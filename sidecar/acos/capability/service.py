@@ -108,6 +108,17 @@ class CapabilityService:
     async def _write_bindings(
         self, db: aiosqlite.Connection, cap_id: str, version: int, bindings: list[dict]
     ) -> None:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT status FROM capability_versions WHERE capability_id = ? AND version = ?",
+            (cap_id, version),
+        )
+        vrow = await cursor.fetchone()
+        if vrow and vrow["status"] != "draft":
+            raise create_error(
+                CAP_VERSION_IMMUTABLE,
+                f"版本 {cap_id} v{version} 状态为 {vrow['status']}，不可修改 bindings",
+            )
         now = self._now()
         await db.execute(
             "DELETE FROM skill_bindings WHERE capability_id = ? AND capability_version = ?",

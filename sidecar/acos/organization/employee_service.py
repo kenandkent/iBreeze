@@ -9,8 +9,10 @@ from typing import Optional
 import aiosqlite
 
 from acos.organization.models import Employee
+from acos.organization.reporting_closure import ReportingClosure
 from acos.rpc.errors import (
     ORG_NOT_FOUND,
+    ORG_REPORTING_CYCLE,
     ORG_STATE_INVALID,
     SYS_OPTIMISTIC_LOCK_CONFLICT,
     create_error,
@@ -101,6 +103,9 @@ class EmployeeService:
                     now, now,
                 ),
             )
+            # 维护汇报链闭包表：新员工自引用
+            rc = ReportingClosure()
+            await rc.add_employee(db, company_id, employee.employee_id, None)
             await db.commit()
         return employee
 
@@ -275,3 +280,101 @@ class EmployeeService:
             )
             rows = await cursor.fetchall()
             return [self._row_to_employee(r) for r in rows]
+
+    async def set_manager(
+        self,
+        employee_id: str,
+        company_id: str,
+        expected_version: int,
+        new_manager_id: str | None,
+        operator: str,
+    ) -> Employee:
+        """设置/变更员工直属上级，同事务维护汇报链闭包表。
+
+        Args:
+            employee_id: 目标员工 ID
+            company_id: 公司 ID
+            expected_version: 乐观锁版本
+            new_manager_id: 新上级 ID（None 表示无上级）
+            operator: 操作者（LocalOwnerPrincipal.id）
+
+        Returns:
+            更新后的 Employee
+        """
+        now = self._now()
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            # 1. 获取当前员工
+            cursor = await db.execute(
+                "SELECT * FROM employees WHERE employee_id = ? AND company_id = ?",
+                (employee_id, company_id),
+            )
+            current = await cursor.fetchone()
+            if current is None:
+                raise create_error(ORG_NOT_FOUND, f"员工 {employee_id} 不存在")
+
+            old_manager_id = current["reports_to_employee_id"]
+            if old_manager_id == new_manager_id:
+                # 无变化
+                return self._row_to_employee(current)
+
+            # 2. 校验新上级：同公司、未删除、非自身、非自身下属（防环）
+            if new_manager_id is not None:
+                cursor = await db.execute(
+                    "SELECT employee_id FROM employees WHERE employee_id = ? AND company_id = ? AND deleted_at IS NULL",
+                    (new_manager_id, company_id),
+                )
+                if await cursor.fetchone() is None:
+                    raise create_error(ORG_NOT_FOUND, f"新上级 {new_manager_id} 不存在")
+
+                # 防环：新上级不能是当前员工的下属
+                rc = ReportingClosure()
+                if await rc.check_cycle(db, company_id, employee_id, new_manager_id):
+                    raise create_error(
+                        ORG_REPORTING_CYCLE,
+                        f"设置上级会形成环: {employee_id} -> {new_manager_id}",
+                    )
+
+            # 3. 更新员工表 + 维护闭包表（同一事务）
+            cursor = await db.execute(
+                """UPDATE employees
+                   SET reports_to_employee_id = ?, version = version + 1, updated_at = ?
+                   WHERE employee_id = ? AND company_id = ? AND version = ?""",
+                (new_manager_id, now, employee_id, company_id, expected_version),
+            )
+            if cursor.rowcount == 0:
+                raise create_error(
+                    SYS_OPTIMISTIC_LOCK_CONFLICT,
+                    f"CAS 冲突: employee {employee_id}",
+                )
+
+            # 维护闭包表
+            rc = ReportingClosure()
+            await rc.change_manager(db, company_id, employee_id, old_manager_id, new_manager_id)
+
+            # 写审计日志
+            import uuid
+            audit_id = str(uuid.uuid4())
+            before = {"reports_to_employee_id": old_manager_id}
+            after = {"reports_to_employee_id": new_manager_id}
+            await db.execute(
+                """INSERT INTO org_change_audit
+                   (id, company_id, aggregate_type, aggregate_id, action,
+                    before_snapshot, after_snapshot, operator, reason, trace_id, timestamp)
+                   VALUES (?, ?, 'employee', ?, 'manager_changed', ?, ?, ?, '', ?, ?)""",
+                (
+                    audit_id, company_id, employee_id,
+                    json.dumps(before), json.dumps(after),
+                    operator, str(uuid.uuid4()), now,
+                ),
+            )
+
+            await db.commit()
+
+            # 返回更新后的员工
+            cursor = await db.execute(
+                "SELECT * FROM employees WHERE employee_id = ?", (employee_id,),
+            )
+            row = await cursor.fetchone()
+            return self._row_to_employee(row)

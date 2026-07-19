@@ -37,7 +37,17 @@ async def _make_published_prompt(gate: QualityGate, pa_id: str, version: int = 1
                VALUES (?, ?, ?, 'base', '{"system":"ok"}', '[]', '[]', ?, 'published', datetime('now'), datetime('now'))""",
             (f"{pa_id}-v{version}", pa_id, version, checksum),
         )
+        await db.execute(
+            """INSERT INTO prompt_assets
+               (prompt_asset_id, company_scope, company_id, name,
+                segments, variables, context_slots, checksum,
+                version, status, created_at, updated_at)
+               VALUES (?, 'company', 'comp-1', 'base', '{"system":"ok"}', '[]', '[]', ?,
+                ?, 'published', datetime('now'), datetime('now'))""",
+            (pa_id, checksum, version),
+        )
         await db.commit()
+    return checksum
     return checksum
 
 
@@ -161,7 +171,7 @@ async def test_manifest_missing_name(gate: QualityGate) -> None:
 
 
 async def test_capability_snapshot_checksum(gate: QualityGate) -> None:
-    await _make_published_prompt(gate, "pa-cap")
+    pa_checksum = await _make_published_prompt(gate, "pa-cap")
     skill_checksum = compute_checksum({
         "name": "skill-c",
         "prompt_asset_id": "pa-cap",
@@ -177,8 +187,8 @@ async def test_capability_snapshot_checksum(gate: QualityGate) -> None:
                (skill_version_id, skill_id, version, name, prompt_asset_id,
                 prompt_asset_version, prompt_asset_checksum, tool_bindings,
                 knowledge_refs, input_schema, output_schema, checksum, status, created_at, updated_at)
-               VALUES (?, 'skill-c', 1, 'skill-c', 'pa-cap', 1, 'x', '[]', '[]', '{}', '{}', ?, 'published', datetime('now'), datetime('now'))""",
-            ("sv-c", skill_checksum),
+               VALUES (?, 'skill-c', 1, 'skill-c', 'pa-cap', 1, ?, '[]', '[]', '{}', '{}', ?, 'published', datetime('now'), datetime('now'))""",
+            ("sv-c", pa_checksum, skill_checksum),
         )
         await db.execute(
             """INSERT INTO skills
@@ -186,8 +196,8 @@ async def test_capability_snapshot_checksum(gate: QualityGate) -> None:
                 prompt_asset_version, prompt_asset_checksum, tool_bindings,
                 knowledge_refs, input_schema, output_schema, checksum,
                 version, status, created_at, updated_at)
-               VALUES ('skill-c', 'company', 'comp-1', 'skill-c', 'pa-cap', 1, 'x', '[]', '[]', '{}', '{}', ?, 1, 'published', datetime('now'), datetime('now'))""",
-            (skill_checksum,),
+               VALUES ('skill-c', 'company', 'comp-1', 'skill-c', 'pa-cap', 1, ?, '[]', '[]', '{}', '{}', ?, 1, 'published', datetime('now'), datetime('now'))""",
+            (pa_checksum, skill_checksum),
         )
         await db.execute(
             """INSERT INTO capabilities

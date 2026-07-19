@@ -18,6 +18,11 @@ from pathlib import Path
 
 import pytest
 
+from acos.capability.models import Capability, PromptAsset, Skill
+from acos.capability.prompt_service import PromptAssetService
+from acos.capability.skill_service import SkillService
+from acos.capability.service import CapabilityService
+from acos.capability.versioning import VersioningService
 from acos.organization.employee_service import EmployeeService
 from acos.organization.permission_engine import PermissionEngine
 from acos.organization.service import OrganizationService
@@ -27,6 +32,73 @@ from acos.store.migrator import Migrator
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def _publish_prompt_asset(prompt_svc: PromptAssetService, versioning: VersioningService, company_id: str, name: str) -> str:
+    prompt = PromptAsset(
+        company_scope="company",
+        company_id=company_id,
+        name=name,
+        segments={
+            "system": "你是助手",
+            "developer": "",
+            "user_template": "{{input}}",
+            "tool_instructions": "",
+            "output_contract": "",
+        },
+        variables=[],
+        context_slots=[],
+    )
+    prompt = await prompt_svc.create(prompt)
+    await versioning.submit_review("prompt_asset", prompt.prompt_asset_id, 1)
+    await versioning.publish("prompt_asset", prompt.prompt_asset_id, 1)
+    return prompt.prompt_asset_id
+
+
+async def _publish_skill(skill_svc: SkillService, versioning: VersioningService, company_id: str, prompt_asset_id: str, name: str) -> str:
+    skill = Skill(
+        company_scope="company",
+        company_id=company_id,
+        name=name,
+        prompt_asset_id=prompt_asset_id,
+        prompt_asset_version=1,
+        tool_bindings=[],
+        knowledge_refs=[],
+        input_schema={},
+        output_schema={},
+    )
+    skill = await skill_svc.create(skill)
+    await versioning.submit_review("skill", skill.skill_id, 1)
+    await versioning.publish("skill", skill.skill_id, 1)
+    return skill.skill_id
+
+
+async def _publish_capability(cap_svc: CapabilityService, versioning: VersioningService, company_id: str, skill_id: str, name: str) -> str:
+    import aiosqlite as _aiosqlite
+    async with _aiosqlite.connect(cap_svc._db_path) as db:
+        db.row_factory = _aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT checksum FROM skills WHERE skill_id = ?",
+            (skill_id,),
+        )
+        skill_row = await cursor.fetchone()
+        skill_checksum = skill_row["checksum"] if skill_row else ""
+
+    cap = Capability(
+        company_id=company_id,
+        name=name,
+        description=f"{name} 描述",
+        source_category="code",
+        visibility="company",
+        cost_policy={"stability_level": 5},
+    )
+    cap = await cap_svc.create(
+        cap,
+        bindings=[{"skill_id": skill_id, "skill_version": 1, "skill_version_checksum": skill_checksum}],
+    )
+    await versioning.submit_review("capability", cap.capability_id, 1)
+    await versioning.publish("capability", cap.capability_id, 1)
+    return cap.capability_id
 
 
 async def _insert_department(db_path, company_id, department_id, parent_id, leader=None):
@@ -71,13 +143,15 @@ async def _set_employee_type(db_path, employee_id, employee_type):
         await db.commit()
 
 
-async def _set_reports_to(db_path, employee_id, manager_id):
-    async with aiosqlite.connect(db_path) as db:
-        await db.execute(
-            "UPDATE employees SET reports_to_employee_id = ? WHERE employee_id = ?",
-            (manager_id, employee_id),
-        )
-        await db.commit()
+async def _set_reports_to(db_path, emp_svc, company_id, employee_id, manager_id):
+    """通过 EmployeeService.set_manager 设置汇报关系，自动维护闭包表。"""
+    await emp_svc.set_manager(
+        employee_id=employee_id,
+        company_id=company_id,
+        expected_version=1,  # 测试环境 version=1
+        new_manager_id=manager_id,
+        operator="test-operator",
+    )
 
 
 async def _set_dept_leader(db_path, department_id, leader_id):
@@ -106,9 +180,20 @@ async def setup(tmp_path: Path):
     org_svc = OrganizationService(str(db_path))
     company = await org_svc.create_company("测试公司", "owner-1")
     await org_svc.activate_company(company.company_id, expected_version=1)
+
+    # 创建完整的 capability 链
+    prompt_svc = PromptAssetService(str(db_path))
+    skill_svc = SkillService(str(db_path))
+    cap_svc = CapabilityService(str(db_path))
+    versioning = VersioningService(str(db_path))
+
+    prompt_asset_id = await _publish_prompt_asset(prompt_svc, versioning, company.company_id, "测试Prompt")
+    skill_id = await _publish_skill(skill_svc, versioning, company.company_id, prompt_asset_id, "测试Skill")
+    capability_id = await _publish_capability(cap_svc, versioning, company.company_id, skill_id, "测试能力")
+
     template_svc = TemplateService(str(db_path))
     template = await template_svc.create(
-        company_id=company.company_id, capability_id="cap-001",
+        company_id=company.company_id, capability_id=capability_id,
         capability_version=1, default_role="开发者",
     )
     await template_svc.activate(template.template_id, company.company_id, expected_version=1)
@@ -186,8 +271,8 @@ async def test_reporting_chain_visibility(setup):
     head = await _make_emp(emp_svc, company_id, template_id, "X", "部门负责人")
     lead2 = await _make_emp(emp_svc, company_id, template_id, "P", "平行组长")
     await _set_employee_type_direct(dp, head, "department_leader")
-    await _set_reports_to(dp, member, lead)
-    await _set_reports_to(dp, lead, head)
+    await _set_reports_to(dp, emp_svc, company_id, member, lead)
+    await _set_reports_to(dp, emp_svc, company_id, lead, head)
     # 部门负责人领导 X 部门（含后代）
     await _set_dept_leader(dp, "X", head)
 

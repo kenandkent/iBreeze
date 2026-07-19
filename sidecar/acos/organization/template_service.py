@@ -8,11 +8,16 @@ from typing import Optional
 
 import aiosqlite
 
+from acos.capability.snapshot import CapabilitySnapshot
+from acos.capability.service import CapabilityService
 from acos.organization.models import EmployeeTemplate
 from acos.rpc.errors import (
+    CAP_VALIDATION,
+    CAP_VERSION_IMMUTABLE,
     ORG_NOT_FOUND,
     ORG_STATE_INVALID,
     SYS_OPTIMISTIC_LOCK_CONFLICT,
+    TEMPLATE_CROSS_COMPANY_DENIED,
     create_error,
 )
 
@@ -61,7 +66,40 @@ class TemplateService:
         provider_id: str = "openai",
         model: str = "gpt-4",
     ) -> EmployeeTemplate:
-        """创建模板。"""
+        """创建模板。
+
+        校验：
+        1. Capability 必须存在且 status=published
+        2. 跨公司复用校验：global 模板只能引用 global capability
+        3. 构建 capability_snapshot (lock 文件)
+        """
+        # 1. 校验 capability 存在且已发布
+        cap_svc = CapabilityService(self._db_path)
+        cap = await cap_svc.get(capability_id)
+        if cap is None:
+            raise create_error(CAP_VALIDATION, f"Capability {capability_id} 不存在")
+        if cap.status != "published":
+            raise create_error(CAP_VALIDATION, f"Capability {capability_id} 非发布状态，不可被模板引用")
+
+        # 2. 跨公司复用校验
+        cap_scope = cap.company_scope
+        if template_scope == "global" and cap_scope == "company":
+            raise create_error(TEMPLATE_CROSS_COMPANY_DENIED, "全局模板不可引用公司私有 Capability")
+        if template_scope == "company" and cap_scope == "company" and cap.company_id != company_id:
+            raise create_error(TEMPLATE_CROSS_COMPANY_DENIED, "公司模板不可引用其他公司私有 Capability")
+
+        # 3. 构建 capability_snapshot
+        snapshot_builder = CapabilitySnapshot()
+        async with aiosqlite.connect(self._db_path) as db:
+            lock = await snapshot_builder.build_snapshot(db, capability_id, capability_version)
+            capability_snapshot = {
+                "snapshot_id": lock.snapshot_id,
+                "capability_id": lock.capability_id,
+                "capability_version": lock.capability_version,
+                "snapshot_checksum": lock.snapshot_checksum,
+                "dependency_tree": lock.dependency_tree,
+            }
+
         template = EmployeeTemplate(
             template_scope=template_scope,
             company_id=company_id if template_scope == "company" else None,
@@ -70,7 +108,7 @@ class TemplateService:
             model=model,
             capability_id=capability_id,
             capability_version=capability_version,
-            capability_snapshot=capability_snapshot or {},
+            capability_snapshot=capability_snapshot,
             default_role=default_role,
             status="draft",
         )
@@ -156,18 +194,51 @@ class TemplateService:
             return self._row_to_template(row)
 
     async def activate(self, template_id: str, company_id: str, expected_version: int) -> EmployeeTemplate:
-        """激活模板 draft→active。"""
+        """激活模板 draft→active。
+
+        如果 capability_snapshot 为空（旧数据），则在激活时构建快照。
+        """
         now = self._now()
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
+            # 先获取当前模板
+            cursor = await db.execute(
+                "SELECT * FROM employee_templates WHERE template_id = ?", (template_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise create_error(ORG_NOT_FOUND, f"模板 {template_id} 不存在")
+            if row["status"] != "draft":
+                raise create_error(ORG_STATE_INVALID, "只能激活草稿模板")
+            if row["version"] != expected_version:
+                raise create_error(SYS_OPTIMISTIC_LOCK_CONFLICT, f"CAS 冲突: template {template_id}")
+
+            # 如果 capability_snapshot 为空，构建快照
+            capability_snapshot = json.loads(row["capability_snapshot"])
+            if not capability_snapshot:
+                cap_svc = CapabilityService(self._db_path)
+                cap = await cap_svc.get(row["capability_id"])
+                if cap is None or cap.status != "published":
+                    raise create_error(CAP_VALIDATION, "引用的 Capability 不存在或未发布")
+                snapshot_builder = CapabilitySnapshot()
+                lock = await snapshot_builder.build_snapshot(db, row["capability_id"], row["capability_version"])
+                capability_snapshot = {
+                    "snapshot_id": lock.snapshot_id,
+                    "capability_id": lock.capability_id,
+                    "capability_version": lock.capability_version,
+                    "snapshot_checksum": lock.snapshot_checksum,
+                    "dependency_tree": lock.dependency_tree,
+                }
+
             cursor = await db.execute(
                 """UPDATE employee_templates
-                   SET status = 'active', version = version + 1, updated_at = ?
+                   SET status = 'active', version = version + 1, updated_at = ?,
+                       capability_snapshot = ?
                    WHERE template_id = ? AND version = ? AND status = 'draft'""",
-                (now, template_id, expected_version),
+                (now, json.dumps(capability_snapshot), template_id, expected_version),
             )
             if cursor.rowcount == 0:
-                raise create_error(ORG_STATE_INVALID, f"无法激活模板 {template_id}")
+                raise create_error(SYS_OPTIMISTIC_LOCK_CONFLICT, f"CAS 冲突: template {template_id}")
 
             cursor = await db.execute(
                 "SELECT * FROM employee_templates WHERE template_id = ?", (template_id,),

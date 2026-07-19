@@ -134,7 +134,7 @@ class Retriever:
         conn = await self._conn()
         try:
             results = await self._hybrid_search(
-                conn, company_id, query, acl_sql, cat_clause, generation_id, limit
+                conn, company_id, query, acl_sql, cat_clause, generation_id, limit, scope
             )
         finally:
             await conn.close()
@@ -167,6 +167,7 @@ class Retriever:
         cat_clause: str,
         generation_id: str | None,
         limit: int,
+        scope: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         fts_results: dict[str, float] = {}
         if query.strip():
@@ -189,9 +190,9 @@ class Retriever:
             where = _acl_to_lancedb_where(
                 {
                     "company_id": company_id,
-                    "visible_department_ids": [],
-                    "visible_task_ids": [],
-                    "private_visible_employee_ids": [],
+                    "visible_department_ids": scope.get("visible_department_ids", []) if scope else [],
+                    "visible_task_ids": scope.get("visible_task_ids", []) if scope else [],
+                    "private_visible_employee_ids": scope.get("private_visible_employee_ids", []) if scope else [],
                 },
                 generation_id,
             )

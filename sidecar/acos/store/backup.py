@@ -82,7 +82,58 @@ class BackupManager:
                 await db.executescript(sql)
                 await db.commit()
 
-    async def create_snapshot(self) -> str:
+    async def _query_snapshot_epochs_extra(self, db: aiosqlite.Connection) -> dict:
+        """查询 snapshot_epochs 所需的额外字段值。"""
+        extra: dict = {}
+
+        # outbox_delivery_watermark: max created_at from outbox_deliveries
+        try:
+            cursor = await db.execute(
+                "SELECT MAX(created_at) FROM outbox_deliveries"
+            )
+            row = await cursor.fetchone()
+            extra["outbox_delivery_watermark"] = row[0] if row and row[0] else None
+        except Exception:
+            extra["outbox_delivery_watermark"] = None
+
+        # lancedb_generation_map_json
+        try:
+            cursor = await db.execute(
+                "SELECT company_id, generation_id FROM lancedb_generations WHERE status='active'"
+            )
+            rows = await cursor.fetchall()
+            extra["lancedb_generation_map_json"] = json.dumps(
+                {r[0]: r[1] for r in rows} if rows else {}
+            )
+        except Exception:
+            extra["lancedb_generation_map_json"] = "{}"
+
+        # session_watermarks_json
+        try:
+            cursor = await db.execute(
+                """SELECT company_id, employee_id, security_context_key, last_checkpoint_offset
+                   FROM session_threads
+                   WHERE last_checkpoint_offset IS NOT NULL
+                   ORDER BY company_id, employee_id, security_context_key"""
+            )
+            rows = await cursor.fetchall()
+            watermarks = [
+                {
+                    "company_id": r[0],
+                    "employee_id": r[1],
+                    "security_context_key": r[2],
+                    "last_checkpoint_offset": r[3],
+                }
+                for r in rows
+            ]
+            extra["session_watermarks_json"] = json.dumps(watermarks)
+        except Exception:
+            extra["session_watermarks_json"] = "[]"
+
+        extra["failure_code"] = None
+        return extra
+
+    async def create_snapshot(self, *, kind: str = "full") -> str:
         """创建跨存储一致快照，返回 backup_id。"""
         import uuid
 
@@ -103,12 +154,22 @@ class BackupManager:
             async with aiosqlite.connect(self._db_path) as db:
                 db.row_factory = aiosqlite.Row
 
+                extra = await self._query_snapshot_epochs_extra(db)
+
                 # 记录 snapshot_epoch 并提交，使备份包含此记录
                 cursor = await db.execute(
                     """INSERT INTO snapshot_epochs
-                       (state, barrier_started_at)
-                       VALUES ('creating', ?)""",
-                    (now_iso,),
+                       (state, barrier_started_at,
+                        outbox_delivery_watermark, lancedb_generation_map_json,
+                        session_watermarks_json, failure_code)
+                       VALUES ('creating', ?, ?, ?, ?, ?)""",
+                    (
+                        now_iso,
+                        extra["outbox_delivery_watermark"],
+                        extra["lancedb_generation_map_json"],
+                        extra["session_watermarks_json"],
+                        extra["failure_code"],
+                    ),
                 )
                 epoch = cursor.lastrowid
                 await db.commit()
@@ -129,6 +190,8 @@ class BackupManager:
                     "backup_id": backup_id,
                     "epoch": epoch,
                     "archive_sha256": archive_sha256,
+                    "encrypted_archive_sha256": archive_sha256,
+                    "wrapped_dek": "",
                     "file_count": 1,
                     "total_bytes": len(archive_bytes),
                 }
@@ -152,15 +215,19 @@ class BackupManager:
                 await db.execute(
                     """INSERT INTO backup_manifests
                        (backup_id, snapshot_epoch, kind, app_version, schema_version,
-                        archive_path, manifest_sha256, file_count, total_bytes,
+                        archive_path, manifest_sha256, encrypted_archive_sha256,
+                        wrapped_dek, file_count, total_bytes,
                         status, created_at, completed_at)
-                       VALUES (?, ?, 'full', '0.1.0', '0007', ?, ?, 1, ?,
+                       VALUES (?, ?, ?, '0.1.0', '0007', ?, ?, ?, ?, 1, ?,
                                'available', ?, ?)""",
                     (
                         backup_id,
                         epoch,
+                        kind,
                         str(archive_path),
                         manifest_sha256,
+                        archive_sha256,
+                        "",
                         len(archive_bytes),
                         now_iso,
                         captured_at,
@@ -173,10 +240,84 @@ class BackupManager:
         finally:
             await self.release_write_barrier()
 
-    async def restore_snapshot(self, backup_id: str) -> bool:
+    async def reconcile_after_restore(self, backup_id: str) -> dict:
+        """恢复后校验：比对 session watermarks 与 schema_version。"""
+        current_schema_version = "0007"
+        details: dict = {}
+        consistent = True
+
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            # 查 manifest 中的 schema_version
+            cursor = await db.execute(
+                "SELECT schema_version FROM backup_manifests WHERE backup_id = ?",
+                (backup_id,),
+            )
+            manifest_row = await cursor.fetchone()
+            if manifest_row and manifest_row["schema_version"] != current_schema_version:
+                consistent = False
+                details["schema_version_mismatch"] = {
+                    "expected": current_schema_version,
+                    "actual": manifest_row["schema_version"],
+                }
+
+            # 查 snapshot_epochs 中的 session_watermarks_json
+            cursor = await db.execute(
+                """SELECT se.session_watermarks_json
+                   FROM snapshot_epochs se
+                   JOIN backup_manifests bm ON bm.snapshot_epoch = se.snapshot_epoch
+                   WHERE bm.backup_id = ?""",
+                (backup_id,),
+            )
+            epoch_row = await cursor.fetchone()
+            if epoch_row and epoch_row["session_watermarks_json"]:
+                try:
+                    saved_watermarks = json.loads(epoch_row["session_watermarks_json"])
+                except (json.JSONDecodeError, TypeError):
+                    saved_watermarks = []
+            else:
+                saved_watermarks = []
+
+            # 查当前 session_threads 中的实际 watermarks
+            try:
+                cursor = await db.execute(
+                    """SELECT company_id, employee_id, security_context_key,
+                              last_checkpoint_offset
+                       FROM session_threads
+                       WHERE last_checkpoint_offset IS NOT NULL
+                       ORDER BY company_id, employee_id, security_context_key"""
+                )
+                actual_rows = await cursor.fetchall()
+                actual_watermarks = [
+                    {
+                        "company_id": r[0],
+                        "employee_id": r[1],
+                        "security_context_key": r[2],
+                        "last_checkpoint_offset": r[3],
+                    }
+                    for r in actual_rows
+                ]
+            except Exception:
+                actual_watermarks = []
+
+            # 比对 watermarks
+            if saved_watermarks != actual_watermarks:
+                consistent = False
+                details["session_watermarks_diff"] = {
+                    "saved_count": len(saved_watermarks),
+                    "actual_count": len(actual_watermarks),
+                }
+
+        details["consistent"] = consistent
+        return {"consistent": consistent, "details": details}
+
+    async def restore_snapshot(self, backup_id: str) -> tuple[bool, str | None]:
         """恢复快照。
 
         校验 backup_id 存在且 status=available，校验 manifest hash，恢复 SQLite。
+        恢复前自动创建 pre_restore 快照；恢复后调用 reconcile 校验一致性。
+        返回 (success, pre_restore_backup_id)。
         """
         await self._apply_backup_tables()
 
@@ -192,18 +333,30 @@ class BackupManager:
 
                 raise create_error("SYS-BACKUP-NOT-FOUND", f"Backup {backup_id} not found")
 
+            # schema_version 校验
+            current_schema_version = "0007"
+            if row["schema_version"] != current_schema_version:
+                from acos.rpc.errors import create_error
+
+                raise create_error(
+                    "SYS-BACKUP-SCHEMA-INCOMPATIBLE",
+                    f"Backup schema {row['schema_version']} != current {current_schema_version}",
+                )
+
             archive_path = Path(row["archive_path"])
             if not archive_path.exists():
                 from acos.rpc.errors import create_error
 
                 raise create_error("SYS-BACKUP-INCONSISTENT", "Archive file missing")
 
-            # 校验 manifest hash
+            # 校验 manifest hash（含新增字段）
             archive_bytes = archive_path.read_bytes()
             manifest_data = {
                 "backup_id": row["backup_id"],
                 "epoch": row["snapshot_epoch"],
                 "archive_sha256": hashlib.sha256(archive_bytes).hexdigest(),
+                "encrypted_archive_sha256": row["encrypted_archive_sha256"] or "",
+                "wrapped_dek": row["wrapped_dek"] or "",
                 "file_count": row["file_count"],
                 "total_bytes": row["total_bytes"],
             }
@@ -214,6 +367,9 @@ class BackupManager:
                 from acos.rpc.errors import create_error
 
                 raise create_error("SYS-BACKUP-INCONSISTENT", "Manifest checksum mismatch")
+
+        # 恢复前自动创建 pre_restore 快照
+        pre_restore_backup_id = await self.create_snapshot(kind="pre_restore")
 
         # 恢复 SQLite：用备份文件覆盖当前数据库
         acquired = await self.acquire_write_barrier(timeout=5.0)
@@ -226,9 +382,44 @@ class BackupManager:
 
         try:
             shutil.copy2(str(archive_path), self._db_path)
-            return True
+
+            # 恢复后校验
+            reconciliation = await self.reconcile_after_restore(backup_id)
+            if not reconciliation["consistent"]:
+                # 尝试从 pre_restore 快照恢复
+                pre_archive_cursor_result = await self._restore_from_pre_restore(
+                    pre_restore_backup_id
+                )
+                if pre_archive_cursor_result:
+                    from acos.rpc.errors import create_error
+
+                    raise create_error(
+                        "SYS-BACKUP-INCONSISTENT",
+                        "Restore produced inconsistent state; rolled back to pre-restore snapshot",
+                    )
+
+            return True, pre_restore_backup_id
         finally:
             await self.release_write_barrier()
+
+    async def _restore_from_pre_restore(self, pre_restore_backup_id: str) -> bool:
+        """从 pre_restore 快照恢复。返回 True 表示恢复成功。"""
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT archive_path FROM backup_manifests WHERE backup_id = ? AND status = 'available'",
+                (pre_restore_backup_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                return False
+
+        pre_archive_path = Path(row["archive_path"])
+        if not pre_archive_path.exists():
+            return False
+
+        shutil.copy2(str(pre_archive_path), self._db_path)
+        return True
 
     async def list_snapshots(self) -> list[dict]:
         """列出可用快照。"""

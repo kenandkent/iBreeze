@@ -136,12 +136,20 @@ async def test_restore_snapshot(tmp_db: str, backup_dir: str) -> None:
         assert (await cursor.fetchone())[0] == 0
 
     # 恢复
-    result = await mgr.restore_snapshot(backup_id)
-    assert result is True
+    success, pre_restore_id = await mgr.restore_snapshot(backup_id)
+    assert success is True
+    assert pre_restore_id is not None
+    assert isinstance(pre_restore_id, str)
 
     async with aiosqlite.connect(tmp_db) as db:
         cursor = await db.execute("SELECT COUNT(*) FROM items")
         assert (await cursor.fetchone())[0] == 2
+
+    # pre_restore 快照的归档文件应存在（DB 记录在恢复时被覆盖）
+    import hashlib
+    pre_archive = Path(backup_dir) / f"{pre_restore_id}.db"
+    assert pre_archive.exists()
+    assert pre_archive.stat().st_size > 0
 
 
 async def test_restore_nonexistent_snapshot(tmp_db: str, backup_dir: str) -> None:

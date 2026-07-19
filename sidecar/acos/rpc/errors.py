@@ -45,6 +45,7 @@ ORG_NOT_FOUND: Final[str] = "ORG-NOT-FOUND"
 ORG_STATE_INVALID: Final[str] = "ORG-STATE-INVALID"
 ORG_PERM_DENIED: Final[str] = "ORG-PERM-DENIED"
 ORG_DEPT_CYCLE: Final[str] = "ORG-DEPT-CYCLE"
+ORG_REPORTING_CYCLE: Final[str] = "ORG-REPORTING-CYCLE"
 ORG_COMPANY_DISSOLVED: Final[str] = "ORG-COMPANY-DISSOLVED"
 
 # ── CAP_* ────────────────────────────────────────────────────────────────
@@ -181,6 +182,7 @@ ALL_ERROR_CODES: Final[dict[str, dict[str, str]]] = {
     ORG_STATE_INVALID: _ec(ORG_STATE_INVALID, "组织状态不合法"),
     ORG_PERM_DENIED: _ec(ORG_PERM_DENIED, "无操作权限"),
     ORG_DEPT_CYCLE: _ec(ORG_DEPT_CYCLE, "部门层级形成环路"),
+    ORG_REPORTING_CYCLE: _ec(ORG_REPORTING_CYCLE, "汇报链形成环路"),
     ORG_COMPANY_DISSOLVED: _ec(ORG_COMPANY_DISSOLVED, "公司已注销"),
     CAP_VALIDATION: _ec(CAP_VALIDATION, "能力定义校验失败", suggestion="检查能力 schema"),
     CAP_VERSION_IMMUTABLE: _ec(CAP_VERSION_IMMUTABLE, "已发布版本不可修改"),

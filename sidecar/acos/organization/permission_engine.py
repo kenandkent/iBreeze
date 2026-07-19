@@ -91,26 +91,14 @@ class PermissionEngine:
         return [r["employee_id"] for r in await cur.fetchall()]
 
     async def _reporting_subordinate_ids(self, db, employee_id: str) -> list[str]:
-        """从 reports_to_employee_id 链 BFS 推导下属（v1：无 employee_reporting_closure 表）。"""
-        # 建立 reports_to -> [下属] 映射
+        """从 employee_reporting_closure 表查询所有下属（含间接，不含自身）。"""
         cur = await db.execute(
-            "SELECT employee_id, reports_to_employee_id FROM employees WHERE deleted_at IS NULL AND reports_to_employee_id IS NOT NULL"
+            """SELECT descendant_employee_id FROM employee_reporting_closure
+               WHERE ancestor_employee_id = ? AND depth > 0
+               ORDER BY depth""",
+            (employee_id,),
         )
-        children: dict[str, list[str]] = {}
-        for r in await cur.fetchall():
-            children.setdefault(r["reports_to_employee_id"], []).append(r["employee_id"])
-
-        result: list[str] = []
-        queue = [employee_id]
-        seen: set[str] = {employee_id}
-        while queue:
-            node = queue.pop(0)
-            for sub in children.get(node, []):
-                if sub not in seen:
-                    seen.add(sub)
-                    result.append(sub)
-                    queue.append(sub)
-        return result
+        return [r["descendant_employee_id"] for r in await cur.fetchall()]
 
     async def _active_grants(
         self, db, employee_id: str, company_id: str

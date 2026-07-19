@@ -270,13 +270,12 @@ class BackendLeaseManager:
                 (backend_id,),
             )
             row = await cursor.fetchone()
-            async with aiosqlite.connect(self._db_path) as db2:
-                db2.row_factory = aiosqlite.Row
-                cursor2 = await db2.execute(
-                    "SELECT concurrency_limit FROM backends WHERE backend_id = ?",
-                    (backend_id,),
-                )
-                backend_row = await cursor2.fetchone()
+            db.row_factory = aiosqlite.Row
+            cursor2 = await db.execute(
+                "SELECT concurrency_limit FROM backends WHERE backend_id = ?",
+                (backend_id,),
+            )
+            backend_row = await cursor2.fetchone()
 
             if backend_row and row[0] >= backend_row["concurrency_limit"]:
                 raise create_error(BACKEND_CAPACITY_FULL, f"Backend {backend_id} 容量已满")

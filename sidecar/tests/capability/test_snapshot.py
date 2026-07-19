@@ -33,17 +33,30 @@ async def _insert_capability(conn: aiosqlite.Connection, cap_id: str) -> None:
     )
 
 
+async def _insert_prompt_asset(conn: aiosqlite.Connection, pa_id: str, checksum: str) -> None:
+    await conn.execute(
+        """INSERT INTO prompt_assets
+           (prompt_asset_id, company_scope, company_id, name,
+            segments, variables, context_slots, checksum,
+            version, status, created_at, updated_at)
+           VALUES (?, 'company', 'comp-1', ?, '{}', '[]', '[]', ?,
+            1, 'published', datetime('now'), datetime('now'))""",
+        (pa_id, pa_id, checksum),
+    )
+
+
 async def _insert_skill(
-    conn: aiosqlite.Connection, skill_id: str, checksum: str
+    conn: aiosqlite.Connection, skill_id: str, checksum: str,
+    pa_id: str = "pa-1", pa_checksum: str = "pa-csum",
 ) -> None:
     await conn.execute(
         """INSERT INTO skills
            (skill_id, company_scope, company_id, name,
             prompt_asset_id, prompt_asset_version, prompt_asset_checksum,
             checksum, version, status, created_at, updated_at)
-           VALUES (?, 'company', 'comp-1', ?, 'pa-1', 1, 'pa-csum',
+           VALUES (?, 'company', 'comp-1', ?, ?, 1, ?,
             ?, 1, 'draft', datetime('now'), datetime('now'))""",
-        (skill_id, skill_id, checksum),
+        (skill_id, skill_id, pa_id, pa_checksum, checksum),
     )
 
 
@@ -65,10 +78,12 @@ async def _insert_binding(
 
 
 async def test_build_snapshot_success(db: str) -> None:
+    pa_checksum = compute_checksum({"name": "pa1"})
     async with aiosqlite.connect(db) as conn:
+        await _insert_prompt_asset(conn, "pa-1", pa_checksum)
         await _insert_capability(conn, "cap-1")
         skill_checksum = compute_checksum({"name": "skill1"})
-        await _insert_skill(conn, "skill-1", skill_checksum)
+        await _insert_skill(conn, "skill-1", skill_checksum, "pa-1", pa_checksum)
         await _insert_binding(conn, "bind-1", "cap-1", "skill-1", skill_checksum)
         await conn.commit()
 
@@ -84,9 +99,11 @@ async def test_build_snapshot_success(db: str) -> None:
 
 
 async def test_build_snapshot_checksum_mismatch(db: str) -> None:
+    pa_checksum = compute_checksum({"name": "pa2"})
     async with aiosqlite.connect(db) as conn:
+        await _insert_prompt_asset(conn, "pa-1", pa_checksum)
         await _insert_capability(conn, "cap-2")
-        await _insert_skill(conn, "skill-2", "real-checksum")
+        await _insert_skill(conn, "skill-2", "real-checksum", "pa-1", pa_checksum)
         await _insert_binding(
             conn, "bind-2", "cap-2", "skill-2", "wrong-checksum"
         )
@@ -99,10 +116,12 @@ async def test_build_snapshot_checksum_mismatch(db: str) -> None:
 
 
 async def test_verify_snapshot(db: str) -> None:
+    pa_checksum = compute_checksum({"name": "pa3"})
     async with aiosqlite.connect(db) as conn:
+        await _insert_prompt_asset(conn, "pa-1", pa_checksum)
         await _insert_capability(conn, "cap-3")
         skill_checksum = compute_checksum({"name": "skill3"})
-        await _insert_skill(conn, "skill-3", skill_checksum)
+        await _insert_skill(conn, "skill-3", skill_checksum, "pa-1", pa_checksum)
         await _insert_binding(conn, "bind-3", "cap-3", "skill-3", skill_checksum)
         await conn.commit()
 

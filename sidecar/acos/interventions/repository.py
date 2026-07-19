@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
 
 from acos.interventions.models import HumanIntervention
+
+# target_ref 格式白名单（设计 §5.7）
+_VALID_TARGET_REF_RE = re.compile(
+    r"^(company_dissolution|employee_drain|backend_recovery|approval|manual_task|dead_letter):[\w-]+$"
+)
 
 
 def _row_to_intervention(row: aiosqlite.Row) -> HumanIntervention:
@@ -45,7 +51,15 @@ class InterventionRepository:
         node_id: str | None = None,
         run_id: str | None = None,
     ) -> HumanIntervention:
-        """创建或获取 open 的干预项（幂等）。"""
+        """创建或获取 open 的干预项（幂等）。
+
+        target_ref 格式必须为 subtype:id，如 company_dissolution:abc123。
+        """
+        if not _VALID_TARGET_REF_RE.match(target_ref):
+            raise ValueError(
+                f"target_ref 格式无效: {target_ref!r}，"
+                "必须为 subtype:id 格式，如 company_dissolution:<id>"
+            )
         conn.row_factory = aiosqlite.Row
         cursor = await conn.execute(
             """SELECT * FROM human_interventions

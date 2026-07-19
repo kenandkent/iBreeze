@@ -31,7 +31,7 @@ async def test_create_intervention(conn: aiosqlite.Connection, repo: Interventio
         conn,
         company_id="c1",
         subtype="approval",
-        target_ref="task-001",
+        target_ref="approval:task-001",
         allowed_actions=["approve", "reject"],
         trace_id="t1",
         task_id="task-001",
@@ -48,11 +48,11 @@ async def test_create_or_get_open_idempotent(
     conn: aiosqlite.Connection, repo: InterventionRepository
 ) -> None:
     first = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=["approve"], trace_id="t1",
     )
     second = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=["approve"], trace_id="t1",
     )
     assert first.intervention_id == second.intervention_id
@@ -60,7 +60,7 @@ async def test_create_or_get_open_idempotent(
 
 async def test_get_intervention(conn: aiosqlite.Connection, repo: InterventionRepository) -> None:
     created = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=[], trace_id="t1",
     )
     fetched = await repo.get(conn, created.intervention_id, "c1")
@@ -73,15 +73,15 @@ async def test_get_intervention(conn: aiosqlite.Connection, repo: InterventionRe
 
 async def test_list_open(conn: aiosqlite.Connection, repo: InterventionRepository) -> None:
     await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="a1",
+        conn, company_id="c1", subtype="approval", target_ref="approval:a1",
         allowed_actions=[], trace_id="t1",
     )
     await repo.create_or_get_open(
-        conn, company_id="c1", subtype="dead_letter", target_ref="a2",
+        conn, company_id="c1", subtype="dead_letter", target_ref="dead_letter:a2",
         allowed_actions=[], trace_id="t1",
     )
     await repo.create_or_get_open(
-        conn, company_id="c2", subtype="approval", target_ref="a3",
+        conn, company_id="c2", subtype="approval", target_ref="approval:a3",
         allowed_actions=[], trace_id="t1",
     )
 
@@ -90,14 +90,14 @@ async def test_list_open(conn: aiosqlite.Connection, repo: InterventionRepositor
 
     approvals = await repo.list_open(conn, "c1", subtype="approval")
     assert len(approvals) == 1
-    assert approvals[0].target_ref == "a1"
+    assert approvals[0].target_ref == "approval:a1"
 
 
 async def test_resolve_cas_success(
     conn: aiosqlite.Connection, repo: InterventionRepository
 ) -> None:
     item = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=["approve"], trace_id="t1",
     )
     ok = await repo.resolve_cas(
@@ -118,7 +118,7 @@ async def test_resolve_cas_version_conflict(
     conn: aiosqlite.Connection, repo: InterventionRepository
 ) -> None:
     item = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=["approve"], trace_id="t1",
     )
     ok = await repo.resolve_cas(
@@ -136,7 +136,7 @@ async def test_cross_company_isolation(
     conn: aiosqlite.Connection, repo: InterventionRepository
 ) -> None:
     item = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=[], trace_id="t1",
     )
     assert await repo.get(conn, item.intervention_id, "c2") is None
@@ -149,7 +149,7 @@ async def test_closed_can_create_new(
     conn: aiosqlite.Connection, repo: InterventionRepository
 ) -> None:
     first = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=[], trace_id="t1",
     )
     await repo.resolve_cas(
@@ -158,8 +158,18 @@ async def test_closed_can_create_new(
     )
 
     second = await repo.create_or_get_open(
-        conn, company_id="c1", subtype="approval", target_ref="task-001",
+        conn, company_id="c1", subtype="approval", target_ref="approval:task-001",
         allowed_actions=[], trace_id="t1",
     )
     assert second.intervention_id != first.intervention_id
     assert second.status == "open"
+
+
+async def test_invalid_target_ref_rejected(
+    conn: aiosqlite.Connection, repo: InterventionRepository
+) -> None:
+    with pytest.raises(ValueError, match="target_ref 格式无效"):
+        await repo.create_or_get_open(
+            conn, company_id="c1", subtype="approval", target_ref="bad-ref",
+            allowed_actions=[], trace_id="t1",
+        )
