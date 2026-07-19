@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Building2 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -28,9 +29,12 @@ export function Header({ onRefresh }: { onRefresh?: () => void }) {
 
   const activeCompanies = companies?.filter((c) => c.status === 'active') ?? [];
 
-  if (activeCompanies.length > 0 && !currentCompanyId) {
-    setCurrentCompany(activeCompanies[0].company_id);
-  }
+  useEffect(() => {
+    if (activeCompanies.length > 0 && !currentCompanyId) {
+      console.log('[iBreeze] Header: auto-selecting first company', activeCompanies[0].company_id);
+      setCurrentCompany(activeCompanies[0].company_id);
+    }
+  }, [activeCompanies, currentCompanyId, setCurrentCompany]);
 
   return (
     <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200">
@@ -43,7 +47,11 @@ export function Header({ onRefresh }: { onRefresh?: () => void }) {
             <Building2 size={14} className="text-gray-400" />
             <select
               value={currentCompanyId ?? ''}
-              onChange={(e) => setCurrentCompany(e.target.value || null)}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                console.log('[iBreeze] Header: switching company to', val);
+                setCurrentCompany(val);
+              }}
               className="text-sm border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-white"
             >
               {activeCompanies.map((c) => (

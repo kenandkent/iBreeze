@@ -1,6 +1,7 @@
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAppStore } from '../../stores/appStore';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { CompanyList } from '../company/CompanyList';
 import { EmployeeList } from '../employee/EmployeeList';
 import { TaskBoard } from '../task/TaskBoard';
@@ -17,42 +18,65 @@ import { InterventionPage } from '../intervention/InterventionPage';
 import { AuditPage } from '../audit/AuditPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 
+const PAGE_LABELS: Record<string, string> = {
+  companies: '公司管理',
+  employees: '员工管理',
+  tasks: '任务看板',
+  knowledge: '知识库',
+  capabilities: '能力管理',
+  skills: '技能管理',
+  prompts: 'Prompt 资产',
+  templates: '员工模板',
+  session: '会话',
+  provider: 'Provider与Backend',
+  grant: '授权',
+  intervention: '人工干预',
+  audit: '审计',
+  dashboard: 'Dashboard',
+  settings: '设置',
+};
+
 function PageContent() {
   const { currentPage, currentCompanyId } = useAppStore();
+  const label = PAGE_LABELS[currentPage] ?? currentPage;
+  let content: React.ReactNode;
+
   switch (currentPage) {
     case 'companies':
-      return <CompanyList />;
+      content = <CompanyList />; break;
     case 'employees':
-      return <EmployeeList />;
+      content = <EmployeeList />; break;
     case 'tasks':
-      return <TaskBoard />;
+      content = <TaskBoard />; break;
     case 'knowledge':
-      return <KnowledgeList />;
+      content = <KnowledgeList />; break;
     case 'capabilities':
-      return <CapabilityList companyId={currentCompanyId} />;
+      content = <CapabilityList companyId={currentCompanyId} />; break;
     case 'skills':
-      return <SkillList companyId={currentCompanyId} />;
+      content = <SkillList companyId={currentCompanyId} />; break;
     case 'prompts':
-      return <PromptList companyId={currentCompanyId} />;
+      content = <PromptList companyId={currentCompanyId} />; break;
     case 'templates':
-      return <TemplateList companyId={currentCompanyId} />;
+      content = <TemplateList companyId={currentCompanyId} />; break;
     case 'session':
-      return <SessionPage />;
+      content = <SessionPage />; break;
     case 'provider':
-      return <ProviderBackendPage />;
+      content = <ProviderBackendPage />; break;
     case 'grant':
-      return <GrantPage />;
+      content = <GrantPage />; break;
     case 'intervention':
-      return <InterventionPage />;
+      content = <InterventionPage />; break;
     case 'audit':
-      return <AuditPage />;
+      content = <AuditPage />; break;
     case 'dashboard':
-      return <DashboardPage />;
+      content = <DashboardPage />; break;
     case 'settings':
-      return <SettingsPage />;
+      content = <SettingsPage />; break;
     default:
-      return <CompanyList />;
+      content = <CompanyList />; break;
   }
+
+  return <ErrorBoundary fallbackLabel={label}>{content}</ErrorBoundary>;
 }
 
 export function Layout() {

@@ -29,7 +29,8 @@ export function AuditPage() {
         offset: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
       }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
@@ -40,6 +41,7 @@ export function AuditPage() {
   if (isLoading) return <LoadingSpinner />;
 
   if (error) {
+    console.error('[iBreeze] AuditPage: load failed', error);
     return (
       <div className="p-6">
         <div className="text-red-500 text-sm mb-4">加载失败: {error.message}</div>

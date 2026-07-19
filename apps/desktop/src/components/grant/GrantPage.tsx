@@ -22,7 +22,8 @@ export function GrantPage() {
   const { data: grants, isLoading, error, refetch } = useQuery<Grant[]>({
     queryKey: ['grant', currentCompanyId],
     queryFn: () => rpcCall<Grant[]>('org.grant.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
@@ -50,6 +51,7 @@ export function GrantPage() {
   if (isLoading) return <LoadingSpinner />;
 
   if (error) {
+    console.error('[iBreeze] GrantPage: load failed', error);
     return (
       <div className="p-6">
         <div className="text-red-500 text-sm mb-4">加载失败: {error.message}</div>

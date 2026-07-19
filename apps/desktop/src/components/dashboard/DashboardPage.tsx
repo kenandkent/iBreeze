@@ -11,42 +11,47 @@ export function DashboardPage() {
   const { data: companies } = useQuery<Company[]>({
     queryKey: ['dashboardCompanies'],
     queryFn: () => rpcCall<Company[]>('company.list'),
-    retry: 3,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: employees } = useQuery<Employee[]>({
     queryKey: ['dashboardEmployees', currentCompanyId],
     queryFn: () => rpcCall<Employee[]>('employee.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: tasks } = useQuery<Task[]>({
     queryKey: ['dashboardTasks', currentCompanyId],
     queryFn: () => rpcCall<Task[]>('task.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: docs } = useQuery<KnowledgeDocument[]>({
     queryKey: ['dashboardDocs', currentCompanyId],
     queryFn: () => rpcCall<KnowledgeDocument[]>('knowledge.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: backends } = useQuery<Backend[]>({
     queryKey: ['dashboardBackends', currentCompanyId],
     queryFn: () => rpcCall<Backend[]>('backend.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: sessions } = useQuery<SessionThread[]>({
     queryKey: ['dashboardSessions', currentCompanyId],
     queryFn: () => rpcCall<SessionThread[]>('session.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
@@ -59,7 +64,8 @@ export function DashboardPage() {
         offset: 0,
         limit: 1,
       }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 

@@ -15,14 +15,16 @@ export function ProviderBackendPage() {
   const { data: backends, isLoading, error, refetch } = useQuery<Backend[]>({
     queryKey: ['backend', currentCompanyId],
     queryFn: () => rpcCall<Backend[]>('backend.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
   const { data: providers } = useQuery<Provider[]>({
     queryKey: ['provider', currentCompanyId],
     queryFn: () => rpcCall<Provider[]>('provider.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
@@ -33,7 +35,7 @@ export function ProviderBackendPage() {
         company_id: currentCompanyId,
         provider_id: activeProviderId,
       }),
-    enabled: !!activeProviderId,
+    enabled: !!activeProviderId && !!currentCompanyId,
   });
 
   if (!currentCompanyId) {
@@ -45,6 +47,7 @@ export function ProviderBackendPage() {
   if (isLoading) return <LoadingSpinner />;
 
   if (error) {
+    console.error('[iBreeze] ProviderBackendPage: load failed', error);
     return (
       <div className="p-6">
         <div className="text-red-500 text-sm mb-4">加载失败: {error.message}</div>

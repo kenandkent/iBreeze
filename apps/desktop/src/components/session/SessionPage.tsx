@@ -17,7 +17,8 @@ export function SessionPage() {
   const { data: threads, isLoading, error, refetch } = useQuery<SessionThread[]>({
     queryKey: ['session', currentCompanyId],
     queryFn: () => rpcCall<SessionThread[]>('session.list', { company_id: currentCompanyId }),
-    retry: 3,
+    enabled: !!currentCompanyId,
+    retry: 2,
     retryDelay: 1000,
   });
 
@@ -45,6 +46,7 @@ export function SessionPage() {
   if (isLoading) return <LoadingSpinner />;
 
   if (error) {
+    console.error('[iBreeze] SessionPage: load failed', error);
     return (
       <div className="p-6">
         <div className="text-red-500 text-sm mb-4">加载失败: {error.message}</div>
