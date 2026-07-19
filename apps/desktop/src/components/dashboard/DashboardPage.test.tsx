@@ -2,14 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from './DashboardPage';
+import { useAppStore } from '../../stores/appStore';
 
 const mockInvoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
-}));
-
-vi.mock('../../stores/appStore', () => ({
-  useAppStore: () => ({ currentCompanyId: 'c1' }),
 }));
 
 function renderWithQuery(ui: React.ReactElement) {
@@ -18,7 +15,16 @@ function renderWithQuery(ui: React.ReactElement) {
 }
 
 describe('DashboardPage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStore.setState({ currentCompanyId: 'c1' });
+  });
+
+  it('shows prompt when no company selected', () => {
+    useAppStore.setState({ currentCompanyId: null });
+    renderWithQuery(<DashboardPage />);
+    expect(screen.getByText('请先在上方选择公司后再查看概览。')).toBeInTheDocument();
+  });
 
   it('calls all aggregation rpcs', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string; params?: string }) => {

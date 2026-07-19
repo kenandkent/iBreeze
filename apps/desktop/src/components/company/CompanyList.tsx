@@ -4,6 +4,7 @@ import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { useAppStore } from '../../stores/appStore';
 import type { Company, Department } from '../../types';
 import { Building2, X, Pencil, Trash2, ChevronRight, FolderTree, Plus, RotateCcw } from 'lucide-react';
 
@@ -17,6 +18,7 @@ const STATUS_OPTIONS = [
 
 export function CompanyList() {
   const queryClient = useQueryClient();
+  const { setCurrentCompany } = useAppStore();
   const [statusFilter, setStatusFilter] = useState('active');
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [editCompany, setEditCompany] = useState<Company | null>(null);
@@ -56,7 +58,7 @@ export function CompanyList() {
 
   const deleteCompany = useMutation({
     mutationFn: (company_id: string) => rpcCall('org.company.delete', { company_id }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); setSelectedCompany(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['companies'] }); setSelectedCompany(null); setCurrentCompany(null); },
     onError: (err: Error) => alert('删除失败: ' + err.message),
   });
 
@@ -123,7 +125,7 @@ export function CompanyList() {
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setSelectedCompany(null); }}
+            onChange={(e) => { setStatusFilter(e.target.value); setSelectedCompany(null); setCurrentCompany(null); }}
             className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
           >
             {STATUS_OPTIONS.map((opt) => (
@@ -141,7 +143,7 @@ export function CompanyList() {
                 className={`px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedCompany?.company_id === company.company_id ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''
                 }`}
-                onClick={() => setSelectedCompany(company)}
+                onClick={() => { setSelectedCompany(company); setCurrentCompany(company.company_id); }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">

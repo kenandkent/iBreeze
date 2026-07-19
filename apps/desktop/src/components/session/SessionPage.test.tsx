@@ -2,14 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionPage } from './SessionPage';
+import { useAppStore } from '../../stores/appStore';
 
 const mockInvoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
-}));
-
-vi.mock('../../stores/appStore', () => ({
-  useAppStore: () => ({ currentCompanyId: 'c1' }),
 }));
 
 function renderWithQuery(ui: React.ReactElement) {
@@ -29,7 +26,16 @@ const mockThread = (overrides: Partial<Record<string, unknown>> = {}) => ({
 });
 
 describe('SessionPage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStore.setState({ currentCompanyId: 'c1' });
+  });
+
+  it('shows prompt when no company selected', () => {
+    useAppStore.setState({ currentCompanyId: null });
+    renderWithQuery(<SessionPage />);
+    expect(screen.getByText('请先在上方选择公司后再查看会话。')).toBeInTheDocument();
+  });
 
   it('renders empty state', async () => {
     mockInvoke.mockResolvedValue([]);
