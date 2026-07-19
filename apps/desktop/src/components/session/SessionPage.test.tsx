@@ -1,0 +1,77 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SessionPage } from './SessionPage';
+
+const mockInvoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+vi.mock('../../stores/appStore', () => ({
+  useAppStore: () => ({ currentCompanyId: 'c1' }),
+}));
+
+function renderWithQuery(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+const mockThread = (overrides: Partial<Record<string, unknown>> = {}) => ({
+  thread_id: 't1',
+  company_id: 'c1',
+  user_id: 'u1',
+  status: 'active',
+  security_context: { level: 'standard' },
+  created_at: '2026-07-19T00:00:00Z',
+  updated_at: '2026-07-19T00:00:00Z',
+  ...overrides,
+});
+
+describe('SessionPage', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders empty state', async () => {
+    mockInvoke.mockResolvedValue([]);
+    renderWithQuery(<SessionPage />);
+    await waitFor(() => expect(screen.getByText('暂无会话')).toBeInTheDocument());
+  });
+
+  it('renders thread list', async () => {
+    mockInvoke.mockResolvedValue([mockThread()]);
+    renderWithQuery(<SessionPage />);
+    await waitFor(() => expect(screen.getByText('active')).toBeInTheDocument());
+  });
+
+  it('shows transcript on thread select', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'session.list') return Promise.resolve([mockThread()]);
+      if (opts.method === 'session.transcript.get')
+        return Promise.resolve([{ message_id: 'm1', role: 'user', content: '你好', created_at: '2026-07-19T00:00:00Z' }]);
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<SessionPage />);
+    await waitFor(() => screen.getByText('active'));
+    fireEvent.click(screen.getByText('active').closest('tr')!);
+    await waitFor(() => expect(screen.getByText('你好')).toBeInTheDocument());
+  });
+
+  it('sends message via session.sendMessage', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'session.list') return Promise.resolve([mockThread()]);
+      if (opts.method === 'session.transcript.get') return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+    renderWithQuery(<SessionPage />);
+    await waitFor(() => screen.getByText('active'));
+    fireEvent.click(screen.getByText('active').closest('tr')!);
+    const input = await screen.findByPlaceholderText('输入消息...');
+    fireEvent.change(input, { target: { value: '新消息' } });
+    fireEvent.click(screen.getByText('发送'));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('sys_rpc_call', expect.objectContaining({
+        method: 'session.sendMessage',
+      }));
+    });
+  });
+});

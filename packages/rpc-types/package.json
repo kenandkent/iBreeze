@@ -1,0 +1,9 @@
+{
+  "name": "@ibreeze/rpc-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generated TypeScript types from RPC schemas",
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts"
+}

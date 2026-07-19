@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "agent": "opencode",
+  "role": "reviewer",
+  "lens": "performance",
+  "issues": [
+    {
+      "id": "PERF-01",
+      "type": "bottleneck",
+      "severity": "high",
+      "target": "Design spec §8.3 (compute_scope), §4.5 (permission_compute_scope_time)",
+      "description": "compute_scope runs ~8-10 SQLite queries per call (6 branches: company, visible_department_ids, managed_department_ids, visible_task_ids, own_employee_id, private_visible_employee_ids). Called on every permission check (tool execution, knowledge query, workspace access). §4.5 sets <10ms release_gate but explicitly forbids cross-request caching. With 100 employees and deep department trees, cold-cache queries may exceed 10ms. The design does not specify warm-cache vs cold-cache measurement conditions."
+    },
+    {
+      "id": "PERF-02",
+      "type": "bottleneck",
+      "severity": "high",
+      "target": "Design spec §6.11 (BackendScheduler lease acquire), §4.5 (backend_slot_acquire_time)",
+      "description": "Lease-acquire is a single SQLite transaction scanning all backends' held counts + global total + queue heads + lease creation + queue update. §4.5 targets <50ms release_gate. Under concurrent load (many tasks starting/completing simultaneously), SQLite single-writer serialization creates contention. With global_process_limit up to 64 and multiple companies, the GROUP BY on backend_leases WHERE status=held could be slow."
+    },
+    {
+      "id": "PERF-03",
+      "type": "bottleneck",
+      "severity": "high",
+      "target": "Design spec §9.4 (knowledge search pipeline), §4.5 (missing metric)",
+      "description": "Knowledge search has 7 sequential steps: compute_scope → FTS5 → LanceDB (parallel) → RRF fusion → governance priority → token trim → audit write. For interactive chat, this runs on every turn with knowledge retrieval. §4.5 has no observational metric for knowledge_search_e2e_time, so no baseline will be measured at release."
+    },
+    {
+      "id": "PERF-04",
+      "type": "concurrency_bottleneck",
+      "severity": "medium",
+      "target": "Design spec §4.7 (backup snapshot barrier)",
+      "description": "Backup snapshot barrier freezes all writes while waiting for in-flight transactions, active turns to checkpoint, and outbox to quiesce. Quiesce timeout value not specified. During freeze, all RPC write operations retry with SYS-BACKUP-IN-PROGRESS. Long-running tool executions (30+ seconds) could cause substantial barrier wait."
+    },
+    {
+      "id": "PERF-05",
+      "type": "indexing_gap",
+      "severity": "medium",
+      "target": "Design spec §11.4 (session_threads), ER diagram §15",
+      "description": "session_threads lookup by (employee_id, security_context_key) is the primary access path for session.sendMessage without thread_id. The ER diagram and §15 do not explicitly declare a composite index or UNIQUE constraint on this pair. Without it, lookup degrades to full table scan per employee."
+    },
+    {
+      "id": "PERF-06",
+      "type": "latency",
+      "severity": "medium",
+      "target": "Design spec §4.6 (Outbox Worker), §5.2",
+      "description": "Outbox Worker polling interval not specified. 30+ named events depend on timely delivery: knowledge extraction on TaskCompleted, capability metrics on TaskCompleted/ReviewCompleted, UI notifications. Too-slow polling adds artificial latency; too-fast polling adds SQLite read pressure."
+    },
+    {
+      "id": "PERF-07",
+      "type": "hot_path",
+      "severity": "medium",
+      "target": "Design spec §10.6 (usage reservation)",
+      "description": "Every model call dispatch requires: read provider_model_prices, compute worst-case cost with int64 overflow check, write usage_reservations, SUM(amount_micros) for task+currency to check budget. The SUM aggregation runs on every dispatch. For tasks with many parallel workers, this becomes a contention point."
+    },
+    {
+      "id": "PERF-08",
+      "type": "unbounded_growth",
+      "severity": "medium",
+      "target": "Design spec §11.4 (transcript.jsonl)",
+      "description": "transcript.jsonl is append-only with no total size limit or archival strategy. context-summary.md checkpoints compress older messages but raw transcript grows unboundedly. For long-running sessions (months of history), recovery requires reading the entire file to find the latest valid checkpoint, becoming increasingly expensive."
+    },
+    {
+      "id": "PERF-09",
+      "type": "overhead",
+      "severity": "low",
+      "target": "Design spec §11.2 (Credential Broker)",
+      "description": "Every API Provider call requires a cross-process UDS round-trip for credential resolution: Sidecar signs capability → Rust verifies → looks up Keychain → returns plaintext. Single-use 30s TTL means no connection pooling. High-throughput parallel workers using API Providers multiply this overhead."
+    },
+    {
+      "id": "PERF-10",
+      "type": "write_amplification",
+      "severity": "low",
+      "target": "Design spec §5.5 (five audit tables)",
+      "description": "Five separate audit tables (acl_audit_log, knowledge_access_logs, org_change_audit, knowledge_governance_audit, backend_change_audit) are written on different operations. Each adds schema complexity and index maintenance. Acceptable for v1 baseline but note for future scale."
+    },
+    {
+      "id": "PERF-11",
+      "type": "measurement",
+      "severity": "low",
+      "target": "Design spec §4.5, implementation plan P0-T3",
+      "description": "sidecar_restart_ready_time <3s release_gate does not specify time budget breakdown (process spawn, Python init, migration check, RPC bind). P0-T3 DoD references this metric but does not break down the budget. Cold PyInstaller startup could add 1-2s; test should run against frozen binary, not uv run."
+    },
+    {
+      "id": "PERF-12",
+      "type": "measurement",
+      "severity": "low",
+      "target": "Design spec §10.1.1 (PV-13)",
+      "description": "PV-13 checks Backend health/lease state for each agent/review/fix/merge node. With max_nodes=200, this adds per-node DB queries. Should batch Backend health lookups rather than querying per-node. Not a blocker given scale limits, but worth noting."
+    },
+    {
+      "id": "PERF-13",
+      "type": "correctness_and_performance",
+      "severity": "low",
+      "target": "Design spec §9.4, §17 (LanceDB pre-filter)",
+      "description": "If chosen LanceDB version only supports post-filter, the system falls back to computing similarity against all vectors before filtering. At 10K document scale, this wastes significant compute and returns potentially incorrect results. §17 lists pre-filter validation as quality gate but timing (Phase 0 vs later) should be explicit."
+    },
+    {
+      "id": "PERF-14",
+      "type": "resource_contention",
+      "severity": "low",
+      "target": "Design spec §4.6 (global_process_limit default)",
+      "description": "Default global_process_limit = clamp(logical_cpu_count, 2, 16). Each CLI Provider sub-process (e.g., Claude Code CLI with Node.js) consumes significant memory. With 16GB RAM and 12 sub-processes, memory pressure could cause swapping. CPU-based default may need memory-based adjustment for Apple Silicon."
+    }
+  ]
+}

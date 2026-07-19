@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "sys.health Response",
+  "description": "Response schema for the sys.health RPC method",
+  "type": "object",
+  "required": ["status", "components"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "unhealthy"],
+      "description": "Overall system health status"
+    },
+    "components": {
+      "type": "object",
+      "description": "Health status of individual components",
+      "properties": {
+        "rpc": {
+          "type": "string",
+          "enum": ["up", "down"],
+          "description": "RPC server status"
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,114 @@
+"""任务生命周期 RPC 方法集合。"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from acos.rpc.errors import AcosError
+from acos.rpc.server import RPCServer
+from acos.task.service import TaskService
+from acos.workflows.service import CasConflict
+
+
+class TaskMethods:
+    """任务相关的 RPC 方法。"""
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+        self._svc = TaskService(db_path)
+
+    def register_to(self, server: RPCServer) -> None:
+        server.register_method("task.start", self._task_start)
+        server.register_method("task.complete", self._task_complete)
+        server.register_method("task.cancel", self._task_cancel)
+        server.register_method("task.retrySubtask", self._task_retry_subtask)
+        server.register_method("task.create", self._task_create)
+
+    async def _task_start(self, params: dict[str, Any]) -> dict[str, Any]:
+        task_id = params.get("task_id")
+        expected_version = params.get("expected_version")
+        if not task_id or expected_version is None:
+            return {"error": "missing task_id or expected_version"}
+        try:
+            task = await self._svc.start_task(task_id, expected_version)
+            return {"task_id": task.task_id, "version": task.version, "status": task.status}
+        except CasConflict:
+            return {"error": "version conflict"}
+        except AcosError as e:
+            return {"error": e.code, "message": e.message}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    async def _task_complete(self, params: dict[str, Any]) -> dict[str, Any]:
+        task_id = params.get("task_id")
+        expected_version = params.get("expected_version")
+        if not task_id or expected_version is None:
+            return {"error": "missing task_id or expected_version"}
+        try:
+            task = await self._svc.complete_task(task_id, expected_version)
+            return {"task_id": task.task_id, "version": task.version, "status": task.status}
+        except CasConflict:
+            return {"error": "version conflict"}
+        except AcosError as e:
+            return {"error": e.code, "message": e.message}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    async def _task_cancel(self, params: dict[str, Any]) -> dict[str, Any]:
+        task_id = params.get("task_id")
+        expected_version = params.get("expected_version")
+        if not task_id or expected_version is None:
+            return {"error": "missing task_id or expected_version"}
+        try:
+            res = await self._svc.cancel_task(task_id, expected_version)
+            return {"task_id": res["task_id"], "status": res["status"]}
+        except CasConflict:
+            return {"error": "version conflict"}
+        except AcosError as e:
+            return {"error": e.code, "message": e.message}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    async def _task_retry_subtask(self, params: dict[str, Any]) -> dict[str, Any]:
+        task_id = params.get("task_id")
+        node_id = params.get("node_id")
+        reason = params.get("reason", "")
+        if not task_id or not node_id:
+            return {"error": "missing task_id or node_id"}
+        try:
+            result = await self._svc.retry_subtask(task_id, node_id, reason)
+            return result
+        except AcosError as e:
+            return {"error": e.code, "message": e.message}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    async def _task_create(self, params: dict[str, Any]) -> dict[str, Any]:
+        company_id = params.get("company_id")
+        title = params.get("title", "")
+        manager_employee_id = params.get("manager_employee_id", "system")
+        manager_scope = params.get("manager_scope", "dept")
+        goal = params.get("goal", "")
+        acceptance = params.get("acceptance", "")
+        if not company_id or not title:
+            return {"error": "missing company_id or title"}
+        try:
+            result = await self._svc.create_task(
+                company_id=company_id,
+                title=title,
+                manager_employee_id=manager_employee_id,
+                manager_scope=manager_scope,
+                goal=goal,
+                acceptance=acceptance,
+                department_id=params.get("department_id"),
+                backend_id=params.get("backend_id"),
+                budget=params.get("budget"),
+                created_by=params.get("created_by", "system"),
+                priority=params.get("priority", 5),
+                inputs=params.get("inputs"),
+            )
+            return result
+        except AcosError as e:
+            return {"error": e.code, "message": e.message}
+        except ValueError as e:
+            return {"error": str(e)}
