@@ -270,9 +270,29 @@ class PermissionEngine:
                 decision = "allow"
                 matched_rule = "grant_task"
         elif resource_type in ("knowledge", "document"):
-            # company 级可见性：同公司即允许（v1 最小实现）
-            decision = "allow"
-            matched_rule = "company_visibility"
+            # 知识资源鉴权：按结构化 ACL 四分支判断（设计 §8.3）
+            # 1. company 级：同公司在职职员恒可读
+            if resource_id.startswith(f"{company_id}:"):
+                decision = "allow"
+                matched_rule = "knowledge_company_visibility"
+            # 2. department 级：在 visible_department_ids 中
+            elif resource_id.startswith("dept:"):
+                dept_id = resource_id.split(":", 1)[1]
+                if dept_id in scope["visible_department_ids"]:
+                    decision = "allow"
+                    matched_rule = "knowledge_department_visible"
+            # 3. task 级：在 visible_task_ids 中
+            elif resource_id.startswith("task:"):
+                task_id_ref = resource_id.split(":", 1)[1]
+                if task_id_ref in scope["visible_task_ids"]:
+                    decision = "allow"
+                    matched_rule = "knowledge_task_visible"
+            # 4. employee 级：仅本人或 private_visible_employee_ids
+            elif resource_id.startswith("emp:"):
+                emp_id = resource_id.split(":", 1)[1]
+                if emp_id == employee_id or emp_id in scope["private_visible_employee_ids"]:
+                    decision = "allow"
+                    matched_rule = "knowledge_employee_visible"
         else:
             matched_rule = "unknown_resource_type"
 

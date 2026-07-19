@@ -142,7 +142,7 @@ class ApprovalMethods:
             node_id=params.get("node_id"),
             generation_id=params.get("generation_id"),
             target_ref=target_ref,
-            target_gisk=params.get("target_gisk"),
+            target_skill=params.get("target_skill", params.get("target_gisk")),
             risk_summary=params.get("risk_summary"),
             target_hash=params.get("target_hash"),
             target_snapshot=params.get("target_snapshot"),

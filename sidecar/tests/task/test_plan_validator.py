@@ -165,3 +165,58 @@ def _build_dag(name: str) -> list[dict]:
             "outputs_schema": {"type": "object"}}],
     }
     return cases[name]
+
+
+async def test_pv03_reads_company_config(migrated_db):
+    """PV-03 应从 companies.plan_validator_config 读取可配上限。"""
+    import json
+    import aiosqlite
+    from datetime import datetime, timezone
+    from acos.task.plan_validator import PlanValidator, ValidationContext
+
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(migrated_db) as db:
+        await db.execute(
+            """INSERT OR IGNORE INTO companies
+               (company_id, name, status, default_provider_policy, root_department_id,
+                version, created_at, updated_at)
+               VALUES ('co1', '公司', 'active', '{}', 'dep1', 1, ?, ?)""",
+            (now, now),
+        )
+        await db.execute(
+            """INSERT OR IGNORE INTO backends
+               (backend_id, company_id, name, backend_type, status, health_status,
+                capabilities, workspace_types, workspace_root, concurrency_limit,
+                version, created_at, updated_at)
+               VALUES ('be-pv03', 'co1', 'test', 'local_process', 'enabled', 'healthy',
+                       '[]', '[]', '/tmp', 2, 1, ?, ?)""",
+            (now, now),
+        )
+        await db.execute(
+            "UPDATE companies SET plan_validator_config = ? WHERE company_id = 'co1'",
+            (json.dumps({"max_nodes": 3, "max_depth": 10}),),
+        )
+        await db.commit()
+
+    validator = PlanValidator(migrated_db)
+    ctx = ValidationContext(
+        company_id="co1", manager_employee_id="emp1", manager_scope="company",
+    )
+    # 3 个节点应该通过（等于上限）
+    dag_ok = [
+        {"node_id": f"n{i}", "node_type": "agent_step", "goal": "g",
+         "depends_on": ["n" + str(i - 1)] if i > 0 else [],
+         "outputs_schema": {"type": "object"}}
+        for i in range(3)
+    ]
+    await validator.validate(dag_ok, ctx)
+
+    # 4 个节点应该被拒绝（超过公司配置上限）
+    dag_bad = [
+        {"node_id": f"n{i}", "node_type": "agent_step", "goal": "g",
+         "depends_on": ["n" + str(i - 1)] if i > 0 else [],
+         "outputs_schema": {"type": "object"}}
+        for i in range(4)
+    ]
+    with pytest.raises(Exception, match="PV-03"):
+        await validator.validate(dag_bad, ctx)

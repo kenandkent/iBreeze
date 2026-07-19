@@ -71,3 +71,59 @@ async def test_list_hides_executor_state_and_paginates(migrated_db):
 def aiosqlite_fix(db):
     import aiosqlite
     return aiosqlite.connect(db)
+
+
+@pytest.mark.asyncio
+async def test_restore_returns_latest_verified(migrated_db):
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_backend(db)
+    await _mk_task(db)
+    svc = CheckpointService(db)
+    cp1 = await svc.create(task_id="task-cp", company_id="co1", task_cursor=1)
+    cp2 = await svc.create(task_id="task-cp", company_id="co1", task_cursor=2, run_id="run-2")
+    result = await svc.restore("task-cp", "co1")
+    assert result is not None
+    assert result["checkpoint_id"] in (cp1.checkpoint_id, cp2.checkpoint_id)
+    assert result["task_cursor"] in (1, 2)
+    assert await svc.verify(result["checkpoint_id"]) is True
+
+
+@pytest.mark.asyncio
+async def test_restore_returns_none_when_no_checkpoints(migrated_db):
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_backend(db)
+    await _mk_task(db)
+    svc = CheckpointService(db)
+    result = await svc.restore("task-cp", "co1")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_restore_cross_company_rejected(migrated_db):
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_company_employee(db, company_id="co2")
+    await seed_backend(db)
+    await _mk_task(db)
+    svc = CheckpointService(db)
+    await svc.create(task_id="task-cp", company_id="co1", task_cursor=1)
+    with pytest.raises(Exception):
+        await svc.restore("task-cp", "co2")
+
+
+@pytest.mark.asyncio
+async def test_restore_fails_on_tampered_checksum(migrated_db):
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_backend(db)
+    await _mk_task(db)
+    svc = CheckpointService(db)
+    cp = await svc.create(task_id="task-cp", company_id="co1", task_cursor=1)
+    async with aiosqlite_fix(db) as d:
+        await d.execute("UPDATE checkpoints SET task_cursor = 999 WHERE checkpoint_id = ?",
+                        (cp.checkpoint_id,))
+        await d.commit()
+    with pytest.raises(Exception, match="checksum"):
+        await svc.restore("task-cp", "co1")

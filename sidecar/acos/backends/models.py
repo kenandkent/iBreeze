@@ -18,6 +18,7 @@ class Backend:
     workspace_types: list[str] = field(default_factory=list)
     workspace_root: str = ""
     concurrency_limit: int = 1
+    last_health_probe_at: Optional[str] = None
     version: int = 1
 
 

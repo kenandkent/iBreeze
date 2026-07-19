@@ -173,6 +173,14 @@ class BudgetService:
                 "approval_id": lock["approval_id"],
                 "lock_id": lock["lock_id"],
             }
+        if on_exceeded == "downgrade":
+            # 降级：返回 downgrade 信号，由调用方走 CostPolicy 降级链
+            return {
+                "status": "downgrade",
+                "code": "WF-BUDGET-DOWNGRADE",
+                "message": "预算超限，建议降级到更低模型档位",
+                "remaining_micros": budget["remaining_micros"],
+            }
         raise AcosError(
             code=WF_BUDGET_EXCEEDED,
             message="预算超限",

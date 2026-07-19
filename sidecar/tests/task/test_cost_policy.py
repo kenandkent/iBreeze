@@ -50,3 +50,16 @@ def test_tier_for_role():
     assert CostPolicy.tier_for_role("worker", stability_level=2) == "free"
     assert CostPolicy.tier_for_role("worker", stability_level=6) == "standard"
     assert CostPolicy.worker_upgrade_ceiling() == "premium"
+
+
+def test_mid_stability_retry_first():
+    d = decide_degrade(stability_level=5, attempt=1, current_tier="standard",
+                       dept_employees=["e1", "e2"], current_employee_id="e1")
+    assert d.action == "retry_same_tier"
+
+
+def test_high_stability_second_attempt_ceiling_free():
+    d = decide_degrade(stability_level=8, attempt=2, current_tier="free",
+                       dept_employees=["e1"], current_employee_id="e1")
+    assert d.action == "upgrade_tier"
+    assert d.next_tier == "standard"

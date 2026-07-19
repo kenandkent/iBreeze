@@ -215,3 +215,27 @@ async def test_audit_query(db_path: str, server: RPCServer) -> None:
     q = await server._handlers["gov.audit.query"]({"company_id": company_id, "type": "budget"})
     assert q["total"] >= 1
     assert q["items"][0]["category"] == "budget"
+
+
+async def test_budget_reserve_downgrade(db_path: str, server: RPCServer) -> None:
+    """预算触顶 on_budget_exceeded=downgrade 时返回 downgrade 信号。"""
+    company_id = "comp-down"
+    await _seed_company_policy(db_path, company_id, on_budget_exceeded="downgrade")
+    await _seed_task(db_path, "t-dn", company_id)
+    # 直接用 BudgetService 创建任务预算
+    from acos.governance.budget import BudgetService
+    budget_svc = BudgetService(db_path)
+    await budget_svc.ensure_task_budget(
+        company_id=company_id, task_id="t-dn", currency="USD", limit_micros=100,
+    )
+    # 预留 50（够用）
+    r1 = await server._handlers["gov.budget.reserve"](
+        {"company_id": company_id, "task_id": "t-dn", "run_id": "r1", "currency": "USD", "amount_micros": 50}
+    )
+    assert r1["status"] == "reserved"
+    # 再预留 60（超限）→ 应返回 downgrade
+    r2 = await server._handlers["gov.budget.reserve"](
+        {"company_id": company_id, "task_id": "t-dn", "run_id": "r2", "currency": "USD", "amount_micros": 60}
+    )
+    assert r2["status"] == "downgrade"
+    assert r2["code"] == "WF-BUDGET-DOWNGRADE"

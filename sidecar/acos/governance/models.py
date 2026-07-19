@@ -68,7 +68,7 @@ class ApprovalRequest:
     node_id: Optional[str] = None
     generation_id: Optional[str] = None
     target_ref: str = ""
-    target_gisk: Optional[str] = None
+    target_skill: Optional[str] = None
     risk_summary: Optional[str] = None
     target_hash: Optional[str] = None
     target_snapshot: Optional[str] = None

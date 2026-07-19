@@ -504,7 +504,7 @@ class GovernanceService:
             await db.execute(
                 """INSERT INTO approval_requests
                    (request_id, company_id, approval_type, task_id, run_id, node_id,
-                    generation_id, target_ref, target_gisk, risk_summary, target_hash,
+                    generation_id, target_ref, target_skill, risk_summary, target_hash,
                     target_snapshot, requested_by, status, expiry, version, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?)""",
                 (
@@ -516,7 +516,7 @@ class GovernanceService:
                     req.node_id,
                     req.generation_id,
                     req.target_ref,
-                    req.target_gisk,
+                    req.target_skill,
                     req.risk_summary,
                     req.target_hash,
                     req.target_snapshot,
@@ -710,13 +710,19 @@ class GovernanceService:
                 )
 
             new_status = "approved" if decision == "approve" else "rejected"
-            await db.execute(
+            cursor_update = await db.execute(
                 """UPDATE approvals
                    SET status = ?, approved_by = ?, resolution = ?, reason = ?,
                        version = version + 1, updated_at = ?
                    WHERE approval_id = ? AND status = 'pending' AND version = ?""",
                 (new_status, actor_id, decision, comment, now, approval_id, expected_version),
             )
+            if cursor_update.rowcount == 0:
+                raise AcosError(
+                    code=SYS_OPTIMISTIC_LOCK_CONFLICT,
+                    message="审批决议失败：版本冲突",
+                    cause=f"期望 version={expected_version} 且 status='pending'，但实际不匹配",
+                )
             await db.commit()
 
             await self.write_audit(
@@ -836,7 +842,7 @@ def _row_to_approval_request(row: aiosqlite.Row) -> ApprovalRequest:
         node_id=row["node_id"] if "node_id" in row.keys() else None,
         generation_id=row["generation_id"] if "generation_id" in row.keys() else None,
         target_ref=row["target_ref"],
-        target_gisk=row["target_gisk"] if "target_gisk" in row.keys() else None,
+        target_skill=row["target_skill"] if "target_skill" in row.keys() else None,
         risk_summary=row["risk_summary"] if "risk_summary" in row.keys() else None,
         target_hash=row["target_hash"] if "target_hash" in row.keys() else None,
         target_snapshot=row["target_snapshot"] if "target_snapshot" in row.keys() else None,

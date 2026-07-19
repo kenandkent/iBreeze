@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS approval_requests (
     node_id TEXT,
     generation_id TEXT,
     target_ref TEXT NOT NULL,
-    target_gisk TEXT,
+    target_skill TEXT,
     risk_summary TEXT,
     target_hash TEXT,
     target_snapshot TEXT,

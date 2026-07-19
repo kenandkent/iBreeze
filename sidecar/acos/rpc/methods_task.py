@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json as _json
 from typing import Any
+
+import aiosqlite
 
 from acos.rpc.errors import AcosError
 from acos.rpc.server import RPCServer
@@ -23,6 +26,7 @@ class TaskMethods:
         server.register_method("task.cancel", self._task_cancel)
         server.register_method("task.retrySubtask", self._task_retry_subtask)
         server.register_method("task.create", self._task_create)
+        server.register_method("task.nodes", self._task_nodes)
 
     async def _task_start(self, params: dict[str, Any]) -> dict[str, Any]:
         task_id = params.get("task_id")
@@ -112,3 +116,37 @@ class TaskMethods:
             return {"error": e.code, "message": e.message}
         except ValueError as e:
             return {"error": str(e)}
+
+    async def _task_nodes(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """task.nodes：返回任务的 DAG 节点列表（含依赖关系，供前端可视化）。"""
+        task_id = params.get("task_id")
+        if not task_id:
+            return []
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """SELECT node_id, node_type, goal, status, depends_on,
+                          assignee_employee_id, generation_id, version
+                   FROM task_nodes WHERE task_id = ? ORDER BY created_at""",
+                (task_id,),
+            )
+            rows = await cur.fetchall()
+            result = []
+            for r in rows:
+                deps = r["depends_on"]
+                if isinstance(deps, str):
+                    try:
+                        deps = _json.loads(deps)
+                    except Exception:
+                        deps = []
+                result.append({
+                    "node_id": r["node_id"],
+                    "node_type": r["node_type"],
+                    "goal": r["goal"],
+                    "status": r["status"],
+                    "depends_on": deps or [],
+                    "assignee_employee_id": r["assignee_employee_id"],
+                    "generation_id": r["generation_id"],
+                    "version": r["version"],
+                })
+            return result

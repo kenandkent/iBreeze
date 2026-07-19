@@ -140,8 +140,23 @@ class PlanValidator:
                 raise PlanValidationError("PV-01", "depends_on 必须是数组")
 
     async def _pv03_scale(self, dag: list[dict], company_id: str) -> None:
+        # 从公司配置读取可配上限（设计 §PV-03：公司策略可配置默认值）
         max_nodes = 50
         max_depth_limit = 8
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT plan_validator_config FROM companies WHERE company_id = ?",
+                (company_id,),
+            )
+            row = await cur.fetchone()
+            if row:
+                try:
+                    cfg = json.loads(row["plan_validator_config"] or "{}")
+                    max_nodes = cfg.get("max_nodes", max_nodes)
+                    max_depth_limit = cfg.get("max_depth", max_depth_limit)
+                except (json.JSONDecodeError, TypeError):
+                    pass
         if len(dag) > max_nodes:
             raise PlanValidationError(
                 "PV-03", f"节点数 {len(dag)} 超过上限 {max_nodes}"

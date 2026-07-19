@@ -225,6 +225,7 @@ class TaskService:
         return await self._tasks.transition(task_id, expected_version, "completed")
 
     async def cancel_task(self, task_id: str, expected_version: int) -> dict:
+        """事务化取消：task cancelling -> cancelled + 节点级联 + assignment 关闭。"""
         task = await self._tasks.get(task_id)
         if task is None:
             raise AcosError(code="WF-NOT-FOUND", message="任务不存在")
@@ -232,19 +233,47 @@ class TaskService:
             raise AcosError(
                 code=WF_STATE_INVALID, message=f"任务状态 {task.status} 不可取消"
             )
-        # cancelling -> cancelled（此处同步简化，证据级联）
-        cancelling = await self._tasks.transition(task_id, expected_version, "cancelling")
-        # 节点级联：未终态 -> cancelled
-        nodes = await self._nodes.list_by_task(task_id)
-        for n in nodes:
-            if n.status not in ("completed", "failed", "cancelled", "dead_letter"):
-                await self._nodes.transition(n.node_id, n.version, "cancelled")
-        # assignment 关闭
-        asgs = await self._assignments.list_by_task(task_id)
-        for a in asgs:
-            if a.status == "active":
-                await self._assignments.close(a.assignment_id, a.version)
-        await self._tasks.transition(task_id, cancelling.version, "cancelled")
+        # 整个取消流程在一个事务中完成
+        async with aiosqlite.connect(self._db_path) as db:
+            # 1. task -> cancelling
+            now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            cursor = await db.execute(
+                """UPDATE tasks SET status = 'cancelling', version = version + 1, updated_at = ?
+                   WHERE task_id = ? AND version = ? AND status NOT IN ('completed', 'cancelled', 'cancelling')""",
+                (now, task_id, expected_version),
+            )
+            if cursor.rowcount == 0:
+                raise AcosError(code=WF_STATE_INVALID, message="取消失败：状态已变更")
+            new_task_version = expected_version + 1
+
+            # 2. 节点级联：未终态 -> cancelled
+            node_rows = await db.execute_fetchall(
+                "SELECT node_id, version, status FROM task_nodes WHERE task_id = ?",
+                (task_id,),
+            )
+            for n in node_rows:
+                if n["status"] not in ("completed", "failed", "cancelled", "dead_letter"):
+                    await db.execute(
+                        """UPDATE task_nodes SET status = 'cancelled', version = version + 1, updated_at = ?
+                           WHERE node_id = ? AND version = ?""",
+                        (now, n["node_id"], n["version"]),
+                    )
+
+            # 3. assignment 关闭
+            await db.execute(
+                """UPDATE task_assignments SET status = 'closed', updated_at = ?
+                   WHERE task_id = ? AND status = 'active'""",
+                (now, task_id),
+            )
+
+            # 4. task -> cancelled
+            await db.execute(
+                """UPDATE tasks SET status = 'cancelled', version = version + 1, updated_at = ?
+                   WHERE task_id = ? AND version = ?""",
+                (now, task_id, new_task_version),
+            )
+
+            await db.commit()
         return {"status": "cancelled", "task_id": task_id}
 
     # ── 辅助 ──

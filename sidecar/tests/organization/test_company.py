@@ -116,5 +116,10 @@ async def test_create_company_default_policies(svc: OrganizationService) -> None
     company = await svc.create_company("策略测试", "owner-1")
     fetched = await svc.get_company(company.company_id)
     assert fetched is not None
-    assert fetched.default_provider_policy == {}
-    assert fetched.default_budget_policy == {}
+    # 默认策略：provider policy 含 free/standard/premium 槽位
+    assert "free" in fetched.default_provider_policy
+    assert "standard" in fetched.default_provider_policy
+    assert "premium" in fetched.default_provider_policy
+    # 默认预算策略：含 currency 和 default_on_budget_exceeded
+    assert fetched.default_budget_policy.get("currency") == "CNY"
+    assert fetched.default_budget_policy.get("default_on_budget_exceeded") == "require_approval"

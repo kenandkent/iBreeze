@@ -1,4 +1,4 @@
-"""Backend 服务：CRUD、调度、Lease 管理。"""
+"""Backend 服务：CRUD、调度（全局进程上限）、Lease 管理（process_start_token）。"""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ def _row_to_backend(row: aiosqlite.Row) -> Backend:
         workspace_types=json.loads(row["workspace_types"]),
         workspace_root=row["workspace_root"],
         concurrency_limit=row["concurrency_limit"],
+        last_health_probe_at=row["last_health_probe_at"] if "last_health_probe_at" in row.keys() else None,
         version=row["version"],
     )
 
@@ -141,19 +142,77 @@ class BackendService:
             await db.commit()
             return await self.get(backend_id)
 
+    async def probe_health(self, backend_id: str) -> dict:
+        """健康探针：写入 last_health_probe_at，返回最新健康状态。
+
+        设计 §10.3：Backend 每 30s 发送 probe，超 90s 未更新标记 stale。
+        """
+        now = _now()
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute(
+                """UPDATE backends
+                   SET last_health_probe_at = ?, version = version + 1, updated_at = ?
+                   WHERE backend_id = ?""",
+                (now, now, backend_id),
+            )
+            await db.commit()
+            cursor = await db.execute(
+                "SELECT backend_id, health_status, last_health_probe_at FROM backends WHERE backend_id = ?",
+                (backend_id,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return {"backend_id": backend_id, "health_status": "unknown", "stale": True}
+        return {
+            "backend_id": row["backend_id"],
+            "health_status": row["health_status"],
+            "last_probe": row["last_health_probe_at"],
+            "stale": False,
+        }
+
+    async def get_stale_backends(self, stale_seconds: int = 90) -> list[str]:
+        """返回超过 stale_seconds 未 probe 的 backend_id 列表。"""
+        now = datetime.now(timezone.utc)
+        stale_threshold = now.timestamp() - stale_seconds
+        stale_iso = datetime.fromtimestamp(stale_threshold, tz=timezone.utc).isoformat()
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                """SELECT backend_id FROM backends
+                   WHERE status = 'enabled'
+                     AND (last_health_probe_at IS NULL OR last_health_probe_at < ?)""",
+                (stale_iso,),
+            )
+            return [row[0] for row in await cursor.fetchall()]
+
 
 class BackendScheduler:
-    """Backend 调度器：选择 Backend、入队、获取下一个。"""
+    """Backend 调度器：选择 Backend、入队、获取下一个（含全局进程上限）。"""
 
-    def __init__(self, db_path: str) -> None:
+    def __init__(self, db_path: str, global_process_limit: int = 0) -> None:
         self._db_path = db_path
+        self._global_process_limit = global_process_limit
+
+    async def _count_global_active_leases(self) -> int:
+        """查询所有 backend 的 active lease 总数。"""
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM backend_leases WHERE status = 'active'",
+            )
+            row = await cursor.fetchone()
+            return row[0]
 
     async def select_backend(
         self,
         company_id: str,
         required_capabilities: Optional[list[str]] = None,
     ) -> Optional[Backend]:
-        """选择可用的 Backend。"""
+        """选择可用的 Backend（含全局进程上限检查）。"""
+        if self._global_process_limit > 0:
+            global_count = await self._count_global_active_leases()
+            if global_count >= self._global_process_limit:
+                return None
+
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
@@ -243,7 +302,7 @@ class BackendScheduler:
 
 
 class BackendLeaseManager:
-    """Backend Lease 管理：bind、heartbeat、release。"""
+    """Backend Lease 管理：bind（含 process_start_token）、heartbeat、release。"""
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
@@ -255,50 +314,51 @@ class BackendLeaseManager:
         run_id: Optional[str] = None,
         session_turn_id: Optional[str] = None,
         worker_pid: Optional[int] = None,
+        process_start_token: Optional[str] = None,
     ) -> BackendLease:
-        lease = BackendLease(
-            lease_id=str(uuid.uuid4()),
+        """原子获取 lease（修复 TOCTOU 竞态）+ 写入 process_start_token。"""
+        lease_id = str(uuid.uuid4())
+        now = _now()
+        if not process_start_token:
+            process_start_token = uuid.uuid4().hex
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO backend_leases
+                   (lease_id, backend_id, company_id, run_id, session_turn_id,
+                    worker_pid, process_start_token, status, heartbeat_at,
+                    version, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, ?, 'active', ?, 1, ?, ?
+                   FROM backends
+                   WHERE backend_id = ?
+                     AND (SELECT COUNT(*) FROM backend_leases
+                          WHERE backend_id = ? AND status = 'active') < concurrency_limit""",
+                (lease_id, backend_id, company_id, run_id, session_turn_id,
+                 worker_pid, process_start_token, now, now, now, backend_id, backend_id),
+            )
+            if cursor.rowcount == 0:
+                raise create_error(
+                    BACKEND_CAPACITY_FULL,
+                    f"Backend {backend_id} 容量已满或不存在"
+                )
+            await db.commit()
+        return BackendLease(
+            lease_id=lease_id,
             backend_id=backend_id,
             company_id=company_id,
             run_id=run_id,
             session_turn_id=session_turn_id,
             worker_pid=worker_pid,
         )
+
+    async def verify_process_token(self, lease_id: str, process_start_token: str) -> bool:
+        """CAS 验证 process_start_token（防止 PID 复用攻击）。"""
         async with aiosqlite.connect(self._db_path) as db:
             cursor = await db.execute(
-                "SELECT COUNT(*) FROM backend_leases WHERE backend_id = ? AND status = 'active'",
-                (backend_id,),
+                """SELECT 1 FROM backend_leases
+                   WHERE lease_id = ? AND process_start_token = ? AND status = 'active'""",
+                (lease_id, process_start_token),
             )
-            row = await cursor.fetchone()
-            db.row_factory = aiosqlite.Row
-            cursor2 = await db.execute(
-                "SELECT concurrency_limit FROM backends WHERE backend_id = ?",
-                (backend_id,),
-            )
-            backend_row = await cursor2.fetchone()
-
-            if backend_row and row[0] >= backend_row["concurrency_limit"]:
-                raise create_error(BACKEND_CAPACITY_FULL, f"Backend {backend_id} 容量已满")
-
-            await db.execute(
-                """INSERT INTO backend_leases
-                   (lease_id, backend_id, company_id, run_id, session_turn_id,
-                    worker_pid, status, heartbeat_at, version, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'active', ?, 1, ?, ?)""",
-                (
-                    lease.lease_id,
-                    lease.backend_id,
-                    lease.company_id,
-                    lease.run_id,
-                    lease.session_turn_id,
-                    lease.worker_pid,
-                    _now(),
-                    _now(),
-                    _now(),
-                ),
-            )
-            await db.commit()
-        return lease
+            return (await cursor.fetchone()) is not None
 
     async def heartbeat(self, lease_id: str) -> bool:
         now = _now()

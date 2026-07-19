@@ -65,14 +65,24 @@ class OrganizationService:
         async with aiosqlite.connect(self._db_path) as db:
             await db.execute("PRAGMA foreign_keys = ON")
             try:
+                # 初始化默认策略（设计 §6.1）
+                default_provider_policy = json.dumps({
+                    "free": None, "standard": None, "premium": None
+                })
+                default_budget_policy = json.dumps({
+                    "currency": "CNY",
+                    "default_limit_micros": 0,
+                    "default_on_budget_exceeded": "require_approval"
+                })
                 await db.execute(
                     """INSERT INTO companies
                        (company_id, name, status, root_department_id,
                         default_provider_policy, default_budget_policy,
                         created_at, updated_at, version)
-                       VALUES (?, ?, ?, ?, '{}', '{}', ?, ?, 1)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
                     (company.company_id, company.name, company.status,
-                     dept_id, now, now),
+                     dept_id, default_provider_policy, default_budget_policy,
+                     now, now),
                 )
 
                 await db.execute(

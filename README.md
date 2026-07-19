@@ -87,7 +87,7 @@ ibreeze/
 │   └── acos/
 │       ├── app.py         # RPC 总线接线（所有 Methods 注册入口）
 │       ├── rpc/           # 各命名空间 handler（methods_*.py）
-│       ├── migrations/    # SQLite 幂等迁移（0028-0058）
+│       ├── migrations/    # SQLite 幂等迁移（0028-0061）
 │       ├── backends/      # Backend 服务 / Provider 注册 / 凭证代理 / 运行时
 │       ├── knowledge/     # 知识库 RAG 模块
 │       ├── workflows/     # 工作流引擎
@@ -205,3 +205,11 @@ React 前端通过 `rpcCall` → Tauri `sys_rpc_call` → sidecar 通信。Sideb
 
 详细部署说明请参阅 [docs/部署文档.md](docs/部署文档.md)。
 用户操作手册请参阅 [docs/用户手册.md](docs/用户手册.md)。
+
+## 近期新增
+
+- Backend 健康探测（`backend.probe_health`、stale 后端自动检测，迁移 0061）
+- PV-03 公司可配 DAG 上限（`plan_validator_config` 字段）
+- Budget 降级分支（`on_exceeded="downgrade"` 策略）
+- `task.nodes` RPC：返回 DAG 节点及依赖关系
+- Task DAG 可视化（React Flow，`TaskDetail` 页面 DAG 标签页）

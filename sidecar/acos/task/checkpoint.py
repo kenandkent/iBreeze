@@ -2,6 +2,7 @@
 
 checkpoint 结构对照 §10.5。workflow.checkpoint.list 按 (created_at DESC, checkpoint_id DESC)
 分页；不暴露 executor_state；跨公司拒绝。
+restore 读取最新已验证 checkpoint 并返回恢复状态。
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from acos.task.models import Checkpoint, new_id
 from acos.task.repository import CheckpointRepository
 
 WF_NOT_FOUND = "WF-NOT-FOUND"
+WF_CHECKPOINT_RESTORE_FAILED = "WF-CHECKPOINT-RESTORE-FAILED"
 SYS_PAGE_CURSOR_INVALID = "SYS-PAGE-CURSOR-INVALID"
 
 
@@ -120,4 +122,53 @@ class CheckpointService:
             "items": items,
             "next_cursor": next_cursor if has_more else None,
             "has_more": has_more,
+        }
+
+    async def restore(self, task_id: str, company_id: str) -> Optional[dict]:
+        """恢复：读取该任务最新 checksum 已验证的 checkpoint，返回恢复状态。
+
+        返回 {"checkpoint_id", "task_cursor", "generation_id", "run_id",
+                "plan_hash", "event_offset", "context_hash"} 或 None（无可恢复点）。
+        """
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            # 校验公司归属
+            cur = await db.execute(
+                "SELECT company_id FROM tasks WHERE task_id = ?", (task_id,)
+            )
+            row = await cur.fetchone()
+            if row is None:
+                raise AcosError(code=WF_NOT_FOUND, message="任务不存在")
+            if row["company_id"] != company_id:
+                raise AcosError(
+                    code="GOV-BUDGET-CROSS-COMPANY",
+                    message="跨公司 checkpoint 恢复被拒绝",
+                )
+            # 取最新 checkpoint
+            cur = await db.execute(
+                """SELECT * FROM checkpoints
+                   WHERE task_id = ? ORDER BY created_at DESC, checkpoint_id DESC LIMIT 1""",
+                (task_id,),
+            )
+            cp = await cur.fetchone()
+            if cp is None:
+                return None
+
+        # 验证 checksum
+        ok = await self.verify(cp["checkpoint_id"])
+        if not ok:
+            raise AcosError(
+                code=WF_CHECKPOINT_RESTORE_FAILED,
+                message="最新 checkpoint checksum 校验失败，无法恢复",
+                cause=f"checkpoint_id={cp['checkpoint_id']}",
+            )
+
+        return {
+            "checkpoint_id": cp["checkpoint_id"],
+            "task_cursor": cp["task_cursor"],
+            "generation_id": cp["generation_id"],
+            "run_id": cp["run_id"],
+            "plan_hash": cp["plan_hash"],
+            "context_hash": cp["context_hash"],
+            "event_offset": cp["event_offset"],
         }

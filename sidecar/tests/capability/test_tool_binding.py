@@ -119,3 +119,45 @@ class TestToolBindingValidator:
         assert r.tool_call_hash == ""
         assert r.matched_rule == ""
         assert r.requires_approval is False
+
+    async def test_acl_with_permission_engine_deny(self) -> None:
+        class MockPermEngine:
+            async def authorize(self, **kw):
+                return {"decision": "deny", "matched_rule": "perm_deny"}
+
+        validator = ToolBindingValidator(permission_engine=MockPermEngine())
+        employee = MockEmployee()
+        result = await validator.validate_tool_call(
+            employee, None, {"allowed_tools": ["search"]},
+            {"tool_name": "search"}, company_id="comp-1",
+        )
+        assert result.allowed is False
+        assert result.matched_rule == "perm_deny"
+
+    async def test_acl_with_permission_engine_allow(self) -> None:
+        class MockPermEngine:
+            async def authorize(self, **kw):
+                return {"decision": "allow", "matched_rule": "perm_allow"}
+
+        validator = ToolBindingValidator(permission_engine=MockPermEngine())
+        employee = MockEmployee()
+        result = await validator.validate_tool_call(
+            employee, None, {"allowed_tools": ["search"]},
+            {"tool_name": "search"}, company_id="comp-1",
+        )
+        assert result.allowed is True
+        # 最终 matched_rule 是链路最后一层（runtime_policy），但 ACL 层已通过
+        assert result.matched_rule == "runtime_policy"
+
+    async def test_acl_permission_engine_fallback(self) -> None:
+        class BrokenPermEngine:
+            async def authorize(self, **kw):
+                raise RuntimeError("db down")
+
+        validator = ToolBindingValidator(permission_engine=BrokenPermEngine())
+        employee = MockEmployee(allowed_tools=["search"])
+        result = await validator.validate_tool_call(
+            employee, None, {"allowed_tools": ["search"]},
+            {"tool_name": "search"}, company_id="comp-1",
+        )
+        assert result.allowed is True

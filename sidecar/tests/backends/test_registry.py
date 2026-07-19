@@ -138,7 +138,9 @@ async def test_enqueue_and_acquire(svc: BackendService, scheduler: BackendSchedu
 # ── BackendLeaseManager ──
 
 
-async def test_bind_and_list_active(lease_mgr: BackendLeaseManager) -> None:
+async def test_bind_and_list_active(lease_mgr: BackendLeaseManager, svc: BackendService) -> None:
+    # 先创建 backend
+    await _make_backend(svc, backend_id="be-1")
     lease = await lease_mgr.bind("be-1", "comp-1", run_id="run-1")
     assert lease.lease_id
     assert lease.status == "active"
@@ -147,7 +149,8 @@ async def test_bind_and_list_active(lease_mgr: BackendLeaseManager) -> None:
     assert len(active) == 1
 
 
-async def test_heartbeat(lease_mgr: BackendLeaseManager) -> None:
+async def test_heartbeat(lease_mgr: BackendLeaseManager, svc: BackendService) -> None:
+    await _make_backend(svc, backend_id="be-1")
     lease = await lease_mgr.bind("be-1", "comp-1", run_id="run-1")
     ok = await lease_mgr.heartbeat(lease.lease_id)
     assert ok is True
@@ -158,7 +161,8 @@ async def test_heartbeat_nonexistent(lease_mgr: BackendLeaseManager) -> None:
     assert ok is False
 
 
-async def test_release(lease_mgr: BackendLeaseManager) -> None:
+async def test_release(lease_mgr: BackendLeaseManager, svc: BackendService) -> None:
+    await _make_backend(svc, backend_id="be-1")
     lease = await lease_mgr.bind("be-1", "comp-1", run_id="run-1")
     ok = await lease_mgr.release(lease.lease_id)
     assert ok is True
@@ -170,3 +174,52 @@ async def test_release(lease_mgr: BackendLeaseManager) -> None:
 async def test_release_nonexistent(lease_mgr: BackendLeaseManager) -> None:
     ok = await lease_mgr.release("nonexistent")
     assert ok is False
+
+
+# ── global_process_limit ──
+
+
+async def test_select_backend_global_limit_reached(svc: BackendService, db_path: str) -> None:
+    from acos.backends.service import BackendScheduler
+
+    await _make_backend(svc, backend_id="be-g1", concurrency_limit=5)
+    scheduler = BackendScheduler(db_path, global_process_limit=2)
+    # 正常情况可选
+    b = await scheduler.select_backend("comp-1")
+    assert b is not None
+    # 手动填满全局上限
+    lease_mgr = BackendLeaseManager(db_path)
+    await lease_mgr.bind("be-g1", "comp-1", run_id="r1")
+    await lease_mgr.bind("be-g1", "comp-1", run_id="r2")
+    # 全局已满
+    b2 = await scheduler.select_backend("comp-1")
+    assert b2 is None
+
+
+# ── process_start_token ──
+
+
+async def test_bind_with_process_start_token(lease_mgr: BackendLeaseManager, svc: BackendService) -> None:
+    await _make_backend(svc, backend_id="be-tok")
+    lease = await lease_mgr.bind("be-tok", "comp-1", run_id="r-tok", process_start_token="tok-abc")
+    assert lease.lease_id
+    ok = await lease_mgr.verify_process_token(lease.lease_id, "tok-abc")
+    assert ok is True
+    bad = await lease_mgr.verify_process_token(lease.lease_id, "wrong-token")
+    assert bad is False
+
+
+# ── health probe ──
+
+
+async def test_probe_health(svc: BackendService) -> None:
+    await _make_backend(svc, backend_id="be-hp")
+    result = await svc.probe_health("be-hp")
+    assert result["backend_id"] == "be-hp"
+    assert result["stale"] is False
+
+
+async def test_get_stale_backends(svc: BackendService) -> None:
+    await _make_backend(svc, backend_id="be-stale")
+    stale = await svc.get_stale_backends(stale_seconds=0)
+    assert "be-stale" in stale
