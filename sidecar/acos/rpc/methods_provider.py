@@ -162,7 +162,7 @@ class ProviderMethods:
     # API Key 形式可选择的供应商及其默认 base_url
     _API_VENDORS = {
         "openai": "https://api.openai.com/v1",
-        "deepseek": "https://api.deepseek.com/v1",
+        "deepseek": "https://api.deepseek.com",
         "anthropic": "https://api.anthropic.com/v1",
     }
 

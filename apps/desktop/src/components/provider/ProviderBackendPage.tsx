@@ -358,7 +358,11 @@ export function ProviderBackendPage() {
                     <input
                       value={providerForm.base_url}
                       onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })}
-                      placeholder={providerForm.api_vendor === 'anthropic' ? 'https://api.anthropic.com/v1' : '如：https://api.openai.com/v1'}
+                      placeholder={
+                        providerForm.api_vendor === 'anthropic' ? 'https://api.anthropic.com/v1'
+                          : providerForm.api_vendor === 'deepseek' ? 'https://api.deepseek.com'
+                            : '如：https://api.openai.com/v1'
+                      }
                       className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>

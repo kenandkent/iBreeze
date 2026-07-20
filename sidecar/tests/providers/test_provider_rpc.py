@@ -162,6 +162,8 @@ async def test_models_fetch_fallback_on_bad_key(methods: ProviderMethods, monkey
 async def test_models_fetch_live_openai(methods: ProviderMethods, monkeypatch) -> None:
     import httpx
 
+    captured = {}
+
     class _Resp:
         def raise_for_status(self):
             pass
@@ -179,17 +181,55 @@ async def test_models_fetch_live_openai(methods: ProviderMethods, monkeypatch) -
         async def __aexit__(self, *a):
             return False
 
-        async def get(self, *a, **k):
+        async def get(self, url, *a, **k):
+            captured["url"] = url
             return _Resp()
 
     monkeypatch.setattr(httpx, "AsyncClient", _Client)
     res = await methods._models_fetch({"api_vendor": "openai", "api_key": "sk-x"})
     assert res["source"] == "live"
     assert res["models"] == [{"model": "gpt-5.1-codex", "display_name": "gpt-5.1-codex"}]
+    assert captured["url"] == "https://api.openai.com/v1/models"
+
+
+async def test_models_fetch_live_deepseek(methods: ProviderMethods, monkeypatch) -> None:
+    import httpx
+
+    captured = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"id": "deepseek-v4-pro", "owned_by": "deepseek"}]}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, *a, **k):
+            captured["url"] = url
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    res = await methods._models_fetch({"api_vendor": "deepseek", "api_key": "sk-x"})
+    assert res["source"] == "live"
+    # DeepSeek 官方文档: GET /models (基址不带 /v1)
+    assert captured["url"] == "https://api.deepseek.com/models"
+    assert res["models"] == [{"model": "deepseek-v4-pro", "display_name": "deepseek-v4-pro"}]
 
 
 async def test_models_fetch_live_anthropic(methods: ProviderMethods, monkeypatch) -> None:
     import httpx
+
+    captured = {}
 
     class _Resp:
         def raise_for_status(self):
@@ -208,12 +248,14 @@ async def test_models_fetch_live_anthropic(methods: ProviderMethods, monkeypatch
         async def __aexit__(self, *a):
             return False
 
-        async def get(self, *a, **k):
+        async def get(self, url, *a, **k):
+            captured["url"] = url
             return _Resp()
 
     monkeypatch.setattr(httpx, "AsyncClient", _Client)
     res = await methods._models_fetch({"api_vendor": "anthropic", "api_key": "sk-x"})
     assert res["source"] == "live"
+    assert captured["url"] == "https://api.anthropic.com/v1/models"
     assert res["models"][0]["model"] == "claude-opus-4-8"
     assert res["models"][0]["display_name"] == "Claude Opus 4.8"
 
