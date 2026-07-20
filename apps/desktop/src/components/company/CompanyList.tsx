@@ -6,7 +6,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useAppStore } from '../../stores/appStore';
 import type { Company, Department } from '../../types';
-import { Building2, X, Pencil, Trash2, ChevronRight, FolderTree, Plus, RotateCcw } from 'lucide-react';
+import { Building2, X, Pencil, Trash2, ChevronRight, FolderTree, Plus, RotateCcw, Zap } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: 'active', label: '正常运营' },
@@ -30,6 +30,8 @@ export function CompanyList() {
   const [deptForm, setDeptForm] = useState({ name: '', description: '' });
 
   const [confirmTarget, setConfirmTarget] = useState<{ type: 'company' | 'department' | 'restore'; id: string; name: string } | null>(null);
+  const [activateTarget, setActivateTarget] = useState<Company | null>(null);
+  const [activateLeaderName, setActivateLeaderName] = useState('负责人');
 
   const { data: allCompanies, isLoading, error, refetch } = useQuery<Company[]>({
     queryKey: ['companies'],
@@ -66,6 +68,20 @@ export function CompanyList() {
     mutationFn: (company_id: string) => rpcCall('org.company.restore', { company_id }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
     onError: (err: Error) => alert('恢复失败: ' + err.message),
+  });
+
+  const activateCompany = useMutation({
+    mutationFn: ({ company_id, version, leader_name }: { company_id: string; version: number; leader_name: string }) =>
+      rpcCall<{ company_id: string; status: string }>('org.company.activate', { company_id, expected_version: version, leader: { name: leader_name } }),
+    onSuccess: (result: { company_id: string; status: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      if (result.status === 'active') {
+        setCurrentCompany(result.company_id);
+      }
+      setActivateTarget(null);
+      setActivateLeaderName('负责人');
+    },
+    onError: (err: Error) => alert('激活失败: ' + err.message),
   });
 
   const createDept = useMutation({
@@ -151,7 +167,11 @@ export function CompanyList() {
                     <span className="text-sm text-gray-700 truncate">{company.name}</span>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {company.status !== 'active' ? (
+                    {company.status === 'initializing' ? (
+                      <button onClick={(e) => { e.stopPropagation(); setActivateTarget(company); setActivateLeaderName('负责人'); }} className="p-1 text-gray-400 hover:text-green-600" title="激活">
+                        <Zap className="w-3.5 h-3.5" />
+                      </button>
+                    ) : company.status !== 'active' ? (
                       <button onClick={(e) => { e.stopPropagation(); setConfirmTarget({ type: 'restore', id: company.company_id, name: company.name }); }} className="p-1 text-gray-400 hover:text-green-600" title="恢复">
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
@@ -291,6 +311,35 @@ export function CompanyList() {
                 disabled={!deptForm.name || createDept.isPending || updateDept.isPending}
                 className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
                 {createDept.isPending || updateDept.isPending ? '处理中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 激活公司弹窗 */}
+      {activateTarget && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">激活公司「{activateTarget.name}」</h3>
+              <button onClick={() => setActivateTarget(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">激活后公司状态将变为「正常运营」，并创建首任负责人。</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">负责人姓名</label>
+                <input type="text" value={activateLeaderName} onChange={(e) => setActivateLeaderName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400" placeholder="请输入负责人姓名" autoFocus />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setActivateTarget(null)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button
+                onClick={() => activateCompany.mutate({ company_id: activateTarget.company_id, version: activateTarget.version, leader_name: activateLeaderName })}
+                disabled={!activateLeaderName || activateCompany.isPending}
+                className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50">
+                {activateCompany.isPending ? '激活中...' : '确认激活'}
               </button>
             </div>
           </div>

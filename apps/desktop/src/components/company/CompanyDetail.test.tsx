@@ -12,6 +12,7 @@ const mockCompany: Company = {
   company_id: 'comp-001',
   name: '测试公司',
   status: 'active',
+  version: 1,
   created_at: '2025-01-15',
 };
 

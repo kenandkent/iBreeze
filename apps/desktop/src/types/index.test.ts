@@ -7,7 +7,7 @@ import type {
 
 describe('types', () => {
   it('Company has expected fields', () => {
-    const c: Company = { company_id: '1', name: 'Test', status: 'active', created_at: '2024-01-01' };
+    const c: Company = { company_id: '1', name: 'Test', status: 'active', version: 1, created_at: '2024-01-01' };
     expect(c.company_id).toBe('1');
   });
 

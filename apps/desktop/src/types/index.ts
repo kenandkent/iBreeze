@@ -2,6 +2,7 @@ export interface Company {
   company_id: string;
   name: string;
   status: string;
+  version: number;
   created_at: string;
 }
 
