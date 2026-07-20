@@ -99,12 +99,71 @@ async def test_deadletter_resolve_ok(migrated_db):
     wf = WorkflowMethods(db)
     res = await wf._deadletter_resolve({"dead_letter_id": "dl1", "resolution": "resolved"})
     assert res["status"] == "resolved"
+    assert res["task"]["task_id"] == "task-dl"
     async with aiosqlite.connect(db) as c:
         c.row_factory = aiosqlite.Row
         cur = await c.execute("SELECT status, version FROM dead_letters WHERE dead_letter_id='dl1'")
         row = await cur.fetchone()
         assert row["status"] == "resolved"
         assert row["version"] == 2
+
+
+@pytest.mark.asyncio
+async def test_deadletter_resolve_resumes_blocked_task(migrated_db):
+    # 任务因 dead_letter 挂起（failed），resolved 应恢复为 running
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_backend(db)
+    await _mk_task(db, "task-dl-r")
+    import aiosqlite
+    async with aiosqlite.connect(db) as c:
+        await c.execute(
+            "UPDATE tasks SET status='failed', version=version+1 WHERE task_id='task-dl-r'"
+        )
+        await c.execute(
+            """INSERT INTO dead_letters
+               (dead_letter_id, company_id, task_id, node_id, reason, kind, status, version)
+               VALUES ('dlr','co1','task-dl-r','n1','fix exhausted','fix_exhausted','open',1)"""
+        )
+        await c.commit()
+    wf = WorkflowMethods(db)
+    res = await wf._deadletter_resolve({"dead_letter_id": "dlr", "resolution": "resolved"})
+    assert res["status"] == "resolved"
+    assert res["task"]["status"] == "running"
+    assert res["task"]["updated"] is True
+    async with aiosqlite.connect(db) as c:
+        c.row_factory = aiosqlite.Row
+        cur = await c.execute("SELECT status FROM tasks WHERE task_id='task-dl-r'")
+        assert (await cur.fetchone())["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_deadletter_resolve_aborts_running_task(migrated_db):
+    # 运行中的任务，aborted 应终止为 cancelled
+    db = migrated_db
+    await seed_company_employee(db)
+    await seed_backend(db)
+    await _mk_task(db, "task-dl-a")
+    import aiosqlite
+    async with aiosqlite.connect(db) as c:
+        await c.execute(
+            "UPDATE tasks SET status='running', version=version+1 WHERE task_id='task-dl-a'"
+        )
+        await c.execute(
+            """INSERT INTO dead_letters
+               (dead_letter_id, company_id, task_id, node_id, reason, kind, status, version)
+               VALUES ('dla','co1','task-dl-a','n1','fix exhausted','fix_exhausted','open',1)"""
+        )
+        await c.commit()
+    wf = WorkflowMethods(db)
+    res = await wf._deadletter_resolve({"dead_letter_id": "dla", "resolution": "aborted"})
+    assert res["status"] == "aborted"
+    assert res["task"]["status"] == "cancelled"
+    assert res["task"]["updated"] is True
+    async with aiosqlite.connect(db) as c:
+        c.row_factory = aiosqlite.Row
+        cur = await c.execute("SELECT status FROM tasks WHERE task_id='task-dl-a'")
+        assert (await cur.fetchone())["status"] == "cancelled"
 
 
 @pytest.mark.asyncio

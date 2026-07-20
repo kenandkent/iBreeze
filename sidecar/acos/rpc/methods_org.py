@@ -12,6 +12,7 @@ from typing import Any
 from acos.organization.employee_service import EmployeeService
 from acos.organization.permission_engine import PermissionEngine
 from acos.organization.service import OrganizationService
+from acos.rpc.errors import AcosError
 from acos.rpc.server import RPCServer
 
 
@@ -132,7 +133,7 @@ class OrganizationMethods:
             company = await self._service.update_company(
                 company_id, expected_version, updates
             )
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             return {"error": str(e)}
         return {
             "company_id": company.company_id,
@@ -153,7 +154,7 @@ class OrganizationMethods:
             company = await self._service.start_dissolution(
                 company_id, expected_version, "system"
             )
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             return {"error": str(e)}
         # 软删：dissolving 同时写 deleted_at，确保 list 不再返回（SC-60-2）
         import aiosqlite
@@ -209,7 +210,7 @@ class OrganizationMethods:
             return {"error": "missing company_id"}
         try:
             company = await self._service.activate_company(company_id, expected_version)
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             return {"error": str(e)}
         # 负责人已由 service.activate_company 创建，查回 owner 员工 id
         import aiosqlite
@@ -240,7 +241,7 @@ class OrganizationMethods:
             return {"error": "missing company_id"}
         try:
             company = await self._service.start_dissolution(company_id, expected_version, "system")
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             return {"error": str(e)}
         now = datetime.now(timezone.utc).isoformat()
         conn = await aiosqlite.connect(self._db_path)
@@ -272,11 +273,20 @@ class OrganizationMethods:
                 return {"error": "ORG-NOT-FOUND"}
             company_id = company_id["company_id"]
             store = DepartmentClosure()
+            parent = await conn.execute(
+                "SELECT company_id FROM departments WHERE department_id = ? AND deleted_at IS NULL",
+                (new_parent_id,),
+            )
+            parent_row = await parent.fetchone()
+            if parent_row is None:
+                return {"error": "ORG-PARENT-NOT-FOUND"}
+            if parent_row["company_id"] != company_id:
+                return {"error": "ORG-DEPT-CROSS-COMPANY-DENIED"}
             if await store.check_cycle(conn, company_id, department_id, new_parent_id):
                 return {"error": "ORG-DEPT-CYCLE: 不能移动到自身或后代下"}
             await store.move_subtree(conn, company_id, department_id, new_parent_id)
             await conn.commit()
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             await conn.rollback()
             return {"error": str(e)}
         finally:
@@ -425,7 +435,7 @@ class OrganizationMethods:
                 emp = await self._employee_service.archive(employee_id, company_id, expected_version)
             else:
                 return {"error": f"不支持的状态: {status}"}
-        except ValueError as e:
+        except (ValueError, AcosError) as e:
             return {"error": str(e)}
         return {"employee_id": emp.employee_id, "status": emp.status, "version": emp.version}
 
@@ -505,9 +515,9 @@ class OrganizationMethods:
         conn = await aiosqlite.connect(self._db_path)
         conn.row_factory = aiosqlite.Row
         try:
-            # 校验同公司且未归档
+            # 校验同公司且未删除
             cur = await conn.execute(
-                "SELECT company_id, COALESCE(deleted_at, archived_at) AS gone FROM employees WHERE employee_id = ? AND deleted_at IS NULL",
+                "SELECT company_id FROM employees WHERE employee_id = ? AND deleted_at IS NULL",
                 (employee_id,),
             )
             emp = await cur.fetchone()

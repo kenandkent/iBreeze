@@ -107,4 +107,13 @@ class WorkflowMethods:
                 raise AcosError(code="SYS-OPTIMISTIC-LOCK-CONFLICT", message="并发处理冲突，请重试")
             await db.commit()
 
-        return {"dead_letter_id": dead_letter_id, "status": resolution}
+        # 联动关联 task 状态：resolved->恢复 running / aborted->终止 cancelled
+        task_effect = await self._task_svc.apply_deadletter_resolution(
+            row["task_id"], resolution
+        )
+
+        return {
+            "dead_letter_id": dead_letter_id,
+            "status": resolution,
+            "task": {"task_id": row["task_id"], **task_effect},
+        }

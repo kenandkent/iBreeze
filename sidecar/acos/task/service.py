@@ -207,7 +207,7 @@ class TaskService:
         # 创建新 attempt run
         new_attempt = (await self._latest_attempt(node_id)) + 1
         new_run_id = new_id("run")
-        await self._nodes.transition(node_id, node.version, "ready")
+        await self._nodes.transition(node_id, node.version, "running")
         # 重派 assignment（attempt+1）
         old = await self._assignments.list_active_for_node(node_id, "worker")
         for a in old:
@@ -273,11 +273,11 @@ class TaskService:
                 (task_id,),
             )
             for n in node_rows:
-                if n["status"] not in ("completed", "failed", "cancelled", "dead_letter"):
+                if n[2] not in ("completed", "failed", "cancelled", "dead_letter"):
                     await db.execute(
                         """UPDATE task_nodes SET status = 'cancelled', version = version + 1, updated_at = ?
                            WHERE node_id = ? AND version = ?""",
-                        (now, n["node_id"], n["version"]),
+                        (now, n[0], n[1]),
                     )
 
             # 3. assignment 关闭
@@ -296,6 +296,44 @@ class TaskService:
 
             await db.commit()
         return {"status": "cancelled", "task_id": task_id}
+
+    # ── P9-T11 dead_letter 联动：人工处理后收口关联 task 状态 ──
+
+    async def apply_deadletter_resolution(self, task_id: str, resolution: str) -> dict:
+        """dead_letter 处理后联动 task 状态（文档 E2E-50 步6 语义：任务恢复或终止）。
+
+        - resolution='resolved'：任务恢复为可执行态 running（状态机允许的转换；
+          终态/已 running 则跳过，避免非法回退或无效 no-op）。
+        - resolution='aborted'：任务终止为 cancelled（经 cancel_task 事务级联）。
+        """
+        if resolution == "aborted":
+            return await self._abort_task_for_deadletter(task_id)
+        return await self._resume_task_for_deadletter(task_id)
+
+    async def _resume_task_for_deadletter(self, task_id: str) -> dict:
+        task = await self._tasks.get(task_id)
+        if task is None:
+            return {"updated": False, "reason": "task_not_found"}
+        # 终态不回退；已 running 视为已恢复，无需转换
+        if task.status in ("completed", "cancelled", "cancelling"):
+            return {"updated": False, "reason": "terminal"}
+        if task.status == "running":
+            return {"updated": False, "reason": "already_running"}
+        # failed/paused/created/planning -> running 均合法
+        try:
+            await self._tasks.transition(task.task_id, task.version, "running")
+        except ValueError:
+            return {"updated": False, "reason": "transition_invalid"}
+        return {"updated": True, "status": "running"}
+
+    async def _abort_task_for_deadletter(self, task_id: str) -> dict:
+        task = await self._tasks.get(task_id)
+        if task is None:
+            return {"updated": False, "reason": "task_not_found"}
+        if task.status in ("completed", "cancelled", "cancelling"):
+            return {"updated": False, "reason": "terminal"}
+        await self.cancel_task(task.task_id, task.version)
+        return {"updated": True, "status": "cancelled"}
 
     # ── 辅助 ──
 

@@ -316,6 +316,73 @@ async def test_create_intervention_for_failure(
         assert "retry" in intervention.allowed_actions
 
 
+async def test_dissolve_creates_employee_drain_interventions(
+    db_path: str, active_company: tuple[str, str]
+) -> None:
+    """E2E-61 步2：dissolve 应为每个 active 员工创建 employee_drain 干预。"""
+    import aiosqlite
+
+    company_id, _ = active_company
+    svc = OrganizationService(db_path)
+
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute(
+            """INSERT INTO departments
+               (department_id, company_id, parent_department_id, name,
+                leader_employee_id, status, created_at, updated_at, version)
+               VALUES (?, ?, NULL, '排干部门', NULL, 'active', '', '', 1)""",
+            ("dept-drain", company_id),
+        )
+        await db.execute(
+            """INSERT INTO employees
+               (employee_id, company_id, department_id, template_id,
+                capability_snapshot, name, role_name, employee_type,
+                reports_to_employee_id, stability_level, status,
+                session_transfer_state, primary_session_thread_id,
+                version, created_at, updated_at)
+               VALUES (?, ?, 'dept-drain', '', '{}', '员工A', '员工', 'department_leader',
+                       NULL, 5, 'active', 'none', NULL, 1, '', '')""",
+            ("emp-drain-1", company_id),
+        )
+        await db.execute(
+            """INSERT INTO employees
+               (employee_id, company_id, department_id, template_id,
+                capability_snapshot, name, role_name, employee_type,
+                reports_to_employee_id, stability_level, status,
+                session_transfer_state, primary_session_thread_id,
+                version, created_at, updated_at)
+               VALUES (?, ?, 'dept-drain', '', '{}', '员工B', '员工', 'department_leader',
+                       NULL, 5, 'active', 'none', NULL, 1, '', '')""",
+            ("emp-drain-2", company_id),
+        )
+        await db.commit()
+
+    await svc.start_dissolution(company_id, expected_version=2, operator="owner-1")
+
+    from acos.interventions.repository import InterventionRepository
+
+    repo = InterventionRepository()
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            """SELECT * FROM human_interventions
+               WHERE company_id = ? AND subtype = 'employee_drain' AND status = 'open'""",
+            (company_id,),
+        )
+        interventions = await cur.fetchall()
+        assert len(interventions) == 2
+        for iv in interventions:
+            assert iv["target_ref"].startswith("employee_drain:")
+
+        cur = await db.execute(
+            """SELECT employee_id, session_transfer_state FROM employees
+               WHERE employee_id IN ('emp-drain-1', 'emp-drain-2')"""
+        )
+        for emp in await cur.fetchall():
+            assert emp["session_transfer_state"] == "draining"
+
+
 async def test_mark_consumer_completed_idempotent(
     db_path: str, active_company: tuple[str, str], orchestrator: DissolutionOrchestrator
 ) -> None:

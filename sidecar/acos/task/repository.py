@@ -40,7 +40,7 @@ class TaskRepository:
                     active_generation_id, assigned_backend_id, budget_currency,
                     budget_limit_micros, token_limit, goal, acceptance, inputs_json,
                     deadline_at, version, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     task.task_id, task.company_id, task.department_id,
                     task.created_by_employee_id, task.title, task.description,
@@ -48,7 +48,8 @@ class TaskRepository:
                     task.manager_scope, task.active_generation_id,
                     task.assigned_backend_id, task.budget_currency,
                     task.budget_limit_micros, task.token_limit, task.goal,
-                    task.acceptance, task.inputs_json, task.deadline_at, now, now,
+                    task.acceptance, task.inputs_json, task.deadline_at,
+                    task.version, now, now,
                 ),
             )
             await db.commit()

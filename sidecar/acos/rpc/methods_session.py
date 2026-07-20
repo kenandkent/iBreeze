@@ -10,7 +10,7 @@
 
 对接点：
 - provider.runtime：通过 FakeProviderAdapter 驱动 AgentRuntime.send（不调真实 API）。
-- backend.lease：BackendLeaseManager.select_backend / bind / release（真实调用）。
+- backend.lease：BackendService.select_backend + BackendLeaseManager.bind / release（真实调用）。
 - org.permission：消费有效授权计算 effective_grants_hash。
 """
 
@@ -24,7 +24,7 @@ from typing import Any
 
 import aiosqlite
 
-from acos.backends.service import BackendLeaseManager
+from acos.backends.service import BackendLeaseManager, BackendService
 from acos.providers.fake import FakeProviderAdapter
 from acos.rpc.errors import (
     AcosError,
@@ -69,6 +69,7 @@ class SessionMethods:
         self._drain_port = EmployeeDrainRuntimePort(db_path, company_root)
         self._fake = FakeProviderAdapter()
         self._lease_mgr = BackendLeaseManager(db_path)
+        self._backend_svc = BackendService(db_path)
 
     def register_to(self, server: Any) -> None:
         server.register_method("session.list", self._list)
@@ -309,14 +310,14 @@ class SessionMethods:
     ) -> str | None:
         """尝试从公司默认 Backend 取得绑定 turn 的 lease（真实调用）。"""
         try:
-            backend = await self._lease_mgr.select_backend(company_id)
+            backend = await self._backend_svc.select_backend(company_id)
         except Exception:
             return None
         if backend is None:
             return None
         try:
             lease = await self._lease_mgr.bind(
-                backend.backend_id, company_id, run_id=turn_id, session_turn_id=thread_id
+                backend.backend_id, company_id, session_turn_id=thread_id
             )
             return lease.lease_id
         except Exception:

@@ -9,6 +9,7 @@ from typing import Optional
 
 import aiosqlite
 
+from acos.interventions.repository import InterventionRepository
 from acos.organization.models import Company
 from acos.rpc.errors import (
     ORG_COMPANY_DISSOLVED,
@@ -341,8 +342,58 @@ class OrganizationService:
                 consumers,
             )
 
+            # dissolve 即启动员工排干：为所有 active 员工创建 employee_drain 干预
+            # 并将其 session_transfer_state 置为 draining，由后台协调器推进转移
+            await self._start_employee_drain_for_dissolution(db, company_id)
+
             await db.commit()
             return self._row_to_company(row)
+
+    async def _start_employee_drain_for_dissolution(
+        self, db: aiosqlite.Connection, company_id: str
+    ) -> None:
+        """解散时对公司下所有 active 员工启动排干。
+
+        为每个员工创建 subtype='employee_drain' 的 human_intervention，
+        并通过 EmployeeDrainService 记录排干任务，同时将其
+        session_transfer_state 流转为 'draining'。
+        """
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT employee_id FROM employees
+               WHERE company_id = ? AND status = 'active'""",
+            (company_id,),
+        )
+        employee_rows = await cursor.fetchall()
+        if not employee_rows:
+            return
+
+        repo = InterventionRepository()
+        now = self._now()
+        for row in employee_rows:
+            employee_id = row["employee_id"]
+            drain_id = str(uuid.uuid4())
+            # 在同一事务内写入 employee_drains，避免嵌套连接导致锁定
+            await db.execute(
+                """INSERT INTO employee_drains
+                   (drain_id, company_id, employee_id, operation,
+                    target_department_id, status, intervention_id,
+                    timeout_seconds, created_at, updated_at)
+                   VALUES (?, ?, ?, 'suspend', NULL, 'active', NULL, 600, ?, ?)""",
+                (drain_id, company_id, employee_id, now, now),
+            )
+            target_ref = f"employee_drain:{drain_id}"
+            await repo.create_or_get_open(
+                db, company_id, "employee_drain", target_ref,
+                ["resolve", "abort"], str(uuid.uuid4()),
+            )
+            await db.execute(
+                """UPDATE employees
+                   SET session_transfer_state = 'draining', version = version + 1,
+                       updated_at = ?
+                   WHERE employee_id = ? AND status = 'active'""",
+                (now, employee_id),
+            )
 
     async def complete_dissolution(self, company_id: str) -> Company:
         """完成解散。"""

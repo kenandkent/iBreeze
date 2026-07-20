@@ -174,6 +174,31 @@ async def test_save_draft_cas(setup: tuple[TemplateService, str, str]) -> None:
     assert updated.version == 2
 
 
+async def test_save_draft_rejects_archived_capability(setup: tuple[TemplateService, str, str]) -> None:
+    """SC-20-2: draft 模板改绑到非发布(archived)能力应被拒绝。"""
+    svc, company_id, capability_id = setup
+    template = await svc.create(
+        company_id=company_id,
+        capability_id=capability_id,
+        capability_version=1,
+        default_role="角色A",
+    )
+    # 创建一个 capability 并归档（非 published）
+    cap_svc = CapabilityService(svc._db_path)
+    ver_svc = VersioningService(svc._db_path)
+    prompt_asset_id, _ = await _publish_prompt_asset(PromptAssetService(svc._db_path), ver_svc, company_id, "归档Prompt")
+    skill_id = await _publish_skill(SkillService(svc._db_path), ver_svc, company_id, prompt_asset_id, "归档Skill")
+    archived_cap_id = await _publish_capability(cap_svc, ver_svc, company_id, skill_id, "归档能力")
+    await ver_svc.deprecate("capability", archived_cap_id, 1)
+    await ver_svc.archive("capability", archived_cap_id, 1)
+
+    with pytest.raises(AcosError):
+        await svc.save_draft(
+            template.template_id, company_id, expected_version=1,
+            updates={"capability_id": archived_cap_id},
+        )
+
+
 async def test_save_draft_cas_conflict(setup: tuple[TemplateService, str, str]) -> None:
     svc, company_id, capability_id = setup
     template = await svc.create(

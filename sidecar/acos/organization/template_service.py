@@ -156,6 +156,16 @@ class TemplateService:
 
             allowed = {"capability_id", "capability_version", "capability_snapshot", "default_role",
                         "provider_type", "provider_id", "model"}
+
+            # 改绑 capability 时需校验目标能力为已发布状态（SC-20-2）
+            if "capability_id" in updates and updates["capability_id"]:
+                cap_svc = CapabilityService(self._db_path)
+                cap = await cap_svc.get(updates["capability_id"])
+                if cap is None:
+                    raise create_error(CAP_VALIDATION, f"Capability {updates['capability_id']} 不存在")
+                if cap.status != "published":
+                    raise create_error(CAP_VALIDATION, f"Capability {updates['capability_id']} 非发布状态，不可被模板引用")
+
             set_parts: list[str] = []
             params: list[object] = []
             for key, value in updates.items():

@@ -4,7 +4,7 @@ import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppStore } from '../../stores/appStore';
-import { formatBJTime } from '../../utils/format';
+import { formatBJTime, formatNumber } from '../../utils/format';
 import { X, CheckCircle2, XCircle, Plus, FileText, Wallet, Tag } from 'lucide-react';
 
 // 预算金额在后端以微元整数存储，前端展示需 /1e6 还原为元，表单输入元需 *1e6
@@ -306,10 +306,10 @@ function ApprovalModule({ companyId, queryClient }: { companyId: string; queryCl
                 <Row label="风险原因" value={detail.risk_reason || '-'} />
                 <Row label="过期时间" value={formatBJTime(detail.expiry)} />
                 {detail.current_limit_micros !== undefined && (
-                  <Row label="当前额度(元)" value={microsToYuan(detail.current_limit_micros).toString()} />
+                  <Row label="当前额度(元)" value={formatNumber(microsToYuan(detail.current_limit_micros))} />
                 )}
                 {detail.requested_limit_micros !== undefined && (
-                  <Row label="申请额度(元)" value={microsToYuan(detail.requested_limit_micros).toString()} />
+                  <Row label="申请额度(元)" value={formatNumber(microsToYuan(detail.requested_limit_micros))} />
                 )}
                 {detail.currency && <Row label="币种" value={detail.currency} />}
               </div>
@@ -437,8 +437,8 @@ function PolicyModule({ companyId, queryClient }: { companyId: string; queryClie
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 p-4 grid grid-cols-2 gap-4 text-sm">
-          <Row label="月度限额(元)" value={microsToYuan(policy.monthly_limit).toString()} />
-          <Row label="单任务限额(元)" value={microsToYuan(policy.per_task_limit).toString()} />
+          <Row label="月度限额(元)" value={formatNumber(microsToYuan(policy.monthly_limit))} />
+          <Row label="单任务限额(元)" value={formatNumber(microsToYuan(policy.per_task_limit))} />
           <Row label="币种" value={policy.currency || '-'} />
           <Row label="超限策略" value={policy.on_budget_exceeded || '-'} />
         </div>
