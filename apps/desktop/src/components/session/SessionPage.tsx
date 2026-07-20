@@ -13,6 +13,7 @@ export function SessionPage() {
   const { currentCompanyId } = useAppStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const { data: threads, isLoading, error, refetch } = useQuery<SessionThread[]>({
     queryKey: ['session', currentCompanyId],
@@ -39,7 +40,17 @@ export function SessionPage() {
       rpcCall('session.sendMessage', { thread_id: selectedId, content }),
     onSuccess: () => {
       setDraft('');
+      setSendError(null);
       queryClient.invalidateQueries({ queryKey: ['sessionTranscript', selectedId] });
+    },
+    onError: (err: Error) => {
+      // 后端对只读/过期线程返回明确文案,前端据此展示针对性提示而非静默失败
+      const msg = err.message || '';
+      if (msg.includes('只读') || msg.includes('过期') || msg.includes('安全上下文已变化')) {
+        setSendError(msg);
+      } else {
+        setSendError(`发送失败: ${msg}`);
+      }
     },
   });
 
@@ -67,6 +78,7 @@ export function SessionPage() {
   }
 
   const selected = threads?.find((t) => t.thread_id === selectedId);
+  const isReadonly = selected?.status === 'dormant' || selected?.status === 'archived';
 
   return (
     <div className="p-6">
@@ -108,7 +120,18 @@ export function SessionPage() {
                   安全上下文: {Object.keys(selected.security_context || {}).length
                     ? JSON.stringify(selected.security_context)
                     : '无'}
+                  <span className="ml-2"><StatusBadge status={selected.status} /></span>
                 </div>
+                {isReadonly && (
+                  <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    该会话为只读,无法发送消息
+                  </div>
+                )}
+                {sendError && (
+                  <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    {sendError}
+                  </div>
+                )}
                 <div className="flex-1 space-y-2 overflow-auto max-h-80">
                   {txLoading ? (
                     <LoadingSpinner />
@@ -127,12 +150,13 @@ export function SessionPage() {
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder="输入消息..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                    placeholder={isReadonly ? '会话只读,无法输入' : '输入消息...'}
+                    disabled={!!isReadonly}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 disabled:bg-gray-100 disabled:text-gray-400"
                   />
                   <button
                     onClick={() => draft.trim() && sendMutation.mutate(draft.trim())}
-                    disabled={!draft.trim() || sendMutation.isPending}
+                    disabled={!draft.trim() || sendMutation.isPending || !!isReadonly}
                     className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
                     <Send size={14} /> 发送

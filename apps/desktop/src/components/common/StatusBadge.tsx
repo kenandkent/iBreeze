@@ -7,6 +7,9 @@ const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   error: 'bg-red-100 text-red-800',
   unhealthy: 'bg-red-100 text-red-800',
+  dormant: 'bg-amber-100 text-amber-700',
+  archived: 'bg-gray-200 text-gray-500',
+  stale: 'bg-amber-100 text-amber-700',
 };
 
 export function StatusBadge({ status }: { status: string }) {
