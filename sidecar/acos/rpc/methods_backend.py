@@ -72,9 +72,10 @@ def _now() -> str:
 
 
 def _row_to_backend(row: aiosqlite.Row) -> dict[str, Any]:
-    return {
+        return {
         "backend_id": row["backend_id"],
         "company_id": row["company_id"],
+        "provider_id": row["provider_id"],
         "name": row["name"],
         "backend_type": row["backend_type"],
         "status": row["status"],
@@ -314,9 +315,9 @@ class BackendMethods:
                 """INSERT INTO backends
                    (backend_id, company_id, name, backend_type, status,
                     health_status, capabilities, workspace_types, workspace_root,
-                    concurrency_limit, version, created_at, updated_at)
+                    provider_id, concurrency_limit, version, created_at, updated_at)
                    VALUES (?, ?, ?, ?, 'disabled', 'unknown',
-                           ?, ?, ?, ?, 1, ?, ?)""",
+                           ?, ?, ?, ?, ?, 1, ?, ?)""",
                 (
                     backend_id,
                     company_id,
@@ -325,6 +326,7 @@ class BackendMethods:
                     json.dumps(capabilities, ensure_ascii=False),
                     json.dumps(workspace_types, ensure_ascii=False),
                     workspace_root,
+                    params.get("provider_id"),
                     concurrency_limit,
                     now,
                     now,

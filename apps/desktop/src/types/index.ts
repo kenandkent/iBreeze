@@ -177,8 +177,11 @@ export interface Backend {
   backend_id: string;
   name: string;
   type: string;
+  provider_id?: string;
+  backend_type?: string;
   status: string;
   health: string;
+  health_status?: string;
   capacity: number;
   company_id: string;
 }
@@ -187,6 +190,7 @@ export interface Provider {
   provider_id: string;
   name: string;
   type: string;
+  provider_type?: string;
   status: string;
   company_id: string;
   config?: Record<string, unknown>;

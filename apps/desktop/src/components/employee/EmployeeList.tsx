@@ -41,7 +41,7 @@ export function EmployeeList() {
     queryFn: async () => {
       const comps = activeCompanies ?? [];
       const lists = await Promise.all(
-        comps.map((c) => rpcCall<EmployeeTemplate[]>('org.template.list', { company_id: c.company_id }).catch(() => [] as EmployeeTemplate[]))
+        comps.map((c) => rpcCall<EmployeeTemplate[]>('org.template.list', { company_id: c.company_id, status: 'active' }).catch(() => [] as EmployeeTemplate[]))
       );
       return lists.flat();
     },

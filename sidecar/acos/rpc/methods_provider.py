@@ -164,6 +164,8 @@ class ProviderMethods:
         "openai": "https://api.openai.com/v1",
         "deepseek": "https://api.deepseek.com",
         "anthropic": "https://api.anthropic.com/v1",
+        # 第三方必须用户自己填 base_url，无默认值
+        "third_party": "",
     }
 
     async def _provider_create(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -280,8 +282,13 @@ class ProviderMethods:
                     {"model": m["id"], "display_name": m.get("display_name") or m["id"]}
                     for m in data
                 ]
-        # openai / deepseek / third_party 均走 OpenAI 格式 /v1/models
-        base = base_url or self._API_VENDORS.get(vendor or "", "https://api.openai.com/v1")
+        # openai / deepseek 走 OpenAI 格式 /v1/models；third_party 必须用户提供 base_url
+        if vendor == "third_party":
+            if not base_url:
+                raise AcosError(PROV_VALIDATION, "第三方供应商必须提供 Base URL")
+            base = base_url
+        else:
+            base = base_url or self._API_VENDORS.get(vendor or "", "https://api.openai.com/v1")
         if not base.endswith("/models"):
             base = base.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {api_key}"}

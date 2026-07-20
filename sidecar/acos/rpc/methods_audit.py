@@ -42,6 +42,9 @@ class AuditMethods:
             )
 
         status = params.get("status")  # open / resolved / None(全部)
+        # pending 与 open 语义一致（DB 存的是 open），前端用 pending 表示待处理
+        if status == "pending":
+            status = "open"
         if status is not None and status not in ("open", "resolved"):
             raise create_error(
                 AUDIT_VALIDATION,

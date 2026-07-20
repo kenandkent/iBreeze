@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from acos.organization.employee_service import EmployeeService
 from acos.organization.permission_engine import PermissionEngine
 from acos.organization.service import OrganizationService
 from acos.rpc.server import RPCServer
@@ -20,6 +21,7 @@ class OrganizationMethods:
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
         self._service = OrganizationService(db_path)
+        self._employee_service = EmployeeService(db_path)
 
     def register_to(self, server: RPCServer) -> None:
         # 公司 (org.company.*)
@@ -196,28 +198,18 @@ class OrganizationMethods:
             company = await self._service.activate_company(company_id, expected_version)
         except ValueError as e:
             return {"error": str(e)}
-        # 在根部门下创建负责人职员
-        leader_employee_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        # 负责人已由 service.activate_company 创建，查回 owner 员工 id
         import aiosqlite
-
         conn = await aiosqlite.connect(self._db_path)
         try:
-            await conn.execute(
-                """INSERT INTO employees
-                   (employee_id, company_id, department_id, template_id,
-                    capability_snapshot, name, role_name, employee_type,
-                    stability_level, status, session_transfer_state, version, created_at, updated_at)
-                   VALUES (?, ?, (SELECT root_department_id FROM companies WHERE company_id = ?),
-                           ?, '{}', ?, '公司负责人', 'company_leader', 5, 'active', 'none', 1, ?, ?)""",
-                (leader_employee_id, company_id, company_id, template_id or None,
-                 name, now, now),
+            cursor = await conn.execute(
+                """SELECT employee_id FROM employees
+                   WHERE company_id = ? AND employee_type = 'company_leader'
+                   ORDER BY created_at DESC LIMIT 1""",
+                (company_id,),
             )
-            await conn.execute(
-                "UPDATE departments SET leader_employee_id = ? WHERE department_id = (SELECT root_department_id FROM companies WHERE company_id = ?)",
-                (leader_employee_id, company_id),
-            )
-            await conn.commit()
+            row = await cursor.fetchone()
+            leader_employee_id = row[0] if row else None
         finally:
             await conn.close()
         return {
@@ -403,23 +395,45 @@ class OrganizationMethods:
             await conn.close()
         return {"employee_id": employee_id, "reports_to_employee_id": reports_to, "ok": True}
 
-    async def _set_employee_status(self, params: dict[str, Any], status: str) -> dict[str, Any]:
-        employee_id = params.get("employee_id")
-        if not employee_id:
-            return {"error": "missing employee_id"}
+    async def _employee_company_id(self, employee_id: str) -> str | None:
         import aiosqlite
         conn = await aiosqlite.connect(self._db_path)
         try:
             cursor = await conn.execute(
-                "UPDATE employees SET status = ?, updated_at = ? WHERE employee_id = ? AND deleted_at IS NULL",
-                (status, datetime.now(timezone.utc).isoformat(), employee_id),
+                "SELECT company_id FROM employees WHERE employee_id = ? AND deleted_at IS NULL",
+                (employee_id,),
             )
-            if cursor.rowcount == 0:
-                return {"error": "ORG-NOT-FOUND"}
-            await conn.commit()
+            row = await cursor.fetchone()
         finally:
             await conn.close()
-        return {"employee_id": employee_id, "status": status}
+        return row[0] if row else None
+
+    async def _set_employee_status(self, params: dict[str, Any], status: str) -> dict[str, Any]:
+        employee_id = params.get("employee_id")
+        if not employee_id:
+            return {"error": "missing employee_id"}
+        expected_version = params.get("expected_version", 1)
+        company_id = await self._employee_company_id(employee_id)
+        if company_id is None:
+            return {"error": "ORG-NOT-FOUND"}
+        # 委托服务层状态机：校验合法转换 + CAS
+        methods = {
+            "active": self._employee_service.activate,
+            "suspended": self._employee_service.suspend,
+            "archived": self._employee_service.archive,
+        }
+        try:
+            if status == "active":
+                emp = await self._employee_service.activate(employee_id, company_id, expected_version)
+            elif status == "suspended":
+                emp = await self._employee_service.suspend(employee_id, company_id, expected_version)
+            elif status == "archived":
+                emp = await self._employee_service.archive(employee_id, company_id, expected_version)
+            else:
+                return {"error": f"不支持的状态: {status}"}
+        except ValueError as e:
+            return {"error": str(e)}
+        return {"employee_id": emp.employee_id, "status": emp.status, "version": emp.version}
 
     async def _employee_activate(self, params: dict[str, Any]) -> dict[str, Any]:
         return await self._set_employee_status(params, "active")
@@ -818,15 +832,24 @@ class OrganizationMethods:
 
         conn = await aiosqlite.connect(self._db_path)
         try:
+            capability_snapshot = "{}"
+            if template_id:
+                cur = await conn.execute(
+                    "SELECT capability_snapshot FROM employee_templates WHERE template_id = ?",
+                    (template_id,),
+                )
+                row = await cur.fetchone()
+                if row and row[0]:
+                    capability_snapshot = row[0]
             await conn.execute(
                 """INSERT INTO employees
                    (employee_id, company_id, department_id, template_id,
                     capability_snapshot, name, role_name, employee_type,
                     stability_level, status, session_transfer_state,
                     version, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, '{}', ?, ?, ?, 5, 'created', 'none', 1, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5, 'created', 'none', 1, ?, ?)""",
                 (employee_id, company_id, department_id, template_id,
-                 name, role_name, employee_type, now, now),
+                 capability_snapshot, name, role_name, employee_type, now, now),
             )
             await conn.commit()
         finally:

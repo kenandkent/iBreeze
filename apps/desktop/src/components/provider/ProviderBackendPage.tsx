@@ -138,7 +138,7 @@ export function ProviderBackendPage() {
   };
 
   const createBackendMutation = useMutation({
-    mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type }),
+    mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type, provider_id: activeProviderId ?? undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['backend', currentCompanyId] });
       setShowBackendModal(false);
@@ -209,9 +209,9 @@ export function ProviderBackendPage() {
                 {backends.map((b) => (
                   <tr key={b.backend_id} className="hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-medium text-gray-800">{b.name}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{b.type}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{b.backend_type ?? b.type}</td>
                     <td className="px-4 py-2.5"><StatusBadge status={b.status} /></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={b.health} /></td>
+                    <td className="px-4 py-2.5"><StatusBadge status={b.health_status ?? b.health} /></td>
                     <td className="px-4 py-2.5 text-gray-600">{formatNumber(b.capacity)}</td>
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -253,7 +253,7 @@ export function ProviderBackendPage() {
                       className={`cursor-pointer hover:bg-gray-50 ${activeProviderId === p.provider_id ? 'bg-blue-50' : ''}`}
                     >
                       <td className="px-4 py-2.5 font-medium text-gray-800">{p.name}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{p.type}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{p.provider_type ?? p.type}</td>
                       <td className="px-4 py-2.5"><StatusBadge status={p.status} /></td>
                     </tr>
                   ))}
@@ -271,12 +271,6 @@ export function ProviderBackendPage() {
                   {models.map((m) => (
                     <li key={m.model_id} className="text-gray-700">
                       {m.name}
-                      <button
-                        onClick={() => rpcCall('provider.pricingPolicy.update', { provider_id: m.provider_id, company_id: currentCompanyId, policy: {} })}
-                        className="ml-2 text-xs text-blue-500 hover:underline"
-                      >
-                        更新定价策略
-                      </button>
                     </li>
                   ))}
                 </ul>
