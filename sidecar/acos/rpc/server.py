@@ -174,63 +174,72 @@ class RPCServer:
                 "error": f"Method not found: {method}",
             }
 
-        try:
-            # 写方法 + 提供了 idempotency_key → 幂等检查
-            idempotency_key = request.get("idempotency_key")
-            if self._is_write_method(method) and idempotency_key:
-                if self._db_conn_factory is None:
-                    raise AcosError(
-                        code=SYS_INTERNAL,
-                        message="幂等检查需要数据库连接",
-                        trace_id=trace_id,
-                    )
-                conn = await self._db_conn_factory()
-                try:
-                    request_hash = self._idempotency.compute_request_hash(method, params)
-                    cached = await self._idempotency.check_and_reserve(
-                        conn,
-                        company_id=params.get("_company_id", ""),
-                        actor_type=params.get("_actor_type", ""),
-                        actor_id=params.get("_actor_id", ""),
-                        method=method,
-                        idempotency_key=idempotency_key,
-                        request_hash=request_hash,
-                    )
-                    if cached is not None:
-                        return {
-                            "type": "response",
-                            "id": req_id,
-                            "trace_id": trace_id,
-                            "result": {
-                                "cached": True,
-                                "status": cached["status"],
-                                "response_ref": cached["response_ref"],
-                            },
-                            "error": None,
-                        }
-                finally:
-                    await conn.close()
+        # 写方法 + 提供了 idempotency_key → 先预约幂等记录
+        idempotency_key = request.get("idempotency_key")
+        ide_reserved = False
+        if self._is_write_method(method) and idempotency_key:
+            if self._db_conn_factory is None:
+                return {
+                    "type": "response",
+                    "id": req_id,
+                    "trace_id": trace_id,
+                    "result": None,
+                    "error": {
+                        "code": SYS_INTERNAL,
+                        "message": "幂等检查需要数据库连接",
+                        "cause": "",
+                        "suggestion": "",
+                        "trace_id": trace_id,
+                    },
+                }
+            conn = await self._db_conn_factory()
+            try:
+                request_hash = self._idempotency.compute_request_hash(method, params)
+                cached = await self._idempotency.check_and_reserve(
+                    conn,
+                    company_id=params.get("_company_id", ""),
+                    actor_type=params.get("_actor_type", ""),
+                    actor_id=params.get("_actor_id", ""),
+                    method=method,
+                    idempotency_key=idempotency_key,
+                    request_hash=request_hash,
+                )
+                if cached is not None:
+                    # 命中已有幂等记录，直接返回缓存结果，不重跑 handler
+                    return {
+                        "type": "response",
+                        "id": req_id,
+                        "trace_id": trace_id,
+                        "result": {
+                            "cached": True,
+                            "status": cached["status"],
+                            "response_ref": cached["response_ref"],
+                        },
+                        "error": None,
+                    }
+                ide_reserved = True
+            finally:
+                await conn.close()
 
+        try:
             result = await handler(params)
-            return {
-                "type": "response",
-                "id": req_id,
-                "trace_id": trace_id,
-                "result": result,
-                "error": None,
-            }
         except AcosError as exc:
             exc.trace_id = exc.trace_id or trace_id
-            return {
+            response = {
                 "type": "response",
                 "id": req_id,
                 "trace_id": trace_id,
                 "result": None,
                 "error": exc.to_dict(),
             }
+            await self._complete_idempotency(
+                ide_reserved, idempotency_key, method, params, trace_id,
+                status="failed", error_code=exc.code,
+            )
+            return response
         except Exception as exc:
             logger.exception("Unhandled exception in RPC handler %s", method)
-            return {
+            response = {
                 "type": "response",
                 "id": req_id,
                 "trace_id": trace_id,
@@ -243,3 +252,54 @@ class RPCServer:
                     "trace_id": trace_id,
                 },
             }
+            await self._complete_idempotency(
+                ide_reserved, idempotency_key, method, params, trace_id,
+                status="failed", error_code=SYS_INTERNAL,
+            )
+            return response
+
+        # handler 成功：回填幂等结果
+        await self._complete_idempotency(
+            ide_reserved, idempotency_key, method, params, trace_id,
+            status="succeeded", result=result,
+        )
+        return {
+            "type": "response",
+            "id": req_id,
+            "trace_id": trace_id,
+            "result": result,
+            "error": None,
+        }
+
+    async def _complete_idempotency(
+        self,
+        reserved: bool,
+        idempotency_key: str | None,
+        method: str,
+        params: dict[str, Any],
+        trace_id: str,
+        status: str,
+        result: dict | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        """若本请求预约了幂等记录，统一回填结果/失败状态（E2E-99 步骤1）。"""
+        if not reserved or not idempotency_key or self._db_conn_factory is None:
+            return
+        try:
+            conn = await self._db_conn_factory()
+            try:
+                await self._idempotency.complete(
+                    conn,
+                    company_id=params.get("_company_id", ""),
+                    actor_type=params.get("_actor_type", ""),
+                    actor_id=params.get("_actor_id", ""),
+                    method=method,
+                    idempotency_key=idempotency_key,
+                    status=status,
+                    result=result,
+                    error=error_code,
+                )
+            finally:
+                await conn.close()
+        except Exception:  # 幂等回填失败不应影响主响应
+            logger.exception("幂等记录回填失败 method=%s key=%s", method, idempotency_key)

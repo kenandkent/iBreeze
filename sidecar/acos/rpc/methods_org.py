@@ -80,8 +80,9 @@ class OrganizationMethods:
         conn = await aiosqlite.connect(self._db_path)
         conn.row_factory = aiosqlite.Row
         try:
+            # 软删后（dissolving / 已置 deleted_at）默认不出现在列表
             cursor = await conn.execute(
-                "SELECT * FROM companies ORDER BY created_at DESC"
+                "SELECT * FROM companies WHERE status != 'dissolving' AND deleted_at IS NULL ORDER BY created_at DESC"
             )
             return [dict(row) for row in await cursor.fetchall()]
         finally:
@@ -154,11 +155,23 @@ class OrganizationMethods:
             )
         except ValueError as e:
             return {"error": str(e)}
+        # 软删：dissolving 同时写 deleted_at，确保 list 不再返回（SC-60-2）
+        import aiosqlite
+        conn = await aiosqlite.connect(self._db_path)
+        try:
+            await conn.execute(
+                "UPDATE companies SET deleted_at = ? WHERE company_id = ?",
+                (datetime.now(timezone.utc).isoformat(), company_id),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
         return {
             "company_id": company.company_id,
             "status": company.status,
             "version": company.version,
             "dissolving": True,
+            "deleted": True,
         }
 
     async def _company_restore(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -361,39 +374,20 @@ class OrganizationMethods:
             return {"error": "missing employee_id"}
         if reports_to == employee_id:
             return {"error": "ORG-REPORTING-CYCLE: 不能将自身设为上级"}
-        import aiosqlite
-        conn = await aiosqlite.connect(self._db_path)
-        conn.row_factory = aiosqlite.Row
+        company_id = await self._employee_company_id(employee_id)
+        if company_id is None:
+            return {"error": "ORG-NOT-FOUND"}
+        expected_version = params.get("expected_version", 1)
+        operator = params.get("operator", "system")
         try:
-            # 环检测：reports_to 不能是 employee_id 的后代（按部门闭包 + 同部门汇报链）
-            cur = await conn.execute(
-                "SELECT department_id FROM employees WHERE employee_id = ? AND deleted_at IS NULL",
-                (employee_id,),
+            # 委托服务层：基于员工汇报链闭包做正确的环检测
+            emp = await self._employee_service.set_manager(
+                employee_id, company_id, expected_version, reports_to, operator,
             )
-            emp_row = await cur.fetchone()
-            if emp_row is None:
-                return {"error": "ORG-NOT-FOUND"}
-            emp_dept = emp_row["department_id"]
-            cur = await conn.execute(
-                """SELECT 1 FROM department_closure dc
-                   JOIN employees e ON e.department_id = dc.descendant_department_id
-                   WHERE dc.ancestor_department_id = ? AND e.employee_id = ? AND dc.depth > 0
-                   LIMIT 1""",
-                (emp_dept, reports_to),
-            )
-            if await cur.fetchone() is not None:
-                return {"error": "ORG-REPORTING-CYCLE: 上级不能位于自身下级部门"}
-
-            cursor = await conn.execute(
-                "UPDATE employees SET reports_to_employee_id = ?, updated_at = ? WHERE employee_id = ? AND deleted_at IS NULL",
-                (reports_to, datetime.now(timezone.utc).isoformat(), employee_id),
-            )
-            if cursor.rowcount == 0:
-                return {"error": "ORG-NOT-FOUND"}
-            await conn.commit()
-        finally:
-            await conn.close()
-        return {"employee_id": employee_id, "reports_to_employee_id": reports_to, "ok": True}
+        except Exception as e:
+            code = getattr(e, "code", None)
+            return {"error": code if code else str(e)}
+        return {"employee_id": emp.employee_id, "reports_to_employee_id": reports_to, "ok": True}
 
     async def _employee_company_id(self, employee_id: str) -> str | None:
         import aiosqlite
@@ -587,6 +581,11 @@ class OrganizationMethods:
             rows = [dict(r) for r in await cur.fetchall()]
         finally:
             await conn.close()
+        # 派生字段：status='active' 但已过期的 grant 标记为 expired（内存标注，不落库）
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for g in rows:
+            if g.get("status") == "active" and g.get("expires_at") and g["expires_at"] <= now_iso:
+                g["expired"] = True
         return {"grants": rows, "total": len(rows)}
 
     async def _grant_get(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -705,6 +704,21 @@ class OrganizationMethods:
         if not company_id:
             return {"error": "missing company_id"}
 
+        # 冻结部门不可新建子部门
+        if parent_department_id:
+            conn = await aiosqlite.connect(self._db_path)
+            conn.row_factory = aiosqlite.Row
+            try:
+                cur = await conn.execute(
+                    "SELECT status FROM departments WHERE department_id = ? AND deleted_at IS NULL",
+                    (parent_department_id,),
+                )
+                parent_row = await cur.fetchone()
+            finally:
+                await conn.close()
+            if parent_row is not None and parent_row["status"] == "frozen":
+                return {"error": "ORG-DEPT-FROZEN: 冻结部门不可新建子部门"}
+
         now = datetime.now(timezone.utc).isoformat()
         department_id = str(uuid.uuid4())
 
@@ -781,6 +795,13 @@ class OrganizationMethods:
         now = datetime.now(timezone.utc).isoformat()
         conn = await aiosqlite.connect(self._db_path)
         try:
+            # 含员工的部门不可删除
+            cur = await conn.execute(
+                "SELECT 1 FROM employees WHERE department_id = ? AND deleted_at IS NULL LIMIT 1",
+                (department_id,),
+            )
+            if await cur.fetchone() is not None:
+                return {"error": "ORG-DEPT-HAS-EMPLOYEES: 含员工的部门不可删除"}
             cursor = await conn.execute(
                 "UPDATE departments SET deleted_at = ?, status = 'archived', updated_at = ? WHERE department_id = ? AND deleted_at IS NULL",
                 (now, now, department_id),
@@ -835,12 +856,19 @@ class OrganizationMethods:
             capability_snapshot = "{}"
             if template_id:
                 cur = await conn.execute(
-                    "SELECT capability_snapshot FROM employee_templates WHERE template_id = ?",
+                    "SELECT capability_snapshot, company_id, status FROM employee_templates WHERE template_id = ?",
                     (template_id,),
                 )
                 row = await cur.fetchone()
-                if row and row[0]:
-                    capability_snapshot = row[0]
+                if row is None or not row[0]:
+                    return {"error": "ORG-TEMPLATE-NOT-FOUND"}
+                # 跨公司模板串快照拒绝
+                if row[1] != params["company_id"]:
+                    return {"error": "ORG-TEMPLATE-CROSS-COMPANY-DENIED"}
+                # 仅 active 模板可用于建/改绑员工
+                if row[2] != "active":
+                    return {"error": "ORG-TEMPLATE-NOT-ACTIVE"}
+                capability_snapshot = row[0]
             await conn.execute(
                 """INSERT INTO employees
                    (employee_id, company_id, department_id, template_id,
@@ -851,6 +879,10 @@ class OrganizationMethods:
                 (employee_id, company_id, department_id, template_id,
                  capability_snapshot, name, role_name, employee_type, now, now),
             )
+            # 维护汇报链闭包表，供 setManager 环检测使用
+            from acos.organization.reporting_closure import ReportingClosure
+            rc = ReportingClosure()
+            await rc.add_employee(conn, company_id, employee_id, None)
             await conn.commit()
         finally:
             await conn.close()
@@ -871,6 +903,19 @@ class OrganizationMethods:
         now = datetime.now(timezone.utc).isoformat()
         conn = await aiosqlite.connect(self._db_path)
         try:
+            # 改绑 template_id 时校验模板 active + 同公司
+            if params.get("template_id") is not None:
+                cur = await conn.execute(
+                    "SELECT company_id, status FROM employee_templates WHERE template_id = ?",
+                    (params["template_id"],),
+                )
+                trow = await cur.fetchone()
+                if trow is None:
+                    return {"error": "ORG-TEMPLATE-NOT-FOUND"}
+                if trow[0] != params.get("company_id", ""):
+                    return {"error": "ORG-TEMPLATE-CROSS-COMPANY-DENIED"}
+                if trow[1] != "active":
+                    return {"error": "ORG-TEMPLATE-NOT-ACTIVE"}
             sets = ["updated_at = ?"]
             vals: list[Any] = [now]
             for field in ("name", "role_name", "employee_type", "department_id", "template_id"):
@@ -888,20 +933,20 @@ class OrganizationMethods:
         return {"employee_id": employee_id}
 
     async def _employee_delete(self, params: dict[str, Any]) -> dict[str, Any]:
-        import aiosqlite
         employee_id = params.get("employee_id")
         if not employee_id:
             return {"error": "missing employee_id"}
-        conn = await aiosqlite.connect(self._db_path)
+        company_id = await self._employee_company_id(employee_id)
+        if company_id is None:
+            return {"error": "ORG-NOT-FOUND"}
+        expected_version = params.get("expected_version", 1)
         try:
-            await conn.execute(
-                "DELETE FROM employees WHERE employee_id = ?",
-                (employee_id,),
-            )
-            await conn.commit()
-        finally:
-            await conn.close()
-        return {"employee_id": employee_id, "deleted": True}
+            # 委托服务层：走软删 + 状态机 + deleted_at
+            emp = await self._employee_service.delete(employee_id, company_id, expected_version)
+        except (ValueError, Exception) as e:
+            code = getattr(e, "code", None)
+            return {"error": code if code else str(e)}
+        return {"employee_id": emp.employee_id, "status": emp.status, "deleted": True}
 
     # ── 任务 ──────────────────────────────────────────────
 

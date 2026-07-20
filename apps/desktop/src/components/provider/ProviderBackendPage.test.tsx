@@ -234,6 +234,7 @@ describe('ProviderBackendPage', () => {
 
     fireEvent.click(screen.getByText('新建 Backend'));
     fireEvent.change(screen.getByPlaceholderText('如：opencode-local'), { target: { value: 'opencode-local' } });
+    fireEvent.change(screen.getByPlaceholderText('如：/Users/ken/workspace/agent-runs'), { target: { value: '/tmp/agent-runs' } });
     fireEvent.click(screen.getByText('确认'));
 
     await waitFor(() => {

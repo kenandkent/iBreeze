@@ -188,6 +188,14 @@ class ProviderMethods:
             model = config.get("model")
             if not model:
                 raise AcosError(PROV_VALIDATION, "cli provider 必须指定 model")
+            # cursor-cli 仅 auto 可选，自定义模型不在白名单内则拒绝
+            if agent == "cursor-cli":
+                allowed = {m["model"] for m in self._CLI_AGENTS["cursor-cli"]["models"]}
+                if model not in allowed:
+                    raise AcosError(
+                        PROV_VALIDATION,
+                        f"cursor-cli 仅支持 {sorted(allowed)}，不支持自定义模型",
+                    )
             config = {"agent": agent, "model": model}
         elif provider_type == "api":
             # api 形式：凭证走 Keychain（provider.credential.set），此处仅存连接配置 + 供应商标识
@@ -212,6 +220,22 @@ class ProviderMethods:
                    VALUES (?, ?, ?, 'active', ?, ?)""",
                 (provider_id, name, provider_type, json.dumps(config, ensure_ascii=False), now),
             )
+            # 所选模型落库到 provider_models，使 provider.model.list 可查到
+            selected_model = (config.get("model") if provider_type == "cli" else params.get("model"))
+            if selected_model:
+                company_id = params.get("company_id")
+                if not company_id:
+                    company_id = await self._require_local_owner(conn)
+                await conn.execute(
+                    """INSERT OR IGNORE INTO provider_models
+                       (model_id, provider_id, model, display_name, supports,
+                        owner_company_id, source, config_version, tier,
+                        billing_mode, enforces_output_cap, context_window, latency_hint)
+                       VALUES (?, ?, ?, ?, '[]', ?, 'provider_selected', 1, 'standard',
+                               'unknown', 0, 0, '')""",
+                    (f"pm-{uuid.uuid4().hex}", provider_id, selected_model, selected_model,
+                     company_id),
+                )
             await conn.commit()
         finally:
             await conn.close()

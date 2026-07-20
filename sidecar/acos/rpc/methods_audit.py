@@ -99,7 +99,8 @@ class AuditMethods:
                 cause="missing company_id",
             )
 
-        audit_type = params.get("audit_type")
+        # 兼容文档/前端的 type 与 audit_type 两种字段名
+        audit_type = params.get("audit_type") or params.get("type")
         if audit_type not in _AUDIT_TABLES:
             raise create_error(
                 AUDIT_VALIDATION,

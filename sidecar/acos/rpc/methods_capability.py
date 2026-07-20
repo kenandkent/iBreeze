@@ -607,7 +607,18 @@ class CapabilityMethods:
             return {"error": "missing capability_id"}
         m = await self._metrics_reader.get_metrics(cap_id, version)
         if m is None:
-            return {"error": "not found"}
+            # 无度量记录时返回全 0 的非空指标对象，满足"返回非空质量指标"语义
+            return {
+                "capability_id": cap_id,
+                "capability_version": version,
+                "success_rate": 0.0,
+                "avg_cost": 0.0,
+                "review_pass_rate": 0.0,
+                "avg_downgrade_count": 0.0,
+                "over_budget_rate": 0.0,
+                "avg_duration": 0.0,
+                "updated_at": "",
+            }
         return {
             "capability_id": m.capability_id,
             "capability_version": m.capability_version,

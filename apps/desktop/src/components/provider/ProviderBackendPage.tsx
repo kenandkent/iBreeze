@@ -27,7 +27,7 @@ export function ProviderBackendPage() {
   const [fetchedModels, setFetchedModels] = useState<{ model: string; display_name: string }[]>([]);
   const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
-  const [backendForm, setBackendForm] = useState({ name: '', backend_type: 'local_process' });
+  const [backendForm, setBackendForm] = useState({ name: '', backend_type: 'local_process', workspace_root: '' });
 
   const { data: agents } = useQuery<CliAgentOption[]>({
     queryKey: ['cliAgents'],
@@ -92,6 +92,7 @@ export function ProviderBackendPage() {
       const res = await rpcCall<{ provider_id: string }>('provider.create', {
         name,
         provider_type: 'api',
+        model: modelValue,
         config: {
           ...(providerForm.base_url.trim() ? { base_url: providerForm.base_url.trim() } : {}),
           api_vendor: providerForm.api_vendor,
@@ -138,11 +139,11 @@ export function ProviderBackendPage() {
   };
 
   const createBackendMutation = useMutation({
-    mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type, provider_id: activeProviderId ?? undefined }),
+    mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type, workspace_root: backendForm.workspace_root.trim(), provider_id: activeProviderId ?? undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['backend', currentCompanyId] });
       setShowBackendModal(false);
-      setBackendForm({ name: '', backend_type: 'local_process' });
+      setBackendForm({ name: '', backend_type: 'local_process', workspace_root: '' });
     },
   });
 
@@ -366,7 +367,7 @@ export function ProviderBackendPage() {
                       <button
                         type="button"
                         onClick={fetchModels}
-                        disabled={!providerForm.api_key.trim() || isFetchingModels}
+                        disabled={isFetchingModels}
                         className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-40"
                       >
                         {isFetchingModels ? '查询中...' : '查询可用模型'}
@@ -422,7 +423,7 @@ export function ProviderBackendPage() {
                     >
                       <option value="">请选择模型</option>
                       {selectedAgent?.models.map((m) => <option key={m.model} value={m.model}>{m.display_name}</option>)}
-                      <option value="__custom__">自定义（手动输入）</option>
+                      {providerForm.agent !== 'cursor-cli' && <option value="__custom__">自定义（手动输入）</option>}
                     </select>
                   </div>
                   {providerForm.model === '__custom__' && (
@@ -487,12 +488,21 @@ export function ProviderBackendPage() {
                   <option value="anthropic">anthropic</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Workspace 根目录（必填）</label>
+                <input
+                  value={backendForm.workspace_root}
+                  onChange={(e) => setBackendForm({ ...backendForm, workspace_root: e.target.value })}
+                  placeholder="如：/Users/ken/workspace/agent-runs"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowBackendModal(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
               <button
                 onClick={() => createBackendMutation.mutate()}
-                disabled={!backendForm.name.trim() || createBackendMutation.isPending}
+                disabled={!backendForm.name.trim() || !backendForm.workspace_root.trim() || createBackendMutation.isPending}
                 className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
                 {createBackendMutation.isPending ? '创建中...' : '确认'}

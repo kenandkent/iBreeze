@@ -18,14 +18,14 @@ from acos.rpc.errors import (
     create_error,
 )
 
-VALID_EMPLOYEE_STATUSES = frozenset({"created", "active", "suspended", "archived"})
+VALID_EMPLOYEE_STATUSES = frozenset({"created", "active", "suspended", "archived", "deleted"})
 
 # 状态转换规则
 _EMPLOYEE_TRANSITIONS: dict[str, frozenset[str]] = {
     "created": frozenset({"active"}),
     "active": frozenset({"suspended", "archived"}),
     "suspended": frozenset({"active", "archived"}),
-    "archived": frozenset(),
+    "archived": frozenset({"deleted"}),
 }
 
 
@@ -171,6 +171,64 @@ class EmployeeService:
     async def archive(self, employee_id: str, company_id: str, expected_version: int) -> Employee:
         """归档员工。"""
         return await self._transition(employee_id, company_id, expected_version, "archived")
+
+    async def delete(self, employee_id: str, company_id: str, expected_version: int) -> Employee:
+        """软删员工：状态机 archived→deleted + 写 deleted_at + 清理汇报链闭包。"""
+        now = self._now()
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                "SELECT * FROM employees WHERE employee_id = ? AND company_id = ?",
+                (employee_id, company_id),
+            )
+            current = await cursor.fetchone()
+            if current is None:
+                raise create_error(ORG_NOT_FOUND, f"员工 {employee_id} 不存在")
+
+            current_status = current["status"]
+            allowed = _EMPLOYEE_TRANSITIONS.get(current_status, frozenset())
+            if "deleted" not in allowed:
+                raise create_error(
+                    ORG_STATE_INVALID,
+                    f"不允许从 {current_status} 转换到 deleted",
+                )
+
+            rc = ReportingClosure()
+            # 把该员工的所有直接下属挂到其原上级下，避免悬空
+            old_manager_id = current["reports_to_employee_id"]
+            cursor = await db.execute(
+                "SELECT employee_id, version FROM employees WHERE reports_to_employee_id = ? AND company_id = ? AND deleted_at IS NULL",
+                (employee_id, company_id),
+            )
+            direct_reports = await cursor.fetchall()
+            for rep in direct_reports:
+                await rc.change_manager(db, company_id, rep["employee_id"], employee_id, old_manager_id)
+
+            # 从汇报链闭包表彻底移除该员工相关记录
+            await db.execute(
+                "DELETE FROM employee_reporting_closure WHERE company_id = ? AND (ancestor_employee_id = ? OR descendant_employee_id = ?)",
+                (company_id, employee_id, employee_id),
+            )
+
+            cursor = await db.execute(
+                """UPDATE employees
+                   SET status = 'deleted', deleted_at = ?, updated_at = ?
+                   WHERE employee_id = ? AND company_id = ? AND version = ?""",
+                (now, now, employee_id, company_id, expected_version),
+            )
+            if cursor.rowcount == 0:
+                raise create_error(
+                    SYS_OPTIMISTIC_LOCK_CONFLICT,
+                    f"CAS 冲突: employee {employee_id}",
+                )
+
+            cursor = await db.execute(
+                "SELECT * FROM employees WHERE employee_id = ?", (employee_id,),
+            )
+            row = await cursor.fetchone()
+            await db.commit()
+            return self._row_to_employee(row)
 
     async def update(
         self,

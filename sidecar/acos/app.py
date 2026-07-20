@@ -117,7 +117,7 @@ async def run() -> None:
     sys_methods.register_to(server)
 
     from acos.rpc.methods_session import SessionMethods
-    session_methods = SessionMethods(DB_PATH)
+    session_methods = SessionMethods(DB_PATH, require_backend=True)
     session_methods.register_to(server)
 
     from acos.rpc.methods_kg import KgMethods

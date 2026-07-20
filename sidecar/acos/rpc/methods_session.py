@@ -32,6 +32,7 @@ from acos.rpc.errors import (
     RT_SESSION_NOT_FOUND,
     RT_SESSION_READONLY,
     RT_SESSION_STALE,
+    BACKEND_UNAVAILABLE,
     ORG_NOT_FOUND,
     ORG_PERM_DENIED,
     ORG_STATE_INVALID,
@@ -55,9 +56,14 @@ def _now() -> str:
 class SessionMethods:
     """session.* RPC 方法。"""
 
-    def __init__(self, db_path: str, company_root: str = "/tmp/acos_sessions") -> None:
+    def __init__(
+        self, db_path: str, company_root: str = "/tmp/acos_sessions",
+        require_backend: bool = False,
+    ) -> None:
         self._db_path = db_path
         self._company_root = company_root
+        # 生产路径可设 True：无 healthy backend 时失败并触发恢复干预
+        self.require_backend = require_backend
         self._store = SessionThreadStore(db_path, company_root)
         self._handoff = HandoffService(db_path, company_root)
         self._drain_port = EmployeeDrainRuntimePort(db_path, company_root)
@@ -180,6 +186,29 @@ class SessionMethods:
             company_id, employee_id, task_id, provider_id, model_id
         )
 
+        # SC-40-2：员工 suspended / 模板 archived 触发 READONLY（无条件）
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT status, template_id FROM employees WHERE employee_id = ? AND deleted_at IS NULL",
+                (employee_id,),
+            )
+            emp = await cur.fetchone()
+            emp_status = emp["status"] if emp else None
+            template_id = emp["template_id"] if emp else None
+            tpl_status = None
+            if template_id is not None:
+                cur = await db.execute(
+                    "SELECT status FROM employee_templates WHERE template_id = ?",
+                    (template_id,),
+                )
+                tpl = await cur.fetchone()
+                tpl_status = tpl["status"] if tpl else None
+        if emp_status == "suspended":
+            raise AcosError(RT_SESSION_READONLY, "会话为只读(员工已暂停)", cause=employee_id)
+        if tpl_status == "archived":
+            raise AcosError(RT_SESSION_READONLY, "会话为只读(模板已归档)", cause=template_id)
+
         if thread_id:
             thread = await self._store.get_thread(thread_id)
             if thread["employee_id"] != employee_id or thread["company_id"] != company_id:
@@ -220,6 +249,25 @@ class SessionMethods:
 
             # Backend lease 接入（真实调用；无可用 backend 时跳过，turn 仍可被 FakeProvider 驱动）
             lease_id = await self._try_acquire_lease(company_id, thread_id, turn_id)
+
+            # SC-40-4（方案 A：开关）：无 healthy backend 时失败并触发恢复干预
+            if lease_id is None and self.require_backend:
+                from acos.interventions.repository import InterventionRepository
+                repo = InterventionRepository()
+                async with aiosqlite.connect(self._db_path) as db:
+                    await db.execute("PRAGMA foreign_keys = OFF")
+                    await repo.create_or_get_open(
+                        db,
+                        company_id=company_id,
+                        subtype="backend_recovery",
+                        target_ref=f"backend_lease:{company_id}",
+                        allowed_actions=["retry", "resolve"],
+                        trace_id=turn_id,
+                    )
+                raise AcosError(
+                    BACKEND_UNAVAILABLE, "无可用 healthy backend,已创建恢复干预",
+                    cause=company_id,
+                )
 
             # 调用 Provider（FakeProviderAdapter，不调真实 API）
             provider_result = await self._call_provider(

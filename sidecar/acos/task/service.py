@@ -147,12 +147,33 @@ class TaskService:
                 raise AcosError(code=GOV_BUDGET_CURRENCY_INVALID, message="币种无效")
             if not isinstance(limit, int) or limit < 0 or limit > _INT64_MAX:
                 raise AcosError(code=WF_BUDGET_EXCEEDED, message="limit 非法")
+            # 超预算拦截：比较公司预算策略上限（SC-50-1）
+            await self._enforce_budget_policy(company_id, limit)
             return currency, limit, token_limit
         # 复制公司默认策略
         policy = await self._gov.get_active_budget_policy(company_id)
         if policy is None:
             raise AcosError(code=GOV_BUDGET_CURRENCY_INVALID, message="公司无默认预算策略")
         return policy.currency, policy.per_task_limit, None
+
+    async def _enforce_budget_policy(self, company_id: str, limit_micros: int) -> None:
+        """检查请求预算是否超过公司策略上限；'reject' 策略则抛错拦截。"""
+        policy = await self._gov.get_active_budget_policy(company_id)
+        if policy is None:
+            return
+        if policy.on_budget_exceeded == "reject":
+            if limit_micros > policy.per_task_limit:
+                raise AcosError(
+                    code=WF_BUDGET_EXCEEDED,
+                    message="超出单任务预算上限",
+                    cause=f"limit={limit_micros}, per_task_limit={policy.per_task_limit}",
+                )
+            if policy.monthly_limit is not None and limit_micros > policy.monthly_limit:
+                raise AcosError(
+                    code=WF_BUDGET_EXCEEDED,
+                    message="超出月度预算上限",
+                    cause=f"limit={limit_micros}, monthly_limit={policy.monthly_limit}",
+                )
 
     async def _check_backend(self, company_id: str, backend_id: str) -> None:
         b = await BackendService(self._db_path).get(backend_id)

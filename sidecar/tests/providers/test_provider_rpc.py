@@ -98,6 +98,35 @@ async def test_provider_create_cli_stores_agent_and_model(methods: ProviderMetho
     assert cfg == {"agent": "opencode", "model": "anthropic/claude-sonnet-4"}
 
 
+async def test_provider_create_stores_selected_model_to_provider_models(methods: ProviderMethods, db_path: str) -> None:
+    # E2E-10 步骤6：所选模型必须落库，provider.model.list 可查到
+    await _make_company(db_path)
+    cli = await methods._provider_create({
+        "company_id": "c1", "name": "opencode", "provider_type": "cli",
+        "config": {"agent": "opencode", "model": "anthropic/claude-sonnet-5"},
+    })
+    res = await methods._model_list({"company_id": "c1", "provider_id": cli["provider_id"]})
+    assert any(m["model"] == "anthropic/claude-sonnet-5" for m in res["items"])
+
+    api = await methods._provider_create({
+        "company_id": "c1", "name": "MyOpenAI", "provider_type": "api",
+        "model": "gpt-5.1-codex",
+        "config": {"api_vendor": "openai", "base_url": "https://api.openai.com/v1"},
+    })
+    res2 = await methods._model_list({"company_id": "c1", "provider_id": api["provider_id"]})
+    assert any(m["model"] == "gpt-5.1-codex" for m in res2["items"])
+
+
+async def test_provider_create_cli_cursor_rejects_custom_model(methods: ProviderMethods, db_path: str) -> None:
+    # E2E-11 步骤5：cursor-cli 仅 auto 可选，自定义模型应被后端拒绝
+    await _make_company(db_path)
+    with pytest.raises(AcosError):
+        await methods._provider_create({
+            "company_id": "c1", "name": "cursor", "provider_type": "cli",
+            "config": {"agent": "cursor-cli", "model": "my-custom-model"},
+        })
+
+
 async def test_provider_create_requires_name(methods: ProviderMethods, db_path: str) -> None:
     await _make_company(db_path)
     with pytest.raises(AcosError):

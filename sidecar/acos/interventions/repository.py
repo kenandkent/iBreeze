@@ -13,7 +13,7 @@ from acos.interventions.models import HumanIntervention
 
 # target_ref 格式白名单（设计 §5.7）
 _VALID_TARGET_REF_RE = re.compile(
-    r"^(company_dissolution|employee_drain|backend_recovery|approval|manual_task|dead_letter):[\w-]+$"
+    r"^(company_dissolution|employee_drain|backend_recovery|backend_lease|approval|manual_task|dead_letter):[\w-]+$"
 )
 
 
