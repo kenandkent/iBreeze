@@ -231,6 +231,18 @@ describe('CompanyList', () => {
     fireEvent.click(trashBtn!);
 
     expect(screen.getByText('删除确认')).toBeInTheDocument();
+    expect(screen.getByText(/确定删除公司「Test Corp」/)).toBeInTheDocument();
+  });
+
+  it('opens dissolve confirm for active company', async () => {
+    renderWithQuery(<CompanyList />);
+    await waitFor(() => screen.getByText('Test Corp'));
+
+    const companyItem = screen.getByText('Test Corp').closest('[class*="border-b"]')!;
+    const dissolveBtn = companyItem.querySelector('.lucide-archive')?.closest('button');
+    fireEvent.click(dissolveBtn!);
+
+    expect(screen.getByText('解散')).toBeInTheDocument();
     expect(screen.getByText(/确定解散公司「Test Corp」/)).toBeInTheDocument();
   });
 

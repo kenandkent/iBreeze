@@ -16,6 +16,11 @@ import {
   AlertTriangle,
   ScrollText,
   LayoutDashboard,
+  Scale,
+  ShieldCheck,
+  Network,
+  Boxes,
+  GitBranch,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAppStore } from '../../stores/appStore';
@@ -42,6 +47,11 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'grant', label: '授权', icon: <KeyRound size={18} /> },
   { key: 'intervention', label: '人工干预', icon: <AlertTriangle size={18} /> },
   { key: 'audit', label: '审计', icon: <ScrollText size={18} /> },
+  { key: 'governance', label: '治理与审批', icon: <Scale size={18} /> },
+  { key: 'knowledgeGov', label: '知识治理', icon: <ShieldCheck size={18} /> },
+  { key: 'permission', label: '权限可视化', icon: <Network size={18} /> },
+  { key: 'capengine', label: '能力引擎', icon: <Boxes size={18} /> },
+  { key: 'taskAdvanced', label: '任务高级', icon: <GitBranch size={18} /> },
   { key: 'settings', label: '设置', icon: <Settings size={18} /> },
 ];
 

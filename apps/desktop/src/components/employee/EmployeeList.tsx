@@ -5,9 +5,27 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import type { Employee, Company, Department, EmployeeTemplate } from '../../types';
-import { Users, X, Pencil, Trash2 } from 'lucide-react';
+import { Users, X, Pencil, Trash2, UserCog, Play, Pause, RotateCcw, Archive } from 'lucide-react';
 
 const emptyForm = { name: '', role_name: '', company_id: '', department_id: '', template_id: '' };
+
+// 员工状态机：根据当前状态决定可用转换
+const STATUS_ACTIONS: Record<string, { key: string; label: string; rpc: string; icon: typeof Play; danger?: boolean }[]> = {
+  active: [
+    { key: 'suspend', label: '暂停', rpc: 'org.employee.suspend', icon: Pause },
+    { key: 'archive', label: '归档', rpc: 'org.employee.archive', icon: Archive, danger: true },
+  ],
+  suspended: [
+    { key: 'resume', label: '恢复', rpc: 'org.employee.resume', icon: RotateCcw },
+    { key: 'archive', label: '归档', rpc: 'org.employee.archive', icon: Archive, danger: true },
+  ],
+  archived: [
+    { key: 'activate', label: '激活', rpc: 'org.employee.activate', icon: Play },
+  ],
+  inactive: [
+    { key: 'activate', label: '激活', rpc: 'org.employee.activate', icon: Play },
+  ],
+};
 
 export function EmployeeList() {
   const queryClient = useQueryClient();
@@ -15,6 +33,10 @@ export function EmployeeList() {
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [confirmDelete, setConfirmDelete] = useState<Employee | null>(null);
+  const [statusTarget, setStatusTarget] = useState<Employee | null>(null);
+  const [statusAction, setStatusAction] = useState<{ key: string; label: string; rpc: string; danger?: boolean } | null>(null);
+  const [managerTarget, setManagerTarget] = useState<Employee | null>(null);
+  const [managerId, setManagerId] = useState('');
 
   const { data, isLoading, error, refetch } = useQuery<Employee[]>({
     queryKey: ['employees'],
@@ -75,6 +97,29 @@ export function EmployeeList() {
     onSuccess: (result) => { console.log('[iBreeze] deleteEmployee success', result); queryClient.invalidateQueries({ queryKey: ['employees'] }); },
     onError: (err: Error) => { console.error('[iBreeze] deleteEmployee error:', err); alert('删除员工失败: ' + err.message); },
   });
+
+  // 员工状态机：激活/暂停/恢复/归档
+  const statusMutation = useMutation({
+    mutationFn: ({ emp, rpc }: { emp: Employee; rpc: string }) => rpcCall(rpc, { employee_id: emp.employee_id }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); setStatusTarget(null); setStatusAction(null); },
+    onError: (err: Error) => alert('操作失败: ' + err.message),
+  });
+
+  // 设置上级（制造汇报链）
+  const setManagerMutation = useMutation({
+    mutationFn: ({ emp, manager_employee_id }: { emp: Employee; manager_employee_id: string }) =>
+      rpcCall('org.employee.setManager', { employee_id: emp.employee_id, manager_employee_id }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); setManagerTarget(null); setManagerId(''); },
+    onError: (err: Error) => alert('设置上级失败: ' + err.message),
+  });
+
+  // 设上级弹窗所需的同公司员工下拉
+  const { data: peers } = useQuery<Employee[]>({
+    queryKey: ['employees', managerTarget?.company_id],
+    queryFn: () => rpcCall<Employee[]>('org.employee.list'),
+    enabled: !!managerTarget,
+  });
+  const peerOptions = (peers ?? []).filter((p) => p.employee_id !== managerTarget?.employee_id && p.company_id === managerTarget?.company_id);
 
   function closeModal() { setShowModal(false); setEditEmployee(null); setForm(emptyForm); }
 
@@ -177,6 +222,49 @@ export function EmployeeList() {
         onCancel={() => setConfirmDelete(null)}
       />
 
+      {/* 员工状态机确认弹窗 */}
+      {statusTarget && statusAction && (
+        <ConfirmDialog
+          open={!!statusTarget && !!statusAction}
+          title="状态变更确认"
+          message={`确定对员工「${statusTarget.name}」执行「${statusAction.label}」操作？`}
+          confirmLabel={statusAction.label}
+          danger={statusAction.danger}
+          onConfirm={() => { if (statusTarget && statusAction) statusMutation.mutate({ emp: statusTarget, rpc: statusAction.rpc }); }}
+          onCancel={() => { setStatusTarget(null); setStatusAction(null); }}
+        />
+      )}
+
+      {/* 设上级弹窗 */}
+      {managerTarget && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">设置上级 · {managerTarget.name}</h3>
+              <button onClick={() => { setManagerTarget(null); setManagerId(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">选择上级员工</label>
+                <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]">
+                  <option value="">请选择上级</option>
+                  {peerOptions.map((p) => <option key={p.employee_id} value={p.employee_id}>{p.name} · {p.role_name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => { setManagerTarget(null); setManagerId(''); }} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button onClick={() => { if (managerTarget && managerId) setManagerMutation.mutate({ emp: managerTarget, manager_employee_id: managerId }); }}
+                disabled={!managerId || setManagerMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                {setManagerMutation.isPending ? '处理中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {(!data || data.length === 0) ? (
         <div className="text-center py-12 text-gray-400">
           <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
@@ -210,6 +298,14 @@ export function EmployeeList() {
                   <td className="px-4 py-2.5"><StatusBadge status={e.status} /></td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">
+                      {(STATUS_ACTIONS[e.status] ?? []).map((a) => {
+                        const Icon = a.icon;
+                        return (
+                          <button key={a.key} onClick={() => { setStatusTarget(e); setStatusAction(a); }}
+                            className="p-1 text-gray-400 hover:text-blue-600" title={a.label}><Icon className="w-3.5 h-3.5" /></button>
+                        );
+                      })}
+                      <button onClick={() => { setManagerTarget(e); setManagerId(''); }} className="p-1 text-gray-400 hover:text-blue-600" title="设上级"><UserCog className="w-3.5 h-3.5" /></button>
                       <button onClick={() => openEdit(e)} className="p-1 text-gray-400 hover:text-blue-600"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setConfirmDelete(e)} className="p-1 text-gray-400 hover:text-red-600" title="删除"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>

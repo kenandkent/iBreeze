@@ -5,8 +5,8 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useAppStore } from '../../stores/appStore';
-import type { Company, Department } from '../../types';
-import { Building2, X, Pencil, Trash2, ChevronRight, FolderTree, Plus, RotateCcw, Zap } from 'lucide-react';
+import type { Company, Department, Employee } from '../../types';
+import { Building2, X, Pencil, Trash2, ChevronRight, FolderTree, Plus, RotateCcw, Zap, UserCog, Move, Snowflake, Sun, Archive } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { value: 'active', label: '正常运营' },
@@ -29,7 +29,7 @@ export function CompanyList() {
   const [editDept, setEditDept] = useState<Department | null>(null);
   const [deptForm, setDeptForm] = useState({ name: '', description: '' });
 
-  const [confirmTarget, setConfirmTarget] = useState<{ type: 'company' | 'department' | 'restore'; id: string; name: string } | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{ type: 'company' | 'department' | 'restore' | 'dissolve'; id: string; name: string } | null>(null);
   const [activateTarget, setActivateTarget] = useState<Company | null>(null);
   const [activateLeaderName, setActivateLeaderName] = useState('负责人');
 
@@ -70,6 +70,12 @@ export function CompanyList() {
     onError: (err: Error) => alert('恢复失败: ' + err.message),
   });
 
+  const dissolveCompany = useMutation({
+    mutationFn: (company_id: string) => rpcCall('org.company.dissolve', { company_id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+    onError: (err: Error) => alert('解散失败: ' + err.message),
+  });
+
   const activateCompany = useMutation({
     mutationFn: ({ company_id, version, leader_name }: { company_id: string; version: number; leader_name: string }) =>
       rpcCall<{ company_id: string; status: string }>('org.company.activate', { company_id, expected_version: version, leader: { name: leader_name } }),
@@ -101,11 +107,54 @@ export function CompanyList() {
     onError: (err: Error) => alert('删除部门失败: ' + err.message),
   });
 
+  // 部门高级操作：设负责人 / 移动 / 冻结 / 解冻
+  const setLeaderMutation = useMutation({
+    mutationFn: ({ department_id, leader_employee_id }: { department_id: string; leader_employee_id: string }) =>
+      rpcCall('org.department.setLeader', { department_id, leader_employee_id }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['departments', selectedCompany?.company_id] }); setLeaderTarget(null); setLeaderId(''); },
+    onError: (err: Error) => alert('设置负责人失败: ' + err.message),
+  });
+
+  const moveDeptMutation = useMutation({
+    mutationFn: ({ department_id, new_parent_department_id }: { department_id: string; new_parent_department_id: string | null }) =>
+      rpcCall('org.department.move', { department_id, new_parent_department_id }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['departments', selectedCompany?.company_id] }); setMoveTarget(null); setMoveParentId(''); },
+    onError: (err: Error) => alert('移动部门失败: ' + err.message),
+  });
+
+  const freezeDeptMutation = useMutation({
+    mutationFn: ({ department_id, freeze }: { department_id: string; freeze: boolean }) =>
+      rpcCall(freeze ? 'org.department.freeze' : 'org.department.unfreeze', { department_id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['departments', selectedCompany?.company_id] }),
+    onError: (err: Error) => alert('操作失败: ' + err.message),
+  });
+
+  // 设负责人弹窗状态
+  const [leaderTarget, setLeaderTarget] = useState<Department | null>(null);
+  const [leaderId, setLeaderId] = useState('');
+  // 移动弹窗状态
+  const [moveTarget, setMoveTarget] = useState<Department | null>(null);
+  const [moveParentId, setMoveParentId] = useState('');
+  // 冻结确认弹窗状态
+  const [freezeTarget, setFreezeTarget] = useState<{ dept: Department; freeze: boolean } | null>(null);
+
+  // 设负责人可用的同公司员工
+  const { data: deptEmployees } = useQuery<Employee[]>({
+    queryKey: ['employees', 'company', selectedCompany?.company_id],
+    queryFn: () => rpcCall<Employee[]>('org.employee.list'),
+    enabled: !!leaderTarget && !!selectedCompany,
+  });
+  const leaderOptions = (deptEmployees ?? []).filter((e) => !selectedCompany || e.company_id === selectedCompany.company_id);
+
+  // 移动可用的候选父部门（排除自身及子孙，简单排除自身）
+  const moveParentOptions = (departments ?? []).filter((d) => d.department_id !== moveTarget?.department_id);
+
   function handleConfirm() {
     if (!confirmTarget) return;
     if (confirmTarget.type === 'company') deleteCompany.mutate(confirmTarget.id);
     else if (confirmTarget.type === 'department') deleteDept.mutate(confirmTarget.id);
     else if (confirmTarget.type === 'restore') restoreCompany.mutate(confirmTarget.id);
+    else if (confirmTarget.type === 'dissolve') dissolveCompany.mutate(confirmTarget.id);
     setConfirmTarget(null);
   }
 
@@ -122,10 +171,11 @@ export function CompanyList() {
     );
   }
 
-  const confirmTitle = confirmTarget?.type === 'restore' ? '恢复' : '删除';
-  const confirmMsg = confirmTarget?.type === 'company' ? `确定解散公司「${confirmTarget.name}」？所有部门和员工将一并删除。`
+  const confirmTitle = confirmTarget?.type === 'restore' ? '恢复' : confirmTarget?.type === 'dissolve' ? '解散' : '删除';
+  const confirmMsg = confirmTarget?.type === 'company' ? `确定删除公司「${confirmTarget.name}」？所有部门和员工将一并删除。`
     : confirmTarget?.type === 'department' ? `确定删除部门「${confirmTarget.name}」？`
     : confirmTarget?.type === 'restore' ? `确定恢复公司「${confirmTarget.name}」？`
+    : confirmTarget?.type === 'dissolve' ? `确定解散公司「${confirmTarget.name}」？解散后状态变为「解散中」，可通过恢复撤销。`
     : '';
 
   return (
@@ -183,6 +233,9 @@ export function CompanyList() {
                         <button onClick={(e) => { e.stopPropagation(); setConfirmTarget({ type: 'company', id: company.company_id, name: company.name }); }} className="p-1 text-gray-400 hover:text-red-600" title="删除">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        <button onClick={(e) => { e.stopPropagation(); setConfirmTarget({ type: 'dissolve', id: company.company_id, name: company.name }); }} className="p-1 text-gray-400 hover:text-amber-600" title="解散">
+                          <Archive className="w-3.5 h-3.5" />
+                        </button>
                       </>
                     )}
                     <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
@@ -226,6 +279,11 @@ export function CompanyList() {
                       </div>
                       {selectedCompany.status === 'active' && (
                         <div className="flex items-center gap-1 flex-shrink-0">
+                          <button onClick={() => { setLeaderTarget(dept); setLeaderId(''); }} className="p-1 text-gray-400 hover:text-blue-600" title="设负责人"><UserCog className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => { setMoveTarget(dept); setMoveParentId(dept.parent_department_id ?? ''); }} className="p-1 text-gray-400 hover:text-blue-600" title="移动"><Move className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setFreezeTarget({ dept, freeze: dept.status !== 'frozen' })} className="p-1 text-gray-400 hover:text-amber-600" title={dept.status === 'frozen' ? '解冻' : '冻结'}>
+                            {dept.status === 'frozen' ? <Sun className="w-3.5 h-3.5" /> : <Snowflake className="w-3.5 h-3.5" />}
+                          </button>
                           <button onClick={() => { setDeptForm({ name: dept.name, description: dept.description || '' }); setEditDept(dept); setShowDeptModal(true); }} className="p-1 text-gray-400 hover:text-blue-600">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -316,6 +374,76 @@ export function CompanyList() {
           </div>
         </div>
       )}
+
+      {/* 部门设负责人弹窗 */}
+      {leaderTarget && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">设置负责人 · {leaderTarget.name}</h3>
+              <button onClick={() => { setLeaderTarget(null); setLeaderId(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">选择负责人员工</label>
+                <select value={leaderId} onChange={(e) => setLeaderId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]">
+                  <option value="">请选择员工</option>
+                  {leaderOptions.map((e) => <option key={e.employee_id} value={e.employee_id}>{e.name} · {e.role_name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => { setLeaderTarget(null); setLeaderId(''); }} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button onClick={() => { if (leaderTarget && leaderId) setLeaderMutation.mutate({ department_id: leaderTarget.department_id, leader_employee_id: leaderId }); }}
+                disabled={!leaderId || setLeaderMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                {setLeaderMutation.isPending ? '处理中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 部门移动弹窗 */}
+      {moveTarget && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">移动部门 · {moveTarget.name}</h3>
+              <button onClick={() => { setMoveTarget(null); setMoveParentId(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">新父部门</label>
+                <select value={moveParentId} onChange={(e) => setMoveParentId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]">
+                  <option value="">顶级部门（无上级）</option>
+                  {moveParentOptions.map((d) => <option key={d.department_id} value={d.department_id}>{d.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => { setMoveTarget(null); setMoveParentId(''); }} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button onClick={() => { if (moveTarget) moveDeptMutation.mutate({ department_id: moveTarget.department_id, new_parent_department_id: moveParentId || null }); }}
+                disabled={moveDeptMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                {moveDeptMutation.isPending ? '处理中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 部门冻结/解冻确认弹窗 */}
+      <ConfirmDialog
+        open={!!freezeTarget}
+        title={freezeTarget?.freeze ? '冻结确认' : '解冻确认'}
+        message={freezeTarget ? `确定${freezeTarget.freeze ? '冻结' : '解冻'}部门「${freezeTarget.dept.name}」？` : ''}
+        confirmLabel={freezeTarget?.freeze ? '冻结' : '解冻'}
+        onConfirm={() => { if (freezeTarget) freezeDeptMutation.mutate({ department_id: freezeTarget.dept.department_id, freeze: freezeTarget.freeze }); setFreezeTarget(null); }}
+        onCancel={() => setFreezeTarget(null)}
+      />
 
       {/* 激活公司弹窗 */}
       {activateTarget && (

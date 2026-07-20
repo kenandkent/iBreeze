@@ -17,6 +17,11 @@ import { GrantPage } from '../grant/GrantPage';
 import { InterventionPage } from '../intervention/InterventionPage';
 import { AuditPage } from '../audit/AuditPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
+import { GovernancePage } from '../governance/GovernancePage';
+import { KnowledgeGovernancePage } from '../knowledge/KnowledgeGovernancePage';
+import { PermissionPage } from '../permission/PermissionPage';
+import { CapabilityEnginePage } from '../capability/CapabilityEnginePage';
+import { TaskAdvancedPage } from '../task/TaskAdvancedPage';
 
 const PAGE_LABELS: Record<string, string> = {
   companies: '公司管理',
@@ -33,6 +38,11 @@ const PAGE_LABELS: Record<string, string> = {
   intervention: '人工干预',
   audit: '审计',
   dashboard: 'Dashboard',
+  governance: '治理与审批',
+  knowledgeGov: '知识治理',
+  permission: '权限可视化',
+  capengine: '能力引擎',
+  taskAdvanced: '任务高级',
   settings: '设置',
 };
 
@@ -68,6 +78,16 @@ function PageContent() {
       content = <InterventionPage />; break;
     case 'audit':
       content = <AuditPage />; break;
+    case 'governance':
+      content = <GovernancePage />; break;
+    case 'knowledgeGov':
+      content = <KnowledgeGovernancePage />; break;
+    case 'permission':
+      content = <PermissionPage />; break;
+    case 'capengine':
+      content = <CapabilityEnginePage />; break;
+    case 'taskAdvanced':
+      content = <TaskAdvancedPage />; break;
     case 'dashboard':
       content = <DashboardPage />; break;
     case 'settings':

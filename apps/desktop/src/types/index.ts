@@ -262,4 +262,9 @@ export type PageKey =
   | 'grant'
   | 'intervention'
   | 'audit'
-  | 'dashboard';
+  | 'dashboard'
+  | 'governance'
+  | 'knowledgeGov'
+  | 'permission'
+  | 'capengine'
+  | 'taskAdvanced';
