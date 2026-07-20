@@ -86,10 +86,48 @@ describe('ProviderBackendPage', () => {
     await waitFor(() => expect(screen.getByText('gpt-4o')).toBeInTheDocument());
   });
 
-  it('creates provider via provider.create', async () => {
+  it('creates api provider with key + base_url and sets credential', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
       if (opts.method === 'backend.list') return Promise.resolve([]);
       if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      if (opts.method === 'provider.agent.list') return Promise.resolve({ agents: [] });
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<ProviderBackendPage />);
+    await waitFor(() => screen.getByText('新建 Provider'));
+
+    fireEvent.click(screen.getByText('新建 Provider'));
+    fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'MyOpenAI' } });
+    fireEvent.change(screen.getByPlaceholderText('第三方 API Key'), { target: { value: 'sk-xxx' } });
+    fireEvent.change(screen.getByPlaceholderText('如：https://api.openai.com/v1'), { target: { value: 'https://api.openai.com/v1' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      const createCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
+      expect(createCall).toBeTruthy();
+      const cp = JSON.parse((createCall![1] as Record<string, string>).params);
+      expect(cp.name).toBe('MyOpenAI');
+      expect(cp.provider_type).toBe('api');
+      expect(cp.config.base_url).toBe('https://api.openai.com/v1');
+
+      const credCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.credential.set');
+      expect(credCall).toBeTruthy();
+      const credP = JSON.parse((credCall![1] as Record<string, string>).params);
+      expect(credP.credential.api_key).toBe('sk-xxx');
+    });
+  });
+
+  it('creates cli provider with agent + model', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'backend.list') return Promise.resolve([]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      if (opts.method === 'provider.agent.list') {
+        return Promise.resolve({
+          agents: [
+            { agent_id: 'opencode', display_name: 'OpenCode', models: [{ model: 'anthropic/claude-sonnet-4', display_name: 'Claude Sonnet 4' }] },
+          ],
+        });
+      }
       return Promise.resolve([]);
     });
     renderWithQuery(<ProviderBackendPage />);
@@ -97,17 +135,51 @@ describe('ProviderBackendPage', () => {
 
     fireEvent.click(screen.getByText('新建 Provider'));
     fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'opencode' } });
-    fireEvent.change(screen.getByPlaceholderText('如：openai / agent'), { target: { value: 'agent' } });
+    fireEvent.click(screen.getByText('调用 Agent 形式'));
+    await waitFor(() => screen.getByText('OpenCode'));
+    fireEvent.change(screen.getByDisplayValue('请选择 Agent'), { target: { value: 'opencode' } });
+    fireEvent.change(screen.getByDisplayValue('请选择模型'), { target: { value: 'anthropic/claude-sonnet-4' } });
     fireEvent.click(screen.getByText('确认'));
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('sys_rpc_call', expect.objectContaining({
-        method: 'provider.create',
-      }));
-      const call = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
-      const params = JSON.parse((call![1] as Record<string, string>).params);
-      expect(params.name).toBe('opencode');
-      expect(params.provider_type).toBe('agent');
+      const createCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
+      expect(createCall).toBeTruthy();
+      const cp = JSON.parse((createCall![1] as Record<string, string>).params);
+      expect(cp.provider_type).toBe('cli');
+      expect(cp.config.agent).toBe('opencode');
+      expect(cp.config.model).toBe('anthropic/claude-sonnet-4');
+    });
+  });
+
+  it('cli provider supports custom model input', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'backend.list') return Promise.resolve([]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      if (opts.method === 'provider.agent.list') {
+        return Promise.resolve({
+          agents: [
+            { agent_id: 'opencode', display_name: 'OpenCode', models: [{ model: 'anthropic/claude-sonnet-4', display_name: 'Claude Sonnet 4' }] },
+          ],
+        });
+      }
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<ProviderBackendPage />);
+    await waitFor(() => screen.getByText('新建 Provider'));
+
+    fireEvent.click(screen.getByText('新建 Provider'));
+    fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'opencode' } });
+    fireEvent.click(screen.getByText('调用 Agent 形式'));
+    await waitFor(() => screen.getByText('OpenCode'));
+    fireEvent.change(screen.getByDisplayValue('请选择 Agent'), { target: { value: 'opencode' } });
+    fireEvent.change(screen.getByDisplayValue('请选择模型'), { target: { value: '__custom__' } });
+    fireEvent.change(screen.getByPlaceholderText('手动输入模型名'), { target: { value: 'my-custom-model' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      const createCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
+      const cp = JSON.parse((createCall![1] as Record<string, string>).params);
+      expect(cp.config.model).toBe('my-custom-model');
     });
   });
 

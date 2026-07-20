@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from pathlib import Path
 
 import aiosqlite
@@ -60,34 +61,82 @@ async def test_provider_list_imports_manifest(methods: ProviderMethods, db_path:
     assert set(result["tier_mapping"].keys()) == {"free", "standard", "premium"}
 
 
-async def test_provider_create_and_list_status(methods: ProviderMethods, db_path: str) -> None:
+async def test_provider_create_api_and_list_status(methods: ProviderMethods, db_path: str) -> None:
     await _make_company(db_path)
     created = await methods._provider_create({
-        "name": "opencode",
-        "provider_type": "agent",
-        "config": {"base_url": "http://localhost:1234"},
+        "name": "MyOpenAI",
+        "provider_type": "api",
+        "config": {"base_url": "https://api.openai.com/v1"},
     })
     assert created["provider_id"].startswith("pv-")
-    assert created["name"] == "opencode"
-    assert created["provider_type"] == "agent"
+    assert created["name"] == "MyOpenAI"
+    assert created["provider_type"] == "api"
     assert created["status"] == "active"
 
     result = await methods._provider_list({"company_id": "c1"})
     oc = next(p for p in result["items"] if p["provider_id"] == created["provider_id"])
     assert oc["status"] == "active"
-    assert oc["provider_type"] == "agent"
+    assert oc["provider_type"] == "api"
+
+
+async def test_provider_create_cli_stores_agent_and_model(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    created = await methods._provider_create({
+        "name": "opencode",
+        "provider_type": "cli",
+        "config": {"agent": "opencode", "model": "anthropic/claude-sonnet-4"},
+    })
+    assert created["provider_type"] == "cli"
+
+    conn = await aiosqlite.connect(db_path)
+    try:
+        cur = await conn.execute("SELECT config FROM providers WHERE provider_id = ?", (created["provider_id"],))
+        row = await cur.fetchone()
+        cfg = json.loads(row[0])
+    finally:
+        await conn.close()
+    assert cfg == {"agent": "opencode", "model": "anthropic/claude-sonnet-4"}
 
 
 async def test_provider_create_requires_name(methods: ProviderMethods, db_path: str) -> None:
     await _make_company(db_path)
     with pytest.raises(AcosError):
-        await methods._provider_create({"provider_type": "agent"})
+        await methods._provider_create({"provider_type": "api"})
 
 
 async def test_provider_create_rejects_bad_config(methods: ProviderMethods, db_path: str) -> None:
     await _make_company(db_path)
     with pytest.raises(AcosError):
         await methods._provider_create({"name": "x", "config": "not-an-object"})
+
+
+async def test_provider_create_rejects_unknown_type(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    with pytest.raises(AcosError):
+        await methods._provider_create({"name": "x", "provider_type": "agent"})
+
+
+async def test_provider_create_cli_rejects_unknown_agent(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    with pytest.raises(AcosError):
+        await methods._provider_create({"name": "x", "provider_type": "cli", "config": {"agent": "nope", "model": "m"}})
+
+
+async def test_provider_create_cli_requires_model(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    with pytest.raises(AcosError):
+        await methods._provider_create({"name": "x", "provider_type": "cli", "config": {"agent": "opencode"}})
+
+
+async def test_provider_agent_list_returns_fixed_agents(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    result = await methods._agent_list({})
+    agent_ids = {a["agent_id"] for a in result["agents"]}
+    assert agent_ids == {"cursor-cli", "claude-code", "codex-cli", "opencode"}
+    cursor = next(a for a in result["agents"] if a["agent_id"] == "cursor-cli")
+    assert [m["model"] for m in cursor["models"]] == ["auto"]
+    opencode = next(a for a in result["agents"] if a["agent_id"] == "opencode")
+    assert any(m["model"] == "anthropic/claude-sonnet-4" for m in opencode["models"])
 
 
 async def test_model_list_requires_company(methods: ProviderMethods) -> None:

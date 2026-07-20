@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppStore } from '../../stores/appStore';
 import { formatNumber } from '../../utils/format';
-import type { Backend, Provider, ProviderModel } from '../../types';
+import type { Backend, Provider, ProviderModel, CliAgentOption } from '../../types';
 import { Server, Plus, X } from 'lucide-react';
 
 export function ProviderBackendPage() {
@@ -14,8 +14,35 @@ export function ProviderBackendPage() {
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [showBackendModal, setShowBackendModal] = useState(false);
-  const [providerForm, setProviderForm] = useState({ name: '', provider_type: 'openai' });
+  const [providerForm, setProviderForm] = useState({
+    name: '',
+    provider_type: 'api' as 'api' | 'cli',
+    api_key: '',
+    base_url: '',
+    agent: '',
+    model: '',
+    custom_model: '',
+  });
   const [backendForm, setBackendForm] = useState({ name: '', backend_type: 'local_process' });
+
+  const { data: agents } = useQuery<CliAgentOption[]>({
+    queryKey: ['cliAgents'],
+    queryFn: async () => {
+      const res = await rpcCall<{ agents: CliAgentOption[] }>('provider.agent.list', {});
+      return res.agents ?? [];
+    },
+    enabled: showProviderModal,
+  });
+
+  const selectedAgent = agents?.find((a) => a.agent_id === providerForm.agent);
+  const modelValue = providerForm.model === '__custom__' ? providerForm.custom_model : providerForm.model;
+
+  useEffect(() => {
+    if (providerForm.provider_type === 'cli' && selectedAgent && providerForm.model && providerForm.model !== '__custom__') {
+      const valid = selectedAgent.models.some((m) => m.model === providerForm.model);
+      if (!valid) setProviderForm((f) => ({ ...f, model: '' }));
+    }
+  }, [providerForm.provider_type, selectedAgent, providerForm.model]);
 
   const { data: backends, isLoading, error, refetch } = useQuery<Backend[]>({
     queryKey: ['backend', currentCompanyId],
@@ -49,11 +76,33 @@ export function ProviderBackendPage() {
   });
 
   const createProviderMutation = useMutation({
-    mutationFn: () => rpcCall('provider.create', { name: providerForm.name.trim(), provider_type: providerForm.provider_type }),
+    mutationFn: async () => {
+      const name = providerForm.name.trim();
+      if (providerForm.provider_type === 'cli') {
+        return rpcCall('provider.create', {
+          name,
+          provider_type: 'cli',
+          config: { agent: providerForm.agent, model: modelValue },
+        });
+      }
+      const res = await rpcCall<{ provider_id: string }>('provider.create', {
+        name,
+        provider_type: 'api',
+        config: providerForm.base_url.trim() ? { base_url: providerForm.base_url.trim() } : {},
+      });
+      if (providerForm.api_key.trim()) {
+        await rpcCall('provider.credential.set', {
+          company_id: currentCompanyId,
+          provider_id: res.provider_id,
+          credential: { api_key: providerForm.api_key.trim() },
+        });
+      }
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provider', currentCompanyId] });
       setShowProviderModal(false);
-      setProviderForm({ name: '', provider_type: 'openai' });
+      setProviderForm({ name: '', provider_type: 'api', api_key: '', base_url: '', agent: '', model: '', custom_model: '' });
     },
   });
 
@@ -208,7 +257,7 @@ export function ProviderBackendPage() {
 
       {showProviderModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+          <div className="bg-white rounded-lg p-6 w-[420px] shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-medium">新建 Provider</h3>
               <button onClick={() => setShowProviderModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
@@ -225,19 +274,97 @@ export function ProviderBackendPage() {
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">类型</label>
-                <input
-                  value={providerForm.provider_type}
-                  onChange={(e) => setProviderForm({ ...providerForm, provider_type: e.target.value })}
-                  placeholder="如：openai / agent"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProviderForm({ ...providerForm, provider_type: 'api' })}
+                    className={`flex-1 px-3 py-2 text-sm rounded-md border ${providerForm.provider_type === 'api' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'}`}
+                  >
+                    API Key 形式
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProviderForm({ ...providerForm, provider_type: 'cli' })}
+                    className={`flex-1 px-3 py-2 text-sm rounded-md border ${providerForm.provider_type === 'cli' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'}`}
+                  >
+                    调用 Agent 形式
+                  </button>
+                </div>
               </div>
+
+              {providerForm.provider_type === 'api' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">API Key</label>
+                    <input
+                      type="password"
+                      value={providerForm.api_key}
+                      onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
+                      placeholder="第三方 API Key"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Base URL（OpenAI 格式兼容，可选）</label>
+                    <input
+                      value={providerForm.base_url}
+                      onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })}
+                      placeholder="如：https://api.openai.com/v1"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </>
+              )}
+
+              {providerForm.provider_type === 'cli' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Agent 工具</label>
+                    <select
+                      value={providerForm.agent}
+                      onChange={(e) => setProviderForm({ ...providerForm, agent: e.target.value, model: '' })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+                    >
+                      <option value="">请选择 Agent</option>
+                      {agents?.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.display_name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">模型</label>
+                    <select
+                      value={providerForm.model}
+                      onChange={(e) => setProviderForm({ ...providerForm, model: e.target.value })}
+                      disabled={!providerForm.agent}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+                    >
+                      <option value="">请选择模型</option>
+                      {selectedAgent?.models.map((m) => <option key={m.model} value={m.model}>{m.display_name}</option>)}
+                      <option value="__custom__">自定义（手动输入）</option>
+                    </select>
+                  </div>
+                  {providerForm.model === '__custom__' && (
+                    <div>
+                      <input
+                        value={providerForm.custom_model}
+                        onChange={(e) => setProviderForm({ ...providerForm, custom_model: e.target.value })}
+                        placeholder="手动输入模型名"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowProviderModal(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
               <button
                 onClick={() => createProviderMutation.mutate()}
-                disabled={!providerForm.name.trim() || createProviderMutation.isPending}
+                disabled={
+                  !providerForm.name.trim() ||
+                  createProviderMutation.isPending ||
+                  (providerForm.provider_type === 'cli' && (!providerForm.agent || !modelValue)) ||
+                  (providerForm.provider_type === 'cli' && providerForm.model === '__custom__' && !providerForm.custom_model.trim())
+                }
                 className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
                 {createProviderMutation.isPending ? '创建中...' : '确认'}

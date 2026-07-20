@@ -52,6 +52,7 @@ class ProviderMethods:
     def register_to(self, server: RPCServer) -> None:
         server.register_method("provider.list", self._provider_list)
         server.register_method("provider.create", self._provider_create)
+        server.register_method("provider.agent.list", self._agent_list)
         server.register_method("provider.model.list", self._model_list)
         server.register_method("provider.pricingPolicy.update", self._pricing_policy_update)
         server.register_method("provider.budgetFreeze.clear", self._budget_freeze_clear)
@@ -119,15 +120,65 @@ class ProviderMethods:
 
     # ── provider.create ─────────────────────────────────
 
+    # 固定的 cli agent（调用本机 agent 工具），后续迭代可扩展
+    _CLI_AGENTS = {
+        "cursor-cli": {
+            "display_name": "Cursor CLI",
+            "models": [{"model": "auto", "display_name": "Auto (Cursor 自动选择)"}],
+        },
+        "claude-code": {
+            "display_name": "Claude Code",
+            "models": [
+                {"model": "claude-sonnet-4-20250514", "display_name": "Claude Sonnet 4"},
+                {"model": "claude-opus-4-20250514", "display_name": "Claude Opus 4"},
+                {"model": "claude-haiku-4-20250414", "display_name": "Claude Haiku 4"},
+            ],
+        },
+        "codex-cli": {
+            "display_name": "Codex CLI",
+            "models": [
+                {"model": "codex-mini-latest", "display_name": "Codex Mini (latest)"},
+                {"model": "gpt-5-codex", "display_name": "GPT-5 Codex"},
+                {"model": "gpt-5.1-codex", "display_name": "GPT-5.1 Codex"},
+            ],
+        },
+        "opencode": {
+            "display_name": "OpenCode",
+            "models": [
+                {"model": "anthropic/claude-sonnet-4", "display_name": "Anthropic / Claude Sonnet 4"},
+                {"model": "openai/gpt-4o", "display_name": "OpenAI / GPT-4o"},
+                {"model": "google/gemini-2.5-pro", "display_name": "Google / Gemini 2.5 Pro"},
+            ],
+        },
+    }
+
     async def _provider_create(self, params: dict[str, Any]) -> dict[str, Any]:
         name = params.get("name")
         provider_type = params.get("provider_type", "openai")
         if not name:
             raise AcosError(PROV_VALIDATION, "缺少 name")
+        if provider_type not in ("api", "cli"):
+            raise AcosError(PROV_VALIDATION, "provider_type 仅支持 api / cli")
 
         config = params.get("config")
         if config is not None and not isinstance(config, dict):
             raise AcosError(PROV_VALIDATION, "config 必须为对象")
+        config = dict(config or {})
+
+        if provider_type == "cli":
+            agent = config.get("agent")
+            if agent not in self._CLI_AGENTS:
+                raise AcosError(PROV_VALIDATION, f"cli agent 仅支持 {list(self._CLI_AGENTS.keys())}")
+            model = config.get("model")
+            if not model:
+                raise AcosError(PROV_VALIDATION, "cli provider 必须指定 model")
+            config = {"agent": agent, "model": model}
+        elif provider_type == "api":
+            # api 形式：凭证走 Keychain（provider.credential.set），此处仅存连接配置
+            base_url = config.get("base_url")
+            if base_url is not None and not isinstance(base_url, str):
+                raise AcosError(PROV_VALIDATION, "base_url 必须为字符串")
+            config = {"base_url": base_url} if base_url else {}
 
         provider_id = params.get("provider_id") or f"pv-{uuid.uuid4().hex[:12]}"
         now = _now_utc()
@@ -138,13 +189,27 @@ class ProviderMethods:
                 """INSERT INTO providers
                    (provider_id, name, provider_type, status, config, created_at)
                    VALUES (?, ?, ?, 'active', ?, ?)""",
-                (provider_id, name, provider_type, json.dumps(config or {}, ensure_ascii=False), now),
+                (provider_id, name, provider_type, json.dumps(config, ensure_ascii=False), now),
             )
             await conn.commit()
         finally:
             await conn.close()
 
         return {"provider_id": provider_id, "name": name, "provider_type": provider_type, "status": "active"}
+
+    # ── provider.agent.list ─────────────────────────────
+
+    async def _agent_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """返回固定的 cli agent 及其支持的模型（供 UI 下拉）。"""
+        agents = [
+            {
+                "agent_id": aid,
+                "display_name": meta["display_name"],
+                "models": meta["models"],
+            }
+            for aid, meta in self._CLI_AGENTS.items()
+        ]
+        return {"agents": agents}
 
     # ── provider.model.list ──────────────────────────────
 

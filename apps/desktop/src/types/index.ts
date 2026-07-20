@@ -189,6 +189,13 @@ export interface Provider {
   type: string;
   status: string;
   company_id: string;
+  config?: Record<string, unknown>;
+}
+
+export interface CliAgentOption {
+  agent_id: string;
+  display_name: string;
+  models: { model: string; display_name: string }[];
 }
 
 export interface ProviderModel {
