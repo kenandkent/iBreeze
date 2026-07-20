@@ -51,6 +51,7 @@ class ProviderMethods:
 
     def register_to(self, server: RPCServer) -> None:
         server.register_method("provider.list", self._provider_list)
+        server.register_method("provider.create", self._provider_create)
         server.register_method("provider.model.list", self._model_list)
         server.register_method("provider.pricingPolicy.update", self._pricing_policy_update)
         server.register_method("provider.budgetFreeze.clear", self._budget_freeze_clear)
@@ -101,6 +102,7 @@ class ProviderMethods:
                     "provider_id": p["provider_id"],
                     "name": p["name"],
                     "provider_type": p["provider_type"],
+                    "status": p.get("status", "active"),
                     "availability": (
                         {
                             "available": bool(avail["available"]),
@@ -114,6 +116,35 @@ class ProviderMethods:
             return {"items": items, "tier_mapping": tier_mapping}
         finally:
             await conn.close()
+
+    # ── provider.create ─────────────────────────────────
+
+    async def _provider_create(self, params: dict[str, Any]) -> dict[str, Any]:
+        name = params.get("name")
+        provider_type = params.get("provider_type", "openai")
+        if not name:
+            raise AcosError(PROV_VALIDATION, "缺少 name")
+
+        config = params.get("config")
+        if config is not None and not isinstance(config, dict):
+            raise AcosError(PROV_VALIDATION, "config 必须为对象")
+
+        provider_id = params.get("provider_id") or f"pv-{uuid.uuid4().hex[:12]}"
+        now = _now_utc()
+
+        conn = await self._connect()
+        try:
+            await conn.execute(
+                """INSERT INTO providers
+                   (provider_id, name, provider_type, status, config, created_at)
+                   VALUES (?, ?, ?, 'active', ?, ?)""",
+                (provider_id, name, provider_type, json.dumps(config or {}, ensure_ascii=False), now),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+        return {"provider_id": provider_id, "name": name, "provider_type": provider_type, "status": "active"}
 
     # ── provider.model.list ──────────────────────────────
 

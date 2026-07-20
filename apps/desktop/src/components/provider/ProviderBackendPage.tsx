@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppStore } from '../../stores/appStore';
 import { formatNumber } from '../../utils/format';
 import type { Backend, Provider, ProviderModel } from '../../types';
-import { Server } from 'lucide-react';
+import { Server, Plus, X } from 'lucide-react';
 
 export function ProviderBackendPage() {
   const { currentCompanyId } = useAppStore();
+  const queryClient = useQueryClient();
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [showBackendModal, setShowBackendModal] = useState(false);
+  const [providerForm, setProviderForm] = useState({ name: '', provider_type: 'openai' });
+  const [backendForm, setBackendForm] = useState({ name: '', backend_type: 'local_process' });
 
   const { data: backends, isLoading, error, refetch } = useQuery<Backend[]>({
     queryKey: ['backend', currentCompanyId],
@@ -41,6 +46,24 @@ export function ProviderBackendPage() {
       return res.items ?? [];
     },
     enabled: !!activeProviderId && !!currentCompanyId,
+  });
+
+  const createProviderMutation = useMutation({
+    mutationFn: () => rpcCall('provider.create', { name: providerForm.name.trim(), provider_type: providerForm.provider_type }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['provider', currentCompanyId] });
+      setShowProviderModal(false);
+      setProviderForm({ name: '', provider_type: 'openai' });
+    },
+  });
+
+  const createBackendMutation = useMutation({
+    mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['backend', currentCompanyId] });
+      setShowBackendModal(false);
+      setBackendForm({ name: '', backend_type: 'local_process' });
+    },
   });
 
   if (!currentCompanyId) {
@@ -75,7 +98,15 @@ export function ProviderBackendPage() {
       <h2 className="text-base font-medium text-gray-700">Provider 与 Backend</h2>
 
       <section>
-        <h3 className="text-sm font-medium text-gray-600 mb-2">Backend</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-600">Backend</h3>
+          <button
+            onClick={() => setShowBackendModal(true)}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus size={12} /> 新建 Backend
+          </button>
+        </div>
         {!backends || backends.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             <Server className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -119,7 +150,15 @@ export function ProviderBackendPage() {
       </section>
 
       <section>
-        <h3 className="text-sm font-medium text-gray-600 mb-2">Provider</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-600">Provider</h3>
+          <button
+            onClick={() => setShowProviderModal(true)}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus size={12} /> 新建 Provider
+          </button>
+        </div>
         {!providers || providers.length === 0 ? (
           <p className="text-sm text-gray-400">暂无 Provider</p>
         ) : (
@@ -166,6 +205,91 @@ export function ProviderBackendPage() {
           </div>
         )}
       </section>
+
+      {showProviderModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">新建 Provider</h3>
+              <button onClick={() => setShowProviderModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">名称</label>
+                <input
+                  value={providerForm.name}
+                  onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
+                  placeholder="如：opencode"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">类型</label>
+                <input
+                  value={providerForm.provider_type}
+                  onChange={(e) => setProviderForm({ ...providerForm, provider_type: e.target.value })}
+                  placeholder="如：openai / agent"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowProviderModal(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button
+                onClick={() => createProviderMutation.mutate()}
+                disabled={!providerForm.name.trim() || createProviderMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {createProviderMutation.isPending ? '创建中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBackendModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium">新建 Backend</h3>
+              <button onClick={() => setShowBackendModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">名称</label>
+                <input
+                  value={backendForm.name}
+                  onChange={(e) => setBackendForm({ ...backendForm, name: e.target.value })}
+                  placeholder="如：opencode-local"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">类型</label>
+                <select
+                  value={backendForm.backend_type}
+                  onChange={(e) => setBackendForm({ ...backendForm, backend_type: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+                >
+                  <option value="local_process">local_process</option>
+                  <option value="openai">openai</option>
+                  <option value="anthropic">anthropic</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowBackendModal(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+              <button
+                onClick={() => createBackendMutation.mutate()}
+                disabled={!backendForm.name.trim() || createBackendMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {createBackendMutation.isPending ? '创建中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

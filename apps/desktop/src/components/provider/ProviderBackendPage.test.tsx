@@ -85,4 +85,53 @@ describe('ProviderBackendPage', () => {
     fireEvent.click(screen.getByText('Provider-A').closest('tr')!);
     await waitFor(() => expect(screen.getByText('gpt-4o')).toBeInTheDocument());
   });
+
+  it('creates provider via provider.create', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'backend.list') return Promise.resolve([]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<ProviderBackendPage />);
+    await waitFor(() => screen.getByText('新建 Provider'));
+
+    fireEvent.click(screen.getByText('新建 Provider'));
+    fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'opencode' } });
+    fireEvent.change(screen.getByPlaceholderText('如：openai / agent'), { target: { value: 'agent' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('sys_rpc_call', expect.objectContaining({
+        method: 'provider.create',
+      }));
+      const call = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
+      const params = JSON.parse((call![1] as Record<string, string>).params);
+      expect(params.name).toBe('opencode');
+      expect(params.provider_type).toBe('agent');
+    });
+  });
+
+  it('creates backend via backend.create', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'backend.list') return Promise.resolve([]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<ProviderBackendPage />);
+    await waitFor(() => screen.getByText('新建 Backend'));
+
+    fireEvent.click(screen.getByText('新建 Backend'));
+    fireEvent.change(screen.getByPlaceholderText('如：opencode-local'), { target: { value: 'opencode-local' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('sys_rpc_call', expect.objectContaining({
+        method: 'backend.create',
+      }));
+      const call = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'backend.create');
+      const params = JSON.parse((call![1] as Record<string, string>).params);
+      expect(params.name).toBe('opencode-local');
+      expect(params.company_id).toBe('c1');
+    });
+  });
 });
