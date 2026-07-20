@@ -28,6 +28,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { key: 'companies', label: '公司管理', icon: <Building2 size={18} /> },
   { key: 'employees', label: '员工管理', icon: <Users size={18} /> },
   { key: 'tasks', label: '任务看板', icon: <ClipboardList size={18} /> },
@@ -41,7 +42,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'grant', label: '授权', icon: <KeyRound size={18} /> },
   { key: 'intervention', label: '人工干预', icon: <AlertTriangle size={18} /> },
   { key: 'audit', label: '审计', icon: <ScrollText size={18} /> },
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { key: 'settings', label: '设置', icon: <Settings size={18} /> },
 ];
 

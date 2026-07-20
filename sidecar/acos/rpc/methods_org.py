@@ -850,7 +850,7 @@ class OrganizationMethods:
         try:
             sets = ["updated_at = ?"]
             vals: list[Any] = [now]
-            for field in ("name", "role_name", "employee_type", "department_id"):
+            for field in ("name", "role_name", "employee_type", "department_id", "template_id"):
                 if field in params and params[field] is not None:
                     sets.append(f"{field} = ?")
                     vals.append(params[field])

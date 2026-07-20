@@ -47,6 +47,21 @@ function defaultResponder(method: string) {
       return Promise.resolve([mockCompany()]);
     case 'org.department.list':
       return Promise.resolve([mockDept()]);
+    case 'org.template.list':
+      return Promise.resolve([{
+        template_id: 't1',
+        template_scope: 'company',
+        company_id: 'c1',
+        provider_type: 'agent',
+        provider_id: 'opencode',
+        model: 'big-pickle',
+        capability_id: 'cap1',
+        capability_version: 1,
+        capability_snapshot: {},
+        default_role: 'BaseAgent',
+        version: 1,
+        status: 'active',
+      }]);
     default:
       return Promise.resolve({ ok: true });
   }
@@ -288,5 +303,84 @@ describe('EmployeeList', () => {
 
     const deptSelect = screen.getByDisplayValue('请选择部门') as HTMLSelectElement;
     expect(deptSelect).toBeDisabled();
+  });
+
+  // --- Template (base agent) selector ---
+  const mockTemplate = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    template_id: 't1',
+    template_scope: 'company',
+    company_id: 'c1',
+    provider_type: 'agent',
+    provider_id: 'opencode',
+    model: 'big-pickle',
+    capability_id: 'cap1',
+    capability_version: 1,
+    capability_snapshot: {},
+    default_role: 'BaseAgent',
+    version: 1,
+    status: 'active',
+    ...overrides,
+  });
+
+  it('shows template select in create modal after selecting company', async () => {
+    renderWithQuery(<EmployeeList />);
+    await waitFor(() => screen.getByText('员工列表'));
+
+    fireEvent.click(screen.getByText('新建员工'));
+    const companySelect = screen.getByDisplayValue('请选择公司');
+    fireEvent.change(companySelect, { target: { value: 'c1' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('基座模板')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('不绑定模板')).toBeInTheDocument();
+    });
+  });
+
+  it('creates employee with selected template_id', async () => {
+    renderWithQuery(<EmployeeList />);
+    await waitFor(() => screen.getByText('员工列表'));
+
+    fireEvent.click(screen.getByText('新建员工'));
+    const companySelect = screen.getByDisplayValue('请选择公司');
+    fireEvent.change(companySelect, { target: { value: 'c1' } });
+
+    await waitFor(() => expect(screen.getByDisplayValue('不绑定模板')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('请输入姓名'), { target: { value: 'Bob' } });
+    fireEvent.change(screen.getByDisplayValue('不绑定模板'), { target: { value: 't1' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      const call = mockRpcCall.mock.calls.find(
+        (c: unknown[]) => c[0] === 'org.employee.create',
+      );
+      expect(call).toBeTruthy();
+      const params = call![1] as Record<string, unknown>;
+      expect(params.template_id).toBe('t1');
+      expect(params.employee_type).toBe('ai_agent');
+    });
+  });
+
+  it('list shows base model resolved from template', async () => {
+    mockRpcCall.mockImplementation((method: string) => {
+      switch (method) {
+        case 'org.employee.list':
+          return Promise.resolve([{ ...mockEmployee(), template_id: 't1' }]);
+        case 'org.company.list':
+          return Promise.resolve([mockCompany()]);
+        case 'org.department.list':
+          return Promise.resolve([]);
+        case 'org.template.list':
+          return Promise.resolve([mockTemplate()]);
+        default:
+          return Promise.resolve({ ok: true });
+      }
+    });
+
+    renderWithQuery(<EmployeeList />);
+    await waitFor(() => {
+      expect(screen.getByText('基座模型')).toBeInTheDocument();
+      expect(screen.getByText('big-pickle · opencode')).toBeInTheDocument();
+    });
   });
 });

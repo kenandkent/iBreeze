@@ -299,4 +299,65 @@ describe('TemplateList', () => {
     });
     expect(screen.getByText('暂无模板')).toBeInTheDocument();
   });
+
+  // --- Provider selector ---
+  function withProviders() {
+    const providers = [
+      { provider_id: 'openai', name: 'OpenAI', type: 'llm', status: 'active', company_id: 'c1' },
+      { provider_id: 'opencode', name: 'OpenCode', type: 'agent', status: 'active', company_id: 'c1' },
+    ];
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'provider.list') {
+        return Promise.resolve({ items: providers, tier_mapping: {} });
+      }
+      if (opts.method === 'org.template.list') {
+        return Promise.resolve([mockTemplate({ provider_id: 'opencode', model: 'big-pickle' })]);
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  it('loads providers and shows provider column in table', async () => {
+    withProviders();
+    render(<TemplateList companyId="c1" />);
+    await waitFor(() => {
+      expect(screen.getByText('Provider')).toBeInTheDocument();
+      expect(screen.getByText('opencode')).toBeInTheDocument();
+      expect(screen.getByText('big-pickle')).toBeInTheDocument();
+    });
+  });
+
+  it('creates template with selected provider (provider_id + provider_type)', async () => {
+    withProviders();
+    render(<TemplateList companyId="c1" />);
+    await waitFor(() => screen.getByText('新建模板'));
+
+    fireEvent.click(screen.getByText('新建模板'));
+    fireEvent.change(screen.getByPlaceholderText('关联的能力 ID'), { target: { value: 'cap-99' } });
+    fireEvent.change(screen.getByPlaceholderText('如：高级工程师'), { target: { value: 'PM' } });
+    fireEvent.change(screen.getByDisplayValue('默认 (openai)'), { target: { value: 'opencode' } });
+
+    fireEvent.click(screen.getByText('创建'));
+
+    await waitFor(() => {
+      const params = getCallParams('org.template.create');
+      expect(params).toBeTruthy();
+      expect(params.capability_id).toBe('cap-99');
+      expect(params.provider_id).toBe('opencode');
+      expect(params.provider_type).toBe('agent');
+    });
+  });
+
+  it('pre-fills provider when editing template', async () => {
+    withProviders();
+    render(<TemplateList companyId="c1" />);
+    await waitFor(() => screen.getByText('opencode'));
+
+    const editBtn = getRowButtons('opencode')[0];
+    fireEvent.click(editBtn);
+
+    expect(screen.getByText('编辑模板')).toBeInTheDocument();
+    const providerSelect = screen.getByDisplayValue('OpenCode (agent)') as HTMLSelectElement;
+    expect(providerSelect.value).toBe('opencode');
+  });
 });

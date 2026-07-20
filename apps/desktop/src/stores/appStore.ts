@@ -11,7 +11,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentPage: 'companies',
+  currentPage: 'dashboard',
   currentCompanyId: null,
   sidebarOpen: true,
   setCurrentPage: (page) => set({ currentPage: page }),

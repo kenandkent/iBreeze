@@ -6,6 +6,7 @@ import { rpcCall } from '../../services/rpcClient';
 import type { Company } from '../../types';
 
 const PAGE_TITLES: Record<string, string> = {
+  dashboard: 'Dashboard',
   companies: '公司管理',
   employees: '员工管理',
   tasks: '任务看板',
@@ -14,6 +15,11 @@ const PAGE_TITLES: Record<string, string> = {
   skills: '技能管理',
   prompts: 'Prompt 资产',
   templates: '员工模板',
+  session: '会话',
+  provider: 'Provider 与 Backend',
+  grant: '授权',
+  intervention: '人工干预',
+  audit: '审计',
   settings: '设置',
 };
 

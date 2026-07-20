@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, X, Check, Play, Archive } from 'lucide-react';
 import { rpcCall } from '../../services/rpcClient';
-import type { EmployeeTemplate } from '../../types';
+import type { EmployeeTemplate, Provider } from '../../types';
 
 interface TemplateListProps {
   companyId: string | null;
@@ -21,6 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function TemplateList({ companyId }: TemplateListProps) {
   const [templates, setTemplates] = useState<EmployeeTemplate[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<EmployeeTemplate | null>(null);
@@ -28,14 +29,19 @@ export function TemplateList({ companyId }: TemplateListProps) {
   const [formCapVersion, setFormCapVersion] = useState('1');
   const [formRole, setFormRole] = useState('');
   const [formModel, setFormModel] = useState('gpt-4');
+  const [formProviderId, setFormProviderId] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     if (!companyId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const data = await rpcCall<EmployeeTemplate[]>('org.template.list', { company_id: companyId });
+      const [data, provRes] = await Promise.all([
+        rpcCall<EmployeeTemplate[]>('org.template.list', { company_id: companyId }),
+        rpcCall<{ items: Provider[]; tier_mapping: Record<string, string> }>('provider.list', { company_id: companyId }).catch(() => null),
+      ]);
       setTemplates(data);
+      if (provRes) setProviders(provRes.items ?? []);
     } catch (e) {
       console.error('Failed to load templates:', e);
     } finally {
@@ -44,6 +50,8 @@ export function TemplateList({ companyId }: TemplateListProps) {
   }, [companyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const selectedProvider = providers.find((p) => p.provider_id === formProviderId);
 
   const handleCreate = async () => {
     if (!companyId || !formCapId.trim() || !formRole.trim()) {
@@ -58,6 +66,8 @@ export function TemplateList({ companyId }: TemplateListProps) {
         capability_version: parseInt(formCapVersion) || 1,
         default_role: formRole.trim(),
         model: formModel,
+        provider_id: formProviderId || undefined,
+        provider_type: selectedProvider?.type || undefined,
       });
       setShowCreate(false);
       resetForm();
@@ -79,6 +89,8 @@ export function TemplateList({ companyId }: TemplateListProps) {
         capability_version: parseInt(formCapVersion) || undefined,
         default_role: formRole.trim() || undefined,
         model: formModel || undefined,
+        provider_id: formProviderId || undefined,
+        provider_type: selectedProvider?.type || undefined,
       });
       setEditing(null);
       resetForm();
@@ -121,6 +133,7 @@ export function TemplateList({ companyId }: TemplateListProps) {
     setFormCapVersion('1');
     setFormRole('');
     setFormModel('gpt-4');
+    setFormProviderId('');
     setError('');
   };
 
@@ -130,6 +143,7 @@ export function TemplateList({ companyId }: TemplateListProps) {
     setFormCapVersion(String(t.capability_version));
     setFormRole(t.default_role);
     setFormModel(t.model);
+    setFormProviderId(t.provider_id || '');
     setShowCreate(false);
     setError('');
   };
@@ -190,6 +204,17 @@ export function TemplateList({ companyId }: TemplateListProps) {
                 placeholder="gpt-4"
               />
             </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Provider</label>
+              <select
+                value={formProviderId}
+                onChange={(e) => setFormProviderId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+              >
+                <option value="">默认 (openai)</option>
+                {providers?.map((p) => <option key={p.provider_id} value={p.provider_id}>{p.name} ({p.type})</option>)}
+              </select>
+            </div>
           </div>
           {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
           <div className="flex gap-2 mt-3">
@@ -215,24 +240,26 @@ export function TemplateList({ companyId }: TemplateListProps) {
             <tr className="border-b border-gray-100 bg-gray-50">
               <th className="text-left px-4 py-2.5 font-medium text-gray-600">角色</th>
               <th className="text-left px-4 py-2.5 font-medium text-gray-600">模型</th>
+              <th className="text-left px-4 py-2.5 font-medium text-gray-600">Provider</th>
               <th className="text-left px-4 py-2.5 font-medium text-gray-600">能力版本</th>
               <th className="text-left px-4 py-2.5 font-medium text-gray-600">状态</th>
               <th className="text-right px-4 py-2.5 font-medium text-gray-600">操作</th>
             </tr>
           </thead>
           <tbody>
-            {templates.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
-                  暂无模板
-                </td>
-              </tr>
-            ) : (
-              templates.map((t) => (
-                <tr key={t.template_id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-2.5 text-gray-800">{t.default_role}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{t.model}</td>
-                  <td className="px-4 py-2.5 text-gray-500">v{t.capability_version}</td>
+                {templates.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      暂无模板
+                    </td>
+                  </tr>
+                ) : (
+                  templates.map((t) => (
+                    <tr key={t.template_id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                      <td className="px-4 py-2.5 text-gray-800">{t.default_role}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{t.model}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{t.provider_id || 'openai'}</td>
+                      <td className="px-4 py-2.5 text-gray-500">v{t.capability_version}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${STATUS_COLORS[t.status] || 'bg-gray-100 text-gray-600'}`}>
                       {STATUS_LABELS[t.status] || t.status}

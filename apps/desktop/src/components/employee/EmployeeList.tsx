@@ -4,10 +4,10 @@ import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
-import type { Employee, Company, Department } from '../../types';
+import type { Employee, Company, Department, EmployeeTemplate } from '../../types';
 import { Users, X, Pencil, Trash2 } from 'lucide-react';
 
-const emptyForm = { name: '', role_name: '', company_id: '', department_id: '' };
+const emptyForm = { name: '', role_name: '', company_id: '', department_id: '', template_id: '' };
 
 export function EmployeeList() {
   const queryClient = useQueryClient();
@@ -36,8 +36,29 @@ export function EmployeeList() {
     enabled: !!form.company_id,
   });
 
+  const { data: templates } = useQuery<EmployeeTemplate[]>({
+    queryKey: ['employeeTemplates', activeCompanies?.map((c) => c.company_id).join(',')],
+    queryFn: async () => {
+      const comps = activeCompanies ?? [];
+      const lists = await Promise.all(
+        comps.map((c) => rpcCall<EmployeeTemplate[]>('org.template.list', { company_id: c.company_id }).catch(() => [] as EmployeeTemplate[]))
+      );
+      return lists.flat();
+    },
+    enabled: !!activeCompanies && activeCompanies.length > 0,
+  });
+
+  const templateMap = new Map((templates ?? []).map((t) => [t.template_id, t]));
+
   const createMutation = useMutation({
-    mutationFn: (data: typeof form) => rpcCall('org.employee.create', { ...data, employee_type: 'ai_agent' }),
+    mutationFn: (data: typeof form) => rpcCall('org.employee.create', {
+      name: data.name,
+      role_name: data.role_name,
+      company_id: data.company_id,
+      department_id: data.department_id,
+      template_id: data.template_id,
+      employee_type: 'ai_agent',
+    }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); closeModal(); },
   });
 
@@ -58,7 +79,7 @@ export function EmployeeList() {
   function closeModal() { setShowModal(false); setEditEmployee(null); setForm(emptyForm); }
 
   function openEdit(emp: Employee) {
-    setForm({ name: emp.name, role_name: emp.role_name, company_id: emp.company_id, department_id: emp.department_id || '' });
+    setForm({ name: emp.name, role_name: emp.role_name, company_id: emp.company_id, department_id: emp.department_id || '', template_id: emp.template_id || '' });
     setEditEmployee(emp);
     setShowModal(true);
   }
@@ -116,6 +137,16 @@ export function EmployeeList() {
                 </select>
               </div>
               <div>
+                <label className="block text-sm text-gray-600 mb-1">基座模板</label>
+                <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]" disabled={!form.company_id}>
+                  <option value="">不绑定模板</option>
+                  {(templates ?? [])
+                    .filter((t) => !form.company_id || t.company_id === form.company_id)
+                    .map((t) => <option key={t.template_id} value={t.template_id}>{t.default_role} · {t.model} · {t.provider_id || 'openai'}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm text-gray-600 mb-1">姓名</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400" placeholder="请输入姓名" />
@@ -155,18 +186,27 @@ export function EmployeeList() {
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-left">
-              <tr>
-                <th className="px-4 py-2 font-medium">姓名</th>
-                <th className="px-4 py-2 font-medium">角色</th>
-                <th className="px-4 py-2 font-medium">状态</th>
-                <th className="px-4 py-2 font-medium w-20">操作</th>
-              </tr>
+                <tr>
+                  <th className="px-4 py-2 font-medium">姓名</th>
+                  <th className="px-4 py-2 font-medium">角色</th>
+                  <th className="px-4 py-2 font-medium">基座模型</th>
+                  <th className="px-4 py-2 font-medium">状态</th>
+                  <th className="px-4 py-2 font-medium w-20">操作</th>
+                </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {data.map((e) => (
                 <tr key={e.employee_id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2.5 font-medium text-gray-800">{e.name}</td>
                   <td className="px-4 py-2.5 text-gray-600">{e.role_name}</td>
+                  <td className="px-4 py-2.5 text-gray-500">
+                    {e.template_id ? (
+                      (() => {
+                        const t = templateMap.get(e.template_id);
+                        return t ? `${t.model} · ${t.provider_id || 'openai'}` : e.template_id;
+                      })()
+                    ) : '-'}
+                  </td>
                   <td className="px-4 py-2.5"><StatusBadge status={e.status} /></td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">
