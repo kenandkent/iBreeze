@@ -49,7 +49,10 @@ export function DashboardPage() {
 
   const { data: sessions } = useQuery<SessionThread[]>({
     queryKey: ['dashboardSessions', currentCompanyId],
-    queryFn: () => rpcCall<SessionThread[]>('session.list', { company_id: currentCompanyId }),
+    queryFn: async () => {
+      const res = await rpcCall<{ threads: SessionThread[]; total: number }>('session.list', { company_id: currentCompanyId });
+      return res.threads ?? [];
+    },
     enabled: !!currentCompanyId,
     retry: 2,
     retryDelay: 1000,

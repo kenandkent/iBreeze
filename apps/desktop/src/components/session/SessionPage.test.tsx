@@ -38,23 +38,23 @@ describe('SessionPage', () => {
   });
 
   it('renders empty state', async () => {
-    mockInvoke.mockResolvedValue([]);
+    mockInvoke.mockResolvedValue({ threads: [], total: 0 });
     renderWithQuery(<SessionPage />);
     await waitFor(() => expect(screen.getByText('暂无会话')).toBeInTheDocument());
   });
 
   it('renders thread list', async () => {
-    mockInvoke.mockResolvedValue([mockThread()]);
+    mockInvoke.mockResolvedValue({ threads: [mockThread()], total: 1 });
     renderWithQuery(<SessionPage />);
     await waitFor(() => expect(screen.getByText('active')).toBeInTheDocument());
   });
 
   it('shows transcript on thread select', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
-      if (opts.method === 'session.list') return Promise.resolve([mockThread()]);
+      if (opts.method === 'session.list') return Promise.resolve({ threads: [mockThread()], total: 1 });
       if (opts.method === 'session.transcript.get')
-        return Promise.resolve([{ message_id: 'm1', role: 'user', content: '你好', created_at: '2026-07-19T00:00:00Z' }]);
-      return Promise.resolve([]);
+        return Promise.resolve({ thread_id: 't1', transcript: [{ message_id: 'm1', role: 'user', content: '你好', created_at: '2026-07-19T00:00:00Z' }], total: 1 });
+      return Promise.resolve({ threads: [], total: 0 });
     });
     renderWithQuery(<SessionPage />);
     await waitFor(() => screen.getByText('active'));
@@ -64,8 +64,8 @@ describe('SessionPage', () => {
 
   it('sends message via session.sendMessage', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
-      if (opts.method === 'session.list') return Promise.resolve([mockThread()]);
-      if (opts.method === 'session.transcript.get') return Promise.resolve([]);
+      if (opts.method === 'session.list') return Promise.resolve({ threads: [mockThread()], total: 1 });
+      if (opts.method === 'session.transcript.get') return Promise.resolve({ thread_id: 't1', transcript: [], total: 0 });
       return Promise.resolve({});
     });
     renderWithQuery(<SessionPage />);

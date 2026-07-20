@@ -12,7 +12,7 @@
 | 层 | 结果 |
 |---|---|
 | 后端 pytest | **610 passed，0 失败**（`uv run pytest tests/ -q`） |
-| 前端 vitest | **302 passed，0 失败**（`npx vitest run`）+ `tsc --noEmit` 通过 |
+| 前端 vitest | **309 passed，0 失败**（`npx vitest run`）+ `tsc --noEmit` 通过 |
 | RPC 注册总数 | 167 个（含 9 个 echo、若干内部 `session._*` 端口） |
 | 设计附录 B 要求 sidecar 实现的方法 | 全覆盖（仅 2 个缺失，已补齐） |
 
@@ -69,7 +69,7 @@
 
 ### Phase 10（治理与审批）+ Phase 12（前端补全）
 **后端已实现并测试：** gov.budgetPolicy 版本化 CAS、gov.budget 预留/修订锁、gov.approvalType、gov.audit.query（acl/org/governance 路由）、approval.list/get/resolve/request（plan_approval 与 tool_call 类型）、settings.* 四类版本化策略 + 云端 consent、sys.migration.status、cap.engine.resolve（ACL 四分支只收窄）、audit.query、intervention.list（公司隔离+分页）。
-**前端已实现并测试（302 passed）：** 6 个新页面（会话 / Provider-Backend / 授权 / 人工干预 / 审计 / Dashboard）接入 Sidebar + Layout + PageKey，统一 `rpcCall` + react-query，时间显示东八区（`utils/format.ts`）、数值 2 位小数不补零。
+**前端已实现并测试（309 passed）：** 6 个新页面（会话 / Provider-Backend / 授权 / 人工干预 / 审计 / Dashboard）接入 Sidebar + Layout + PageKey，统一 `rpcCall` + react-query，时间显示东八区（`utils/format.ts`）、数值 2 位小数不补零。
 
 ---
 
@@ -99,4 +99,4 @@
 
 - 后端测试目录：`tests/{organization,capability,backends,providers,governance,settings,runtime,knowledge,task,audit,rpc}`
 - 关键安全测试均存在并绿灯：权限引擎同部门 employee_private 不可见、会话跨安全上下文不泄漏、知识 ACL 零泄漏、工作流 PV-01..13、Git 不触碰用户工作区、并发 active turn BUSY。
-- 前端测试：`apps/desktop/src/components/**/*.test.tsx`（28 文件，302 用例），含 6 个新页面。
+- 前端测试：`apps/desktop/src/components/**/*.test.tsx`（28 文件，309 用例），含 6 个新页面。

@@ -542,7 +542,7 @@ class OrganizationMethods:
 
         company_id = params.get("company_id")
         if not company_id:
-            return {"error": "missing company_id"}
+            raise ValueError("missing company_id")
         employee_id = params.get("employee_id")
         target_type = params.get("target_type")
         permission = params.get("permission")

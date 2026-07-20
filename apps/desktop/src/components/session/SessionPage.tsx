@@ -16,7 +16,10 @@ export function SessionPage() {
 
   const { data: threads, isLoading, error, refetch } = useQuery<SessionThread[]>({
     queryKey: ['session', currentCompanyId],
-    queryFn: () => rpcCall<SessionThread[]>('session.list', { company_id: currentCompanyId }),
+    queryFn: async () => {
+      const res = await rpcCall<{ threads: SessionThread[]; total: number }>('session.list', { company_id: currentCompanyId });
+      return res.threads ?? [];
+    },
     enabled: !!currentCompanyId,
     retry: 2,
     retryDelay: 1000,
@@ -24,7 +27,10 @@ export function SessionPage() {
 
   const { data: transcript, isLoading: txLoading } = useQuery<SessionMessage[]>({
     queryKey: ['sessionTranscript', selectedId],
-    queryFn: () => rpcCall<SessionMessage[]>('session.transcript.get', { thread_id: selectedId }),
+    queryFn: async () => {
+      const res = await rpcCall<{ thread_id: string; transcript: SessionMessage[]; total: number }>('session.transcript.get', { thread_id: selectedId });
+      return res.transcript ?? [];
+    },
     enabled: !!selectedId,
   });
 

@@ -22,7 +22,10 @@ export function ProviderBackendPage() {
 
   const { data: providers } = useQuery<Provider[]>({
     queryKey: ['provider', currentCompanyId],
-    queryFn: () => rpcCall<Provider[]>('provider.list', { company_id: currentCompanyId }),
+    queryFn: async () => {
+      const res = await rpcCall<{ items: Provider[]; tier_mapping: Record<string, string> }>('provider.list', { company_id: currentCompanyId });
+      return res.items ?? [];
+    },
     enabled: !!currentCompanyId,
     retry: 2,
     retryDelay: 1000,
@@ -30,11 +33,13 @@ export function ProviderBackendPage() {
 
   const { data: models } = useQuery<ProviderModel[]>({
     queryKey: ['providerModels', activeProviderId],
-    queryFn: () =>
-      rpcCall<ProviderModel[]>('provider.model.list', {
+    queryFn: async () => {
+      const res = await rpcCall<{ items: ProviderModel[] }>('provider.model.list', {
         company_id: currentCompanyId,
         provider_id: activeProviderId,
-      }),
+      });
+      return res.items ?? [];
+    },
     enabled: !!activeProviderId && !!currentCompanyId,
   });
 

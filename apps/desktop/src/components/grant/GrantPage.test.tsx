@@ -33,20 +33,20 @@ describe('GrantPage', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders empty state', async () => {
-    mockInvoke.mockResolvedValue([]);
+    mockInvoke.mockResolvedValue({ grants: [], total: 0 });
     renderWithQuery(<GrantPage />);
     await waitFor(() => expect(screen.getByText('暂无授权')).toBeInTheDocument());
   });
 
   it('renders grant list', async () => {
-    mockInvoke.mockResolvedValue([mockGrant()]);
+    mockInvoke.mockResolvedValue({ grants: [mockGrant()], total: 1 });
     renderWithQuery(<GrantPage />);
     await waitFor(() => expect(screen.getByText('department')).toBeInTheDocument());
     expect(screen.getByText('d1')).toBeInTheDocument();
   });
 
   it('creates grant via org.grant.create', async () => {
-    mockInvoke.mockResolvedValue([]);
+    mockInvoke.mockResolvedValue({ grants: [], total: 0 });
     renderWithQuery(<GrantPage />);
     await waitFor(() => screen.getByText('暂无授权'));
     fireEvent.click(screen.getByText('新建授权'));
@@ -61,7 +61,7 @@ describe('GrantPage', () => {
   });
 
   it('revokes grant via org.grant.revoke', async () => {
-    mockInvoke.mockResolvedValue([mockGrant()]);
+    mockInvoke.mockResolvedValue({ grants: [mockGrant()], total: 1 });
     renderWithQuery(<GrantPage />);
     await waitFor(() => screen.getByText('department'));
     fireEvent.click(screen.getByText('撤销'));

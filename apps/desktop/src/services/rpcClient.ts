@@ -3,9 +3,14 @@ import { invoke } from '@tauri-apps/api/core';
 export async function rpcCall<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   console.log(`[iBreeze] rpcCall: ${method}`, params);
   try {
-    const result = await invoke<T>('sys_rpc_call', { method, params: JSON.stringify(params) });
+    const result = await invoke<unknown>('sys_rpc_call', { method, params: JSON.stringify(params) });
+    if (result && typeof result === 'object' && 'error' in result) {
+      const errMsg = String((result as Record<string, unknown>).error);
+      console.error(`[iBreeze] rpcCall server error: ${method}`, errMsg);
+      throw new Error(errMsg);
+    }
     console.log(`[iBreeze] rpcCall success: ${method}`, result);
-    return result;
+    return result as T;
   } catch (e) {
     const msg = String(e);
     console.error(`[iBreeze] rpcCall error: ${method}`, msg);

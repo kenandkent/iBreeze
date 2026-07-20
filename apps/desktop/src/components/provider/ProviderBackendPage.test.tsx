@@ -76,8 +76,8 @@ describe('ProviderBackendPage', () => {
   it('renders provider models', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
       if (opts.method === 'backend.list') return Promise.resolve([mockBackend()]);
-      if (opts.method === 'provider.list') return Promise.resolve([mockProvider()]);
-      if (opts.method === 'provider.model.list') return Promise.resolve([mockModel()]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [mockProvider()], tier_mapping: {} });
+      if (opts.method === 'provider.model.list') return Promise.resolve({ items: [mockModel()] });
       return Promise.resolve([]);
     });
     renderWithQuery(<ProviderBackendPage />);

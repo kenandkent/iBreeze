@@ -21,7 +21,10 @@ export function GrantPage() {
 
   const { data: grants, isLoading, error, refetch } = useQuery<Grant[]>({
     queryKey: ['grant', currentCompanyId],
-    queryFn: () => rpcCall<Grant[]>('org.grant.list', { company_id: currentCompanyId }),
+    queryFn: async () => {
+      const res = await rpcCall<{ grants: Grant[]; total: number }>('org.grant.list', { company_id: currentCompanyId });
+      return res.grants ?? [];
+    },
     enabled: !!currentCompanyId,
     retry: 2,
     retryDelay: 1000,
