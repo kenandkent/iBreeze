@@ -86,11 +86,14 @@ describe('ProviderBackendPage', () => {
     await waitFor(() => expect(screen.getByText('gpt-4o')).toBeInTheDocument());
   });
 
-  it('creates api provider with key + base_url and sets credential', async () => {
+  it('creates api provider with vendor + key + fetched model and sets credential', async () => {
     mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
       if (opts.method === 'backend.list') return Promise.resolve([]);
       if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
       if (opts.method === 'provider.agent.list') return Promise.resolve({ agents: [] });
+      if (opts.method === 'provider.models.fetch') {
+        return Promise.resolve({ models: [{ model: 'gpt-5.1-codex', display_name: 'GPT-5.1 Codex' }], source: 'live' });
+      }
       return Promise.resolve([]);
     });
     renderWithQuery(<ProviderBackendPage />);
@@ -98,8 +101,13 @@ describe('ProviderBackendPage', () => {
 
     fireEvent.click(screen.getByText('新建 Provider'));
     fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'MyOpenAI' } });
-    fireEvent.change(screen.getByPlaceholderText('第三方 API Key'), { target: { value: 'sk-xxx' } });
+    fireEvent.change(screen.getByDisplayValue('OpenAI'), { target: { value: 'openai' } });
+    fireEvent.change(screen.getByPlaceholderText('API Key（用于实时查询可用模型）'), { target: { value: 'sk-xxx' } });
     fireEvent.change(screen.getByPlaceholderText('如：https://api.openai.com/v1'), { target: { value: 'https://api.openai.com/v1' } });
+    fireEvent.click(screen.getByText('查询可用模型'));
+    await waitFor(() => screen.getByRole('option', { name: 'GPT-5.1 Codex' }));
+    const modelSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement;
+    fireEvent.change(modelSelect, { target: { value: 'gpt-5.1-codex' } });
     fireEvent.click(screen.getByText('确认'));
 
     await waitFor(() => {
@@ -108,12 +116,44 @@ describe('ProviderBackendPage', () => {
       const cp = JSON.parse((createCall![1] as Record<string, string>).params);
       expect(cp.name).toBe('MyOpenAI');
       expect(cp.provider_type).toBe('api');
+      expect(cp.config.api_vendor).toBe('openai');
       expect(cp.config.base_url).toBe('https://api.openai.com/v1');
+
+      const fetchCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.models.fetch');
+      expect(fetchCall).toBeTruthy();
 
       const credCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.credential.set');
       expect(credCall).toBeTruthy();
       const credP = JSON.parse((credCall![1] as Record<string, string>).params);
       expect(credP.credential.api_key).toBe('sk-xxx');
+    });
+  });
+
+  it('api provider falls back to built-in models when fetch fails', async () => {
+    mockInvoke.mockImplementation((_m: string, opts: { method: string }) => {
+      if (opts.method === 'backend.list') return Promise.resolve([]);
+      if (opts.method === 'provider.list') return Promise.resolve({ items: [], tier_mapping: {} });
+      if (opts.method === 'provider.agent.list') return Promise.resolve({ agents: [] });
+      if (opts.method === 'provider.models.fetch') {
+        return Promise.resolve({ models: [{ model: 'gpt-5.1-codex', display_name: 'GPT-5.1 Codex' }], source: 'fallback', error_message: '401' });
+      }
+      return Promise.resolve([]);
+    });
+    renderWithQuery(<ProviderBackendPage />);
+    await waitFor(() => screen.getByText('新建 Provider'));
+
+    fireEvent.click(screen.getByText('新建 Provider'));
+    fireEvent.change(screen.getByPlaceholderText('如：opencode'), { target: { value: 'MyOpenAI' } });
+    fireEvent.change(screen.getByPlaceholderText('API Key（用于实时查询可用模型）'), { target: { value: 'bad' } });
+    fireEvent.click(screen.getByText('查询可用模型'));
+    await waitFor(() => screen.getByText(/查询失败/));
+    const modelSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement;
+    fireEvent.change(modelSelect, { target: { value: 'gpt-5.1-codex' } });
+    fireEvent.click(screen.getByText('确认'));
+
+    await waitFor(() => {
+      const createCall = mockInvoke.mock.calls.find((c: unknown[]) => c[0] === 'sys_rpc_call' && (c[1] as Record<string, unknown>).method === 'provider.create');
+      expect(createCall).toBeTruthy();
     });
   });
 

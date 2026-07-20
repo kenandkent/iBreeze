@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import aiosqlite
+import httpx
 
 from acos.organization.principal import get_local_owner
 from acos.providers import pricing as pricing_mod
@@ -53,6 +54,7 @@ class ProviderMethods:
         server.register_method("provider.list", self._provider_list)
         server.register_method("provider.create", self._provider_create)
         server.register_method("provider.agent.list", self._agent_list)
+        server.register_method("provider.models.fetch", self._models_fetch)
         server.register_method("provider.model.list", self._model_list)
         server.register_method("provider.pricingPolicy.update", self._pricing_policy_update)
         server.register_method("provider.budgetFreeze.clear", self._budget_freeze_clear)
@@ -121,35 +123,47 @@ class ProviderMethods:
     # ── provider.create ─────────────────────────────────
 
     # 固定的 cli agent（调用本机 agent 工具），后续迭代可扩展
+    # models 为内置兜底清单（无 key 时展示）；claude-code 走 Anthropic 官方固定清单
     _CLI_AGENTS = {
         "cursor-cli": {
             "display_name": "Cursor CLI",
+            "vendor": None,
             "models": [{"model": "auto", "display_name": "Auto (Cursor 自动选择)"}],
         },
         "claude-code": {
             "display_name": "Claude Code",
+            "vendor": "anthropic",
             "models": [
-                {"model": "claude-sonnet-4-20250514", "display_name": "Claude Sonnet 4"},
-                {"model": "claude-opus-4-20250514", "display_name": "Claude Opus 4"},
-                {"model": "claude-haiku-4-20250414", "display_name": "Claude Haiku 4"},
+                {"model": "claude-sonnet-5", "display_name": "Claude Sonnet 5"},
+                {"model": "claude-opus-4-8", "display_name": "Claude Opus 4.8"},
             ],
         },
         "codex-cli": {
             "display_name": "Codex CLI",
+            "vendor": "openai",
             "models": [
-                {"model": "codex-mini-latest", "display_name": "Codex Mini (latest)"},
-                {"model": "gpt-5-codex", "display_name": "GPT-5 Codex"},
                 {"model": "gpt-5.1-codex", "display_name": "GPT-5.1 Codex"},
+                {"model": "gpt-5-codex", "display_name": "GPT-5 Codex"},
+                {"model": "codex-mini-latest", "display_name": "Codex Mini (latest)"},
             ],
         },
         "opencode": {
             "display_name": "OpenCode",
+            "vendor": "multi",
             "models": [
-                {"model": "anthropic/claude-sonnet-4", "display_name": "Anthropic / Claude Sonnet 4"},
-                {"model": "openai/gpt-4o", "display_name": "OpenAI / GPT-4o"},
+                {"model": "anthropic/claude-sonnet-5", "display_name": "Anthropic / Claude Sonnet 5"},
+                {"model": "anthropic/claude-opus-4-8", "display_name": "Anthropic / Claude Opus 4.8"},
+                {"model": "openai/gpt-5.1-codex", "display_name": "OpenAI / GPT-5.1 Codex"},
                 {"model": "google/gemini-2.5-pro", "display_name": "Google / Gemini 2.5 Pro"},
             ],
         },
+    }
+
+    # API Key 形式可选择的供应商及其默认 base_url
+    _API_VENDORS = {
+        "openai": "https://api.openai.com/v1",
+        "deepseek": "https://api.deepseek.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
     }
 
     async def _provider_create(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -174,11 +188,16 @@ class ProviderMethods:
                 raise AcosError(PROV_VALIDATION, "cli provider 必须指定 model")
             config = {"agent": agent, "model": model}
         elif provider_type == "api":
-            # api 形式：凭证走 Keychain（provider.credential.set），此处仅存连接配置
+            # api 形式：凭证走 Keychain（provider.credential.set），此处仅存连接配置 + 供应商标识
             base_url = config.get("base_url")
             if base_url is not None and not isinstance(base_url, str):
                 raise AcosError(PROV_VALIDATION, "base_url 必须为字符串")
+            api_vendor = config.get("api_vendor")
+            if api_vendor is not None and api_vendor not in self._API_VENDORS and api_vendor != "third_party":
+                raise AcosError(PROV_VALIDATION, f"api_vendor 仅支持 {list(self._API_VENDORS.keys()) + ['third_party']}")
             config = {"base_url": base_url} if base_url else {}
+            if api_vendor:
+                config["api_vendor"] = api_vendor
 
         provider_id = params.get("provider_id") or f"pv-{uuid.uuid4().hex[:12]}"
         now = _now_utc()
@@ -210,6 +229,67 @@ class ProviderMethods:
             for aid, meta in self._CLI_AGENTS.items()
         ]
         return {"agents": agents}
+
+    # ── provider.models.fetch ───────────────────────────
+    # 实时调用厂商官方 API 拉取可用模型（需 api_key）。失败则降级到内置兜底清单。
+
+    async def _models_fetch(self, params: dict[str, Any]) -> dict[str, Any]:
+        vendor = params.get("api_vendor")
+        api_key = params.get("api_key") or ""
+        base_url = (params.get("base_url") or "").strip()
+
+        # 兜底清单（无 key / 调用失败时使用）
+        fallback = self._vendor_fallback_models(vendor)
+
+        if not api_key:
+            return {"models": fallback, "source": "fallback", "error_message": "缺少 api_key，使用内置清单"}
+
+        try:
+            models = await self._fetch_vendor_models(vendor, api_key, base_url)
+            if not models:
+                return {"models": fallback, "source": "fallback", "error_message": "厂商返回为空，使用内置清单"}
+            return {"models": models, "source": "live"}
+        except Exception as exc:  # 网络/鉴权失败均降级
+            return {"models": fallback, "source": "fallback", "error_message": str(exc)}
+
+    def _vendor_fallback_models(self, vendor: str | None) -> list[dict[str, str]]:
+        if vendor == "anthropic":
+            return [
+                {"model": "claude-sonnet-5", "display_name": "Claude Sonnet 5"},
+                {"model": "claude-opus-4-8", "display_name": "Claude Opus 4.8"},
+            ]
+        if vendor in ("openai", "deepseek", "third_party"):
+            return [
+                {"model": "gpt-5.1-codex", "display_name": "GPT-5.1 Codex"},
+                {"model": "gpt-5-codex", "display_name": "GPT-5 Codex"},
+                {"model": "gpt-4o", "display_name": "GPT-4o"},
+            ]
+        return []
+
+    async def _fetch_vendor_models(
+        self, vendor: str | None, api_key: str, base_url: str
+    ) -> list[dict[str, str]]:
+        if vendor == "anthropic":
+            url = "https://api.anthropic.com/v1/models"
+            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json().get("data", [])
+                return [
+                    {"model": m["id"], "display_name": m.get("display_name") or m["id"]}
+                    for m in data
+                ]
+        # openai / deepseek / third_party 均走 OpenAI 格式 /v1/models
+        base = base_url or self._API_VENDORS.get(vendor or "", "https://api.openai.com/v1")
+        if not base.endswith("/models"):
+            base = base.rstrip("/") + "/models"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(base, headers=headers)
+            resp.raise_for_status()
+            data = resp.json().get("data", [])
+            return [{"model": m["id"], "display_name": m["id"]} for m in data]
 
     # ── provider.model.list ──────────────────────────────
 

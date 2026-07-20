@@ -17,12 +17,16 @@ export function ProviderBackendPage() {
   const [providerForm, setProviderForm] = useState({
     name: '',
     provider_type: 'api' as 'api' | 'cli',
+    api_vendor: 'openai' as 'openai' | 'deepseek' | 'anthropic' | 'third_party',
     api_key: '',
     base_url: '',
     agent: '',
     model: '',
     custom_model: '',
   });
+  const [fetchedModels, setFetchedModels] = useState<{ model: string; display_name: string }[]>([]);
+  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [backendForm, setBackendForm] = useState({ name: '', backend_type: 'local_process' });
 
   const { data: agents } = useQuery<CliAgentOption[]>({
@@ -88,7 +92,10 @@ export function ProviderBackendPage() {
       const res = await rpcCall<{ provider_id: string }>('provider.create', {
         name,
         provider_type: 'api',
-        config: providerForm.base_url.trim() ? { base_url: providerForm.base_url.trim() } : {},
+        config: {
+          ...(providerForm.base_url.trim() ? { base_url: providerForm.base_url.trim() } : {}),
+          api_vendor: providerForm.api_vendor,
+        },
       });
       if (providerForm.api_key.trim()) {
         await rpcCall('provider.credential.set', {
@@ -102,9 +109,33 @@ export function ProviderBackendPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provider', currentCompanyId] });
       setShowProviderModal(false);
-      setProviderForm({ name: '', provider_type: 'api', api_key: '', base_url: '', agent: '', model: '', custom_model: '' });
+      setFetchedModels([]);
+      setFetchModelsError(null);
+      setProviderForm({ name: '', provider_type: 'api', api_vendor: 'openai', api_key: '', base_url: '', agent: '', model: '', custom_model: '' });
     },
   });
+
+  const fetchModels = async () => {
+    setIsFetchingModels(true);
+    setFetchModelsError(null);
+    try {
+      const res = await rpcCall<{ models: { model: string; display_name: string }[]; source: string; error_message: string | null }>(
+        'provider.models.fetch',
+        {
+          api_vendor: providerForm.api_vendor,
+          api_key: providerForm.api_key,
+          base_url: providerForm.base_url,
+        },
+      );
+      setFetchedModels(res?.models ?? []);
+      if (res.source === 'fallback' && res.error_message) setFetchModelsError(res.error_message);
+      setProviderForm((f) => ({ ...f, model: '' }));
+    } catch (e) {
+      setFetchModelsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
 
   const createBackendMutation = useMutation({
     mutationFn: () => rpcCall('backend.create', { company_id: currentCompanyId, name: backendForm.name.trim(), backend_type: backendForm.backend_type }),
@@ -295,24 +326,78 @@ export function ProviderBackendPage() {
               {providerForm.provider_type === 'api' && (
                 <>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">API Key</label>
+                    <label className="block text-sm text-gray-600 mb-1">供应商</label>
+                    <select
+                      value={providerForm.api_vendor}
+                      onChange={(e) => setProviderForm({ ...providerForm, api_vendor: e.target.value as typeof providerForm.api_vendor, model: '' })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+                    >
+                      <option value="openai">OpenAI</option>
+                      <option value="deepseek">DeepSeek</option>
+                      <option value="anthropic">Anthropic</option>
+                      <option value="third_party">第三方（OpenAI 兼容）</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      {providerForm.api_vendor === 'deepseek' ? 'DeepSeek API Key'
+                        : providerForm.api_vendor === 'anthropic' ? 'Anthropic API Key'
+                          : providerForm.api_vendor === 'openai' ? 'OpenAI API Key'
+                            : '第三方 API Key'}
+                    </label>
                     <input
                       type="password"
                       value={providerForm.api_key}
                       onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
-                      placeholder="第三方 API Key"
+                      placeholder="API Key（用于实时查询可用模型）"
                       className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">Base URL（OpenAI 格式兼容，可选）</label>
+                    <label className="block text-sm text-gray-600 mb-1">Base URL（可选，留空用供应商默认）</label>
                     <input
                       value={providerForm.base_url}
                       onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })}
-                      placeholder="如：https://api.openai.com/v1"
+                      placeholder={providerForm.api_vendor === 'anthropic' ? 'https://api.anthropic.com/v1' : '如：https://api.openai.com/v1'}
                       className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm text-gray-600">模型</label>
+                      <button
+                        type="button"
+                        onClick={fetchModels}
+                        disabled={!providerForm.api_key.trim() || isFetchingModels}
+                        className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-40"
+                      >
+                        {isFetchingModels ? '查询中...' : '查询可用模型'}
+                      </button>
+                    </div>
+                    {fetchModelsError && (
+                      <p className="text-xs text-amber-600 mb-1">查询失败，已用内置清单：{fetchModelsError}</p>
+                    )}
+                    <select
+                      value={providerForm.model}
+                      onChange={(e) => setProviderForm({ ...providerForm, model: e.target.value })}
+                      disabled={fetchedModels.length === 0}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 h-[38px]"
+                    >
+                      <option value="">{fetchedModels.length === 0 ? '先填写 Key 并点“查询可用模型”' : '请选择模型'}</option>
+                      {fetchedModels.map((m) => <option key={m.model} value={m.model}>{m.display_name}</option>)}
+                      <option value="__custom__">自定义（手动输入）</option>
+                    </select>
+                  </div>
+                  {providerForm.model === '__custom__' && (
+                    <div>
+                      <input
+                        value={providerForm.custom_model}
+                        onChange={(e) => setProviderForm({ ...providerForm, custom_model: e.target.value })}
+                        placeholder="手动输入模型名"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -362,6 +447,7 @@ export function ProviderBackendPage() {
                 disabled={
                   !providerForm.name.trim() ||
                   createProviderMutation.isPending ||
+                  (providerForm.provider_type === 'api' && (!providerForm.model || (providerForm.model === '__custom__' && !providerForm.custom_model.trim()))) ||
                   (providerForm.provider_type === 'cli' && (!providerForm.agent || !modelValue)) ||
                   (providerForm.provider_type === 'cli' && providerForm.model === '__custom__' && !providerForm.custom_model.trim())
                 }

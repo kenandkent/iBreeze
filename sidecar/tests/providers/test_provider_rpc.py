@@ -136,7 +136,105 @@ async def test_provider_agent_list_returns_fixed_agents(methods: ProviderMethods
     cursor = next(a for a in result["agents"] if a["agent_id"] == "cursor-cli")
     assert [m["model"] for m in cursor["models"]] == ["auto"]
     opencode = next(a for a in result["agents"] if a["agent_id"] == "opencode")
-    assert any(m["model"] == "anthropic/claude-sonnet-4" for m in opencode["models"])
+    assert any(m["model"] == "anthropic/claude-sonnet-5" for m in opencode["models"])
+
+
+async def test_models_fetch_fallback_without_key(methods: ProviderMethods) -> None:
+    # 无 api_key → 返回内置兜底清单，source=fallback
+    res = await methods._models_fetch({"api_vendor": "openai"})
+    assert res["source"] == "fallback"
+    assert any(m["model"] == "gpt-5.1-codex" for m in res["models"])
+
+
+async def test_models_fetch_fallback_on_bad_key(methods: ProviderMethods, monkeypatch) -> None:
+    # 坏 key → 网络/鉴权失败 → 降级 fallback
+    import httpx
+
+    async def _boom(*a, **k):
+        raise httpx.HTTPStatusError("401", request=None, response=None)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", _boom)
+    res = await methods._models_fetch({"api_vendor": "openai", "api_key": "bad"})
+    assert res["source"] == "fallback"
+    assert res["error_message"]
+
+
+async def test_models_fetch_live_openai(methods: ProviderMethods, monkeypatch) -> None:
+    import httpx
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"id": "gpt-5.1-codex"}]}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, *a, **k):
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    res = await methods._models_fetch({"api_vendor": "openai", "api_key": "sk-x"})
+    assert res["source"] == "live"
+    assert res["models"] == [{"model": "gpt-5.1-codex", "display_name": "gpt-5.1-codex"}]
+
+
+async def test_models_fetch_live_anthropic(methods: ProviderMethods, monkeypatch) -> None:
+    import httpx
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"id": "claude-opus-4-8", "display_name": "Claude Opus 4.8"}]}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, *a, **k):
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    res = await methods._models_fetch({"api_vendor": "anthropic", "api_key": "sk-x"})
+    assert res["source"] == "live"
+    assert res["models"][0]["model"] == "claude-opus-4-8"
+    assert res["models"][0]["display_name"] == "Claude Opus 4.8"
+
+
+async def test_provider_create_stores_api_vendor(methods: ProviderMethods, db_path: str) -> None:
+    await _make_company(db_path)
+    res = await methods._provider_create({
+        "name": "MyOpenAI", "provider_type": "api",
+        "config": {"api_vendor": "openai", "base_url": "https://api.openai.com/v1"},
+    })
+    assert res["provider_type"] == "api"
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
+    try:
+        cur = await conn.execute("SELECT config FROM providers WHERE provider_id = ?", (res["provider_id"],))
+        row = await cur.fetchone()
+        cfg = json.loads(row["config"])
+        assert cfg["api_vendor"] == "openai"
+        assert cfg["base_url"] == "https://api.openai.com/v1"
+    finally:
+        await conn.close()
 
 
 async def test_model_list_requires_company(methods: ProviderMethods) -> None:
