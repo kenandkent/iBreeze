@@ -1,11 +1,19 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 
-const mockInvoke = vi.fn();
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
+
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => mockInvoke(...args),
+  invoke: async () => ({ status: 'healthy' }),
+}));
+
+vi.mock('../../services/rpcClient', () => ({
+  rpcCall: async () => ({}),
+  checkSidecarHealth: async () => true,
 }));
 
 function renderWithQuery(ui: React.ReactElement) {
@@ -14,8 +22,10 @@ function renderWithQuery(ui: React.ReactElement) {
 }
 
 describe('App', () => {
-  it('renders without crashing', () => {
+  it('renders without crashing', async () => {
     renderWithQuery(<App />);
-    expect(screen.getAllByText('iBreeze').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('iBreeze').length).toBeGreaterThan(0);
+    });
   });
 });

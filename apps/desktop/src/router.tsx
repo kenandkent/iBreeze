@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
+import { SidecarGuard } from './components/common/SidecarGuard';
 import { CompanyList } from './components/company/CompanyList';
 import { CompanyDetail } from './components/company/CompanyDetail';
 import { EmployeeList } from './components/employee/EmployeeList';
@@ -44,7 +45,7 @@ function EmployeeDetailPage() {
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <SidecarGuard><Layout /></SidecarGuard>,
     children: [
       { index: true, element: <SessionPage /> },
       { path: 'companies', element: <CompanyList /> },
