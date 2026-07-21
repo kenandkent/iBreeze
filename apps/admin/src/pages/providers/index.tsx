@@ -33,7 +33,7 @@ function ProviderTab() {
       render: (_, r) => [
         r.status === 'disabled' && <a key="e" onClick={() => transition(r.provider_id, 'enable')}>启用</a>,
         r.status === 'enabled' && <a key="d" onClick={() => transition(r.provider_id, 'disable')}>禁用</a>,
-        <a key="v" onClick={() => transition(r.provider_id, 'validate')}>验证</a>,
+        <a key="v" onClick={() => transition(r.provider_id, 'probe')}>验证</a>,
       ].filter(Boolean),
     },
   ];

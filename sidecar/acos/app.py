@@ -134,7 +134,7 @@ async def run() -> None:
     # audit_methods.register_to(server)
 
     log_event("methods.registered", methods=[
-        # org.* (OrganizationMethods) — 35 个
+        # org.* (OrganizationMethods) — 27 个
         "org.company.list", "org.company.get", "org.company.create", "org.company.update",
         "org.company.delete", "org.company.restore", "org.company.activate", "org.company.dissolve",
         "org.department.list", "org.department.create", "org.department.update", "org.department.delete",

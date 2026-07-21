@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import aiosqlite
-import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
@@ -57,7 +56,6 @@ class OrganizationMethods:
         server.register_method("org.employee.archive", self._employee_archive)
         server.register_method("org.employee.transfer", self._employee_transfer)
         server.register_method("org.employee.get", self._employee_get)
-        # 职员模板 (org.template.*) 由 CapabilityMethods 在 methods_capability.py 中实现
         # 授权 (org.grant.*)
         server.register_method("org.grant.create", self._grant_create)
         server.register_method("org.grant.list", self._grant_list)
@@ -951,136 +949,3 @@ class OrganizationMethods:
             return {"error": code if code else str(e)}
         return {"employee_id": emp.employee_id, "status": emp.status, "deleted": True}
 
-    # ── 任务 ──────────────────────────────────────────────
-
-    async def _task_list(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        import aiosqlite
-        company_id = params.get("company_id")
-        conn = await aiosqlite.connect(self._db_path)
-        conn.row_factory = aiosqlite.Row
-        try:
-            if company_id:
-                cursor = await conn.execute(
-                    "SELECT * FROM tasks WHERE company_id = ? ORDER BY created_at DESC",
-                    (company_id,),
-                )
-            else:
-                cursor = await conn.execute(
-                    "SELECT * FROM tasks ORDER BY created_at DESC"
-                )
-            return [dict(row) for row in await cursor.fetchall()]
-        finally:
-            await conn.close()
-
-    async def _task_create(self, params: dict[str, Any]) -> dict[str, Any]:
-        import aiosqlite
-        title = params.get("title", "")
-        company_id = params.get("company_id", "")
-        description = params.get("description", "")
-        priority = params.get("priority", 5)
-
-        if not title:
-            return {"error": "missing title"}
-        if not company_id:
-            return {"error": "missing company_id"}
-
-        now = datetime.now(timezone.utc).isoformat()
-        task_id = str(uuid.uuid4())
-
-        conn = await aiosqlite.connect(self._db_path)
-        try:
-            await conn.execute(
-                """INSERT INTO tasks
-                   (task_id, company_id, title, description, priority,
-                     status, version, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'created', 1, ?, ?)""",
-                (task_id, company_id, title, description, priority, now, now),
-            )
-            await conn.commit()
-        finally:
-            await conn.close()
-
-        return {
-            "task_id": task_id,
-            "title": title,
-            "status": "created",
-            "priority": priority,
-        }
-
-    async def _task_get(self, params: dict[str, Any]) -> dict[str, Any]:
-        import aiosqlite
-        task_id = params.get("task_id")
-        if not task_id:
-            return {"error": "missing task_id"}
-        conn = await aiosqlite.connect(self._db_path)
-        conn.row_factory = aiosqlite.Row
-        try:
-            cursor = await conn.execute(
-                "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-            )
-            row = await cursor.fetchone()
-            if row is None:
-                return {"error": "WF-NOT-FOUND"}
-            return dict(row)
-        finally:
-            await conn.close()
-
-    # ── 知识库 ────────────────────────────────────────────
-
-    async def _knowledge_list(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        import aiosqlite
-        company_id = params.get("company_id")
-        conn = await aiosqlite.connect(self._db_path)
-        conn.row_factory = aiosqlite.Row
-        try:
-            if company_id:
-                cursor = await conn.execute(
-                    "SELECT * FROM knowledge_documents WHERE company_id = ? ORDER BY created_at DESC",
-                    (company_id,),
-                )
-            else:
-                cursor = await conn.execute(
-                    "SELECT * FROM knowledge_documents ORDER BY created_at DESC"
-                )
-            return [dict(row) for row in await cursor.fetchall()]
-        finally:
-            await conn.close()
-
-    async def _knowledge_create(self, params: dict[str, Any]) -> dict[str, Any]:
-        import aiosqlite
-        title = params.get("title", "")
-        company_id = params.get("company_id", "")
-        content = params.get("content", "")
-        source_category = params.get("source_category", "custom")
-
-        if not title:
-            return {"error": "missing title"}
-        if not company_id:
-            return {"error": "missing company_id"}
-
-        now = datetime.now(timezone.utc).isoformat()
-        document_id = str(uuid.uuid4())
-        checksum = hashlib.sha256(content.encode()).hexdigest()
-
-        conn = await aiosqlite.connect(self._db_path)
-        try:
-            await conn.execute(
-                """INSERT INTO knowledge_documents
-                   (document_id, company_id, title, content, source_type,
-                    source_category, visibility, embedding_status,
-                    checksum, version, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'manual', ?, 'company', 'pending',
-                           ?, 1, 'active', ?, ?)""",
-                (document_id, company_id, title, content,
-                 source_category, checksum, now, now),
-            )
-            await conn.commit()
-        finally:
-            await conn.close()
-
-        return {
-            "document_id": document_id,
-            "title": title,
-            "source_category": source_category,
-            "status": "active",
-        }

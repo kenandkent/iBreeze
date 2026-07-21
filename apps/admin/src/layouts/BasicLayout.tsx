@@ -3,7 +3,7 @@ import { ProLayout } from '@ant-design/pro-components';
 import { LogoutOutlined } from '@ant-design/icons';
 import { Button, Popconfirm } from 'antd';
 import {
-  ToolOutlined, FileTextOutlined, TeamOutlined,
+  ToolOutlined,
   BookOutlined, ApiOutlined, SafetyCertificateOutlined,
   AuditOutlined,
 } from '@ant-design/icons';
