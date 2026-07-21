@@ -16,6 +16,6 @@ function renderWithQuery(ui: React.ReactElement) {
 describe('App', () => {
   it('renders without crashing', () => {
     renderWithQuery(<App />);
-    expect(screen.getByText('iBreeze')).toBeInTheDocument();
+    expect(screen.getAllByText('iBreeze').length).toBeGreaterThan(0);
   });
 });

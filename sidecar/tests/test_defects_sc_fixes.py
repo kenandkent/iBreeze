@@ -10,7 +10,6 @@ import pytest
 
 from acos.rpc.errors import AcosError
 from acos.rpc.methods_audit import AuditMethods
-from acos.rpc.methods_capability import CapabilityMethods
 from acos.rpc.methods_org import OrganizationMethods
 from acos.rpc.server import RPCServer
 from acos.store.migrator import Migrator
@@ -64,23 +63,6 @@ async def test_grant_list_active_not_expired(tmp_path) -> None:
         await conn.commit()
     res = await methods._grant_list({"company_id": "c1", "status": "active"})
     assert "expired" not in res["grants"][0]
-
-
-# ── SC-20-3: cap.metrics.get 无记录返回全 0 非空对象 ──────────────────
-
-async def test_metrics_get_empty_returns_zeros(tmp_path) -> None:
-    db = await _migrated(tmp_path)
-    methods = CapabilityMethods(db)
-    res = await methods._metrics_get({"capability_id": "cap-x", "version": 1})
-    assert "error" not in res
-    assert res["capability_id"] == "cap-x"
-    assert res["capability_version"] == 1
-    assert res["success_rate"] == 0.0
-    assert res["avg_cost"] == 0.0
-    assert res["review_pass_rate"] == 0.0
-    assert res["avg_downgrade_count"] == 0.0
-    assert res["over_budget_rate"] == 0.0
-    assert res["avg_duration"] == 0.0
 
 
 # ── SC-50-1: task.create 超预算 reject 拦截 ───────────────────────────

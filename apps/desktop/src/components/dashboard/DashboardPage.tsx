@@ -2,46 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { rpcCall } from '../../services/rpcClient';
 import { useAppStore } from '../../stores/appStore';
 import { formatBJTime } from '../../utils/format';
-import type { Company, Employee, Task, KnowledgeDocument, Backend, SessionThread, Intervention } from '../../types';
-import { Building2, Users, ClipboardList, BookOpen, Server, AlertTriangle } from 'lucide-react';
+import type { Task, SessionThread } from '../../types';
+import { ClipboardList, MessageSquare, CheckCircle2 } from 'lucide-react';
 
 export function DashboardPage() {
   const { currentCompanyId } = useAppStore();
 
-  const { data: companies } = useQuery<Company[]>({
-    queryKey: ['dashboardCompanies'],
-    queryFn: () => rpcCall<Company[]>('company.list'),
-    retry: 2,
-    retryDelay: 1000,
-  });
-
-  const { data: employees } = useQuery<Employee[]>({
-    queryKey: ['dashboardEmployees', currentCompanyId],
-    queryFn: () => rpcCall<Employee[]>('employee.list', { company_id: currentCompanyId }),
-    enabled: !!currentCompanyId,
-    retry: 2,
-    retryDelay: 1000,
-  });
-
   const { data: tasks } = useQuery<Task[]>({
     queryKey: ['dashboardTasks', currentCompanyId],
     queryFn: () => rpcCall<Task[]>('task.list', { company_id: currentCompanyId }),
-    enabled: !!currentCompanyId,
-    retry: 2,
-    retryDelay: 1000,
-  });
-
-  const { data: docs } = useQuery<KnowledgeDocument[]>({
-    queryKey: ['dashboardDocs', currentCompanyId],
-    queryFn: () => rpcCall<KnowledgeDocument[]>('knowledge.list', { company_id: currentCompanyId }),
-    enabled: !!currentCompanyId,
-    retry: 2,
-    retryDelay: 1000,
-  });
-
-  const { data: backends } = useQuery<Backend[]>({
-    queryKey: ['dashboardBackends', currentCompanyId],
-    queryFn: () => rpcCall<Backend[]>('backend.list', { company_id: currentCompanyId }),
     enabled: !!currentCompanyId,
     retry: 2,
     retryDelay: 1000,
@@ -58,34 +27,18 @@ export function DashboardPage() {
     retryDelay: 1000,
   });
 
-  const { data: interventions } = useQuery<{ items: Intervention[]; total: number }>({
-    queryKey: ['dashboardInterventions', currentCompanyId],
-    queryFn: () =>
-      rpcCall<{ items: Intervention[]; total: number }>('intervention.list', {
-        company_id: currentCompanyId,
-        status: 'pending',
-        offset: 0,
-        limit: 1,
-      }),
-    enabled: !!currentCompanyId,
-    retry: 2,
-    retryDelay: 1000,
-  });
-
   if (!currentCompanyId) {
     return <div className="p-6 text-sm text-amber-600">请先在上方选择公司后再查看概览。</div>;
   }
 
-  const activeBackends = (backends ?? []).filter((b) => b.status === 'active').length;
-  const pendingInterventions = interventions?.total ?? 0;
+  const activeSessions = (sessions ?? []).filter((s) => s.status === 'active').length;
+  const activeTasks = (tasks ?? []).filter((t) => t.status === 'in_progress' || t.status === 'active').length;
+  const completedTasks = (tasks ?? []).filter((t) => t.status === 'completed' || t.status === 'done').length;
 
   const cards = [
-    { label: '公司数', value: (companies ?? []).length, icon: <Building2 size={18} /> },
-    { label: '员工数', value: (employees ?? []).length, icon: <Users size={18} /> },
-    { label: '进行中任务', value: (tasks ?? []).filter((t) => t.status === 'in_progress' || t.status === 'active').length, icon: <ClipboardList size={18} /> },
-    { label: '知识文档数', value: (docs ?? []).length, icon: <BookOpen size={18} /> },
-    { label: '活跃 Backend', value: activeBackends, icon: <Server size={18} /> },
-    { label: '待处理干预', value: pendingInterventions, icon: <AlertTriangle size={18} /> },
+    { label: '活跃会话', value: activeSessions, icon: <MessageSquare size={18} /> },
+    { label: '进行中任务', value: activeTasks, icon: <ClipboardList size={18} /> },
+    { label: '已完成任务', value: completedTasks, icon: <CheckCircle2 size={18} /> },
   ];
 
   return (

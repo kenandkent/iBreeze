@@ -133,11 +133,10 @@ describe('types', () => {
     expect(r.result).toBe('ok');
   });
 
-  it('PageKey includes all pages', () => {
+  it('PageKey includes all retained pages', () => {
     const pages: PageKey[] = [
-      'companies', 'employees', 'tasks', 'knowledge',
-      'capabilities', 'skills', 'prompts', 'templates', 'settings',
+      'companies', 'employees', 'session', 'tasks', 'taskAdvanced', 'dashboard', 'settings',
     ];
-    expect(pages).toHaveLength(9);
+    expect(pages).toHaveLength(7);
   });
 });

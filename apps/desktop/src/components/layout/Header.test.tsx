@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { Header } from './Header';
 import { useAppStore } from '../../stores/appStore';
-import type { PageKey } from '../../types';
 
 const mockRpcCall = vi.fn();
 vi.mock('../../services/rpcClient', () => ({
@@ -14,9 +14,13 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-function renderWithQuery(ui: React.ReactElement) {
+function renderWithQuery(ui: React.ReactElement, initialEntries: string[] = ['/companies']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const mockCompany = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -33,26 +37,22 @@ const mockCompany = (overrides: Partial<Record<string, unknown>> = {}) => ({
 describe('Header', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAppStore.setState({ currentCompanyId: null, currentPage: 'companies' as PageKey });
+    useAppStore.setState({ currentCompanyId: null });
   });
 
-  const PAGE_TITLE_MAP: Record<string, string> = {
-    companies: '公司管理',
-    employees: '员工管理',
-    tasks: '任务看板',
-    knowledge: '知识库',
-    capabilities: '能力管理',
-    skills: '技能管理',
-    prompts: 'Prompt 资产',
-    templates: '员工模板',
-    settings: '设置',
+  const PATH_TITLE_MAP: Record<string, string> = {
+    '/companies': '公司管理',
+    '/employees': '员工管理',
+    '/tasks': '任务看板',
+    '/session': '会话',
+    '/settings': '设置',
+    '/dashboard': '概览',
   };
 
-  for (const [page, title] of Object.entries(PAGE_TITLE_MAP)) {
-    it(`shows correct title for "${page}"`, async () => {
+  for (const [path, title] of Object.entries(PATH_TITLE_MAP)) {
+    it(`shows correct title for "${path}"`, async () => {
       mockRpcCall.mockResolvedValue([]);
-      useAppStore.setState({ currentPage: page as PageKey });
-      renderWithQuery(<Header />);
+      renderWithQuery(<Header />, [path]);
       expect(screen.getByText(title)).toBeInTheDocument();
     });
   }

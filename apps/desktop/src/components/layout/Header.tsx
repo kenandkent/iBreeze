@@ -1,30 +1,24 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Building2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore } from '../../stores/appStore';
 import { rpcCall } from '../../services/rpcClient';
 import type { Company } from '../../types';
 
-const PAGE_TITLES: Record<string, string> = {
-  dashboard: 'Dashboard',
-  companies: '公司管理',
-  employees: '员工管理',
-  tasks: '任务看板',
-  knowledge: '知识库',
-  capabilities: '能力管理',
-  skills: '技能管理',
-  prompts: 'Prompt 资产',
-  templates: '员工模板',
-  session: '会话',
-  provider: 'Provider 与 Backend',
-  grant: '授权',
-  intervention: '人工干预',
-  audit: '审计',
-  settings: '设置',
+const PATH_TITLES: Record<string, string> = {
+  '/dashboard': '概览',
+  '/companies': '公司管理',
+  '/employees': '员工管理',
+  '/tasks': '任务看板',
+  '/tasks/advanced': '任务高级',
+  '/session': '会话',
+  '/settings': '设置',
 };
 
 export function Header({ onRefresh }: { onRefresh?: () => void }) {
-  const { currentPage, currentCompanyId, setCurrentCompany } = useAppStore();
+  const location = useLocation();
+  const { currentCompanyId, setCurrentCompany } = useAppStore();
 
   const { data: companies } = useQuery<Company[]>({
     queryKey: ['companies'],
@@ -42,10 +36,12 @@ export function Header({ onRefresh }: { onRefresh?: () => void }) {
     }
   }, [activeCompanies, currentCompanyId, setCurrentCompany]);
 
+  const title = PATH_TITLES[location.pathname] ?? 'iBreeze';
+
   return (
     <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200">
       <h1 className="text-lg font-semibold text-gray-800">
-        {PAGE_TITLES[currentPage] ?? 'iBreeze'}
+        {title}
       </h1>
       <div className="flex items-center gap-3">
         {activeCompanies.length > 0 && (

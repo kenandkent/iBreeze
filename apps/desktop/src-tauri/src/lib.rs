@@ -3,14 +3,16 @@ pub mod rpc_client;
 use rpc_client::RpcClient;
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 const SOCKET_PATH: &str = "/tmp/acos.sock";
 
-lazy_static::lazy_static! {
-    static ref SIDECAR_CHILD: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+static SIDECAR_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
+
+fn get_sidecar_child() -> &'static Arc<Mutex<Option<Child>>> {
+    SIDECAR_CHILD.get_or_init(|| Arc::new(Mutex::new(None)))
 }
 
 fn find_sidecar_dir() -> Option<PathBuf> {
@@ -33,7 +35,7 @@ fn kill_process_tree(pid: u32) {
 
 fn kill_sidecar() {
     eprintln!("[iBreeze] Cleaning up sidecar...");
-    if let Ok(mut guard) = SIDECAR_CHILD.lock() {
+            if let Ok(mut guard) = get_sidecar_child().lock() {
         if let Some(mut child) = guard.take() {
             let pid = child.id();
             eprintln!("[iBreeze] Sidecar pid={}", pid);
@@ -92,7 +94,7 @@ fn start_sidecar() {
         Ok(child) => {
             eprintln!("[iBreeze] Sidecar spawned, pid={}, app_pid={}", child.id(), app_pid);
 
-            if let Ok(mut guard) = SIDECAR_CHILD.lock() {
+    if let Ok(mut guard) = get_sidecar_child().lock() {
                 *guard = Some(child);
             }
 
@@ -132,7 +134,6 @@ pub fn run() {
     start_sidecar();
 
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![sys_health, sys_rpc_call])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -1,8 +1,8 @@
 import "./styles/globals.css";
-import { Layout } from "./components/layout/Layout";
+import { AppRouter } from "./router";
 
 function App() {
-  return <Layout />;
+  return <AppRouter />;
 }
 
 export default App;

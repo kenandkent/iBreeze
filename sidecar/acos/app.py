@@ -88,29 +88,30 @@ async def run() -> None:
     task_methods = TaskMethods(DB_PATH)
     task_methods.register_to(server)
 
-    from acos.rpc.methods_knowledge import KnowledgeMethods
-    knowledge_methods = KnowledgeMethods(DB_PATH)
-    knowledge_methods.register_to(server)
+    # P4-T1: 精简注册 — 以下模块已迁移到 Admin Backend，Sidecar 不再注册
+    # from acos.rpc.methods_knowledge import KnowledgeMethods
+    # knowledge_methods = KnowledgeMethods(DB_PATH)
+    # knowledge_methods.register_to(server)
 
-    from acos.rpc.methods_backend import BackendMethods
-    backend_methods = BackendMethods(DB_PATH)
-    backend_methods.register_to(server)
+    # from acos.rpc.methods_backend import BackendMethods
+    # backend_methods = BackendMethods(DB_PATH)
+    # backend_methods.register_to(server)
+
+    # from acos.rpc.methods_gov import GovMethods
+    # gov_methods = GovMethods(DB_PATH)
+    # gov_methods.register_to(server)
+
+    # from acos.rpc.methods_approval import ApprovalMethods
+    # approval_methods = ApprovalMethods(DB_PATH)
+    # approval_methods.register_to(server)
+
+    # from acos.rpc.methods_settings import SettingsMethods
+    # settings_methods = SettingsMethods(DB_PATH)
+    # settings_methods.register_to(server)
 
     from acos.rpc.methods_provider import ProviderMethods
     provider_methods = ProviderMethods(DB_PATH)
     provider_methods.register_to(server)
-
-    from acos.rpc.methods_gov import GovMethods
-    gov_methods = GovMethods(DB_PATH)
-    gov_methods.register_to(server)
-
-    from acos.rpc.methods_approval import ApprovalMethods
-    approval_methods = ApprovalMethods(DB_PATH)
-    approval_methods.register_to(server)
-
-    from acos.rpc.methods_settings import SettingsMethods
-    settings_methods = SettingsMethods(DB_PATH)
-    settings_methods.register_to(server)
 
     from acos.rpc.methods_sys import SysMethods
     sys_methods = SysMethods(DB_PATH)
@@ -128,39 +129,41 @@ async def run() -> None:
     workflow_methods = WorkflowMethods(DB_PATH)
     workflow_methods.register_to(server)
 
-    from acos.rpc.methods_audit import AuditMethods
-    audit_methods = AuditMethods(DB_PATH)
-    audit_methods.register_to(server)
+    # from acos.rpc.methods_audit import AuditMethods
+    # audit_methods = AuditMethods(DB_PATH)
+    # audit_methods.register_to(server)
 
     log_event("methods.registered", methods=[
-        "company.list", "company.get", "company.create", "company.update", "company.delete", "company.restore",
-        "department.list", "department.create", "department.update", "department.delete",
-        "employee.list", "employee.create", "employee.update", "employee.delete",
-        "task.list", "task.create", "task.start", "task.complete", "task.cancel",
-        "knowledge.list", "knowledge.create", "knowledge.update", "knowledge.delete", "knowledge.search",
-        "skill.list", "skill.get", "skill.create", "skill.update",
-        "prompt.list", "prompt.get", "prompt.create", "prompt.update",
-        "capability.list", "capability.get", "capability.create", "capability.update", "capability.get_bindings",
-        "template.list", "template.get", "template.create", "template.update", "template.activate", "template.archive",
-        "backend.list", "backend.get", "backend.create", "backend.update", "backend.setDefault",
-        "backend.enable", "backend.drain", "backend.archive", "backend.probe", "backend.checkAvailability",
-        "provider.list", "provider.model.list", "provider.pricingPolicy.update", "provider.budgetFreeze.clear",
-        "provider.tierMapping.update", "provider.probe", "provider.credential.get", "provider.credential.set",
-        "provider.credential.revoke", "provider.runtime.start", "provider.runtime.send", "provider.runtime.cancel",
-        "gov.budgetPolicy.get", "gov.budgetPolicy.update", "gov.budget.get", "gov.budget.reserve",
-        "gov.budget.revise", "gov.approvalType.create", "gov.approvalType.list", "gov.approvalType.get",
-        "gov.approvalType.update", "gov.audit.query",
-        "approval.list", "approval.get", "approval.resolve", "approval.request",
-        "settings.company.get", "settings.company.update", "settings.knowledgePolicy.get",
-        "settings.knowledgePolicy.update", "settings.securityPolicy.get", "settings.securityPolicy.update",
-        "settings.workspacePolicy.get", "settings.workspacePolicy.update", "settings.notification.get",
-        "settings.notification.update", "sys.migration.status", "cap.engine.resolve",
-        "session.list", "session.get", "session.sendMessage", "session.cancel", "session.transcript.get",
-        "kg.document.list", "kg.document.get", "kg.citation.get", "kg.search", "kg.source.delete",
-        "kg.knowledge.reject", "kg.knowledge.confirm", "kg.ingest.retry",
-        "workflow.checkpoint.list", "workflow.plan.validate", "workflow.task.cancel",
-        "task.retrySubtask",
-        "intervention.list", "audit.query",
+        # org.* (OrganizationMethods) — 35 个
+        "org.company.list", "org.company.get", "org.company.create", "org.company.update",
+        "org.company.delete", "org.company.restore", "org.company.activate", "org.company.dissolve",
+        "org.department.list", "org.department.create", "org.department.update", "org.department.delete",
+        "org.department.move", "org.department.setLeader", "org.department.freeze",
+        "org.department.unfreeze", "org.department.archive", "org.department.get",
+        "org.employee.list", "org.employee.create", "org.employee.update", "org.employee.delete",
+        "org.employee.setManager", "org.employee.activate", "org.employee.suspend",
+        "org.employee.resume", "org.employee.archive", "org.employee.transfer", "org.employee.get",
+        "org.grant.create", "org.grant.list", "org.grant.get", "org.grant.revoke",
+        "org.graph.get", "org.permission.resolve",
+        # cap.* — 2 个（仅保留 engine.resolve / snapshot.build）
+        "cap.engine.resolve", "cap.snapshot.build",
+        # task.* (TaskMethods) — 6 个
+        "task.create", "task.start", "task.complete",
+        "task.cancel", "task.retrySubtask", "task.nodes",
+        # session.* (SessionMethods) — 6 个用户侧 + 4 个内部
+        "session.list", "session.get", "session.sendMessage", "session.cancel",
+        "session.transcript.get", "session.resume",
+        "session._suspend", "session._archive", "session._handoff", "session._reconcile",
+        # provider.* (ProviderMethods) — 5 个
+        "provider.list", "provider.model.list",
+        "provider.runtime.start", "provider.runtime.send", "provider.runtime.cancel",
+        # kg.* (KgMethods) — 4 个
+        "kg.document.list", "kg.document.get", "kg.citation.get", "kg.search",
+        # workflow.* (WorkflowMethods) — 4 个
+        "workflow.checkpoint.list", "workflow.plan.validate",
+        "workflow.task.cancel", "workflow.deadletter.resolve",
+        # sys.* (SysMethods + RPCServer builtins) — 4 个
+        "sys.health", "sys.shutdown", "sys.migration.status", "sys.sync.trigger",
     ])
 
     await server.start()

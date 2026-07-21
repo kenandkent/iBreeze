@@ -66,13 +66,6 @@ class OrganizationMethods:
         # 组织图 + 权限解析
         server.register_method("org.graph.get", self._org_graph_get)
         server.register_method("org.permission.resolve", self._permission_resolve)
-        # 任务 (task.*，设计命名，handler 实现位于本模块尾部)
-        server.register_method("task.list", self._task_list)
-        server.register_method("task.create", self._task_create)
-        server.register_method("task.get", self._task_get)
-        # 知识库 (knowledge.*，Phase 8 统一迁移为 kg.*)
-        server.register_method("knowledge.list", self._knowledge_list)
-        server.register_method("knowledge.create", self._knowledge_create)
 
     # ── 公司 ──────────────────────────────────────────────
 
