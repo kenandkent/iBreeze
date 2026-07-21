@@ -28,9 +28,9 @@ fn kill_process_tree(pid: u32) {
     let _ = Command::new("pkill")
         .args(["-9", "-P", &pid.to_string()])
         .output();
-    unsafe {
-        libc::kill(pid as i32, libc::SIGKILL);
-    }
+    let _ = Command::new("kill")
+        .args(["-9", &pid.to_string()])
+        .output();
 }
 
 fn kill_sidecar() {
