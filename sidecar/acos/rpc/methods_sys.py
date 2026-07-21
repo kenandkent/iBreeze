@@ -57,7 +57,7 @@ class SysMethods:
             return {"error": "missing company_id"}
         since = params.get("since")
 
-        admin_api_base = os.environ.get("ACOS_ADMIN_API_BASE", "http://127.0.0.1:8000")
+        admin_api_base = os.environ.get("ACOS_ADMIN_API_BASE", "http://127.0.0.1:50080")
         from acos.sync.puller import ConfigPuller
 
         puller = ConfigPuller(admin_api_base=admin_api_base, db_path=self._db_path)
