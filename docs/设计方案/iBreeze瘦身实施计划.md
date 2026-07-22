@@ -164,7 +164,7 @@ Phase 1 ──────► Phase 2 ──────► Phase 3
    # CORS（Admin 前端运行在不同端口，如 8000）
    app.add_middleware(
        CORSMiddleware,
-       allow_origins=["http://localhost:8000"],  # Admin 前端端口
+       allow_origins=["http://localhost:50081"],  # Admin 前端端口
        allow_credentials=True,
        allow_methods=["*"],
        allow_headers=["*"],
@@ -1320,7 +1320,7 @@ GET /api/sync/config?company_id={company_id}&since={timestamp}
 
 **DoD**：
 - `cd apps/admin && npm install && npm run dev` 启动成功。
-- 浏览器访问 `http://localhost:8000` 跳转登录页。
+- 浏览器访问 `http://localhost:50081` 跳转登录页。
 - 用 `admin/admin123` 登录后看到 Layout + 侧边栏菜单。
 
 ---
