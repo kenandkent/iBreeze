@@ -147,10 +147,10 @@ class SessionMethods:
     async def _list(self, params: dict[str, Any]) -> dict[str, Any]:
         company_id = params.get("company_id")
         employee_id = params.get("employee_id")
-        if not company_id or not employee_id:
-            raise AcosError("RT-VALIDATION", "缺少 company_id/employee_id")
+        if not company_id:
+            raise AcosError("RT-VALIDATION", "缺少 company_id")
         threads = await self._store.list_threads(
-            company_id, employee_id, include_archived=bool(params.get("include_archived"))
+            company_id, employee_id or "", include_archived=bool(params.get("include_archived"))
         )
         return {"threads": threads, "total": len(threads)}
 

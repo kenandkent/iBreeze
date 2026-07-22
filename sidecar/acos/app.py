@@ -147,8 +147,8 @@ async def run() -> None:
         "org.graph.get", "org.permission.resolve",
         # cap.* — 2 个（仅保留 engine.resolve / snapshot.build）
         "cap.engine.resolve", "cap.snapshot.build",
-        # task.* (TaskMethods) — 6 个
-        "task.create", "task.start", "task.complete",
+        # task.* (TaskMethods) — 7 个
+        "task.list", "task.create", "task.start", "task.complete",
         "task.cancel", "task.retrySubtask", "task.nodes",
         # session.* (SessionMethods) — 6 个用户侧 + 4 个内部
         "session.list", "session.get", "session.sendMessage", "session.cancel",
@@ -169,7 +169,7 @@ async def run() -> None:
     await server.start()
     log_event("rpc.listening", socket=socket_path)
 
-    await provider_methods.ensure_manifest_imported()
+    await provider_methods._ensure_manifest()
 
     # 启动父进程监控线程
     app_pid_str = os.environ.get("IBREEZE_APP_PID")

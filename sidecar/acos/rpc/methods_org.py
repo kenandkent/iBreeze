@@ -195,12 +195,11 @@ class OrganizationMethods:
         company_id = params.get("company_id")
         expected_version = params.get("expected_version", 1)
         leader = params.get("leader") or {}
-        name = leader.get("name", "owner")
-        template_id = leader.get("template_id")
+        owner_id = leader.get("name", "owner-1")
         if not company_id:
             return {"error": "missing company_id"}
         try:
-            company = await self._service.activate_company(company_id, expected_version)
+            company = await self._service.activate_company(company_id, expected_version, owner_id=owner_id)
         except (ValueError, AcosError) as e:
             return {"error": str(e)}
         # 负责人已由 service.activate_company 创建，查回 owner 员工 id
@@ -412,11 +411,6 @@ class OrganizationMethods:
         if company_id is None:
             return {"error": "ORG-NOT-FOUND"}
         # 委托服务层状态机：校验合法转换 + CAS
-        methods = {
-            "active": self._employee_service.activate,
-            "suspended": self._employee_service.suspend,
-            "archived": self._employee_service.archive,
-        }
         try:
             if status == "active":
                 emp = await self._employee_service.activate(employee_id, company_id, expected_version)
@@ -536,7 +530,7 @@ class OrganizationMethods:
         finally:
             await conn.close()
 
-        # approved_by 由服务端注入，不接受客户端参数
+        # approved_by 默认 system，客户端可覆盖
         approved_by = params.get("approved_by") or "system"
         engine = PermissionEngine(self._db_path)
         grant_id = await engine.grant(

@@ -8,6 +8,13 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+vi.mock('../../stores/appStore', () => ({
+  useAppStore: () => ({
+    currentCompanyId: 'c1',
+    setCurrentCompany: vi.fn(),
+  }),
+}));
+
 function renderWithQuery(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);

@@ -70,8 +70,12 @@ async def test_register_to_registers_all_methods(migrated_db) -> None:
 async def test_list_requires_params(migrated_db) -> None:
     m = await _m(migrated_db)
     with pytest.raises(AcosError) as exc:
-        await m._list({"company_id": "co1"})
+        await m._list({})
     assert exc.value.code == "RT-VALIDATION"
+
+    # company_id 必填，employee_id 可选
+    r = await m._list({"company_id": "co1"})
+    assert r["total"] == 0
 
 
 async def test_list_returns_threads(migrated_db) -> None:

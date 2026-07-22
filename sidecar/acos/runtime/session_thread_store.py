@@ -159,20 +159,32 @@ class SessionThreadStore:
             return _row_to_thread(row)
 
     async def list_threads(
-        self, company_id: str, employee_id: str, *, include_archived: bool = False
+        self, company_id: str, employee_id: str = "", *, include_archived: bool = False
     ) -> list[dict[str, Any]]:
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
-            if include_archived:
-                cur = await db.execute(
-                    "SELECT * FROM session_threads WHERE company_id = ? AND employee_id = ? ORDER BY updated_at DESC",
-                    (company_id, employee_id),
-                )
+            if employee_id:
+                if include_archived:
+                    cur = await db.execute(
+                        "SELECT * FROM session_threads WHERE company_id = ? AND employee_id = ? ORDER BY updated_at DESC",
+                        (company_id, employee_id),
+                    )
+                else:
+                    cur = await db.execute(
+                        "SELECT * FROM session_threads WHERE company_id = ? AND employee_id = ? AND status != 'archived' ORDER BY updated_at DESC",
+                        (company_id, employee_id),
+                    )
             else:
-                cur = await db.execute(
-                    "SELECT * FROM session_threads WHERE company_id = ? AND employee_id = ? AND status != 'archived' ORDER BY updated_at DESC",
-                    (company_id, employee_id),
-                )
+                if include_archived:
+                    cur = await db.execute(
+                        "SELECT * FROM session_threads WHERE company_id = ? ORDER BY updated_at DESC",
+                        (company_id,),
+                    )
+                else:
+                    cur = await db.execute(
+                        "SELECT * FROM session_threads WHERE company_id = ? AND status != 'archived' ORDER BY updated_at DESC",
+                        (company_id,),
+                    )
             return [_row_to_thread(r) for r in await cur.fetchall()]
 
     # ── 事件追加 ─────────────────────────────────────────

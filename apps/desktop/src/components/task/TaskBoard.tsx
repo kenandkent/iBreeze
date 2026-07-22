@@ -4,6 +4,7 @@ import { rpcCall } from '../../services/rpcClient';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { useAppStore } from '../../stores/appStore';
 import type { Task } from '../../types';
 import { ClipboardList, X, Plus, Play, Ban } from 'lucide-react';
 
@@ -15,21 +16,23 @@ const COLUMNS = [
 
 export function TaskBoard() {
   const queryClient = useQueryClient();
+  const { currentCompanyId } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', priority: 5 });
   const [cancelTarget, setCancelTarget] = useState<Task | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery<Task[]>({
-    queryKey: ['tasks'],
-    queryFn: () => rpcCall<Task[]>('task.list'),
+    queryKey: ['tasks', currentCompanyId],
+    queryFn: () => rpcCall<Task[]>('task.list', { company_id: currentCompanyId }),
+    enabled: !!currentCompanyId,
     retry: 3,
     retryDelay: 1000,
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof form) => rpcCall('task.create', data),
+    mutationFn: async (data: typeof form) => rpcCall('task.create', { ...data, company_id: currentCompanyId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', currentCompanyId] });
       setShowCreate(false);
       setForm({ title: '', description: '', priority: 5 });
     },
@@ -40,7 +43,7 @@ export function TaskBoard() {
       task_id: task.task_id,
       expected_version: task.version,
     }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks', currentCompanyId] }),
   });
 
   const cancelMutation = useMutation({
@@ -49,10 +52,16 @@ export function TaskBoard() {
       expected_version: task.version,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', currentCompanyId] });
       setCancelTarget(null);
     },
   });
+
+  if (!currentCompanyId) {
+    return (
+      <div className="p-6 text-sm text-amber-600">请先在上方选择公司后再查看任务。</div>
+    );
+  }
 
   if (isLoading) return <LoadingSpinner />;
 

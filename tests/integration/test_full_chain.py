@@ -668,14 +668,14 @@ class TestContractSidecarMethodRegistration:
 
     @pytest.mark.asyncio
     async def test_contract_sidecar_method_count(self):
-        """验证 sidecar 注册的活跃方法数在合理范围（~62 个）。"""
+        """验证 sidecar 注册的活跃方法数在合理范围（~71 个）。"""
         socket_path = f"/tmp/acos_contract_method_count_{os.getpid()}.sock"
         server = await _start_full_sidecar_server(socket_path)
         try:
             method_count = len(server._handlers)
-            # 设计文档列出约 62 个方法（含 2 个 builtin）
-            assert 55 <= method_count <= 70, (
-                f"Expected ~62 active methods, found {method_count}"
+            # 设计文档列出约 71 个方法（含 2 个 builtin + 内部端口）
+            assert 60 <= method_count <= 80, (
+                f"Expected ~71 active methods, found {method_count}"
             )
         finally:
             await server.stop()
@@ -687,7 +687,7 @@ class TestContractSidecarMethodRegistration:
         server = await _start_full_sidecar_server(socket_path)
         try:
             expected_methods = [
-                # org.* — 35 个
+                # org.* — 35 个（含 8 个恢复的死方法）
                 "org.company.list", "org.company.get", "org.company.create",
                 "org.company.update", "org.company.delete", "org.company.restore",
                 "org.company.activate", "org.company.dissolve",
@@ -703,8 +703,8 @@ class TestContractSidecarMethodRegistration:
                 "org.graph.get", "org.permission.resolve",
                 # cap.* — 2 个
                 "cap.engine.resolve", "cap.snapshot.build",
-                # task.* — 6 个
-                "task.create", "task.start", "task.complete",
+                # task.* — 7 个
+                "task.list", "task.create", "task.start", "task.complete",
                 "task.cancel", "task.retrySubtask", "task.nodes",
                 # session.* — 6 个用户侧
                 "session.list", "session.get", "session.sendMessage", "session.cancel",

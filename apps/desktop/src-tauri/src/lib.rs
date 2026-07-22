@@ -181,6 +181,7 @@ fn start_sidecar() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .env("IBREEZE_APP_PID", app_pid.to_string())
+        .env("ACOS_ADMIN_API_BASE", "http://127.0.0.1:50080")
         .env("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
 
     match cmd.spawn() {

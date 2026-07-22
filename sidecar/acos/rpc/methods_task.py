@@ -21,12 +21,31 @@ class TaskMethods:
         self._svc = TaskService(db_path)
 
     def register_to(self, server: RPCServer) -> None:
+        server.register_method("task.list", self._task_list)
         server.register_method("task.start", self._task_start)
         server.register_method("task.complete", self._task_complete)
         server.register_method("task.cancel", self._task_cancel)
         server.register_method("task.retrySubtask", self._task_retry_subtask)
         server.register_method("task.create", self._task_create)
         server.register_method("task.nodes", self._task_nodes)
+
+    async def _task_list(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        company_id = params.get("company_id")
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if company_id:
+                cur = await db.execute(
+                    "SELECT task_id, company_id, title, description, status, priority, version, created_at "
+                    "FROM tasks WHERE company_id = ? ORDER BY created_at DESC",
+                    (company_id,),
+                )
+            else:
+                cur = await db.execute(
+                    "SELECT task_id, company_id, title, description, status, priority, version, created_at "
+                    "FROM tasks ORDER BY created_at DESC",
+                )
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
     async def _task_start(self, params: dict[str, Any]) -> dict[str, Any]:
         task_id = params.get("task_id")
