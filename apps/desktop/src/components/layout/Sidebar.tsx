@@ -56,9 +56,11 @@ export function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const isActive = item.path === '/tasks/advanced'
             ? location.pathname === '/tasks/advanced'
-            : item.path === '/session'
-              ? location.pathname === '/session' || location.pathname === '/'
-              : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            : item.path === '/tasks'
+              ? location.pathname === '/tasks'
+              : item.path === '/session'
+                ? location.pathname === '/session' || location.pathname === '/'
+                : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
           return (
             <button
               key={item.path}
