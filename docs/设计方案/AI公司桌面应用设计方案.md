@@ -1081,9 +1081,11 @@ HTTP 接口必须按下表映射；本地专用错误没有 HTTP 状态。未列
 
 未登录路由：
 
-- `/login`
-- `/register`
-- `/server-settings`
+- `/auth/server`
+- `/auth/login`
+- `/auth/register`
+- `/auth/change-password`
+- `/offline-unlock`
 
 登录后主导航：
 
@@ -1144,7 +1146,7 @@ HTTP 接口必须按下表映射；本地专用错误没有 HTTP 状态。未列
 
 统一关联字段：`trace_id`、`company_id`、`task_id`、`department_task_id`、`employee_id` 和 `run_id`。
 
-本地审计记录：组织配置变化、计划确认、任务分派、职员替换、权限批准、工具调用、外部写入、Review 问题状态和任务完成。
+本地审计记录：公司/部门/职员配置变化、计划确认、任务分派、职员替换、权限批准、工具调用、外部写入、Review 问题状态和任务完成。
 
 运行日志默认保留 30 天，可由用户本地调整；审计日志随公司数据保留。日志不得上传后台。
 
@@ -1283,19 +1285,22 @@ ibreeze/
 ├─ sidecar/
 │  ├─ pyproject.toml
 │  ├─ uv.lock
-│  ├─ application/              # 本地领域服务
-│  ├─ orchestration/            # 公司/部门编排
-│  ├─ runtime/                  # Built-in Agent Runtime
-│  ├─ adapters/
-│  │  ├─ codex_cli/
-│  │  ├─ claude_code/
-│  │  ├─ opencode/
-│  │  └─ model_transport/
-│  ├─ tools/
-│  ├─ permissions/
-│  ├─ workspace/
-│  ├─ knowledge/
-│  └─ migrations/
+│  ├─ ibreeze/
+│  │  ├─ application/           # 本地领域服务
+│  │  ├─ orchestration/         # 公司/部门编排
+│  │  ├─ runtime/               # Gateway、CLI Adapter 与 Built-in Agent Runtime
+│  │  ├─ domain/
+│  │  ├─ persistence/
+│  │  ├─ rpc/
+│  │  ├─ events/
+│  │  ├─ workspace/
+│  │  ├─ artifacts/
+│  │  ├─ review/
+│  │  ├─ knowledge/
+│  │  ├─ backup/
+│  │  └─ main.py
+│  ├─ migrations/
+│  └─ tests/
 ├─ packages/
 │  ├─ contracts/                # OpenAPI、事件、Artifact、Skill 等 JSON Schema
 │  ├─ rpc-schema/               # 本地 JSON-RPC 请求/响应 Schema
@@ -1310,7 +1315,7 @@ ibreeze/
 
 ## 附录 B：本地调用边界
 
-WebView 只能调用附录 J.14 列出的公开 JSON-RPC 方法。总经理分析、Plan 生成、部门任务分派、Review 分配、Run 创建、Artifact 合并、知识索引和最终汇总都是 Sidecar 进程内 Application Service 调用 Orchestration/Runtime 模块的内部动作，不注册为公开 RPC，前端不能直接跳过状态机触发。
+WebView 只能调用附录 J.14 列出的公开 JSON-RPC 方法。`rpc_request` 先由 Rust Core 按 J.14 的固定所有权表路由：登录前认证、Backend Origin、Profile 打开/关闭由 Rust Core 本地处理，Profile 打开后的业务方法才转发唯一 Sidecar。总经理分析、Plan 生成、部门任务分派、Review 分配、Run 创建、Artifact 合并、知识索引和最终汇总都是 Sidecar 进程内 Application Service 调用 Orchestration/Runtime 模块的内部动作，不注册为公开 RPC，前端不能直接跳过状态机触发。
 
 公开 RPC 的唯一方法名、读写类别和幂等期限以附录 J.14 为准；请求与响应 Schema 的文件布局和生成规则以附录 J.11、J.14 为准。正文其他位置只描述业务行为，不再定义第二份方法清单。
 
@@ -1777,14 +1782,14 @@ JSON-RPC 请求必须包含：
   "params": {},
   "meta": {
     "trace_id": "uuid",
-    "ipc_session_id": "uuid",
+    "ipc_session_id": "uuid-or-null",
     "window_session_id": "uuid",
     "idempotency_key": "uuid-or-null"
   }
 }
 ```
 
-读方法的 `idempotency_key` 为 null；写方法必须是 UUID。
+读方法的 `idempotency_key` 为 null；写方法必须是 UUID。Rust本地认证与Profile生命周期写方法只用该key合并当前进程内尚未完成的同请求，请求完成立即删除，不持久化密码、Token或响应；用户显式重试必须生成新key。Sidecar业务写方法按J.14期限持久化幂等结果。`ipc_session_id` 仅允许在 Rust 本地方法和首次 `system.handshake` 时为 null；Sidecar业务方法、握手后的Supervisor方法及反向调用必须携带当前session id。Rust收到WebView提供的非当前session id时拒绝请求，且不会把调用方值替换为有效值后继续执行。
 
 RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`，并允许发送无 id 的 `runtime.processRegistered/runtime.processExited` 通知；Rust 收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。进程通知只接受当前 ipc session，Rust 必须用系统进程信息验证 PID/PGID、可执行路径和 Sidecar 父子关系后才登记。
 
@@ -4512,10 +4517,33 @@ token delta 每 50ms 或 100 字符批量刷新。单 Run 内存缓冲最大 1 M
 
 ### J.14 本地 RPC 方法表
 
+公开方法按进程固定分区：`backend.validateOrigin`、`auth.register`、`auth.login`、`auth.changePassword`、`auth.logout`、`auth.listOfflineProfiles`、`auth.openProfile`、`auth.closeProfile` 由 Rust Core 本地实现，禁止转发 Sidecar；表内其余业务方法由 Rust 校验当前 Profile 和 IPC session 后转发 Sidecar。F.3–F.5 的 `system.handshake/health/shutdown` 只用于 Rust 与 Sidecar 的监督通道，不接受 WebView 调用。
+
+Rust 本地方法的 params/response 固定如下，密码只存在于 WebView 提交到 Rust 的单次 IPC 请求及 Rust 零化内存，不进入 Sidecar、日志、事件或持久化：
+
+| 方法 | params | response |
+|---|---|---|
+| `backend.validateOrigin` | `{origin}` | `{canonical_origin,ready}`；只有 `/health/ready` 成功才保存为当前登录Origin |
+| `auth.register` | `{email,password}` | `{app_user_id,email,masked_identifier}`；注册成功不自动登录 |
+| `auth.login` | `{email,password}` | `{status,profile_directory_id,masked_identifier,catalog_release_sequence}`；status仅为`password_change_required/profile_opened` |
+| `auth.changePassword` | `{current_password,new_password}` | 与 `auth.login` 相同；成功原子保存新session bundle并打开Profile |
+| `auth.logout` | `{}` | `{closed_profile,revoked_family}`；先停止Sidecar，再撤销在线family并删除本地bundle |
+| `auth.listOfflineProfiles` | `{}` | `{profiles:[{profile_directory_id,backend_origin,masked_identifier,expires_at}]}`；只返回meta、bundle和票据均有效的条目 |
+| `auth.openProfile` | `{profile_directory_id}` | `{profile_directory_id,mode,catalog_release_sequence}`；mode仅为`online/offline` |
+| `auth.closeProfile` | `{}` | `{closed_profile}`；停止新请求、关闭Sidecar并清理内存Access Token，不删除Keychain bundle |
+
+`auth.login` 固定执行 REST 登录 → 验证响应与OfflineSessionTicket → 单次Keychain bundle update → 获取并验签Catalog → 原子更新Profile meta → 启动Sidecar → Sidecar校验 `local_profile` → 返回 `profile_opened`。任一步失败不得返回已打开状态；Keychain更新后的后续失败保留有效bundle，关闭Sidecar并回登录页。`auth.openProfile` 在后台可达时必须先Refresh并按相同流程轮换bundle、同步Catalog；仅网络失败时才验证本地OfflineSessionTicket并以offline打开。`auth.changePassword` 只接受受限改密session，成功响应按G.11轮换后继续执行登录后半段。`auth.logout` 在离线模式无法联系后台时关闭本地Profile并删除bundle，后端family依靠Refresh过期/服务端撤销策略失效；UI必须明确显示离线退出未完成远端撤销。
+
 | 方法 | 类型 | 幂等保留 | 主要错误 |
 |---|---|---|---|
-| `auth.openProfile` | 写 | 24h | `OFFLINE_TICKET_INVALID` |
-| `auth.closeProfile` | 写 | 24h | `STATE_TRANSITION_INVALID` |
+| `backend.validateOrigin` | 写 | 仅in-flight | `VALIDATION_FAILED` |
+| `auth.register` | 写 | 仅in-flight | `AUTH_EMAIL_EXISTS` |
+| `auth.login` | 写 | 仅in-flight | `AUTH_INVALID_CREDENTIALS` |
+| `auth.changePassword` | 写 | 仅in-flight | `AUTH_PASSWORD_CHANGE_REQUIRED` |
+| `auth.logout` | 写 | 仅in-flight | `STATE_TRANSITION_INVALID` |
+| `auth.listOfflineProfiles` | 读 | 无 | 无 |
+| `auth.openProfile` | 写 | 仅in-flight | `OFFLINE_TICKET_INVALID` |
+| `auth.closeProfile` | 写 | 仅in-flight | `STATE_TRANSITION_INVALID` |
 | `company.create` | 写 | 30d | `PROFILE_VERSION_INVALID`、`NAME_EXISTS` |
 | `company.get/list` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
 | `company.update` | 写 | 30d | `OPTIMISTIC_LOCK_CONFLICT` |
@@ -4570,9 +4598,9 @@ token delta 每 50ms 或 100 字符批量刷新。单 Run 内存缓冲最大 1 M
 | `settings.update` | 写 | 30d | `VALIDATION_FAILED` |
 | `event.subscribe/replay` | 读 | 无 | `EVENT_SEQUENCE_INVALID` |
 
-斜杠表示同一类型的多个独立方法，例如 `company.get/list` 展开为 `company.get` 和 `company.list`，不得把斜杠作为实际方法名。F.3–F.5 的 `system.handshake/health/shutdown` 是 Rust Supervisor 专用控制方法，不转发 WebView 调用。所有读取列表采用 cursor，cursor 是 base64url 编码的排序字段和 id，并用 Profile 内随机 HMAC key 签名，防止调用方篡改。
+斜杠表示同一类型的多个独立方法，例如 `company.get/list` 展开为 `company.get` 和 `company.list`，不得把斜杠作为实际方法名。所有读取列表采用 cursor，cursor 是 base64url 编码的排序字段和 id，并用 Profile 内随机 HMAC key 签名，防止调用方篡改。
 
-每个方法必须在 `packages/rpc-schema/methods/{namespace}.{action}.request.schema.json` 和 `.response.schema.json` 各有一个 JSON Schema。`get` 请求固定为 `{id, company_id}`；`list` 固定为 `{company_id, filter, cursor, limit}`，`limit` 默认 50、范围 1..200；`update/resolve` 必须含 `expected_version`。跨公司对象 id 即使真实存在也返回 `RESOURCE_NOT_FOUND`，不得泄露其他公司存在性。写请求的幂等键只放在 RPC `meta`，禁止在 params 重复定义。
+每个方法必须在 `packages/rpc-schema/methods/{namespace}.{action}.request.schema.json` 和 `.response.schema.json` 各有一个 JSON Schema；`packages/rpc-schema/ownership.v1.json` 固定记录 `rust_core/sidecar/supervisor_only` 三类所有权，生成器拒绝未分配或重复分配的方法。`get` 请求固定为 `{id, company_id}`；`list` 固定为 `{company_id, filter, cursor, limit}`，`limit` 默认 50、范围 1..200；`update/resolve` 必须含 `expected_version`。跨公司对象 id 即使真实存在也返回 `RESOURCE_NOT_FOUND`，不得泄露其他公司存在性。写请求的幂等键只放在 RPC `meta`，禁止在 params 重复定义。
 
 JSON-RPC 协议错误使用标准码 `-32700/-32600/-32601/-32602/-32603`。所有领域错误固定使用 `-32000`，并返回：
 
@@ -4810,7 +4838,7 @@ Backend 每个进程固定 SQLAlchemy `pool_size=20/max_overflow=20/pool_timeout
 
 ### K.13 日志
 
-Python 用 structlog JSON。后台 stdout；桌面单文件 20 MiB、最多 10 个、最长 30 天。固定脱敏 password、authorization、cookie、token、api_key、credential、Prompt 和消息正文。
+Python 用 structlog JSON。后台 stdout；桌面单文件 20 MiB、最多 10 个，保留天数使用 Profile 设置 `1..365`（默认 30），文件数量或保留天数任一达到上限即清理最旧文件。固定脱敏 password、authorization、cookie、token、api_key、credential、Prompt 和消息正文。
 
 后台 Prometheus：HTTP、登录、锁定、目录发布、Skill、PostgreSQL/S3。桌面指标仅本地：Run、队列、重启、Checkpoint、恢复、Adapter 和检索，不上传遥测。
 
