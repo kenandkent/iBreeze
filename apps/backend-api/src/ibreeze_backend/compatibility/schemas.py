@@ -1,4 +1,7 @@
 """Compatibility rule schemas."""
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -23,7 +26,7 @@ class CompatibilityRuleUpdate(BaseModel):
 
 
 class CompatibilityRuleResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     subject_type: str
     subject_version_range: dict | None
     dependency_type: str
@@ -31,8 +34,8 @@ class CompatibilityRuleResponse(BaseModel):
     result: str
     reason_code: str | None
     priority: int
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

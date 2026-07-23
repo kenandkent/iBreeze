@@ -189,3 +189,200 @@ async def get_release_endpoint(
             release.published_at.isoformat() if release.published_at else None
         ),
     }
+
+
+# 公开目录查询端点
+
+@public_router.get("/catalog/agents")
+async def list_agents_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """列出所有已发布的 Agent"""
+    from ibreeze_backend.catalog.models import AgentCatalog
+    
+    result = await db.execute(
+        select(AgentCatalog).where(AgentCatalog.status == "published")
+    )
+    agents = result.scalars().all()
+    
+    return {
+        "data": [
+            {
+                "id": str(agent.id),
+                "key": agent.key,
+                "display_name": agent.display_name,
+                "description": agent.description,
+                "catalog_revision": agent.catalog_revision,
+            }
+            for agent in agents
+        ],
+        "meta": {"total": len(agents)},
+    }
+
+
+@public_router.get("/catalog/agents/{agent_id}/models")
+async def list_agent_models_endpoint(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """列出指定 Agent 可用的模型"""
+    from ibreeze_backend.catalog.models import AgentCatalog, AgentModelBinding, ModelCatalog
+    
+    # 验证 Agent 存在且已发布
+    agent_result = await db.execute(
+        select(AgentCatalog).where(
+            AgentCatalog.id == agent_id,
+            AgentCatalog.status == "published",
+        )
+    )
+    agent = agent_result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # 获取绑定的模型
+    binding_result = await db.execute(
+        select(AgentModelBinding).where(AgentModelBinding.agent_id == agent_id)
+    )
+    bindings = binding_result.scalars().all()
+    
+    models = []
+    for binding in bindings:
+        model_result = await db.execute(
+            select(ModelCatalog).where(ModelCatalog.id == binding.model_id)
+        )
+        model = model_result.scalar_one_or_none()
+        if model and model.status == "published":
+            models.append({
+                "id": str(model.id),
+                "provider_key": model.provider_key,
+                "model_key": model.model_key,
+                "display_name": model.display_name,
+                "context_window": model.context_window,
+                "supports_tools": model.supports_tools,
+                "supports_streaming": model.supports_streaming,
+                "supports_vision": model.supports_vision,
+            })
+    
+    return {
+        "data": models,
+        "meta": {"total": len(models)},
+    }
+
+
+@public_router.get("/catalog/providers")
+async def list_providers_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """列出所有已发布的 Provider"""
+    from ibreeze_backend.models.catalog import ProviderCatalog
+    
+    result = await db.execute(
+        select(ProviderCatalog).where(ProviderCatalog.status == "published")
+    )
+    providers = result.scalars().all()
+    
+    return {
+        "data": [
+            {
+                "id": str(provider.id),
+                "display_name": provider.display_name,
+                "base_url": provider.base_url,
+                "api_protocol": provider.api_protocol,
+            }
+            for provider in providers
+        ],
+        "meta": {"total": len(providers)},
+    }
+
+
+@public_router.get("/catalog/providers/{provider_id}/models")
+async def list_provider_models_endpoint(
+    provider_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """列出指定 Provider 可用的模型"""
+    from ibreeze_backend.catalog.models import ProviderCatalog, ProviderModelBinding, ModelCatalog
+    
+    # 验证 Provider 存在且已发布
+    provider_result = await db.execute(
+        select(ProviderCatalog).where(
+            ProviderCatalog.id == provider_id,
+            ProviderCatalog.status == "published",
+        )
+    )
+    provider = provider_result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    
+    # 获取绑定的模型
+    binding_result = await db.execute(
+        select(ProviderModelBinding).where(ProviderModelBinding.provider_id == provider_id)
+    )
+    bindings = binding_result.scalars().all()
+    
+    models = []
+    for binding in bindings:
+        model_result = await db.execute(
+            select(ModelCatalog).where(ModelCatalog.id == binding.model_id)
+        )
+        model = model_result.scalar_one_or_none()
+        if model and model.status == "published":
+            models.append({
+                "id": str(model.id),
+                "provider_key": model.provider_key,
+                "model_key": model.model_key,
+                "display_name": model.display_name,
+                "context_window": model.context_window,
+                "supports_tools": model.supports_tools,
+                "supports_streaming": model.supports_streaming,
+                "supports_vision": model.supports_vision,
+            })
+    
+    return {
+        "data": models,
+        "meta": {"total": len(models)},
+    }
+
+
+@public_router.get("/catalog/skills")
+async def list_skills_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """列出所有已发布的 Skill"""
+    from ibreeze_backend.models.skill import Skill
+    
+    result = await db.execute(
+        select(Skill).where(Skill.is_active == True)
+    )
+    skills = result.scalars().all()
+    
+    return {
+        "data": [
+            {
+                "id": str(skill.id),
+                "name": skill.name,
+                "version": skill.version,
+                "category": skill.category,
+                "description": skill.description,
+                "compatibility": skill.compatibility,
+            }
+            for skill in skills
+        ],
+        "meta": {"total": len(skills)},
+    }
+
+
+@public_router.get("/catalog/emergency-disables/latest")
+async def get_latest_emergency_disable_public_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """获取最新紧急禁用"""
+    disable = await get_latest_emergency_disable(db)
+    if not disable:
+        raise HTTPException(status_code=404, detail="No emergency disables found")
+    return {
+        "id": str(disable.id),
+        "sequence": disable.sequence,
+        "disabled_skill_ids": disable.disabled_skill_ids,
+        "created_at": disable.created_at.isoformat(),
+    }

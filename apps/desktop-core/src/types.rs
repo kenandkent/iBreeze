@@ -21,8 +21,16 @@ pub struct ProfileUpdate {
 pub struct AuthResult {
     pub access_token: String,
     pub refresh_token: String,
-    pub expires_in: i64,
     pub token_type: String,
+    pub user_type: String,
+    pub pwd_change_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterRequest {
+    pub email: String,
+    pub password: String,
+    pub confirm_password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

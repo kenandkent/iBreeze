@@ -20,7 +20,6 @@ storage = ObjectStorage()
 async def install_skill(
     db: AsyncSession, skill_id: str, version: str, zip_path: Path
 ) -> Skill:
-    """Full install flow: validate → checksum → store → write DB."""
     ok, errors = validate_zip_structure(zip_path)
     if not ok:
         raise ValueError(f"Invalid ZIP: {', '.join(errors)}")
@@ -34,12 +33,11 @@ async def install_skill(
     checksum = compute_zip_checksum(zip_path)
 
     result = await db.execute(
-        select(Skill).where(
-            Skill.id == uuid.UUID(skill_id),
-            Skill.version == version,
-        )
+        select(Skill).where(Skill.id == uuid.UUID(skill_id))
     )
-    existing = result.scalar_one_or_none()
+    all_versions = result.scalars().all()
+
+    existing = next((s for s in all_versions if s.version == version), None)
 
     if existing:
         if existing.is_active:
@@ -50,10 +48,9 @@ async def install_skill(
         await db.flush()
         return existing
 
-    storage.store(skill_id, version, zip_path)
+    base_skill = all_versions[0] if all_versions else None
 
-    result = await db.execute(select(Skill).where(Skill.id == uuid.UUID(skill_id)))
-    base_skill = result.scalar_one_or_none()
+    storage.store(skill_id, version, zip_path)
 
     skill = Skill(
         id=uuid.UUID(skill_id),

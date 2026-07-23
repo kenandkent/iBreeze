@@ -77,7 +77,7 @@ class RPCServer:
     """JSON-RPC 2.0 TCP 服务器。"""
 
     def __init__(
-        self, db: LocalDB, host: str = "127.0.0.1", port: int = 18900
+        self, db: LocalDB, host: str = "127.0.0.1", port: int = 51890
     ) -> None:
         self.db = db
         self.host = host

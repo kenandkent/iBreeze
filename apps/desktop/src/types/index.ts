@@ -104,10 +104,11 @@ export interface User {
 }
 
 export interface AuthResult {
-  user: User;
   access_token: string;
   refresh_token: string;
-  offline_session_ticket: string;
+  token_type: string;
+  user_type: string;
+  pwd_change_required: boolean;
 }
 
 export interface Profile {

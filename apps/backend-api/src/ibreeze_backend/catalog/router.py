@@ -118,8 +118,11 @@ async def update_agent_endpoint(
         agent = await update_agent(
             db, agent_id, body.display_name, body.description
         )
+        await db.refresh(agent)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        status = 409 if "published" in msg else 400
+        raise HTTPException(status_code=status, detail=msg)
     return agent
 
 
@@ -134,7 +137,8 @@ async def delete_agent_endpoint(
     try:
         await delete_agent(db, agent_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
 
 
 @router.patch("/agents/{agent_id}/status", response_model=AgentResponse)
@@ -146,6 +150,7 @@ async def transition_agent_status_endpoint(
 ) -> dict:
     try:
         agent = await transition_agent_status(db, agent_id, body.status)
+        await db.refresh(agent)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return agent
@@ -161,6 +166,7 @@ async def copy_agent_to_draft_endpoint(
 ) -> dict:
     try:
         agent = await copy_agent_to_draft(db, agent_id)
+        await db.refresh(agent)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return agent
@@ -239,6 +245,7 @@ async def create_model_endpoint(
             supports_streaming=body.supports_streaming,
             supports_vision=body.supports_vision,
         )
+        await db.refresh(model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return model
@@ -284,23 +291,26 @@ async def update_model_endpoint(
             supports_streaming=body.supports_streaming,
             supports_vision=body.supports_vision,
         )
+        await db.refresh(model)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return model
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+    return agent
 
 
 @router.delete(
-    "/models/{model_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-async def delete_model_endpoint(
-    model_id: uuid.UUID,
+async def delete_agent_endpoint(
+    agent_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> None:
     try:
-        await delete_model(db, model_id)
+        await delete_agent(db, agent_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
 
 
 @router.patch("/models/{model_id}/status", response_model=ModelResponse)
@@ -312,6 +322,7 @@ async def transition_model_status_endpoint(
 ) -> dict:
     try:
         model = await transition_model_status(db, model_id, body.status)
+        await db.refresh(model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return model
@@ -327,6 +338,7 @@ async def copy_model_to_draft_endpoint(
 ) -> dict:
     try:
         model = await copy_model_to_draft(db, model_id)
+        await db.refresh(model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return model
@@ -349,6 +361,7 @@ async def create_provider_endpoint(
         provider = await create_provider(
             db, body.display_name, body.base_url, body.api_protocol
         )
+        await db.refresh(provider)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return provider
@@ -392,6 +405,42 @@ async def update_provider_endpoint(
             base_url=body.base_url,
             api_protocol=body.api_protocol,
         )
+        await db.refresh(provider)
+    except ValueError as e:
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+    return model
+
+
+@router.delete(
+    "/models/{model_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_model_endpoint(
+    model_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> None:
+    try:
+        await delete_model(db, model_id)
+    except ValueError as e:
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+
+
+@router.patch(
+    "/providers/{provider_id}/status", response_model=ProviderResponse
+)
+async def transition_provider_status_endpoint(
+    provider_id: uuid.UUID,
+    body: StatusTransitionRequest,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    try:
+        provider = await transition_provider_status(
+            db, provider_id, body.status
+        )
+        await db.refresh(provider)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return provider
@@ -408,25 +457,8 @@ async def delete_provider_endpoint(
     try:
         await delete_provider(db, provider_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.patch(
-    "/providers/{provider_id}/status", response_model=ProviderResponse
-)
-async def transition_provider_status_endpoint(
-    provider_id: uuid.UUID,
-    body: StatusTransitionRequest,
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        provider = await transition_provider_status(
-            db, provider_id, body.status
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return provider
+        msg = str(e)
+        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
 
 
 @router.post(
@@ -440,6 +472,7 @@ async def copy_provider_to_draft_endpoint(
 ) -> dict:
     try:
         provider = await copy_provider_to_draft(db, provider_id)
+        await db.refresh(provider)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return provider

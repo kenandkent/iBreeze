@@ -5,9 +5,9 @@
   "identifier": "com.ibreeze.desktop",
   "build": {
     "frontendDist": "../desktop/dist",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:51420",
     "beforeDevCommand": "cd ../desktop && npm run dev",
-    "beforeBuildCommand": "cd ../desktop && npm run build"
+    "beforeBuildCommand": ""
   },
   "app": {
     "withGlobalTauri": false,

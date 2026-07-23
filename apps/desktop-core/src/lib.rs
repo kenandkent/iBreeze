@@ -10,14 +10,17 @@ use tauri::Manager;
 
 use crate::commands::*;
 use crate::keyring::Keyring;
+use crate::rpc::api_client::ApiClient;
 use crate::rpc::sidecar::SidecarClient;
 use crate::store::Store;
 
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let sidecar_port = 18900;
+            let sidecar_port = 51890;
+            let api_port = 51080;
             let sidecar = SidecarClient::new(sidecar_port);
+            let api_client = ApiClient::new(api_port);
             let store = Store::new(std::path::PathBuf::from(
                 app.path()
                     .app_data_dir()
@@ -27,6 +30,7 @@ pub fn run() {
 
             app.manage(AppState {
                 sidecar,
+                api_client,
                 store,
                 keyring,
                 auth_token: None,
@@ -36,6 +40,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            register,
             get_profile,
             update_profile,
             list_profiles,

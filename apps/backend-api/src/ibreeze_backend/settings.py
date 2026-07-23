@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://ibreeze:ibreeze@localhost:5432/ibreeze"
+    database_url: str = "postgresql+asyncpg://ibreeze:ibreeze@localhost:51543/ibreeze"
     db_echo: bool = False
     api_key: str = "dev-api-key-change-me"
     token_secret: str = "dev-token-secret-change-me"
@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     default_admin_password: str = "admin123456"
     log_level: str = "INFO"
     log_json: bool = True
+    
+    # S3 配置
+    s3_endpoint_url: str = "http://localhost:51900"
+    s3_access_key_id: str = "minioadmin"
+    s3_secret_access_key: str = "minioadmin"
+    s3_bucket_name: str = "ibreeze"
+    s3_region: str = "us-east-1"
 
     model_config = {"env_prefix": "IBREEZE_"}
 

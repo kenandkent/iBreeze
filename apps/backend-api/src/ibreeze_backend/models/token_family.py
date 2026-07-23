@@ -23,3 +23,5 @@ class TokenFamily(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     rotated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Refresh Token 哈希存储（设计方案要求：服务端仅保存哈希）
+    refresh_token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)

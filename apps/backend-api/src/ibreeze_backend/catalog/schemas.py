@@ -1,4 +1,7 @@
-"""Catalog schemas."""
+"""Catalog schemas with proper types for Pydantic v2 + SQLAlchemy."""
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -14,14 +17,14 @@ class AgentUpdate(BaseModel):
 
 
 class AgentResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     key: str
     catalog_revision: int
     display_name: str
     description: str | None
     status: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -44,8 +47,8 @@ class AgentVersionCreate(BaseModel):
 
 
 class AgentVersionResponse(BaseModel):
-    id: str
-    agent_id: str
+    id: uuid.UUID
+    agent_id: uuid.UUID
     executable_names: list[str] | None
     supported_platforms: list[str] | None
     min_version: str | None
@@ -55,8 +58,8 @@ class AgentVersionResponse(BaseModel):
     network_domains: list[str] | None
     adapter_contract_version: int | None
     content_sha256: str | None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -85,7 +88,7 @@ class ModelUpdate(BaseModel):
 
 
 class ModelResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     provider_key: str
     model_key: str
     display_name: str
@@ -94,8 +97,8 @@ class ModelResponse(BaseModel):
     supports_streaming: bool
     supports_vision: bool
     status: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -118,13 +121,13 @@ class ProviderUpdate(BaseModel):
 
 
 class ProviderResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     display_name: str
     base_url: str | None
     api_protocol: str
     status: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -141,12 +144,12 @@ class AgentModelBindingCreate(BaseModel):
 
 
 class AgentModelBindingResponse(BaseModel):
-    id: str
-    agent_id: str
-    model_id: str
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    model_id: uuid.UUID
     agent_version_range: dict | None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -164,13 +167,13 @@ class ProviderModelBindingCreate(BaseModel):
 
 
 class ProviderModelBindingResponse(BaseModel):
-    id: str
-    provider_id: str
-    model_id: str
+    id: uuid.UUID
+    provider_id: uuid.UUID
+    model_id: uuid.UUID
     api_protocol: str
     capabilities: dict | None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

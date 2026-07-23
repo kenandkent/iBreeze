@@ -1,4 +1,5 @@
 """Admin user management schemas."""
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
@@ -17,7 +18,7 @@ class UserAdminUpdate(BaseModel):
 
 
 class UserAdminResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     user_type: str
     role: str

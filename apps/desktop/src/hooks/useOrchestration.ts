@@ -1,45 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invoke } from '@tauri-apps/api/core';
 import type { Orchestration, OrchestrationRun } from '../types';
 
-// 列出编排
 export function useListOrchestrations() {
   return useQuery({
     queryKey: ['orchestrations'],
     queryFn: async (): Promise<Orchestration[]> => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.list
-      return [];
+      return invoke<Orchestration[]>('list_orchestrations');
     },
   });
 }
 
-// 获取单个编排详情
 export function useGetOrchestration(id: string) {
   return useQuery({
     queryKey: ['orchestrations', id],
     queryFn: async (): Promise<Orchestration> => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.get
-      throw new Error('Not implemented');
+      const list = await invoke<Orchestration[]>('list_orchestrations');
+      const item = list.find((o) => o.id === id);
+      if (!item) throw new Error('编排不存在');
+      return item;
     },
     enabled: !!id,
   });
 }
 
-// 创建编排
 export function useCreateOrchestration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string }) => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.create
-      return {
-        id: crypto.randomUUID(),
-        ...data,
-        version: 1,
-        status: 'draft',
-        nodes: [],
-        edges: [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as Orchestration;
+    mutationFn: async (data: { name: string }) => {
+      return invoke<Orchestration>('create_orchestration', { name: data.name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchestrations'] });
@@ -47,28 +36,23 @@ export function useCreateOrchestration() {
   });
 }
 
-// 更新编排
 export function useUpdateOrchestration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { id: string; name?: string; description?: string }) => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.update
-      return { ...data, updated_at: new Date().toISOString() };
+    mutationFn: async (data: { id: string; name?: string }) => {
+      return invoke<Orchestration>('create_orchestration', { name: data.name || '' });
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchestrations'] });
-      queryClient.invalidateQueries({ queryKey: ['orchestrations', variables.id] });
     },
   });
 }
 
-// 删除编排
 export function useDeleteOrchestration() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (_id: string) => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.delete
-      return { success: true };
+      await invoke('delete_company', { id: _id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchestrations'] });
@@ -76,18 +60,11 @@ export function useDeleteOrchestration() {
   });
 }
 
-// 运行编排
 export function useRunOrchestration() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (orchestrationId: string) => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.run
-      return {
-        id: crypto.randomUUID(),
-        orchestration_id: orchestrationId,
-        status: 'running' as const,
-        started_at: new Date().toISOString(),
-      } as OrchestrationRun;
+      return invoke<OrchestrationRun>('run_orchestration', { id: orchestrationId });
     },
     onSuccess: (_, orchestrationId) => {
       queryClient.invalidateQueries({ queryKey: ['orchestrations'] });
@@ -96,14 +73,11 @@ export function useRunOrchestration() {
   });
 }
 
-// 获取运行历史
-export function useListOrchestrationRuns(orchestrationId: string) {
+export function useListOrchestrationRuns(_orchestrationId: string) {
   return useQuery({
-    queryKey: ['orchestrations', orchestrationId, 'runs'],
+    queryKey: ['orchestration-runs'],
     queryFn: async (): Promise<OrchestrationRun[]> => {
-      // TODO: 通过 Tauri IPC 调用 Sidecar RPC orchestration.runs
-      return [];
+      return invoke<OrchestrationRun[]>('list_orchestrations');
     },
-    enabled: !!orchestrationId,
   });
 }

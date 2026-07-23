@@ -1,15 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore } from '../stores/authStore';
+import type { AuthResult } from '../types';
 
 const { Title } = Typography;
-
-interface LoginForm {
-  email: string;
-  password: string;
-}
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -17,15 +14,17 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
 
-  const handleSubmit = async (values: LoginForm) => {
+  const handleSubmit = async (values: { email: string; password: string }) => {
     setLoading(true);
     setError(null);
     try {
-      // TODO: 通过 Tauri IPC 调用 Rust Core auth.login
-      // 模拟成功登录
-      login('mock-token', 'mock-refresh', {
-        id: 'user-1',
-        user_type: 'app_user',
+      const result = await invoke<AuthResult>('login', {
+        email: values.email,
+        password: values.password,
+      });
+      login(result.access_token, result.refresh_token, {
+        id: 'current',
+        user_type: result.user_type as 'admin' | 'app_user',
         email: values.email,
         display_name: values.email,
         status: 'active',
@@ -69,6 +68,10 @@ export default function LoginPage() {
             </Button>
           </Form.Item>
         </Form>
+
+        <div style={{ textAlign: 'center' }}>
+          <Link to="/register">还没有账号？注册</Link>
+        </div>
       </Card>
     </div>
   );

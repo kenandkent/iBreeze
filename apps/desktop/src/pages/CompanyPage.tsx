@@ -96,7 +96,7 @@ export default function CompanyPage() {
         </Space>
       </div>
 
-      <Table columns={columns} dataSource={data?.data ?? []} rowKey="id" loading={isLoading} />
+      <Table columns={columns} dataSource={data ?? []} rowKey="id" loading={isLoading} />
 
       <Drawer
         title={editingCompany ? '编辑企业' : '新建企业'}

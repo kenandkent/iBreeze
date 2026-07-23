@@ -27,7 +27,7 @@ router = APIRouter(prefix="/admin/api/v1/users", tags=["admin-users"])
 
 
 @router.post(
-    "/", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED
+    "", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_user_endpoint(
     user_in: UserAdminCreate,
@@ -49,7 +49,7 @@ async def create_user_endpoint(
     return user
 
 
-@router.get("/", response_model=UserAdminListResponse)
+@router.get("", response_model=UserAdminListResponse)
 async def list_users_endpoint(
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),

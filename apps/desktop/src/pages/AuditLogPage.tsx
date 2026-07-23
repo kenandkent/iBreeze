@@ -92,9 +92,9 @@ export default function AuditLogPage() {
       </Card>
 
       {/* 时间线 */}
-      {auditLogs && auditLogs.data.length > 0 ? (
+      {auditLogs && auditLogs.length > 0 ? (
         <Timeline
-          items={auditLogs.data.map((log: AuditLogEntry) => ({
+          items={auditLogs.map((log: AuditLogEntry) => ({
             color: log.event_type.includes('failed') ? 'red' : 'blue',
             children: (
               <div>

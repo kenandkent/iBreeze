@@ -53,14 +53,14 @@ mod tests {
 
     #[test]
     fn test_sidecar_process_new() {
-        let process = SidecarProcess::new(9527);
-        assert_eq!(process.port(), 9527);
+        let process = SidecarProcess::new(51890);
+        assert_eq!(process.port(), 51890);
         assert!(!process.is_running());
     }
 
     #[test]
     fn test_sidecar_stop_without_start() {
-        let process = SidecarProcess::new(9527);
+        let process = SidecarProcess::new(51890);
         assert!(process.stop().is_ok());
     }
 }

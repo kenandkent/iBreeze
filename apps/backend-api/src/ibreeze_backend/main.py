@@ -10,7 +10,7 @@ from ibreeze_backend.auth.router import admin_router
 from ibreeze_backend.auth.router import router as auth_router
 from ibreeze_backend.catalog.router import router as catalog_router
 from ibreeze_backend.compatibility.router import router as compatibility_router
-from ibreeze_backend.middleware import AuditMiddleware, IdempotencyMiddleware
+from ibreeze_backend.middleware import AuditMiddleware, IdempotencyMiddleware, RateLimitMiddleware
 from ibreeze_backend.observability.logging_config import setup_logging
 from ibreeze_backend.releases.router import admin_router as releases_admin_router
 from ibreeze_backend.releases.router import public_router as releases_public_router
@@ -37,6 +37,7 @@ app.add_exception_handler(ProblemDetail, problem_detail_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuditMiddleware)
 app.add_middleware(IdempotencyMiddleware)
 

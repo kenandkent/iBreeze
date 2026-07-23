@@ -287,6 +287,144 @@
 
 ---
 
+## 15. Rust Desktop Core - Backend API 对接
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-RUST-001 | ApiClient 模块存在 | 无 | 检查 rpc/api_client.rs 文件 | 文件存在, 包含 register/login/refresh_token 方法 | P9 |
+| TC-RUST-002 | register 命令存在 | 无 | 检查 commands.rs | 包含 pub async fn register, 调用 api_client.register | P9 |
+| TC-RUST-003 | login 命令对接后端 API | 无 | 检查 commands.rs login 实现 | 调用 api_client.login 而非 sidecar | P9 |
+| TC-RUST-004 | AppState 包含 api_client | 无 | 检查 commands.rs AppState | 包含 pub api_client: ApiClient | P9 |
+| TC-RUST-005 | lib.rs 初始化 ApiClient | 无 | 检查 lib.rs setup | 创建 ApiClient::new(51080), 传入 AppState | P9 |
+| TC-RUST-006 | 端口配置正确 | 无 | 检查 lib.rs | sidecar_port=51890, api_port=51080 | P9 |
+
+---
+
+## 16. 前端 Mock 消除验证
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-MOCK-001 | LoginPage 无 mock-token | 无 | 搜索 LoginPage.tsx | 不包含 "mock-token" | P9 |
+| TC-MOCK-002 | RegisterPage 无模拟跳转 | 无 | 搜索 RegisterPage.tsx | 不包含 "模拟", 调用 invoke | P9 |
+| TC-MOCK-003 | useCompany 使用 invoke | 无 | 搜索 useCompany.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-004 | useConversation 使用 invoke | 无 | 搜索 useConversation.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-005 | useKnowledge 使用 invoke | 无 | 搜索 useKnowledge.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-006 | useWorkspace 使用 invoke | 无 | 搜索 useWorkspace.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-007 | useOrchestration 使用 invoke | 无 | 搜索 useOrchestration.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-008 | useAgent 使用 invoke | 无 | 搜索 useAgent.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-009 | useConversations 使用 invoke | 无 | 搜索 useConversations.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-010 | useTasks 使用 invoke | 无 | 搜索 useTasks.ts | 包含 "invoke", 无 "TODO" | P9 |
+| TC-MOCK-011 | Admin SettingsPage 无 MOCK_SETTINGS | 无 | 搜索 SettingsPage.tsx | 不包含 "MOCK_SETTINGS" | P10 |
+| TC-MOCK-012 | Admin vite 有代理配置 | 无 | 搜索 vite.config.ts | 包含 proxy, 目标 51080 | P10 |
+| TC-MOCK-013 | 全局无 mock-token | 无 | 搜索 desktop/src 全目录 | 所有 .tsx/.ts 不包含 "mock-token" | P9 |
+
+---
+
+## 17. 部署配置验证
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-DEPLOY-001 | docker-compose 端口正确 | 无 | 读取 docker-compose.yml | PostgreSQL=51543, Backend=51080 | P11 |
+| TC-DEPLOY-002 | Dockerfile 使用 venv uvicorn | 无 | 读取 Dockerfile | CMD 使用 .venv/bin/uvicorn | P11 |
+| TC-DEPLOY-003 | settings.py 端口正确 | 无 | 读取 settings.py | database_url 包含 51543 | P11 |
+| TC-DEPLOY-004 | Vite 端口正确 | 无 | 读取 vite.config.ts | Desktop=51420, Admin=51421 | P9/P10 |
+| TC-DEPLOY-005 | tauri.conf.json devUrl 正确 | 无 | 读取 tauri.conf.json | devUrl 包含 51420 | P9 |
+| TC-DEPLOY-006 | Rust 端口一致 | 无 | 读取 lib.rs | sidecar=51890, api=51080 | P9 |
+
+## 21. 安全边界测试
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-SEC-004 | 密码 Argon2id 哈希验证 | 无 | 创建用户后验证密码哈希 | hashed_password 可 verify 原密码, 不同 salt 产生不同哈希 | G.23 |
+| TC-SEC-005 | JWT Token 过期验证 | 已签发 token | 等待 token 过期后调用接口 | 401 AUTH_TOKEN_EXPIRED | G.11 |
+| TC-SEC-006 | JWT Token 签名验证 | 已签发 token | 篡改 token payload | 401 无效签名 | G.11 |
+| TC-SEC-007 | Refresh Token 重放攻击 | 已轮换的 refresh_token | 再次使用旧 refresh_token | 撤销整个 family, 401 | G.11 |
+| TC-SEC-008 | 跨域请求拦截 | 无 | 发送跨域 OPTIONS 请求 | 按 CORS 配置允许/拒绝 | G.23 |
+| TC-SEC-009 | SQL 注入防护 | 无 | 在输入字段注入 SQL 语句 | 输入被转义, 无 SQL 执行 | G.23 |
+| TC-SEC-010 | XSS 防护 | 无 | 在输入字段注入 JavaScript | 输入被转义, 无脚本执行 | G.23 |
+| TC-SEC-011 | 路径遍历防护 | 无 | 尝试访问 ../../etc/passwd | 403 路径不允许 | G.23 |
+| TC-SEC-012 | 文件上传大小限制 | 无 | 上传超过 50MB 的 ZIP | 413 文件过大 | G.8 |
+| TC-SEC-013 | ZIP 解压大小限制 | 无 | 上传解压后超过 200MB 的 ZIP | 413 解压后文件过大 | G.8 |
+| TC-SEC-014 | ZIP 路径遍历检测 | 无 | 上传含 ../ 的 ZIP | 400 路径遍历检测 | G.8 |
+| TC-SEC-015 | ZIP 危险文件检测 | 无 | 上传含 .exe/.sh 的 ZIP | 400 危险文件检测 | G.8 |
+| TC-SEC-016 | 敏感信息日志脱敏 | 无 | 触发包含密码/Token 的日志 | 日志中密码/Token 被脱敏 | G.24 |
+| TC-SEC-017 | API Key 长度验证 | 无 | 使用短于 32 字符的 API Key | 401 无效 API Key | G.23 |
+| TC-SEC-018 | 安全响应头验证 | 无 | 检查响应头 | 含 X-Content-Type-Options, X-Frame-Options 等 | G.23 |
+| TC-SEC-019 | Rate Limiting 验证 | 无 | 连续快速请求 | 超过限制后 429 RATE_LIMITED | G.11 |
+| TC-SEC-020 | 并发请求安全 | 无 | 同时发送多个相同请求 | 幂等键正确处理, 无重复操作 | G.10 |
+
+## 22. 异常处理测试
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-ERR-001 | 数据库连接失败 | 数据库不可用 | 启动服务 | 503 SERVICE_UNAVAILABLE | G.21 |
+| TC-ERR-002 | 数据库迁移失败 | 迁移脚本错误 | 执行迁移 | 迁移失败, 服务不启动 | G.21 |
+| TC-ERR-003 | Redis 连接失败 | Redis 不可用 | 启动服务 | 503 SERVICE_UNAVAILABLE | G.21 |
+| TC-ERR-004 | S3 存储不可用 | S3 不可用 | 上传文件 | 503 STORAGE_UNAVAILABLE | G.8 |
+| TC-ERR-005 | 文件系统权限错误 | 目录不可写 | 写入文件 | 500 INTERNAL_ERROR | G.21 |
+| TC-ERR-006 | JSON 解析错误 | 无效 JSON | 发送请求 | 400 INVALID_JSON | G.14 |
+| TC-ERR-007 | 请求体过大 | 超大请求体 | 发送请求 | 413 REQUEST_TOO_LARGE | G.14 |
+| TC-ERR-008 | 请求超时 | 慢速请求 | 发送请求 | 408 REQUEST_TIMEOUT | G.14 |
+| TC-ERR-009 | 并发写入冲突 | 同一资源 | 并发更新 | 409 CONFLICT | G.10 |
+| TC-ERR-010 | 资源不存在 | 无 | 访问不存在的资源 | 404 NOT_FOUND | G.14 |
+| TC-ERR-011 | 权限不足 | 普通用户 | 访问管理员接口 | 403 FORBIDDEN | G.11 |
+| TC-ERR-012 | Token 过期 | 过期 token | 调用接口 | 401 AUTH_TOKEN_EXPIRED | G.11 |
+| TC-ERR-013 | 无效 Token | 篡改 token | 调用接口 | 401 INVALID_TOKEN | G.11 |
+| TC-ERR-014 | 缺少必需字段 | 不完整请求 | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-015 | 字段类型错误 | 类型不匹配 | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-016 | 字段值超出范围 | 超出范围 | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-017 | 枚举值无效 | 无效枚举 | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-018 | UUID 格式错误 | 无效 UUID | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-019 | 日期格式错误 | 无效日期 | 发送请求 | 422 VALIDATION_FAILED | G.14 |
+| TC-ERR-020 | 邮箱格式错误 | 无效邮箱 | 发送请求 | 422 VALIDATION_FAILED | G.11 |
+
+## 23. 性能测试用例
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-PERF-001 | 登录响应时间 | 无 | 100 并发登录请求 | p95 < 500ms | K.16 |
+| TC-PERF-002 | Token 刷新响应时间 | 已登录 | 100 并发 refresh 请求 | p95 < 200ms | K.16 |
+| TC-PERF-003 | 目录列表响应时间 | 有数据 | 100 并发目录查询 | p95 < 300ms | K.16 |
+| TC-PERF-004 | 文件上传响应时间 | 无 | 10MB 文件上传 | p95 < 2s | K.16 |
+| TC-PERF-005 | 文件下载响应时间 | 已上传 | 10MB 文件下载 | p95 < 1s | K.16 |
+| TC-PERF-006 | 数据库查询性能 | 有数据 | 1000 条记录查询 | p95 < 100ms | K.16 |
+| TC-PERF-007 | 并发用户支持 | 无 | 1000 并发用户 | 无错误, 响应时间合理 | K.16 |
+| TC-PERF-008 | 内存使用监控 | 无 | 长时间运行 | 内存使用稳定, 无泄漏 | K.16 |
+| TC-PERF-009 | CPU 使用监控 | 无 | 高负载运行 | CPU 使用合理 | K.16 |
+| TC-PERF-010 | 磁盘 IO 监控 | 无 | 大量读写操作 | IO 使用合理 | K.16 |
+
+## 24. 端到端功能链路测试
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-E2E-007 | 完整用户注册流程 | 无 | 注册 → 验证邮箱 → 登录 → 创建公司 | 每步成功, 数据一致 | G.1+G.11 |
+| TC-E2E-008 | 完整目录发布流程 | admin 登录 | 创建 Agent → 创建 Model → 创建 Provider → 创建 Skill → 发布 Release | 目录可用, 客户端可同步 | G.5-G.9 |
+| TC-E2E-009 | 完整 Skill 安装流程 | 目录已发布 | 客户端同步 → 下载 Skill → 校验签名 → 安装 → 验证 | Skill 可用, 版本正确 | G.8+G.9 |
+| TC-E2E-010 | 完整任务执行流程 | 公司已创建 | 用户输入 → 总经理分析 → 生成计划 → 用户确认 → 部门执行 → 审查 → 完成 | 任务完成, 产物可用 | G.11 |
+| TC-E2E-011 | 完整 Review 流程 | 任务执行中 | 生成产物 → 分配 Reviewer → 执行 Review → 修复问题 → 重新 Review | Review 通过, 问题关闭 | G.11 |
+| TC-E2E-012 | 完整备份恢复流程 | 有数据 | 创建备份 → 验证备份 → 恢复备份 → 验证数据 | 数据完整, 一致性 | G.21 |
+| TC-E2E-013 | 完整知识管理流程 | 公司已创建 | 导入知识 → 索引 → 搜索 → 验证结果 | 搜索准确, 权限正确 | G.16 |
+| TC-E2E-014 | 完整审计日志流程 | 有操作 | 执行操作 → 查询审计日志 → 验证记录 | 日志完整, 脱敏正确 | G.10 |
+| TC-E2E-015 | 完整错误处理流程 | 无 | 触发各种错误 → 验证错误响应 → 验证日志记录 | 错误码正确, 日志完整 | G.14 |
+| TC-E2E-016 | 完整权限控制流程 | 多用户 | 不同用户执行操作 → 验证权限 | 权限控制正确 | G.11 |
+
+## 25. 数据一致性测试
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
+|---|---|---|---|---|---|
+| TC-DATA-001 | 事务原子性 | 无 | 创建公司（含办公室、总经理、会话） | 全部成功或全部回滚 | G.1 |
+| TC-DATA-002 | 外键约束 | 无 | 删除有依赖的资源 | 400 外键约束失败 | G.1 |
+| TC-DATA-003 | 唯一约束 | 无 | 创建重复名称的资源 | 409 唯一约束冲突 | G.1 |
+| TC-DATA-004 | 乐观锁 | 有数据 | 并发更新同一资源 | 409 版本冲突 | G.10 |
+| TC-DATA-005 | 级联删除 | 有数据 | 删除父资源 | 子资源正确处理 | G.1 |
+| TC-DATA-006 | 数据隔离 | 多公司 | 跨公司访问数据 | 403 数据隔离 | G.1 |
+| TC-DATA-007 | 数据完整性 | 有数据 | 查询数据 | 字段完整, 类型正确 | G.1 |
+| TC-DATA-008 | 数据持久化 | 有数据 | 重启服务 | 数据完整 | G.21 |
+| TC-DATA-009 | 并发读写 | 有数据 | 并发读写同一资源 | 无数据损坏 | G.10 |
+| TC-DATA-010 | 数据迁移 | 旧版本数据 | 执行迁移 | 数据完整, 格式正确 | G.21 |
+
+---
+
 ## 统计
 
 | 模块 | 用例数 |
@@ -311,4 +449,12 @@
 | Rust Desktop Core | 10 |
 | 前端 UI | 8 |
 | 端到端 | 6 |
-| **合计** | **182** |
+| Rust Backend API 对接 | 6 |
+| 前端 Mock 消除验证 | 13 |
+| 部署配置验证 | 6 |
+| 安全边界测试 | 20 |
+| 异常处理测试 | 20 |
+| 性能测试用例 | 10 |
+| 端到端功能链路测试 | 10 |
+| 数据一致性测试 | 10 |
+| **合计** | **297** |

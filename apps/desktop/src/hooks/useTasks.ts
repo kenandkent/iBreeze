@@ -1,46 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Task } from '../types';
+import { useState, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import type { Message } from '../types';
 
-export function useTasks(companyId: string) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function useSendMessage(conversationId: string) {
+  const [sending, setSending] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
+  const sendMessage = useCallback(async (content: string) => {
     try {
-      setLoading(true);
-      // TODO: Implement actual API call via Tauri IPC
-      setTasks([]);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch tasks');
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
-
-  return { tasks, loading, error, refetch: fetchTasks };
-}
-
-export function useCreateTask(companyId: string) {
-  const [creating, setCreating] = useState(false);
-
-  const createTask = useCallback(async (_title: string, _description?: string) => {
-    try {
-      setCreating(true);
-      // TODO: Implement actual API call via Tauri IPC
+      setSending(true);
+      await invoke<Message>('add_message', {
+        conversationId,
+        content,
+        role: 'user',
+      });
       return true;
     } catch (e) {
-      console.error('Failed to create task:', e);
+      console.error('发送消息失败:', e);
       return false;
     } finally {
-      setCreating(false);
+      setSending(false);
     }
-  }, [companyId]);
+  }, [conversationId]);
 
-  return { createTask, creating };
+  return { sendMessage, sending };
 }

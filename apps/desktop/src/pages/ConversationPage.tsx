@@ -24,9 +24,8 @@ const messageRoleColor: Record<string, string> = {
 export default function ConversationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const companyId = ''; // TODO: 从 store 或路由获取
 
-  const { data: conversations } = useListConversations(companyId);
+  const { data: conversations } = useListConversations();
   const { data: messages } = useListMessages(selectedId ?? '');
   const addMessage = useAddMessage();
   const archiveMutation = useArchiveConversation();
@@ -36,7 +35,7 @@ export default function ConversationPage() {
 
   const handleSend = async () => {
     if (!inputValue.trim() || !selectedId) return;
-    await addMessage.mutateAsync({ conversation_id: selectedId, content: inputValue });
+    await addMessage.mutateAsync({ conversationId: selectedId, content: inputValue, role: 'user' });
     setInputValue('');
   };
 

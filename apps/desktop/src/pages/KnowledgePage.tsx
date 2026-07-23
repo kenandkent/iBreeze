@@ -25,13 +25,13 @@ export default function KnowledgePage() {
   const [viewEntry, setViewEntry] = useState<KnowledgeEntry | null>(null);
   const [form] = Form.useForm();
 
-  const { data, isLoading } = useListKnowledgeEntries({ search, type: typeFilter, status: statusFilter });
+  const { data, isLoading } = useListKnowledgeEntries();
   const createMutation = useCreateKnowledgeEntry();
   const updateMutation = useUpdateKnowledgeEntry();
   const archiveMutation = useArchiveKnowledgeEntry();
 
-  const entries = data?.data ?? [];
-  const total = data?.total ?? 0;
+  const entries = data ?? [];
+  const total = entries.length;
 
   const handleCreate = () => {
     setEditingEntry(null);

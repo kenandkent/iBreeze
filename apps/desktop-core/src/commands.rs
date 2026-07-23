@@ -2,12 +2,14 @@
 use tauri::State;
 
 use crate::error::AppError;
+use crate::rpc::api_client::ApiClient;
 use crate::rpc::sidecar::SidecarClient;
 use crate::types::*;
 
 /// 应用全局状态
 pub struct AppState {
     pub sidecar: SidecarClient,
+    pub api_client: ApiClient,
     pub store: crate::store::Store,
     pub keyring: crate::keyring::Keyring,
     pub auth_token: Option<String>,
@@ -65,36 +67,60 @@ pub async fn switch_profile(
 // === Auth 命令 ===
 
 #[tauri::command]
+pub async fn register(
+    state: State<'_, AppState>,
+    email: String,
+    password: String,
+    confirm_password: String,
+) -> Result<AuthResult, AppError> {
+    let result = state
+        .api_client
+        .register(&email, &password, &confirm_password)
+        .await?;
+    Ok(AuthResult {
+        access_token: result.access_token,
+        refresh_token: String::new(),
+        token_type: result.token_type,
+        user_type: "app_user".to_string(),
+        pwd_change_required: false,
+    })
+}
+
+#[tauri::command]
 pub async fn login(
     state: State<'_, AppState>,
     email: String,
     password: String,
 ) -> Result<AuthResult, AppError> {
-    let result: serde_json::Value = state
-        .sidecar
-        .call(
-            "auth.login",
-            serde_json::json!({"email": email, "password": password}),
-        )
-        .await?;
-    serde_json::from_value(result).map_err(|e| AppError::Internal(e.to_string()))
+    let result = state.api_client.login(&email, &password).await?;
+    Ok(AuthResult {
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+        token_type: result.token_type,
+        user_type: result.user_type,
+        pwd_change_required: result.pwd_change_required,
+    })
 }
 
 #[tauri::command]
-pub async fn logout(state: State<'_, AppState>) -> Result<(), AppError> {
-    state
-        .sidecar
-        .call("auth.logout", serde_json::json!({}))
-        .await
+pub async fn logout(_state: State<'_, AppState>) -> Result<(), AppError> {
+    // 清除本地 token 即可
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn refresh_token(state: State<'_, AppState>) -> Result<AuthResult, AppError> {
-    let result: serde_json::Value = state
-        .sidecar
-        .call("auth.refresh", serde_json::json!({}))
-        .await?;
-    serde_json::from_value(result).map_err(|e| AppError::Internal(e.to_string()))
+pub async fn refresh_token(
+    state: State<'_, AppState>,
+    refresh_token: String,
+) -> Result<AuthResult, AppError> {
+    let result = state.api_client.refresh_token(&refresh_token).await?;
+    Ok(AuthResult {
+        access_token: result.access_token,
+        refresh_token: String::new(),
+        token_type: result.token_type,
+        user_type: "app_user".to_string(),
+        pwd_change_required: false,
+    })
 }
 
 // === Company 命令 ===

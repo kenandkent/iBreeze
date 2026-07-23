@@ -17,12 +17,13 @@ __all__ = [
 ]
 
 
-async def create_token_family(db: AsyncSession, user_id: uuid.UUID) -> TokenFamily:
+async def create_token_family(db: AsyncSession, user_id: uuid.UUID, refresh_token_hash: str | None = None) -> TokenFamily:
     """Create a new token family for a user."""
     family = TokenFamily(
         user_id=user_id,
         family_id=str(uuid.uuid4()),
         status="active",
+        refresh_token_hash=refresh_token_hash,
     )
     db.add(family)
     await db.flush()

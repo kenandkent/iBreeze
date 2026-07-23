@@ -8,16 +8,17 @@ services:
       POSTGRES_USER: ibreeze
       POSTGRES_PASSWORD: ibreeze_password
     ports:
-      - "5432:5432"
+      - "51543:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   backend-api:
     build: ./apps/backend-api
     ports:
-      - "8000:8000"
+      - "51080:51080"
     environment:
       IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:ibreeze_password@postgres:5432/ibreeze
+      IBREEZE_API_PORT: "51080"
     depends_on:
       - postgres
 
