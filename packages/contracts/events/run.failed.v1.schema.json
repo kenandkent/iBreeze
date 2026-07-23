@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/run.failed.v1.schema.json",
+  "title": "Run Failed Event",
+  "type": "object",
+  "required": ["run_id", "failed_at", "error_code"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "failed_at": { "type": "string", "format": "date-time" },
+    "error_code": { "type": "string" },
+    "message": { "type": "string" }
+  }
+}

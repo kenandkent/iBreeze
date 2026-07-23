@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/workspace.changed.v1.schema.json",
+  "title": "Workspace Changed Event",
+  "type": "object",
+  "required": ["run_id", "path", "operation"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "path": { "type": "string" },
+    "operation": { "type": "string", "enum": ["create", "modify", "delete"] },
+    "old_hash": { "type": ["string", "null"] },
+    "new_hash": { "type": ["string", "null"] }
+  }
+}

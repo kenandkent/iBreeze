@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/knowledge.removed.v1.schema.json",
+  "title": "Knowledge Removed Event",
+  "type": "object",
+  "required": ["company_id", "item_id", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "company_id": { "type": "string", "format": "uuid" },
+    "item_id": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer" }
+  }
+}

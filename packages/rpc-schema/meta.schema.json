@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/meta.schema.json",
+  "title": "iBreeze RPC Meta",
+  "type": "object",
+  "required": ["trace_id", "ipc_session_id", "window_session_id", "idempotency_key"],
+  "additionalProperties": false,
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "OpenTelemetry trace ID"
+    },
+    "ipc_session_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "IPC session ID, null only for Rust local methods and first handshake"
+    },
+    "window_session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Window session ID"
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Idempotency key, null for read methods, required for write methods"
+    }
+  }
+}

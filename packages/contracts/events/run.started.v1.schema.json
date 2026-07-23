@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/run.started.v1.schema.json",
+  "title": "Run Started Event",
+  "type": "object",
+  "required": ["run_id", "adapter", "purpose", "started_at"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "adapter": { "type": "string" },
+    "purpose": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" }
+  }
+}

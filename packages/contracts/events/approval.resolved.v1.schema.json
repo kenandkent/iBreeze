@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/approval.resolved.v1.schema.json",
+  "title": "Approval Resolved Event",
+  "type": "object",
+  "required": ["run_id", "approval_id", "decision"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "approval_id": { "type": "string", "format": "uuid" },
+    "decision": { "type": "string", "enum": ["allowed", "denied", "expired"] }
+  }
+}

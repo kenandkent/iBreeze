@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/domain-events/registry.v1.json",
+  "title": "Domain Event Registry",
+  "type": "object",
+  "required": ["version", "events"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "events": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["schema_ref", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "schema_ref": { "type": "string" },
+          "description": { "type": "string" },
+          "requires_company_id": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

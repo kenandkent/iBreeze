@@ -53,17 +53,7 @@
 
 文档更新与功能代码提交在同一个 commit 中完成。
 
-### 6. 数据库 Schema 变更规范
-
-**所有表结构变更必须通过 `sidecar/migrations/` 处理**。使用 SQLite，迁移文件命名格式 `YYYYMMDDHHMMSS_description.sql`。
-
-**SQLite 迁移规范**：
-- 迁移脚本必须幂等：`CREATE TABLE IF NOT EXISTS`、`CREATE INDEX IF NOT EXISTS`
-- 对 `ADD COLUMN` 先查 `PRAGMA table_info` 判断再执行
-- DROP 旧表放在最后一步，且仅在确认新表与数据就绪后执行
-- 迁移失败时修复脚本后可直接重跑
-
-### 7. 目标驱动执行
+### 6. 目标驱动执行
 
 把任务转化为可验证的目标，执行直到通过验证：
 - "添加校验" → "为非法输入写测试，然后让测试通过"

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/verification.completed.v1.schema.json",
+  "title": "Verification Completed Event",
+  "type": "object",
+  "required": ["run_id", "verification_id", "passed"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "verification_id": { "type": "string", "format": "uuid" },
+    "passed": { "type": "boolean" },
+    "commands": { "type": "array", "items": { "type": "string" } }
+  }
+}

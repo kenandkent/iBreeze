@@ -1,0 +1,14 @@
+{
+  "name": "@ibreeze/contracts",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "lint": "echo 'lint ok'",
+    "check-generated": "node scripts/check-generated.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.1"
+  }
+}

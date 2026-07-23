@@ -1,0 +1,47 @@
+# Coverage exclusions for iBreeze
+# Each entry requires: path, reason, design_reference, approved_by
+exclusions:
+  - path: "apps/desktop/src/generated/"
+    reason: "Auto-generated TypeScript from JSON Schema"
+    design_reference: "P0-T02"
+    approved_by: "system"
+
+  - path: "apps/desktop-core/src/generated/"
+    reason: "Auto-generated Rust from JSON Schema"
+    design_reference: "P0-T02"
+    approved_by: "system"
+
+  - path: "sidecar/ibreeze/generated/"
+    reason: "Auto-generated Pydantic from JSON Schema"
+    design_reference: "P0-T02"
+    approved_by: "system"
+
+  - path: "apps/admin-web/src/generated/"
+    reason: "Auto-generated TypeScript from OpenAPI"
+    design_reference: "P0-T02"
+    approved_by: "system"
+
+  - path: "apps/backend-api/src/ibreeze_backend/db/base.py"
+    reason: "SQLAlchemy declarative base - no executable logic"
+    design_reference: "P1-T01"
+    approved_by: "system"
+
+  - path: "sidecar/migrations/"
+    reason: "SQLite migration SQL files - not Python executable"
+    design_reference: "P3-T01"
+    approved_by: "system"
+
+  - path: "apps/backend-api/migrations/"
+    reason: "Alembic migration Python files - not application code"
+    design_reference: "P1-T01"
+    approved_by: "system"
+
+  - path: "apps/desktop-core/src/main.rs"
+    reason: "Tauri application entry point - no testable logic"
+    design_reference: "P0-T01"
+    approved_by: "system"
+
+  - path: "apps/desktop-core/build.rs"
+    reason: "Build script - not runtime executable"
+    design_reference: "P0-T01"
+    approved_by: "system"

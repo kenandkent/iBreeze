@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/approval.requested.v1.schema.json",
+  "title": "Approval Requested Event",
+  "type": "object",
+  "required": ["run_id", "approval_id", "target_type"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "approval_id": { "type": "string", "format": "uuid" },
+    "target_type": { "type": "string" },
+    "target_hash": { "type": "string" }
+  }
+}

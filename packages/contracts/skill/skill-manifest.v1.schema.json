@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/skill-manifest.v1.schema.json",
+  "title": "Skill Manifest V1",
+  "type": "object",
+  "required": ["skill_id", "version", "display_name", "entry_point", "supported_agents", "sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "skill_id": { "type": "string" },
+    "version": { "type": "string" },
+    "display_name": { "type": "string" },
+    "description": { "type": "string" },
+    "entry_point": { "type": "string" },
+    "supported_agents": { "type": "array", "items": { "type": "string" } },
+    "supported_platforms": { "type": "array", "items": { "type": "string" } },
+    "required_tools": { "type": "array", "items": { "type": "string" } },
+    "network_domains": { "type": "array", "items": { "type": "string" } },
+    "sha256": { "type": "string" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "size"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "size": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

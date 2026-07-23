@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/tool.requested.v1.schema.json",
+  "title": "Tool Requested Event",
+  "type": "object",
+  "required": ["run_id", "tool_name", "request_id"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "tool_name": { "type": "string" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "input_hash": { "type": "string" }
+  }
+}

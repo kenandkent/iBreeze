@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/run.completed.v1.schema.json",
+  "title": "Run Completed Event",
+  "type": "object",
+  "required": ["run_id", "completed_at", "result_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "result_hash": { "type": "string" }
+  }
+}
