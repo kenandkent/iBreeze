@@ -1,4 +1,4 @@
-"""Schema validation tests."""
+"""Schema validation tests – aligned with design doc."""
 import pytest
 from datetime import datetime
 from pydantic import ValidationError
@@ -27,46 +27,30 @@ def test_company_create_valid():
     """Test valid company creation schema."""
     company = CompanyCreate(
         name="Test",
-        email="test@test.com",
-        phone="+8613800138000",
-        unified_credit_code="123456789012345678",
-        business_license_url="https://example.com/license.jpg",
-        legal_rep_id_card="110101199001011234",
+        introduction="A test company",
     )
     assert company.name == "Test"
+    assert company.introduction == "A test company"
 
 
-def test_company_create_invalid_phone():
-    """Test company creation with invalid phone."""
+def test_company_create_missing_name():
+    """Test company creation without name."""
     with pytest.raises(ValidationError):
-        CompanyCreate(
-            name="Test",
-            email="test@test.com",
-            phone="1234567890",
-            unified_credit_code="123456789012345678",
-            business_license_url="https://example.com/license.jpg",
-            legal_rep_id_card="110101199001011234",
-        )
+        CompanyCreate(introduction="Some intro")
 
 
-def test_company_create_invalid_credit_code():
-    """Test company creation with invalid credit code."""
+def test_company_create_missing_introduction():
+    """Test company creation without introduction."""
     with pytest.raises(ValidationError):
-        CompanyCreate(
-            name="Test",
-            email="test@test.com",
-            phone="+8613800138000",
-            unified_credit_code="12345678901234567",
-            business_license_url="https://example.com/license.jpg",
-            legal_rep_id_card="110101199001011234",
-        )
+        CompanyCreate(name="Test")
 
 
 def test_company_update_partial():
     """Test partial company update."""
     update = CompanyUpdate(name="New Name")
     assert update.name == "New Name"
-    assert update.email is None
+    assert update.introduction is None
+    assert update.expected_version is None
 
 
 def test_conversation_create():
@@ -142,34 +126,32 @@ def test_audit_event_create():
 
 def test_pagination_params():
     """Test pagination parameters."""
-    params = PaginationParams(offset=10, limit=20)
-    assert params.offset == 10
+    params = PaginationParams(cursor="abc", limit=20)
+    assert params.cursor == "abc"
     assert params.limit == 20
 
 
 def test_pagination_params_defaults():
     """Test pagination parameters defaults."""
     params = PaginationParams()
-    assert params.offset == 0
-    assert params.limit == 20
+    assert params.cursor is None
+    assert params.limit == 50
 
 
 def test_pagination_params_validation():
     """Test pagination parameters validation."""
     with pytest.raises(ValidationError):
-        PaginationParams(offset=-1)
-    with pytest.raises(ValidationError):
         PaginationParams(limit=0)
     with pytest.raises(ValidationError):
-        PaginationParams(limit=101)
+        PaginationParams(limit=201)
 
 
 def test_paginated_response():
     """Test paginated response schema."""
-    response = PaginatedResponse(total=100, offset=0, limit=20)
-    assert response.total == 100
-    assert response.offset == 0
-    assert response.limit == 20
+    response = PaginatedResponse(items=[1, 2, 3], next_cursor="xyz", has_more=True)
+    assert response.items == [1, 2, 3]
+    assert response.next_cursor == "xyz"
+    assert response.has_more is True
 
 
 def test_strict_model_forbids_extra():

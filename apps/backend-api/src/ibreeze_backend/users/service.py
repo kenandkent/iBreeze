@@ -8,7 +8,7 @@ from passlib.hash import argon2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.models.token_family import TokenFamily
+from ibreeze_backend.models.token_family import RefreshTokenFamily as TokenFamily
 from ibreeze_backend.models.user import User
 
 

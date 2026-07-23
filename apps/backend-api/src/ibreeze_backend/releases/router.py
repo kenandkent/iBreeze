@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.catalog_release import CatalogRelease
+from ibreeze_backend.models.skill import Skill
 from ibreeze_backend.releases.emergency import (
     create_emergency_disable,
     get_latest_emergency_disable,
@@ -54,7 +55,7 @@ async def _next_release_sequence(db: AsyncSession) -> int:
 async def create_release_endpoint(
     body: ReleaseCreate,
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ) -> dict:
     sequence = await _next_release_sequence(db)
     manifest = await build_manifest(db, sequence)
@@ -70,12 +71,16 @@ async def create_release_endpoint(
     manifest["signature"] = signature
 
     release = CatalogRelease(
-        version=body.version,
-        manifest=manifest,
-        notes=body.notes,
         release_sequence=sequence,
+        minimum_client_version=body.version,
+        manifest_object_key="",
+        manifest_sha256="",
         signature=signature,
         signing_key_id=kid,
+        status="draft",
+        created_by=current_user.id,
+        created_at=datetime.now(UTC).isoformat(),
+        notes=body.notes,
     )
     db.add(release)
     await db.flush()
@@ -105,14 +110,14 @@ async def publish_release_endpoint(
         raise HTTPException(status_code=400, detail="Release already published")
 
     release.status = "published"
-    release.published_at = datetime.now(UTC)
+    release.published_at = datetime.now(UTC).isoformat()
     await db.flush()
 
     return {
         "id": str(release.id),
         "version": release.version,
         "status": release.status,
-        "published_at": release.published_at.isoformat(),
+        "published_at": release.published_at,
     }
 
 
@@ -123,14 +128,51 @@ async def publish_release_endpoint(
 async def create_emergency_disable_endpoint(
     body: EmergencyDisableCreate,
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ) -> dict:
-    disable = await create_emergency_disable(db, body.skill_ids)
+    import hashlib, json as _json
+    payload = {"skill_ids": body.skill_ids}
+    payload_bytes = _json.dumps(payload, sort_keys=True).encode()
+    payload_sha = hashlib.sha256(payload_bytes).hexdigest()
+
+    from ibreeze_backend.security.keys import load_or_create_signing_keys
+    from ibreeze_backend.releases.manifest import compute_manifest_signature
+    from pathlib import Path
+    from ibreeze_backend.settings import settings
+
+    key_dir = Path(settings.token_secret or "keys")
+    private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
+    from cryptography.hazmat.primitives import serialization as _ser
+    private_key = _ser.load_pem_private_key(private_pem, password=None)
+    signature = compute_manifest_signature(payload_bytes, private_key)
+
+    disable = await create_emergency_disable(
+        db,
+        actor_user_id=current_user.id,
+        payload_json=payload,
+        payload_sha256=payload_sha,
+        signature=signature,
+        signing_key_id=kid,
+    )
+
+    # 实际禁用列表中的所有 skill
+    for sid in body.skill_ids:
+        try:
+            skill_result = await db.execute(
+                select(Skill).where(Skill.id == uuid.UUID(sid))
+            )
+            skill = skill_result.scalar_one_or_none()
+            if skill:
+                skill.is_active = False
+        except (ValueError, AttributeError):
+            pass
+
+    await db.flush()
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": disable.disabled_skill_ids,
-        "created_at": disable.created_at.isoformat(),
+        "disabled_skill_ids": body.skill_ids,
+        "created_at": disable.created_at,
     }
 
 
@@ -142,11 +184,12 @@ async def get_latest_emergency_disable_endpoint(
     disable = await get_latest_emergency_disable(db)
     if not disable:
         raise HTTPException(status_code=404, detail="No emergency disables found")
+    skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": disable.disabled_skill_ids,
-        "created_at": disable.created_at.isoformat(),
+        "disabled_skill_ids": skill_ids,
+        "created_at": disable.created_at,
     }
 
 
@@ -163,7 +206,8 @@ async def get_latest_manifest_endpoint(
     release = result.scalar_one_or_none()
     if not release:
         raise HTTPException(status_code=404, detail="No published release found")
-    return release.manifest
+    manifest = await build_manifest(db, release.release_sequence)
+    return manifest
 
 
 @public_router.get("/catalog/releases/{release_id}")
@@ -185,9 +229,7 @@ async def get_release_endpoint(
         "notes": release.notes,
         "release_sequence": release.release_sequence,
         "signing_key_id": release.signing_key_id,
-        "published_at": (
-            release.published_at.isoformat() if release.published_at else None
-        ),
+        "published_at": release.published_at,
     }
 
 
@@ -352,7 +394,7 @@ async def list_skills_endpoint(
     from ibreeze_backend.models.skill import Skill
     
     result = await db.execute(
-        select(Skill).where(Skill.is_active == True)
+        select(Skill).where(Skill.status.in_(["published", "active"]))
     )
     skills = result.scalars().all()
     
@@ -380,9 +422,10 @@ async def get_latest_emergency_disable_public_endpoint(
     disable = await get_latest_emergency_disable(db)
     if not disable:
         raise HTTPException(status_code=404, detail="No emergency disables found")
+    skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": disable.disabled_skill_ids,
-        "created_at": disable.created_at.isoformat(),
+        "disabled_skill_ids": skill_ids,
+        "created_at": disable.created_at,
     }

@@ -11,7 +11,7 @@ from ibreeze_backend.models.skill import Skill
 
 async def generate_manifest(db: AsyncSession) -> dict:
     """Generate catalog manifest from active skills."""
-    result = await db.execute(select(Skill).where(Skill.is_active == True))
+    result = await db.execute(select(Skill).where(Skill.status.in_(["published", "active"])))
     skills = result.scalars().all()
 
     manifest = {

@@ -23,6 +23,9 @@ htmlcov/
 .mypy_cache/
 .pytest_cache/
 
+# Storage (test artifacts)
+apps/backend-api/storage/
+
 # Rust
 *.pdb
 

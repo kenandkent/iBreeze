@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.auth.service import create_access_token, verify_token
-from ibreeze_backend.models.token_family import TokenFamily
+from ibreeze_backend.models.token_family import RefreshTokenFamily as TokenFamily
 
 __all__ = [
     "create_access_token",

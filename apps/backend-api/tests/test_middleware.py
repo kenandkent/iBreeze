@@ -18,7 +18,7 @@ from ibreeze_backend.middleware.audit import (
 )
 from ibreeze_backend.middleware.idempotency import IdempotencyMiddleware
 from ibreeze_backend.middleware.ratelimit import RateLimitMiddleware
-from ibreeze_backend.models.audit_log import AuditLog
+from ibreeze_backend.models.audit_log import AdminAuditLog as AuditLog
 
 
 # ---------------------------------------------------------------------------
@@ -49,12 +49,13 @@ async def test_audit_middleware_logs_request(
 
     result = await db_session.execute(select(AuditLog))
     logs = result.scalars().all()
-    matching = [l for l in logs if "/admin/api/v1/users" in (l.details or {}).get("path", "")]
+    matching = [l for l in logs if "admin" in (l.resource_type or "")]
     assert len(matching) >= 1
 
     log = matching[0]
     assert log.action is not None
     assert log.resource_type is not None
+    assert log.request_id is not None
 
 
 @pytest.mark.asyncio

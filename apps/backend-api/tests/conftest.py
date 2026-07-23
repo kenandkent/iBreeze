@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import INET as PG_INET, JSONB, UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -24,6 +24,11 @@ def _compile_jsonb_sqlite(element, compiler, **kw):
 @compiles(PG_UUID, "sqlite")
 def _compile_uuid_sqlite(element, compiler, **kw):
     return "CHAR(32)"
+
+
+@compiles(PG_INET, "sqlite")
+def _compile_inet_sqlite(element, compiler, **kw):
+    return "VARCHAR(45)"
 
 
 # Patch PostgreSQL UUID bind/result processors for SQLite compatibility
@@ -182,6 +187,7 @@ async def admin_tokens(db_session: AsyncSession, test_admin):
     from ibreeze_backend.auth.service import admin_login
 
     tokens = await admin_login(db_session, test_admin.email, "admin123456")
+    await db_session.commit()
     return {
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],
@@ -194,6 +200,7 @@ async def user_tokens(db_session: AsyncSession, test_user):
     from ibreeze_backend.auth.service import login
 
     tokens = await login(db_session, test_user.email, "testpassword123", "app")
+    await db_session.commit()
     return {
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],

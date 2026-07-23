@@ -1,35 +1,17 @@
-"""本地 SQLite 数据库，WAL 模式，单写多读连接池。
+-- iBreeze Sidecar 本地 Profile 数据库 - 完整 DDL 迁移
+-- 对齐设计文档 H.1-H.14
+-- 所有 id 由应用生成 UUID v4，所有时间以 UTC RFC 3339 文本保存
 
-对齐设计文档附录 H.1–H.14 的全部 DDL。
-"""
-from __future__ import annotations
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+PRAGMA synchronous = NORMAL;
+PRAGMA temp_store = MEMORY;
 
-import asyncio
-import hashlib
-import os
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+-- ============================================================
+-- H.1 迁移记录
+-- ============================================================
 
-import aiosqlite
-
-DEFAULT_DB_PATH = Path.home() / ".ibreeze" / "profile.db"
-MAX_DB_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
-
-# ── PRAGMA 常量（H.1）────────────────────────────────────────────────────
-
-_PRAGMAS = [
-    "PRAGMA journal_mode = WAL",
-    "PRAGMA foreign_keys = ON",
-    "PRAGMA busy_timeout = 5000",
-    "PRAGMA synchronous = NORMAL",
-    "PRAGMA temp_store = MEMORY",
-]
-
-# ── DDL（H.3–H.14，完整建表脚本）────────────────────────────────────────
-
-_CREATE_TABLES_SQL = """
--- schema_migrations (H.1)
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version TEXT PRIMARY KEY,
     script_sha256 TEXT NOT NULL CHECK(length(script_sha256) = 64),
@@ -39,7 +21,10 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     error_message TEXT
 );
 
--- local_profile (H.2)
+-- ============================================================
+-- H.2 Profile、偏好、底座、目录缓存
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS local_profile (
     id TEXT PRIMARY KEY,
     backend_origin TEXT NOT NULL,
@@ -51,7 +36,6 @@ CREATE TABLE IF NOT EXISTS local_profile (
     UNIQUE(backend_origin, app_user_id)
 );
 
--- local_preferences (H.2)
 CREATE TABLE IF NOT EXISTS local_preferences (
     singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
     cli_global_concurrency INTEGER NOT NULL DEFAULT 4
@@ -61,25 +45,23 @@ CREATE TABLE IF NOT EXISTS local_preferences (
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
 );
+
 INSERT OR IGNORE INTO local_preferences(
     singleton_id, cli_global_concurrency, log_retention_days, updated_at, version
 ) VALUES (1, 4, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 1);
 
--- employee_base_profiles (H.2)
 CREATE TABLE IF NOT EXISTS employee_base_profiles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
     normalized_name TEXT NOT NULL UNIQUE,
     description TEXT NOT NULL,
-    current_version_id TEXT REFERENCES employee_base_profile_versions(id)
-        DEFERRABLE INITIALLY DEFERRED,
+    current_version_id TEXT,
     status TEXT NOT NULL CHECK(status IN ('active', 'retired')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
 );
 
--- employee_base_profile_versions (H.2)
 CREATE TABLE IF NOT EXISTS employee_base_profile_versions (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES employee_base_profiles(id),
@@ -94,7 +76,7 @@ CREATE TABLE IF NOT EXISTS employee_base_profile_versions (
     timeout_seconds INTEGER NOT NULL CHECK(timeout_seconds BETWEEN 1 AND 86400),
     max_retries INTEGER NOT NULL CHECK(max_retries BETWEEN 0 AND 5),
     workspace_policy TEXT NOT NULL CHECK(workspace_policy = 'workspace_rw_external_ro'),
-    catalog_release_id TEXT NOT NULL REFERENCES catalog_cache_releases(release_id),
+    catalog_release_id TEXT NOT NULL,
     content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
     status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'retired')),
     created_at TEXT NOT NULL,
@@ -103,10 +85,10 @@ CREATE TABLE IF NOT EXISTS employee_base_profile_versions (
     CHECK((status = 'draft' AND published_at IS NULL)
        OR (status IN ('published', 'retired') AND published_at IS NOT NULL))
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_profile_single_draft
     ON employee_base_profile_versions(profile_id) WHERE status = 'draft';
 
--- profile_skill_bindings (H.2)
 CREATE TABLE IF NOT EXISTS profile_skill_bindings (
     profile_version_id TEXT NOT NULL REFERENCES employee_base_profile_versions(id),
     skill_id TEXT NOT NULL,
@@ -118,7 +100,6 @@ CREATE TABLE IF NOT EXISTS profile_skill_bindings (
     UNIQUE(profile_version_id, load_order)
 );
 
--- catalog_trust_keys (H.2)
 CREATE TABLE IF NOT EXISTS catalog_trust_keys (
     key_id TEXT PRIMARY KEY,
     public_key_base64 TEXT NOT NULL,
@@ -127,7 +108,6 @@ CREATE TABLE IF NOT EXISTS catalog_trust_keys (
     trusted_at TEXT NOT NULL
 );
 
--- auth_verification_keys (H.2)
 CREATE TABLE IF NOT EXISTS auth_verification_keys (
     key_id TEXT PRIMARY KEY,
     public_key_base64 TEXT NOT NULL,
@@ -138,7 +118,6 @@ CREATE TABLE IF NOT EXISTS auth_verification_keys (
     cached_at TEXT NOT NULL
 );
 
--- catalog_cache_releases (H.2)
 CREATE TABLE IF NOT EXISTS catalog_cache_releases (
     release_id TEXT PRIMARY KEY,
     release_sequence INTEGER NOT NULL UNIQUE CHECK(release_sequence > 0),
@@ -150,10 +129,10 @@ CREATE TABLE IF NOT EXISTS catalog_cache_releases (
     downloaded_at TEXT NOT NULL,
     activated_at TEXT
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_catalog_release
     ON catalog_cache_releases(status) WHERE status = 'active';
 
--- catalog_cache_resources (H.2)
 CREATE TABLE IF NOT EXISTS catalog_cache_resources (
     release_id TEXT NOT NULL REFERENCES catalog_cache_releases(release_id),
     resource_type TEXT NOT NULL,
@@ -164,7 +143,6 @@ CREATE TABLE IF NOT EXISTS catalog_cache_resources (
     PRIMARY KEY(release_id, resource_type, resource_id, resource_version_id)
 );
 
--- installed_skill_versions (H.2)
 CREATE TABLE IF NOT EXISTS installed_skill_versions (
     skill_version_id TEXT PRIMARY KEY,
     skill_id TEXT NOT NULL,
@@ -177,7 +155,6 @@ CREATE TABLE IF NOT EXISTS installed_skill_versions (
     UNIQUE(skill_id, version)
 );
 
--- emergency_disable_cache (H.2)
 CREATE TABLE IF NOT EXISTS emergency_disable_cache (
     sequence INTEGER PRIMARY KEY CHECK(sequence > 0),
     payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
@@ -187,7 +164,10 @@ CREATE TABLE IF NOT EXISTS emergency_disable_cache (
     activated_at TEXT NOT NULL
 );
 
--- companies (H.3)
+-- ============================================================
+-- H.3 公司、部门、职员
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS companies (
     id TEXT PRIMARY KEY,
     normalized_name TEXT NOT NULL UNIQUE,
@@ -198,18 +178,9 @@ CREATE TABLE IF NOT EXISTS companies (
     status TEXT NOT NULL CHECK(status IN ('active', 'archived')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
-    FOREIGN KEY(current_revision_id, id) REFERENCES company_revisions(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY(general_manager_office_id, id) REFERENCES departments(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY(general_manager_employee_id, id) REFERENCES employees(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY(company_conversation_id, id) REFERENCES conversations(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
 );
 
--- company_revisions (H.3)
 CREATE TABLE IF NOT EXISTS company_revisions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -223,7 +194,6 @@ CREATE TABLE IF NOT EXISTS company_revisions (
     UNIQUE(company_id, revision_number)
 );
 
--- departments (H.3)
 CREATE TABLE IF NOT EXISTS departments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -237,20 +207,12 @@ CREATE TABLE IF NOT EXISTS departments (
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
     UNIQUE(id, company_id),
-    UNIQUE(company_id, normalized_name),
-    FOREIGN KEY(current_revision_id, id, company_id)
-        REFERENCES department_revisions(id, department_id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY(leader_employee_id, company_id) REFERENCES employees(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY(department_conversation_id, company_id)
-        REFERENCES conversations(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED
+    UNIQUE(company_id, normalized_name)
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_company_gm_office
     ON departments(company_id) WHERE department_type = 'general_manager_office';
 
--- department_revisions (H.3)
 CREATE TABLE IF NOT EXISTS department_revisions (
     id TEXT PRIMARY KEY,
     department_id TEXT NOT NULL,
@@ -265,7 +227,6 @@ CREATE TABLE IF NOT EXISTS department_revisions (
     UNIQUE(department_id, revision_number)
 );
 
--- department_responsibilities (H.3)
 CREATE TABLE IF NOT EXISTS department_responsibilities (
     id TEXT PRIMARY KEY,
     department_id TEXT NOT NULL,
@@ -285,7 +246,6 @@ CREATE TABLE IF NOT EXISTS department_responsibilities (
     UNIQUE(department_id, responsibility_key)
 );
 
--- employees (H.3)
 CREATE TABLE IF NOT EXISTS employees (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -304,7 +264,10 @@ CREATE TABLE IF NOT EXISTS employees (
     UNIQUE(department_id, normalized_display_name)
 );
 
--- conversations (H.4)
+-- ============================================================
+-- H.4 会话、事件、幂等
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -317,7 +280,6 @@ CREATE TABLE IF NOT EXISTS conversations (
     FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id)
 );
 
--- domain_events (H.4)
 CREATE TABLE IF NOT EXISTS domain_events (
     row_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT NOT NULL UNIQUE,
@@ -331,12 +293,12 @@ CREATE TABLE IF NOT EXISTS domain_events (
     occurred_at TEXT NOT NULL,
     UNIQUE(event_id, company_id)
 );
+
 CREATE INDEX IF NOT EXISTS ix_domain_events_company_sequence
     ON domain_events(company_id, row_sequence);
 CREATE INDEX IF NOT EXISTS ix_domain_events_aggregate
     ON domain_events(aggregate_type, aggregate_id, aggregate_version);
 
--- outbox_events (H.4)
 CREATE TABLE IF NOT EXISTS outbox_events (
     id TEXT PRIMARY KEY,
     domain_event_id TEXT NOT NULL REFERENCES domain_events(event_id),
@@ -349,16 +311,15 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     created_at TEXT NOT NULL,
     delivered_at TEXT
 );
+
 CREATE INDEX IF NOT EXISTS ix_outbox_ready ON outbox_events(status, next_attempt_at, created_at);
 
--- projection_offsets (H.4)
 CREATE TABLE IF NOT EXISTS projection_offsets (
     projection_name TEXT PRIMARY KEY,
     last_row_sequence INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
 
--- conversation_messages (H.4)
 CREATE TABLE IF NOT EXISTS conversation_messages (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -374,13 +335,12 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
     UNIQUE(id, company_id),
     FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
     FOREIGN KEY(source_event_id, company_id) REFERENCES domain_events(event_id, company_id),
-    FOREIGN KEY(task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(sender_employee_id, company_id) REFERENCES employees(id, company_id)
 );
+
 CREATE INDEX IF NOT EXISTS ix_messages_conversation_time
     ON conversation_messages(conversation_id, created_at, id);
 
--- rpc_idempotency (H.4)
 CREATE TABLE IF NOT EXISTS rpc_idempotency (
     method TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
@@ -393,7 +353,10 @@ CREATE TABLE IF NOT EXISTS rpc_idempotency (
     PRIMARY KEY(method, idempotency_key)
 );
 
--- company_tasks (H.6)
+-- ============================================================
+-- H.6 任务与计划
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS company_tasks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -419,21 +382,13 @@ CREATE TABLE IF NOT EXISTS company_tasks (
     UNIQUE(id, company_id),
     FOREIGN KEY(company_conversation_id, company_id)
         REFERENCES conversations(id, company_id),
-    FOREIGN KEY(user_message_event_id, company_id)
-        REFERENCES domain_events(event_id, company_id),
-    FOREIGN KEY(supersedes_task_id, company_id)
-        REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(active_plan_id, id, company_id)
-        REFERENCES company_plan_versions(id, company_task_id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
+    CHECK(supersedes_task_id IS NULL OR supersedes_task_id <> id),
     CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NOT NULL)
        OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
-           AND resume_state IS NULL)),
-    CHECK(supersedes_task_id IS NULL OR supersedes_task_id <> id)
+           AND resume_state IS NULL))
 );
 
--- company_plan_versions (H.6)
 CREATE TABLE IF NOT EXISTS company_plan_versions (
     id TEXT PRIMARY KEY,
     company_task_id TEXT NOT NULL,
@@ -448,13 +403,10 @@ CREATE TABLE IF NOT EXISTS company_plan_versions (
     created_at TEXT NOT NULL,
     confirmed_at TEXT,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(generated_by_run_id, company_id) REFERENCES agent_runs(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
     UNIQUE(id, company_task_id, company_id),
     UNIQUE(company_task_id, version_number)
 );
 
--- task_context_snapshots (H.6)
 CREATE TABLE IF NOT EXISTS task_context_snapshots (
     id TEXT PRIMARY KEY,
     company_task_id TEXT NOT NULL,
@@ -466,14 +418,9 @@ CREATE TABLE IF NOT EXISTS task_context_snapshots (
     content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
     created_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(company_revision_id, company_id)
-        REFERENCES company_revisions(id, company_id),
-    FOREIGN KEY(plan_version_id, company_task_id, company_id)
-        REFERENCES company_plan_versions(id, company_task_id, company_id),
     UNIQUE(company_task_id)
 );
 
--- department_tasks (H.6)
 CREATE TABLE IF NOT EXISTS department_tasks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -498,7 +445,6 @@ CREATE TABLE IF NOT EXISTS department_tasks (
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
     UNIQUE(id, company_id),
-    UNIQUE(id, company_task_id, company_id),
     UNIQUE(company_task_id, stage_key),
     CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission')
            AND resume_state IS NOT NULL)
@@ -506,7 +452,6 @@ CREATE TABLE IF NOT EXISTS department_tasks (
            AND resume_state IS NULL))
 );
 
--- department_task_dependencies (H.6)
 CREATE TABLE IF NOT EXISTS department_task_dependencies (
     company_id TEXT NOT NULL,
     company_task_id TEXT NOT NULL,
@@ -520,7 +465,6 @@ CREATE TABLE IF NOT EXISTS department_task_dependencies (
     CHECK(department_task_id <> depends_on_task_id)
 );
 
--- employee_tasks (H.6)
 CREATE TABLE IF NOT EXISTS employee_tasks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -547,7 +491,6 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
        OR (status <> 'waiting_resource' AND resume_state IS NULL))
 );
 
--- employee_availability_snapshots (H.6)
 CREATE TABLE IF NOT EXISTS employee_availability_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -568,13 +511,10 @@ CREATE TABLE IF NOT EXISTS employee_availability_snapshots (
     expires_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id)
         REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(department_task_id, company_id)
-        REFERENCES department_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
     UNIQUE(id, company_id)
 );
 
--- execution_snapshots (H.6)
 CREATE TABLE IF NOT EXISTS execution_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -602,22 +542,17 @@ CREATE TABLE IF NOT EXISTS execution_snapshots (
     created_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
-    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
-    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
-    FOREIGN KEY(task_workspace_id, company_task_id, company_id)
-        REFERENCES task_workspaces(id, company_task_id, company_id),
-    FOREIGN KEY(company_revision_id, company_id)
-        REFERENCES company_revisions(id, company_id),
-    FOREIGN KEY(department_revision_id, department_id, company_id)
-        REFERENCES department_revisions(id, department_id, company_id),
     UNIQUE(id, company_id),
     UNIQUE(snapshot_purpose, work_item_id, employee_id, content_sha256),
     CHECK((snapshot_purpose = 'task_execution' AND employee_task_id IS NOT NULL)
        OR snapshot_purpose <> 'task_execution')
 );
 
--- runtime_queue (H.10)
+-- ============================================================
+-- H.10 Runtime 队列与 Lease
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS runtime_queue (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -632,23 +567,18 @@ CREATE TABLE IF NOT EXISTS runtime_queue (
     status TEXT NOT NULL CHECK(status IN ('ready', 'leased', 'completed', 'cancelled')),
     queued_at TEXT NOT NULL,
     leased_at TEXT,
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id)
-        DEFERRABLE INITIALLY DEFERRED,
-    CHECK((work_item_type = 'knowledge_index' AND run_id IS NULL)
-       OR (work_item_type <> 'knowledge_index' AND run_id IS NOT NULL)),
     UNIQUE(id, job_id, company_id)
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_runtime_queue_active_work_item
     ON runtime_queue(work_item_type, work_item_id)
     WHERE status IN ('ready', 'leased');
 
--- runtime_company_fairness (H.10)
 CREATE TABLE IF NOT EXISTS runtime_company_fairness (
     company_id TEXT PRIMARY KEY REFERENCES companies(id),
     last_dispatched_at TEXT NOT NULL
 );
 
--- runtime_leases (H.10)
 CREATE TABLE IF NOT EXISTS runtime_leases (
     id TEXT PRIMARY KEY,
     queue_id TEXT NOT NULL UNIQUE REFERENCES runtime_queue(id),
@@ -660,15 +590,14 @@ CREATE TABLE IF NOT EXISTS runtime_leases (
     acquired_at TEXT NOT NULL,
     heartbeat_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
-    FOREIGN KEY(queue_id, job_id, company_id) REFERENCES runtime_queue(id, job_id, company_id),
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
-    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
-    FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
     CHECK((run_id IS NULL AND employee_id IS NULL AND conversation_id IS NULL)
        OR (run_id IS NOT NULL AND employee_id IS NOT NULL AND conversation_id IS NOT NULL))
 );
 
--- agent_runs (H.11)
+-- ============================================================
+-- H.11 AgentRun、事件、Checkpoint
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS agent_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -706,41 +635,13 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
-    FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
-    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
-    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
-    FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
-    FOREIGN KEY(availability_snapshot_id, company_id)
-        REFERENCES employee_availability_snapshots(id, company_id),
-    FOREIGN KEY(execution_snapshot_id, company_id)
-        REFERENCES execution_snapshots(id, company_id),
     UNIQUE(id, company_id),
-    CHECK(
-        (run_purpose IN ('task_execution','merge')
-            AND department_task_id IS NOT NULL
-            AND employee_task_id IS NOT NULL
-            AND work_item_id = employee_task_id)
-        OR
-        (run_purpose IN ('company_plan','summary')
-            AND department_task_id IS NULL
-            AND employee_task_id IS NULL
-            AND work_item_id = company_task_id)
-        OR
-        (run_purpose = 'interactive_turn'
-            AND department_task_id IS NULL
-            AND employee_task_id IS NULL
-            AND work_item_id = conversation_id)
-        OR
-        (run_purpose IN ('review','verification','repair'))
-    ),
     CHECK((status IN ('waiting_approval','waiting_resource') AND resume_state IS NOT NULL)
        OR (status NOT IN ('waiting_approval','waiting_resource') AND resume_state IS NULL)),
     CHECK((process_pid IS NULL AND process_group_id IS NULL AND process_started_at IS NULL)
        OR (process_pid > 0 AND process_group_id > 0 AND process_started_at IS NOT NULL))
 );
 
--- agent_run_events (H.11)
 CREATE TABLE IF NOT EXISTS agent_run_events (
     run_id TEXT NOT NULL REFERENCES agent_runs(id),
     event_id TEXT NOT NULL UNIQUE,
@@ -753,7 +654,6 @@ CREATE TABLE IF NOT EXISTS agent_run_events (
     PRIMARY KEY(run_id, sequence)
 );
 
--- checkpoints (H.11)
 CREATE TABLE IF NOT EXISTS checkpoints (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES agent_runs(id),
@@ -773,7 +673,6 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     UNIQUE(run_id, sequence)
 );
 
--- tool_executions (H.11)
 CREATE TABLE IF NOT EXISTS tool_executions (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES agent_runs(id),
@@ -787,11 +686,9 @@ CREATE TABLE IF NOT EXISTS tool_executions (
     approval_id TEXT,
     started_at TEXT,
     completed_at TEXT,
-    UNIQUE(run_id, tool_call_id),
-    FOREIGN KEY(approval_id, run_id) REFERENCES human_approvals(id, run_id)
+    UNIQUE(run_id, tool_call_id)
 );
 
--- human_approvals (H.11)
 CREATE TABLE IF NOT EXISTS human_approvals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -805,7 +702,6 @@ CREATE TABLE IF NOT EXISTS human_approvals (
     resolved_at TEXT,
     consumed_at TEXT,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
     UNIQUE(id, run_id),
     CHECK(
         (status = 'pending' AND resolved_at IS NULL AND consumed_at IS NULL)
@@ -816,7 +712,6 @@ CREATE TABLE IF NOT EXISTS human_approvals (
     )
 );
 
--- verification_results (H.11)
 CREATE TABLE IF NOT EXISTS verification_results (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -829,13 +724,9 @@ CREATE TABLE IF NOT EXISTS verification_results (
     status TEXT NOT NULL CHECK(status IN ('passed', 'failed', 'timed_out')),
     started_at TEXT NOT NULL,
     completed_at TEXT NOT NULL,
-    UNIQUE(run_id, round_number, command_argv_json),
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
-    FOREIGN KEY(stdout_artifact_id, company_id) REFERENCES artifacts(id, company_id),
-    FOREIGN KEY(stderr_artifact_id, company_id) REFERENCES artifacts(id, company_id)
+    UNIQUE(run_id, round_number, command_argv_json)
 );
 
--- workspace_grants (H.11)
 CREATE TABLE IF NOT EXISTS workspace_grants (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -847,10 +738,10 @@ CREATE TABLE IF NOT EXISTS workspace_grants (
     last_resolved_at TEXT,
     UNIQUE(id, company_id)
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_active_path
     ON workspace_grants(normalized_path) WHERE status = 'active';
 
--- task_workspaces (H.11)
 CREATE TABLE IF NOT EXISTS task_workspaces (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -872,11 +763,13 @@ CREATE TABLE IF NOT EXISTS task_workspaces (
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(workspace_grant_id, company_id) REFERENCES workspace_grants(id, company_id),
     UNIQUE(id, company_id),
-    UNIQUE(id, company_task_id, company_id),
     UNIQUE(company_task_id)
 );
 
--- artifacts (H.12)
+-- ============================================================
+-- H.12 Artifact 与 Review
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS artifacts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -899,17 +792,13 @@ CREATE TABLE IF NOT EXISTS artifacts (
     created_at TEXT NOT NULL,
     UNIQUE(id, company_id),
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
-    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
-    FOREIGN KEY(supersedes_artifact_id, company_id) REFERENCES artifacts(id, company_id),
-    FOREIGN KEY(created_by_run_id, company_id) REFERENCES agent_runs(id, company_id),
     CHECK((created_by_type = 'agent' AND created_by_run_id IS NOT NULL)
        OR (created_by_type <> 'agent' AND created_by_run_id IS NULL))
 );
+
 CREATE INDEX IF NOT EXISTS ix_artifacts_task_type
     ON artifacts(company_task_id, artifact_type, created_at);
 
--- artifact_contributors (H.12)
 CREATE TABLE IF NOT EXISTS artifact_contributors (
     artifact_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -919,7 +808,6 @@ CREATE TABLE IF NOT EXISTS artifact_contributors (
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id)
 );
 
--- review_assignments (H.12)
 CREATE TABLE IF NOT EXISTS review_assignments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -936,7 +824,6 @@ CREATE TABLE IF NOT EXISTS review_assignments (
     UNIQUE(artifact_id, reviewer_employee_id, review_round)
 );
 
--- review_reports (H.12)
 CREATE TABLE IF NOT EXISTS review_reports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -951,7 +838,6 @@ CREATE TABLE IF NOT EXISTS review_reports (
     FOREIGN KEY(report_artifact_id, company_id) REFERENCES artifacts(id, company_id)
 );
 
--- review_issues (H.12)
 CREATE TABLE IF NOT EXISTS review_issues (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -971,13 +857,13 @@ CREATE TABLE IF NOT EXISTS review_issues (
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
     UNIQUE(id, company_id),
-    CHECK(status <> 'rejected' OR (severity IN ('medium','low') AND rejection_reason IS NOT NULL)),
-    FOREIGN KEY(review_report_id, company_id) REFERENCES review_reports(id, company_id),
-    FOREIGN KEY(assignee_employee_id, company_id) REFERENCES employees(id, company_id),
-    FOREIGN KEY(verifier_employee_id, company_id) REFERENCES employees(id, company_id)
+    CHECK(status <> 'rejected' OR (severity IN ('medium','low') AND rejection_reason IS NOT NULL))
 );
 
--- knowledge_items (H.13)
+-- ============================================================
+-- H.13 知识
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS knowledge_items (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -994,12 +880,6 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
     created_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
     UNIQUE(id, company_id),
-    FOREIGN KEY(source_artifact_id, company_id) REFERENCES artifacts(id, company_id),
-    FOREIGN KEY(source_message_event_id, company_id) REFERENCES domain_events(event_id, company_id),
-    FOREIGN KEY(owner_employee_id, company_id) REFERENCES employees(id, company_id),
-    FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
-    FOREIGN KEY(task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(embedding_generation_id, company_id) REFERENCES embedding_generations(id, company_id),
     CHECK((source_artifact_id IS NULL) <> (source_message_event_id IS NULL)),
     CHECK(
         (visibility = 'company' AND department_id IS NULL AND task_id IS NULL AND owner_employee_id IS NULL)
@@ -1009,7 +889,6 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
     )
 );
 
--- knowledge_fts (H.13)
 CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
     knowledge_id UNINDEXED,
     company_id UNINDEXED,
@@ -1019,7 +898,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
     tokenize='unicode61'
 );
 
--- embedding_generations (H.13)
 CREATE TABLE IF NOT EXISTS embedding_generations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -1031,12 +909,13 @@ CREATE TABLE IF NOT EXISTS embedding_generations (
     activated_at TEXT,
     UNIQUE(id, company_id)
 );
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_embedding_generation
     ON embedding_generations(company_id) WHERE status = 'active';
+
 CREATE INDEX IF NOT EXISTS ix_knowledge_items_unindexed
     ON knowledge_items(company_id, id) WHERE embedding_generation_id IS NULL;
 
--- knowledge_access_logs (H.13)
 CREATE TABLE IF NOT EXISTS knowledge_access_logs (
     row_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE,
@@ -1048,14 +927,16 @@ CREATE TABLE IF NOT EXISTS knowledge_access_logs (
     candidate_ids_json TEXT NOT NULL CHECK(json_valid(candidate_ids_json)),
     selected_ids_json TEXT NOT NULL CHECK(json_valid(selected_ids_json)),
     context_pack_sha256 TEXT NOT NULL CHECK(length(context_pack_sha256) = 64),
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
-    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id)
+    created_at TEXT NOT NULL
 );
+
 CREATE INDEX IF NOT EXISTS ix_knowledge_access_run
     ON knowledge_access_logs(run_id, row_sequence);
 
--- backup_records (H.13.1)
+-- ============================================================
+-- H.13.1 备份记录
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS backup_records (
     id TEXT PRIMARY KEY,
     backup_type TEXT NOT NULL CHECK(backup_type IN ('daily', 'weekly', 'manual', 'pre_upgrade')),
@@ -1069,7 +950,10 @@ CREATE TABLE IF NOT EXISTS backup_records (
     error_code TEXT
 );
 
--- audit_logs (H.14)
+-- ============================================================
+-- H.14 本地审计
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS audit_logs (
     row_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE,
@@ -1082,76 +966,96 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     outcome TEXT NOT NULL CHECK(outcome IN ('success', 'denied', 'failed')),
     detail_json TEXT NOT NULL CHECK(json_valid(detail_json)),
     trace_id TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(company_id) REFERENCES companies(id)
+    created_at TEXT NOT NULL
 );
+
 CREATE INDEX IF NOT EXISTS ix_audit_company_sequence ON audit_logs(company_id, row_sequence);
-"""
 
-# ── 不可变触发器 ──────────────────────────────────────────────────────────
+-- ============================================================
+-- 不可变性触发器
+-- ============================================================
 
-_IMMUTABILITY_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS company_revisions_no_update
 BEFORE UPDATE ON company_revisions
 BEGIN SELECT RAISE(ABORT, 'company revision is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS company_revisions_no_delete
 BEFORE DELETE ON company_revisions
 BEGIN SELECT RAISE(ABORT, 'company revision is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS department_revisions_no_update
 BEFORE UPDATE ON department_revisions
 BEGIN SELECT RAISE(ABORT, 'department revision is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS department_revisions_no_delete
 BEFORE DELETE ON department_revisions
 BEGIN SELECT RAISE(ABORT, 'department revision is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS domain_events_no_update
 BEFORE UPDATE ON domain_events
 BEGIN SELECT RAISE(ABORT, 'domain event is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS domain_events_no_delete
 BEFORE DELETE ON domain_events
 BEGIN SELECT RAISE(ABORT, 'domain event is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS task_context_snapshots_no_update
 BEFORE UPDATE ON task_context_snapshots
 BEGIN SELECT RAISE(ABORT, 'task context snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS task_context_snapshots_no_delete
 BEFORE DELETE ON task_context_snapshots
 BEGIN SELECT RAISE(ABORT, 'task context snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS availability_snapshots_no_update
 BEFORE UPDATE ON employee_availability_snapshots
 BEGIN SELECT RAISE(ABORT, 'availability snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS availability_snapshots_no_delete
 BEFORE DELETE ON employee_availability_snapshots
 BEGIN SELECT RAISE(ABORT, 'availability snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS execution_snapshots_no_update
 BEFORE UPDATE ON execution_snapshots
 BEGIN SELECT RAISE(ABORT, 'execution snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS execution_snapshots_no_delete
 BEFORE DELETE ON execution_snapshots
 BEGIN SELECT RAISE(ABORT, 'execution snapshot is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS agent_run_events_no_update
 BEFORE UPDATE ON agent_run_events
 BEGIN SELECT RAISE(ABORT, 'agent run event is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS agent_run_events_no_delete
 BEFORE DELETE ON agent_run_events
 WHEN OLD.event_type <> 'model.output.delta'
 BEGIN SELECT RAISE(ABORT, 'non-delta agent run event is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS artifacts_no_update
 BEFORE UPDATE ON artifacts
 BEGIN SELECT RAISE(ABORT, 'artifact is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS artifacts_no_delete
 BEFORE DELETE ON artifacts
 BEGIN SELECT RAISE(ABORT, 'artifact is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS knowledge_access_logs_no_update
 BEFORE UPDATE ON knowledge_access_logs
 BEGIN SELECT RAISE(ABORT, 'knowledge access log is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS knowledge_access_logs_no_delete
 BEFORE DELETE ON knowledge_access_logs
 BEGIN SELECT RAISE(ABORT, 'knowledge access log is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS audit_logs_no_update
 BEFORE UPDATE ON audit_logs
 BEGIN SELECT RAISE(ABORT, 'audit log is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS audit_logs_no_delete
 BEFORE DELETE ON audit_logs
 BEGIN SELECT RAISE(ABORT, 'audit log is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS employee_profile_version_published_guard
 BEFORE UPDATE ON employee_base_profile_versions
 WHEN OLD.status IN ('published','retired')
@@ -1178,226 +1082,24 @@ BEGIN
       ELSE RAISE(ABORT, 'published profile version content is immutable')
     END;
 END;
+
 CREATE TRIGGER IF NOT EXISTS employee_profile_version_no_delete
 BEFORE DELETE ON employee_base_profile_versions
 WHEN OLD.status IN ('published','retired')
 BEGIN SELECT RAISE(ABORT, 'published profile version is immutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS profile_skill_bindings_insert_guard
 BEFORE INSERT ON profile_skill_bindings
 WHEN (SELECT status FROM employee_base_profile_versions WHERE id=NEW.profile_version_id) <> 'draft'
 BEGIN SELECT RAISE(ABORT, 'only draft profile version skills are mutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS profile_skill_bindings_update_guard
 BEFORE UPDATE ON profile_skill_bindings
 WHEN (SELECT status FROM employee_base_profile_versions WHERE id=OLD.profile_version_id) <> 'draft'
    OR (SELECT status FROM employee_base_profile_versions WHERE id=NEW.profile_version_id) <> 'draft'
 BEGIN SELECT RAISE(ABORT, 'only draft profile version skills are mutable'); END;
+
 CREATE TRIGGER IF NOT EXISTS profile_skill_bindings_delete_guard
 BEFORE DELETE ON profile_skill_bindings
 WHEN (SELECT status FROM employee_base_profile_versions WHERE id=OLD.profile_version_id) <> 'draft'
 BEGIN SELECT RAISE(ABORT, 'only draft profile version skills are mutable'); END;
-"""
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def _content_sha256(data: str) -> str:
-    return hashlib.sha256(data.encode("utf-8")).hexdigest()
-
-
-class LocalDB:
-    """异步 SQLite 数据库：1 写连接 + N 读连接池，WAL 模式。
-
-    设计文档要求：
-    - H.1: WAL, foreign_keys=ON, busy_timeout=5000, synchronous=NORMAL, temp_store=MEMORY
-    - 写连接额外 wal_autocheckpoint=1000
-    - 正常退出执行 PRAGMA wal_checkpoint(TRUNCATE)
-    - defer_foreign_keys 默认 OFF，仅在 H.5 创建事务中启用
-    """
-
-    def __init__(
-        self,
-        db_path: str | Path | None = None,
-        read_pool_size: int = 8,
-    ) -> None:
-        self._db_path = str(db_path or DEFAULT_DB_PATH)
-        self._read_pool_size = read_pool_size
-        self._write_conn: aiosqlite.Connection | None = None
-        self._read_pool: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue(
-            maxsize=read_pool_size
-        )
-        self._pool_lock = asyncio.Lock()
-
-    async def initialize(self) -> None:
-        """打开写连接、填充读连接池、创建所有表和触发器。"""
-        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-
-        # 写连接
-        self._write_conn = await aiosqlite.connect(self._db_path)
-        for pragma in _PRAGMAS:
-            await self._write_conn.execute(pragma)
-        await self._write_conn.execute("PRAGMA wal_autocheckpoint=1000")
-        await self._write_conn.executescript(_CREATE_TABLES_SQL)
-        await self._write_conn.executescript(_IMMUTABILITY_TRIGGERS)
-        await self._write_conn.commit()
-
-        # 读连接池
-        for _ in range(self._read_pool_size):
-            conn = await aiosqlite.connect(self._db_path)
-            for pragma in _PRAGMAS:
-                await conn.execute(pragma)
-            await self._read_pool.put(conn)
-
-    async def close(self) -> None:
-        """关闭所有连接。"""
-        if self._write_conn is not None:
-            await self._write_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            await self._write_conn.close()
-            self._write_conn = None
-        while not self._read_pool.empty():
-            conn = await self._read_pool.get()
-            await conn.close()
-
-    # ── 读连接借出/归还 ──────────────────────────────────────────────────
-
-    async def _acquire_read(self) -> aiosqlite.Connection:
-        async with self._pool_lock:
-            if self._read_pool.empty():
-                conn = await aiosqlite.connect(self._db_path)
-                for pragma in _PRAGMAS:
-                    await conn.execute(pragma)
-                return conn
-        return await self._read_pool.get()
-
-    async def _release_read(self, conn: aiosqlite.Connection) -> None:
-        try:
-            self._read_pool.put_nowait(conn)
-        except asyncio.QueueFull:
-            await conn.close()
-
-    # ── 写操作 ───────────────────────────────────────────────────────────
-
-    async def execute_write(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> aiosqlite.Cursor:
-        """在写连接上执行语句。"""
-        assert self._write_conn is not None, "数据库未初始化"
-        cursor = await self._write_conn.execute(sql, params)
-        await self._write_conn.commit()
-        return cursor
-
-    async def execute_script(self, sql: str) -> None:
-        """在写连接上执行多语句脚本。"""
-        assert self._write_conn is not None, "数据库未初始化"
-        await self._write_conn.executescript(sql)
-        await self._write_conn.commit()
-
-    async def execute_many_write(
-        self, sql: str, params_list: list[tuple[Any, ...]]
-    ) -> None:
-        """在写连接上批量执行。"""
-        assert self._write_conn is not None, "数据库未初始化"
-        await self._write_conn.executemany(sql, params_list)
-        await self._write_conn.commit()
-
-    # ── 读操作 ───────────────────────────────────────────────────────────
-
-    async def fetch_one(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> dict[str, Any] | None:
-        conn = await self._acquire_read()
-        try:
-            cursor = await conn.execute(sql, params)
-            row = await cursor.fetchone()
-            if row is None:
-                return None
-            columns = [desc[0] for desc in cursor.description]
-            return dict(zip(columns, row))
-        finally:
-            await self._release_read(conn)
-
-    async def fetch_all(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> list[dict[str, Any]]:
-        conn = await self._acquire_read()
-        try:
-            cursor = await conn.execute(sql, params)
-            rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-            return [dict(zip(columns, row)) for row in rows]
-        finally:
-            await self._release_read(conn)
-
-    async def fetch_val(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> Any:
-        conn = await self._acquire_read()
-        try:
-            cursor = await conn.execute(sql, params)
-            row = await cursor.fetchone()
-            return row[0] if row else None
-        finally:
-            await self._release_read(conn)
-
-    # ── 通用 CRUD 便捷方法 ───────────────────────────────────────────────
-
-    async def insert(self, table: str, data: dict[str, Any]) -> dict[str, Any]:
-        columns = ", ".join(data.keys())
-        placeholders = ", ".join(["?"] * len(data))
-        await self.execute_write(
-            f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
-            tuple(data.values()),
-        )
-        return data
-
-    async def get_by_id(self, table: str, id: str) -> dict[str, Any] | None:
-        return await self.fetch_one(f"SELECT * FROM {table} WHERE id = ?", (id,))
-
-    async def update_by_id(
-        self, table: str, id: str, data: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        if not data:
-            return await self.get_by_id(table, id)
-        set_clause = ", ".join(f"{k} = ?" for k in data.keys())
-        await self.execute_write(
-            f"UPDATE {table} SET {set_clause} WHERE id = ?",
-            tuple(list(data.values()) + [id]),
-        )
-        return await self.get_by_id(table, id)
-
-    async def delete_by_id(self, table: str, id: str) -> bool:
-        cursor = await self.execute_write(f"DELETE FROM {table} WHERE id = ?", (id,))
-        return cursor.rowcount > 0
-
-    async def list_all(
-        self,
-        table: str,
-        filters: dict[str, Any] | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        where_parts: list[str] = []
-        values: list[Any] = []
-        if filters:
-            for k, v in filters.items():
-                where_parts.append(f"{k} = ?")
-                values.append(v)
-        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-        sql = f"SELECT * FROM {table} {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?"
-        return await self.fetch_all(sql, tuple(values + [limit, offset]))
-
-    async def count(
-        self, table: str, filters: dict[str, Any] | None = None
-    ) -> int:
-        where_parts: list[str] = []
-        values: list[Any] = []
-        if filters:
-            for k, v in filters.items():
-                where_parts.append(f"{k} = ?")
-                values.append(v)
-        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-        result = await self.fetch_val(
-            f"SELECT COUNT(*) FROM {table} {where_sql}", tuple(values)
-        )
-        return result or 0

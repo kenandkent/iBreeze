@@ -10,7 +10,7 @@ from ibreeze_backend.models.skill import Skill
 
 async def build_manifest(db: AsyncSession, sequence: int) -> dict:
     """Generate manifest from active skills with content hashes."""
-    result = await db.execute(select(Skill).where(Skill.is_active))
+    result = await db.execute(select(Skill).where(Skill.status.in_(["published", "active"])))
     skills = result.scalars().all()
 
     resources = []

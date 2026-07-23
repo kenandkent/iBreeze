@@ -1,4 +1,4 @@
-"""Authentication service."""
+"""Authentication service – aligned with G.3 token family schema."""
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -9,7 +9,7 @@ from passlib.hash import argon2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.models.token_family import TokenFamily
+from ibreeze_backend.models.token_family import RefreshToken, RefreshTokenFamily
 from ibreeze_backend.models.user import User
 from ibreeze_backend.settings import settings
 
@@ -68,33 +68,54 @@ def verify_token(token: str) -> dict | None:
         return None
 
 
-async def create_token_family(db: AsyncSession, user_id: uuid.UUID, refresh_token_hash: str | None = None, family_id: str | None = None) -> TokenFamily:
-    family = TokenFamily(
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+async def create_token_family(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    refresh_token_hash: str | None = None,
+    family_id: str | None = None,
+) -> RefreshTokenFamily:
+    fid = uuid.UUID(family_id) if family_id else uuid.uuid4()
+    family = RefreshTokenFamily(
+        id=fid,
         user_id=user_id,
-        family_id=family_id or str(uuid.uuid4()),
-        status="active",
-        refresh_token_hash=refresh_token_hash,
+        device_id=uuid.uuid4(),
+        created_at=_now_iso(),
     )
     db.add(family)
+
+    if refresh_token_hash:
+        rt = RefreshToken(
+            id=uuid.uuid4(),
+            family_id=fid,
+            token_hash=refresh_token_hash,
+            issued_at=_now_iso(),
+            expires_at=(datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)).isoformat(),
+        )
+        db.add(rt)
+
     await db.flush()
     return family
 
 
 async def _revoke_all_user_families(db: AsyncSession, user_id: uuid.UUID) -> None:
     result = await db.execute(
-        select(TokenFamily).where(
-            TokenFamily.user_id == user_id,
-            TokenFamily.status == "active",
+        select(RefreshTokenFamily).where(
+            RefreshTokenFamily.user_id == user_id,
+            RefreshTokenFamily.revoked_at.is_(None),
         )
     )
     for family in result.scalars().all():
-        family.status = "revoked"
+        family.revoked_at = _now_iso()
+        family.revoke_reason = "replay_detected"
 
 
 async def register(db: AsyncSession, email: str, password: str) -> User:
-    # 邮箱小写规范化
     normalized_email = email.strip().lower()
-    
+
     result = await db.execute(select(User).where(User.email == normalized_email))
     if result.scalar_one_or_none():
         raise ValueError("Email already registered")
@@ -123,13 +144,11 @@ async def register(db: AsyncSession, email: str, password: str) -> User:
 async def login(
     db: AsyncSession, email: str, password: str, audience: str
 ) -> dict:
-    # 邮箱小写规范化
     normalized_email = email.strip().lower()
-    
+
     result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
 
-    # 登录错误统一化：不区分用户不存在与密码错误
     if not user or not argon2.verify(password, user.hashed_password):
         raise ValueError("Invalid credentials")
 
@@ -140,13 +159,12 @@ async def login(
     if user.user_type != expected_user_type:
         raise ValueError("Invalid credentials")
 
-    # 先创建 refresh token，再存储其哈希
     family_id = str(uuid.uuid4())
     refresh_token = create_refresh_token(str(user.id), family_id, audience)
     refresh_token_hash = argon2.hash(refresh_token)
-    
+
     family = await create_token_family(db, user.id, refresh_token_hash, family_id)
-    
+
     access_token = create_access_token(
         str(user.id), family.family_id, audience, user.must_change_password
     )
@@ -179,9 +197,9 @@ async def refresh_tokens(db: AsyncSession, refresh_token_raw: str) -> dict:
         raise ValueError("Invalid refresh token")
 
     result = await db.execute(
-        select(TokenFamily).where(
-            TokenFamily.family_id == family_id,
-            TokenFamily.status == "active",
+        select(RefreshTokenFamily).where(
+            RefreshTokenFamily.id == uuid.UUID(family_id),
+            RefreshTokenFamily.revoked_at.is_(None),
         )
     )
     family = result.scalar_one_or_none()
@@ -190,19 +208,27 @@ async def refresh_tokens(db: AsyncSession, refresh_token_raw: str) -> dict:
         await _revoke_all_user_families(db, uuid.UUID(user_id))
         raise ValueError("Refresh token replay detected")
 
-    # 验证 refresh token 哈希
-    if family.refresh_token_hash and not argon2.verify(refresh_token_raw, family.refresh_token_hash):
-        await _revoke_all_user_families(db, uuid.UUID(user_id))
-        raise ValueError("Refresh token replay detected")
+    rt_result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.family_id == family.id,
+            RefreshToken.consumed_at.is_(None),
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    stored_rt = rt_result.scalar_one_or_none()
+    if stored_rt and stored_rt.token_hash:
+        if not argon2.verify(refresh_token_raw, stored_rt.token_hash):
+            await _revoke_all_user_families(db, uuid.UUID(user_id))
+            raise ValueError("Refresh token replay detected")
+        stored_rt.consumed_at = _now_iso()
 
-    family.status = "rotated"
-    family.rotated_at = datetime.now(UTC)
+    family.revoked_at = _now_iso()
+    family.revoke_reason = "rotated"
 
-    # 创建新的 refresh token 并存储哈希
     new_family_id = str(uuid.uuid4())
     new_refresh_token = create_refresh_token(user_id, new_family_id, audience)
     new_refresh_token_hash = argon2.hash(new_refresh_token)
-    
+
     new_family = await create_token_family(db, uuid.UUID(user_id), new_refresh_token_hash, new_family_id)
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -231,13 +257,14 @@ async def logout(db: AsyncSession, access_token: str) -> bool:
         return False
 
     result = await db.execute(
-        select(TokenFamily).where(TokenFamily.family_id == family_id)
+        select(RefreshTokenFamily).where(RefreshTokenFamily.id == uuid.UUID(family_id))
     )
     family = result.scalar_one_or_none()
     if not family:
         return False
 
-    family.status = "revoked"
+    family.revoked_at = _now_iso()
+    family.revoke_reason = "logout"
     return True
 
 
@@ -262,12 +289,11 @@ async def change_password(
 
     await _revoke_all_user_families(db, user_id)
 
-    # 创建新的 refresh token 并存储哈希
     family_id = str(uuid.uuid4())
     audience = "admin" if user.user_type == "admin" else "app"
     refresh_token = create_refresh_token(str(user_id), family_id, audience)
     refresh_token_hash = argon2.hash(refresh_token)
-    
+
     family = await create_token_family(db, user_id, refresh_token_hash, family_id)
 
     access_token = create_access_token(str(user_id), family.family_id, audience, False)

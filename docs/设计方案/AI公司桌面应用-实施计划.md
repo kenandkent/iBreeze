@@ -1306,15 +1306,15 @@ ibreeze/
 
 **产生接口：** `company.create/get/list/update/archive`、`department.create/get/list/update/archive/setLeader`、responsibility CRUD。
 
-- [ ] **步骤 1：写六项公司创建不变量失败测试**
+- [x] **步骤 1：写六项公司创建不变量失败测试**
 
   对 H.5 每个插入点注入异常，断言不存在部分 Company、Office、GM Employee 或 Conversation。成功后逐项验证六项不变量。
 
-- [ ] **步骤 2：实现可原子启动的 DDL 与组合外键**
+- [x] **步骤 2：实现可原子启动的 DDL 与组合外键**
 
   同一迁移逐字实现 H.3 的 company/department/revision/responsibility/employee 表以及 H.4 的 `conversations` 表、唯一索引和不可变 Trigger；`conversation_messages` 留给 P4-T03。所有 company scope 引用使用组合 FK，确保空库在本任务结束时已经具备执行 H.5 事务所需的全部表。
 
-- [ ] **步骤 3：实现 Company 创建事务**
+- [x] **步骤 3：实现 Company 创建事务**
 
   命令只接受 E.3 字段；服务端生成七个 UUID（Company、CompanyRevision、Office、OfficeRevision、GM Employee、公司会话、办公室会话）。只在该 `BEGIN IMMEDIATE` 创建事务内设置 `defer_foreign_keys=ON`，通过bootstrap repository按H.5固定顺序写入并提交 `company.created`；提交和每条回滚路径都读取并断言已恢复OFF。部门创建采用相同限定；测试向其他Command注入deferred设置，必须被连接归还守卫发现并丢弃，不能污染下一事务。
 

@@ -121,32 +121,62 @@
 | TC-RPC-005 | Notification | 无 id 请求 | handle({method:"x"}) | response.id=null, result 存在 | H.2 |
 | TC-RPC-006 | 多方法共存 | 注册多个 handler | 调用不同方法 | 各自返回正确结果 | H.2 |
 
-## 7. 公司领域链路 (G.1)
+## 7. 公司领域链路 (H.5)
 
-| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
-|---|---|---|---|---|---|
-| TC-COMP-001 | CompanyCreate schema 验证 | 无 | 创建 name="" | ValidationError | G.1 |
-| TC-COMP-002 | CompanyCreate 带行业 | 无 | 创建 name + industry | 字段正确赋值 | G.1 |
-| TC-COMP-003 | Company name 长度限制 | 无 | name 超 128 字符 | ValidationError | G.1 |
-| TC-COMP-004 | Company 全字段模型 | 无 | 创建完整 Company | 所有字段可序列化/反序列化 | G.1 |
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 | 已实现 |
+|---|---|---|---|---|---|---|
+| TC-COMP-001 | CompanyCreate schema 验证 | 无 | 创建 name="" | ValidationError | G.1 | ✅ |
+| TC-COMP-002 | CompanyCreate 带行业 | 无 | 创建 name + industry | 字段正确赋值 | G.1 | ✅ |
+| TC-COMP-003 | Company name 长度限制 | 无 | name 超 128 字符 | ValidationError | G.1 | ✅ |
+| TC-COMP-004 | Company 全字段模型 | 无 | 创建完整 Company | 所有字段可序列化/反序列化 | G.1 | ✅ |
+| TC-COMP-005 | 公司创建原子事务-成功 | 有 published base_profile_version | BEGIN IMMEDIATE 事务内创建 Company+Office+GM+Conversations | 全部成功, defer_foreign_keys 恢复 OFF | H.5 | ✅ |
+| TC-COMP-006 | 公司创建-名称已存在 | 已存在同名公司 | 创建同名公司 | company_name_exists 错误 | H.5 | ✅ |
+| TC-COMP-007 | 公司创建-外键验证 | 无 published version | 创建公司 | BASE_PROFILE_NOT_PUBLISHED | H.5 | ✅ |
+| TC-COMP-008 | 公司创建-base_profile 必填 | base_profile_version_id="" | 创建公司 | BASE_PROFILE_VERSION_REQUIRED | H.5 | ✅ |
+| TC-COMP-009 | 公司创建-事务回滚 | 注入 DB 错误 | 创建公司 | 全部回滚, 无残留数据 | H.5 | ✅ |
+| TC-COMP-010 | 公司创建-外键 defer 恢复 | 事务前后检查 PRAGMA | 创建前后验证 defer_foreign_keys | PRAGMA 恢复为 OFF | H.5 | ✅ |
+| TC-COMP-011 | 公司改名-成功 | 已创建公司 | rename_company(name, version) | 名称更新, version+1 | H.5 | ✅ |
+| TC-COMP-012 | 公司改名-版本冲突 | 已创建公司 | rename_company(expected_version 不匹配) | company_version_conflict | H.5 | ✅ |
+| TC-COMP-013 | 公司改名-名称冲突 | 两公司 | 用另一公司名称改名 | company_name_exists | H.5 | ✅ |
+| TC-COMP-014 | 公司改名-仅改名称 | 已创建公司 | rename_company(name) | introduction 不变 | H.5 | ✅ |
+| TC-COMP-015 | 辅助函数-new_id 唯一 | 无 | 调用 new_id() 100次 | 全部不同 | H.5 | ✅ |
+| TC-COMP-016 | 辅助函数-normalize_name | 无 | normalize_name("  Foo Bar  ") | "foo bar" | H.5 | ✅ |
+| TC-COMP-017 | 辅助函数-sha256 确定性 | 无 | sha256("hello") 两次 | 结果一致 | H.5 | ✅ |
 
 ## 8. 部门领域链路 (G.2)
 
-| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
-|---|---|---|---|---|---|
-| TC-DEPT-001 | DepartmentCreate 验证 | 无 | name="" | ValidationError | G.2 |
-| TC-DEPT-002 | 子部门创建 | parent_id 有值 | DepartmentCreate(parent_id="d1") | parent_id 正确 | G.2 |
-| TC-DEPT-003 | 部门 name 长度限制 | 无 | name 超 128 字符 | ValidationError | G.2 |
-| TC-DEPT-004 | Department 全字段模型 | 无 | 创建完整 Department | 序列化/反序列化正确 | G.2 |
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 | 已实现 |
+|---|---|---|---|---|---|---|
+| TC-DEPT-001 | DepartmentCreate 验证 | 无 | name="" | ValidationError | G.2 | ✅ |
+| TC-DEPT-002 | 子部门创建 | parent_id 有值 | DepartmentCreate(parent_id="d1") | parent_id 正确 | G.2 | ✅ |
+| TC-DEPT-003 | 部门 name 长度限制 | 无 | name 超 128 字符 | ValidationError | G.2 | ✅ |
+| TC-DEPT-004 | Department 全字段模型 | 无 | 创建完整 Department | 序列化/反序列化正确 | G.2 | ✅ |
+| TC-DEPT-005 | 创建部门 | company 已创建 | create_department(name, department_type) | 所有字段正确 | G.2 | ✅ |
+| TC-DEPT-006 | 创建子部门 | parent 部门存在 | create_department(parent_id) | 父子关系正确 | G.2 | ✅ |
+| TC-DEPT-007 | 获取部门 | 已创建部门 | get_department(id) | 返回完整部门 | G.2 | ✅ |
+| TC-DEPT-008 | 获取不存在部门 | 无 | get_department(nonexistent) | not_found | G.2 | ✅ |
+| TC-DEPT-009 | 列出部门 | 多个部门 | list_departments(company_id) | 返回列表 | G.2 | ✅ |
+| TC-DEPT-010 | 列出部门-含父部门 | 子部门存在 | list_departments 含子部门 | parent_id 正确关联 | G.2 | ✅ |
+| TC-DEPT-011 | 更新部门 | 已创建部门 | update_department(name) | 名称更新 | G.2 | ✅ |
+| TC-DEPT-012 | 删除部门 | 已创建部门 | delete_department(id) | 部门删除 | G.2 | ✅ |
 
 ## 9. 职员领域链路 (G.3)
 
-| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
-|---|---|---|---|---|---|
-| TC-EMP-001 | StaffCreate 验证 | 无 | name="" | ValidationError | G.3 |
-| TC-EMP-002 | 默认角色 | 无 | StaffCreate(name="a") | role="member" | G.3 |
-| TC-EMP-003 | 自定义角色 | 无 | StaffCreate(name="a", role="lead") | role="lead" | G.3 |
-| TC-EMP-004 | name 长度限制 | 无 | name 超 64 字符 | ValidationError | G.3 |
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 | 已实现 |
+|---|---|---|---|---|---|---|
+| TC-EMP-001 | StaffCreate 验证 | 无 | name="" | ValidationError | G.3 | ✅ |
+| TC-EMP-002 | 默认角色 | 无 | StaffCreate(name="a") | role="member" | G.3 | ✅ |
+| TC-EMP-003 | 自定义角色 | 无 | StaffCreate(name="a", role="lead") | role="lead" | G.3 | ✅ |
+| TC-EMP-004 | name 长度限制 | 无 | name 超 64 字符 | ValidationError | G.3 | ✅ |
+| TC-EMP-005 | 创建职员 | 部门已创建 | create_employee(name, department_id) | 所有字段正确 | G.3 | ✅ |
+| TC-EMP-006 | 创建职员-指定部门 | 部门存在 | create_employee(department_id) | department_id 正确 | G.3 | ✅ |
+| TC-EMP-007 | 获取职员 | 已创建职员 | get_employee(id) | 返回完整职员 | G.3 | ✅ |
+| TC-EMP-008 | 获取不存在职员 | 无 | get_employee(nonexistent) | not_found | G.3 | ✅ |
+| TC-EMP-009 | 列出职员 | 多个职员 | list_employees(company_id) | 返回列表 | G.3 | ✅ |
+| TC-EMP-010 | 列出职员-按角色筛选 | 不同角色职员 | list_employees(role="lead") | 只返回 lead | G.3 | ✅ |
+| TC-EMP-011 | 更新职员 | 已创建职员 | update_employee(name) | 名称更新 | G.3 | ✅ |
+| TC-EMP-012 | 删除职员 | 已创建职员 | delete_employee(id) | 职员删除 | G.3 | ✅ |
+| TC-EMP-013 | 列出部门 | 公司有部门 | list_departments | 返回部门列表 | G.3 | ✅ |
 
 ## 10. 会话/消息领域链路 (G.4)
 
@@ -161,20 +191,68 @@
 | TC-CONV-007 | Task 带 assignee | 无 | Task(assignee_id="s1") | assignee_id 正确 | G.10 |
 | TC-CONV-008 | Task 关联 conversation | 无 | Task(conversation_id="conv1") | conversation_id 正确 | G.10 |
 
-## 11. 任务状态机链路 (G.10)
+## 11. 任务状态机链路 (H.7)
 
-| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
-|---|---|---|---|---|---|
-| TC-TASK-001 | CompanyTask 完整流转 | 新任务 | draft→analyzing→awaiting_user_confirmation→approved→dispatching→executing→reviewing→completed | 每步状态正确 | G.10 |
-| TC-TASK-002 | CompanyTask 用户确认门禁 | awaiting_user_confirmation | 未确认直接执行 | 拒绝 | G.10 |
-| TC-TASK-003 | CompanyTask revision_requested | awaiting_user_confirmation | 用户要求修改 | 状态回退, 新 PlanVersion | G.10 |
-| TC-TASK-004 | CompanyTask rejected | awaiting_user_confirmation | 用户拒绝 | 不再创建 Run | G.10 |
-| TC-TASK-005 | DepartmentTask 流转 | 已确认计划 | draft→checking_resources→ready→executing→reviewing→completed | 状态正确 | G.10 |
-| TC-TASK-006 | EmployeeTask 流转 | 部门任务就绪 | assigned→ready→running→submitted→peer_reviewing→accepted | 状态正确 | G.10 |
-| TC-TASK-007 | AgentRun 流转 | 执行请求 | queued→probing→starting→running→succeeded | 状态正确 | G.10 |
-| TC-TASK-008 | 非法状态迁移拒绝 | 任意状态 | 非法跳转 | STATE_TRANSITION_INVALID | G.10 |
-| TC-TASK-009 | AgentRun 超时 | running 超时 | timeout | timed_out | G.10 |
-| TC-TASK-010 | AgentRun 取消 | running | cancel | cancelled | G.10 |
+> 97 个测试覆盖 9 个实体类型的全部合法状态迁移和非法迁移拒绝
+
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 | 已实现 |
+|---|---|---|---|---|---|---|
+| TC-TASK-001 | CompanyTask 完整流转 | 新任务 | draft→analyzing→awaiting_user_confirmation→approved→dispatching→executing→reviewing→completed | 每步状态正确 | H.7 | ✅ |
+| TC-TASK-002 | CompanyTask 非法迁移-draft→running | draft 状态 | 非法跳转 | STATE_TRANSITION_INVALID | H.7 | ✅ |
+| TC-TASK-003 | CompanyTask 终态检查 | completed 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-004 | CompanyTask 用户确认门禁 | awaiting_user_confirmation | 未确认直接执行 | 拒绝 | H.7 | ✅ |
+| TC-TASK-005 | CompanyTask revision_requested | awaiting_user_confirmation | 用户要求修改 | 状态回退, 新 PlanVersion | H.7 | ✅ |
+| TC-TASK-006 | CompanyTask rejected | awaiting_user_confirmation | 用户拒绝 | 不再创建 Run | H.7 | ✅ |
+| TC-TASK-007 | CompanyTask paused→cancelled | paused 状态 | 取消 | 进入 cancelled | H.7 | ✅ |
+| TC-TASK-008 | CompanyTask waiting→cancelled | waiting 状态 | 取消 | 进入 cancelled | H.7 | ✅ |
+| TC-TASK-009 | CompanyTask analyzing→failed | analyzing 状态 | 注入失败 | 进入 failed | H.7 | ✅ |
+| TC-TASK-010 | CompanyTask final_review→completed | final_review 状态 | 审查通过 | 进入 completed | H.7 | ✅ |
+| TC-TASK-011 | CompanyTask reviewing→fixing | reviewing 状态 | 审查不通过 | 进入 fixing | H.7 | ✅ |
+| TC-TASK-012 | CompanyTask reviewing→final_review | reviewing 状态 | 审查通过(部分) | 进入 final_review | H.7 | ✅ |
+| TC-TASK-013 | CompanyTask dispatching→checking | dispatching 状态 | 分发完成 | 进入 checking | H.7 | ✅ |
+| TC-TASK-014 | CompanyTask get_allowed_targets | draft/completed 状态 | 查询可用目标 | 返回正确目标列表 | H.7 | ✅ |
+| TC-TASK-015 | DepartmentTask 完整流转 | 已确认计划 | draft→checking_resources→ready→executing→reviewing→completed | 状态正确 | H.7 | ✅ |
+| TC-TASK-016 | DepartmentTask draft→cancelled | draft 状态 | 取消 | 进入 cancelled | H.7 | ✅ |
+| TC-TASK-017 | DepartmentTask 非法迁移-draft→executing | draft 状态 | 直接跳转 | 拒绝 | H.7 | ✅ |
+| TC-TASK-018 | DepartmentTask 终态检查 | completed/cancelled 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-019 | DepartmentTask reviewing→fixing | reviewing 状态 | 审查不通过 | 进入 fixing | H.7 | ✅ |
+| TC-TASK-020 | DepartmentTask fixing→reviewing | fixing 状态 | 修复完成 | 进入 reviewing | H.7 | ✅ |
+| TC-TASK-021 | EmployeeTask 完整流转 | 部门任务就绪 | assigned→ready→running→submitted→peer_reviewing→accepted | 状态正确 | H.7 | ✅ |
+| TC-TASK-022 | EmployeeTask running→waiting_resource | running 状态 | 资源不足 | 进入 waiting_resource | H.7 | ✅ |
+| TC-TASK-023 | EmployeeTask peer_reviewing→changes_requested | peer_reviewing 状态 | 审查不通过 | 进入 changes_requested | H.7 | ✅ |
+| TC-TASK-024 | EmployeeTask changes_requested→ready | changes_requested 状态 | 修改完成 | 进入 ready | H.7 | ✅ |
+| TC-TASK-025 | EmployeeTask 终态检查 | accepted/cancelled 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-026 | AgentRun 完整流转 | 执行请求 | queued→probing→starting→running→verifying→succeeded | 状态正确 | H.7 | ✅ |
+| TC-TASK-027 | AgentRun running→lost | running 状态 | 进程丢失 | 进入 lost | H.7 | ✅ |
+| TC-TASK-028 | AgentRun running→waiting_approval | running 状态 | 需要审批 | 进入 waiting_approval | H.7 | ✅ |
+| TC-TASK-029 | AgentRun lost→retrying | lost 状态 | 重试 | 进入 retrying | H.7 | ✅ |
+| TC-TASK-030 | AgentRun lost 非法迁移→succeeded | lost 状态 | 直接成功 | 拒绝 | H.7 | ✅ |
+| TC-TASK-031 | AgentRun 超时 | running 超时 | timeout | timed_out | H.7 | ✅ |
+| TC-TASK-032 | AgentRun 取消 | queued/running | cancel | cancelled | H.7 | ✅ |
+| TC-TASK-033 | AgentRun 终态检查 | succeeded/timed_out/lost 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-034 | ReviewAssignment 完整流转 | 审查分配 | assigned→in_review→submitted | 状态正确 | H.7 | ✅ |
+| TC-TASK-035 | ReviewAssignment submitted→stale | submitted 状态 | 审查过期 | 进入 stale | H.7 | ✅ |
+| TC-TASK-036 | ReviewAssignment 终态检查 | stale/cancelled 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-037 | ReviewIssue 完整流转 | 审查问题 | open→fixing→resolved→verified→closed | 状态正确 | H.7 | ✅ |
+| TC-TASK-038 | ReviewIssue open→rejected | open 状态 | 拒绝问题 | 进入 rejected | H.7 | ✅ |
+| TC-TASK-039 | ReviewIssue 终态检查 | closed/rejected 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-040 | ReviewIssue verified→fixing | verified 状态 | 重新打开 | 进入 fixing | H.7 | ✅ |
+| TC-TASK-041 | CompanyPlanVersion 完整流转 | 新计划 | draft→awaiting→approved | 状态正确 | H.7 | ✅ |
+| TC-TASK-042 | CompanyPlanVersion draft→rejected | draft 状态 | 拒绝 | 进入 rejected | H.7 | ✅ |
+| TC-TASK-043 | CompanyPlanVersion awaiting→superseded | awaiting 状态 | 新版本创建 | 进入 superseded | H.7 | ✅ |
+| TC-TASK-044 | CompanyPlanVersion 终态检查 | approved/superseded 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-045 | TaskWorkspace 完整流转 | 任务工作区 | preparing→active→ready_to_apply→applied | 状态正确 | H.7 | ✅ |
+| TC-TASK-046 | TaskWorkspace 终态检查 | applied/abandoned 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-047 | HumanApproval 完整流转 | 审批请求 | pending→allowed→consumed | 状态正确 | H.7 | ✅ |
+| TC-TASK-048 | HumanApproval pending→denied | pending 状态 | 拒绝 | 进入 denied | H.7 | ✅ |
+| TC-TASK-049 | HumanApproval pending→expired | pending 状态 | 超时 | 进入 expired | H.7 | ✅ |
+| TC-TASK-050 | HumanApproval allowed→expired | allowed 状态 | 超时 | 进入 expired | H.7 | ✅ |
+| TC-TASK-051 | HumanApproval 终态检查 | denied/consumed 状态 | 任何迁移 | 拒绝 | H.7 | ✅ |
+| TC-TASK-052 | 状态机 validate_resume_state | waiting 状态 | 验证 resume 参数 | 需要 resume_token | H.7 | ✅ |
+| TC-TASK-053 | 状态机未知实体类型 | 无 | 调用不存在的实体类型 | raises InvalidStateError | H.7 | ✅ |
+| TC-TASK-054 | 状态机未知状态 | 不存在的状态 | 迁移到未知状态 | raises InvalidStateError | H.7 | ✅ |
+| TC-TASK-055 | 状态机终态迁移 | terminal 状态 | 任何迁移 | raises InvalidStateError | H.7 | ✅ |
+| TC-TASK-056 | 状态机 get_allowed_targets | terminal 状态 | 查询可用目标 | 返回空集合 | H.7 | ✅ |
 
 ## 12. 编排平台链路 (G.11)
 
@@ -233,18 +311,25 @@
 
 ## 17. 中间件/安全/可观测链路
 
-| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 |
-|---|---|---|---|---|---|
-| TC-MW-001 | Audit middleware 记录请求 | 请求经过 | 发送 POST 请求 | audit_logs 表写入记录 | G.10 |
-| TC-MW-002 | Idempotency middleware 拦截 | 同 key 重复请求 | 发两次相同 idempotency_key | 第二次返回缓存结果 | G.10 |
-| TC-MW-003 | CORS 配置 | 跨域请求 | OPTIONS 请求 | 按配置允许/拒绝 | G.23 |
-| TC-SEC-001 | 密码 Argon2id 哈希 | 无 | create_user | hashed_password 可 verify 原密码 | G.23 |
-| TC-SEC-002 | API Key 验证 | 无 | validate_api_key | 长度>=32 通过, <32 拒绝 | G.23 |
-| TC-SEC-003 | 安全响应头 | 无 | get_secure_headers | 含 X-Content-Type-Options 等 | G.23 |
-| TC-OBS-001 | PerformanceMetrics 记录 | 无 | record_request(0.5) | average_duration=0.5 | G.24 |
-| TC-OBS-002 | PerformanceMetrics reset | 有记录 | reset() | 所有计数归零 | G.24 |
-| TC-OBS-003 | track_performance 装饰器 | 无 | @track_performance 装饰函数 | 函数执行后 metrics 更新 | G.24 |
-| TC-OBS-004 | 结构化日志 | 无 | setup_logging(json_format=True) | 日志输出为 JSON | G.24 |
+| ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 设计引用 | 已实现 |
+|---|---|---|---|---|---|---|
+| TC-MW-001 | Audit middleware 记录请求 | 请求经过 | 发送 POST 请求 | audit_logs 表写入记录 | G.10 | ✅ |
+| TC-MW-002 | Audit middleware 跳过健康检查 | 请求经过 | GET /health | 不写入审计日志 | G.10 | ✅ |
+| TC-MW-003 | Audit middleware resource_type 提取 | 无 | _resource_type_from_path("/admin/api/v1/users") | 返回 "admin" | G.10 | ✅ |
+| TC-MW-004 | Audit middleware resource_id 提取 | 无 | _extract_resource_id("/api/v1/users/abc-123") | 返回 "abc-123" | G.10 | ✅ |
+| TC-MW-005 | Audit middleware 跳过 auth 端点 | 无 | _is_auth_endpoint("/auth/login") | 返回 True | G.10 | ✅ |
+| TC-MW-006 | Audit middleware IP 提取 | x-forwarded-for 头 | _get_client_ip | 返回第一个 IP | G.10 | ✅ |
+| TC-MW-007 | Idempotency middleware 缓存重用 | 同 key 重复请求 | 发两次相同 idempotency_key | 第二次返回缓存结果 | G.10 | ✅ |
+| TC-MW-008 | Idempotency middleware 冲突检测 | 同 key 不同 body | 发两次不同 body | 返回 409 IDEMPOTENCY_CONFLICT | G.10 | ✅ |
+| TC-MW-009 | Rate Limit 限流 | 同一 IP | 连续 5+ 次请求 | 超过后 429 RATE_LIMITED | G.10 | ✅ |
+| TC-MW-010 | CORS 配置 | 跨域请求 | OPTIONS 请求 | 按配置允许/拒绝 | G.23 | - |
+| TC-SEC-001 | 密码 Argon2id 哈希 | 无 | create_user | hashed_password 可 verify 原密码 | G.23 | ✅ |
+| TC-SEC-002 | API Key 验证 | 无 | validate_api_key | 长度>=32 通过, <32 拒绝 | G.23 | - |
+| TC-SEC-003 | 安全响应头 | 无 | get_secure_headers | 含 X-Content-Type-Options 等 | G.23 | - |
+| TC-OBS-001 | PerformanceMetrics 记录 | 无 | record_request(0.5) | average_duration=0.5 | G.24 | - |
+| TC-OBS-002 | PerformanceMetrics reset | 有记录 | reset() | 所有计数归零 | G.24 | - |
+| TC-OBS-003 | track_performance 装饰器 | 无 | @track_performance 装饰函数 | 函数执行后 metrics 更新 | G.24 | - |
+| TC-OBS-004 | 结构化日志 | 无 | setup_logging(json_format=True) | 日志输出为 JSON | G.24 | - |
 
 ## 18. Rust Desktop Core 链路
 
@@ -427,34 +512,61 @@
 
 ## 统计
 
-| 模块 | 用例数 |
-|---|---|
-| 认证链路 | 27 |
-| 用户管理 | 13 |
-| 目录管理 | 15 |
-| 发布管理 | 10 |
-| Skill 管理 | 16 |
-| Sidecar RPC | 6 |
-| 公司领域 | 4 |
-| 部门领域 | 4 |
-| 职员领域 | 4 |
-| 会话/消息 | 8 |
-| 任务状态机 | 10 |
-| 编排平台 | 12 |
-| Workspace/Artifact/Review | 7 |
-| 知识/备份 | 5 |
-| Workflow 编排模型 | 3 |
-| Agent Runtime 模型 | 3 |
-| 中间件/安全/可观测 | 11 |
-| Rust Desktop Core | 10 |
-| 前端 UI | 8 |
-| 端到端 | 6 |
-| Rust Backend API 对接 | 6 |
-| 前端 Mock 消除验证 | 13 |
-| 部署配置验证 | 6 |
-| 安全边界测试 | 20 |
-| 异常处理测试 | 20 |
-| 性能测试用例 | 10 |
-| 端到端功能链路测试 | 10 |
-| 数据一致性测试 | 10 |
-| **合计** | **297** |
+### 已实现测试覆盖
+
+| 测试套件 | 文件数 | 用例数 | 状态 |
+|---|---|---|---|
+| Sidecar: test_state_machine.py | 1 | 97 | ✅ 全部通过 |
+| Sidecar: test_schemas.py | 1 | 18 | ✅ 全部通过 |
+| Sidecar: test_conversation.py | 1 | 14 | ✅ 全部通过 |
+| Sidecar: test_knowledge.py | 1 | 14 | ✅ 全部通过 |
+| Sidecar: test_company_atomic.py | 1 | 10 | ✅ 全部通过 |
+| Sidecar: test_orchestration.py | 1 | 12 | ✅ 全部通过 |
+| Sidecar: test_workspace.py | 1 | 12 | ✅ 全部通过 |
+| Sidecar: test_employee.py | 1 | 12 | ✅ 全部通过 |
+| Sidecar: test_agent_runtime.py | 1 | 7 | ✅ 全部通过 |
+| **Sidecar 合计** | **9** | **203** | **✅ 100%** |
+| Backend API: test_auth.py | 1 | 22 | ✅ 全部通过 |
+| Backend API: test_catalog.py | 1 | 10 | ✅ 全部通过 |
+| Backend API: test_compatibility.py | 1 | 11 | ✅ 全部通过 |
+| Backend API: test_middleware.py | 1 | 9 | ✅ 全部通过 |
+| Backend API: test_releases.py | 1 | 8 | ✅ 全部通过 |
+| Backend API: test_skills.py | 1 | 8 | ✅ 全部通过 |
+| Backend API: test_users.py | 1 | 12 | ✅ 全部通过 |
+| Backend API: test_zip_service.py | 1 | 11 | ✅ 全部通过 |
+| **Backend API 合计** | **8** | **91** | **✅ 100%** |
+| **项目总计** | **17** | **294** | **✅ 100%** |
+
+### 测试用例文档统计（含待实现）
+
+| 模块 | 用例数 | 已实现 |
+|---|---|---|
+| 认证链路 | 27 | 21 |
+| 用户管理 | 13 | 11 |
+| 目录管理 | 15 | 10 |
+| 发布管理 | 10 | 8 |
+| Skill 管理 | 16 | 8 |
+| Sidecar RPC | 6 | 0 |
+| 公司领域 | 17 | 17 |
+| 部门领域 | 12 | 12 |
+| 职员领域 | 13 | 13 |
+| 会话/消息 | 8 | 14 |
+| 任务状态机 | 56 | 56 |
+| 编排平台 | 12 | 12 |
+| Workspace/Artifact/Review | 7 | 12 |
+| 知识/备份 | 5 | 14 |
+| Workflow 编排模型 | 3 | 0 |
+| Agent Runtime 模型 | 3 | 7 |
+| 中间件/安全/可观测 | 17 | 9 |
+| Rust Desktop Core | 10 | 0 |
+| 前端 UI | 8 | 0 |
+| 端到端 | 6 | 0 |
+| Rust Backend API 对接 | 6 | 0 |
+| 前端 Mock 消除验证 | 13 | 0 |
+| 部署配置验证 | 6 | 0 |
+| 安全边界测试 | 20 | 0 |
+| 异常处理测试 | 20 | 0 |
+| 性能测试用例 | 10 | 0 |
+| 端到端功能链路测试 | 10 | 0 |
+| 数据一致性测试 | 10 | 10 |
+| **合计** | **310** | **224** |

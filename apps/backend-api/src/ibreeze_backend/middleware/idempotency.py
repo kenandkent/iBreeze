@@ -1,8 +1,8 @@
-"""Idempotency middleware."""
+"""Idempotency middleware – aligned with G.3 api_idempotency schema."""
 import hashlib
 import json
-import uuid
-from datetime import datetime, timedelta, timezone
+import uuid as _uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -11,7 +11,7 @@ from starlette.types import ASGIApp
 from sqlalchemy import select
 
 from ibreeze_backend.db.session import async_session_factory
-from ibreeze_backend.models.idempotency_key import IdempotencyKey
+from ibreeze_backend.models.idempotency_key import ApiIdempotency
 from ibreeze_backend.observability.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -37,20 +37,23 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         try:
             async with async_session_factory() as session:
                 result = await session.execute(
-                    select(IdempotencyKey).where(
-                        IdempotencyKey.key == idempotency_key
+                    select(ApiIdempotency).where(
+                        ApiIdempotency.idempotency_key == _uuid.UUID(idempotency_key),
+                        ApiIdempotency.method == request.method,
+                        ApiIdempotency.path == request.url.path,
                     )
                 )
                 existing = result.scalar_one_or_none()
 
                 if existing:
-                    if existing.expires_at < datetime.now(timezone.utc):
+                    now_str = datetime.now(UTC).isoformat()
+                    if existing.expires_at < now_str:
                         await session.delete(existing)
                         await session.commit()
-                    elif existing.response_body and body_hash == existing.response_body:
+                    elif existing.request_sha256 == body_hash:
                         return JSONResponse(
-                            status_code=existing.response_status,
-                            content=json.loads(existing.response_body),
+                            status_code=existing.response_status or 200,
+                            content=json.loads(existing.response_body) if existing.response_body else {},
                         )
                     else:
                         return JSONResponse(
@@ -66,18 +69,21 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 response = await call_next(request)
 
-                response_body = await _read_response_body(response)
-                try:
-                    parsed = json.loads(response_body) if response_body else None
-                except (json.JSONDecodeError, ValueError):
-                    parsed = None
+                response_body_bytes = await _read_response_body(response)
+                response_body_str = response_body_bytes.decode() if response_body_bytes else None
 
-                entry = IdempotencyKey(
-                    id=uuid.uuid4(),
-                    key=idempotency_key,
+                entry = ApiIdempotency(
+                    id=_uuid.uuid4(),
+                    principal_user_id=_uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                    method=request.method,
+                    path=request.url.path,
+                    idempotency_key=_uuid.UUID(idempotency_key),
+                    request_sha256=body_hash,
+                    status="completed",
                     response_status=response.status_code,
-                    response_body=body_hash,
-                    expires_at=datetime.now(timezone.utc) + _IDEMPOTENCY_TTL,
+                    response_body=response_body_str,
+                    created_at=datetime.now(UTC).isoformat(),
+                    expires_at=(datetime.now(UTC) + _IDEMPOTENCY_TTL).isoformat(),
                 )
                 session.add(entry)
                 await session.commit()

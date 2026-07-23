@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.models.catalog_release import CatalogRelease
-from ibreeze_backend.models.emergency_disable import EmergencyDisable
+from ibreeze_backend.models.emergency_disable import EmergencyDisableRelease as EmergencyDisable
 from ibreeze_backend.models.skill import Skill
 from ibreeze_backend.skills.service import install_skill
 

@@ -48,13 +48,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
             async with async_session_factory() as session:
                 await write_audit_log(
                     session,
-                    user_id=user_id,
+                    actor_user_id=user_id,
                     action=action,
                     resource_type=resource_type,
-                    resource_id=_extract_resource_id(path),
-                    details=details,
+                    resource_id=_safe_uuid(rid := _extract_resource_id(path)),
+                    request_id=_uuid.UUID(request_id),
+                    outcome="success" if 200 <= response.status_code < 400 else "failed",
                     ip_address=_get_client_ip(request),
-                    user_agent=request.headers.get("user-agent"),
                 )
                 await session.commit()
         except Exception:
@@ -101,3 +101,12 @@ def _extract_resource_id(path: str) -> str | None:
     if len(parts) >= 3:
         return parts[-1]
     return None
+
+
+def _safe_uuid(value: str | None) -> _uuid.UUID | None:
+    if value is None:
+        return None
+    try:
+        return _uuid.UUID(value)
+    except ValueError:
+        return None
