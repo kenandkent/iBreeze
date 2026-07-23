@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, Switch, message } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useListModels, useCreateModel, useUpdateModel, useDeleteModel, useValidateModel, usePublishModel } from '../hooks/useModelCatalog';
 import type { ModelCatalogItem } from '../types';

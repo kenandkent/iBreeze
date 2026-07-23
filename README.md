@@ -55,7 +55,7 @@ ibreeze/
 │  ├─ rpc-schema/       # 本地 RPC Schema
 │  └─ ui/               # 共享 UI 组件
 ├─ tests/               # 集成、E2E、安全、性能测试
-├─ deploy/              # Docker Compose 部署
+├─ tests/               # 集成、E2E、安全、性能测试
 ├─ scripts/             # 构建和验证脚本
 └─ docs/                # 文档
 ```
@@ -73,15 +73,20 @@ ibreeze/
 ### 快速开始
 
 ```bash
-# 安装依赖
-cd apps/desktop && npm install
-cd ../admin-web && npm install
-cd ../desktop-core && cargo check
-cd ../../sidecar && uv sync
-cd ../apps/backend-api && uv sync
-cd ../../tests/e2e && npm install
+# 1. 启动后台服务（PostgreSQL + MinIO + Backend API）
+docker compose up -d
+docker exec ibreeze-minio-1 mc alias set local http://localhost:9000 minioadmin minioadmin
+docker exec ibreeze-minio-1 mc mb local/ibreeze
+cd apps/backend-api
+IBREEZE_DATABASE_URL="postgresql+asyncpg://ibreeze:ibreeze_password@localhost:51543/ibreeze" \
+  uv run alembic upgrade head
+cd ../..
 
-# 运行验证
+# 2. 安装前端依赖
+cd apps/admin-web && npm install && cd ../..
+cd apps/desktop && npm install && cd ../..
+
+# 3. 运行验证
 bash scripts/verify-all.sh
 ```
 

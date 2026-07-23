@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Table, Select, Input, DatePicker, Button, Tag, Space, Card } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import { useListAuditLogs } from '../hooks/useAuditLogs';
-import type { AuditLogEntry } from '../types';
 
 const EVENT_TYPES = [
   'auth.login', 'auth.logout', 'auth.refresh',

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16
@@ -11,6 +9,28 @@ services:
       - "51543:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ibreeze -d ibreeze"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    ports:
+      - "51900:9000"
+      - "51901:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":51901"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   backend-api:
     build: ./apps/backend-api
@@ -19,8 +39,17 @@ services:
     environment:
       IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:ibreeze_password@postgres:5432/ibreeze
       IBREEZE_API_PORT: "51080"
+      IBREEZE_S3_ENDPOINT_URL: http://minio:9000
+      IBREEZE_S3_ACCESS_KEY_ID: minioadmin
+      IBREEZE_S3_SECRET_ACCESS_KEY: minioadmin
+      IBREEZE_S3_BUCKET_NAME: ibreeze
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  minio_data:

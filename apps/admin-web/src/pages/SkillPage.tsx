@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useListSkills, useInstallSkill, useRemoveSkill } from '../hooks/useSkills';
 import type { SkillCatalogItem } from '../types';
 

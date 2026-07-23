@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider } from '../hooks/useProviderCatalog';
 import type { ProviderCatalogItem } from '../types';
 
