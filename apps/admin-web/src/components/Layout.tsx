@@ -14,6 +14,7 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../utils/logger';
 
 const { Sider, Content, Header } = AntLayout;
 
@@ -41,6 +42,17 @@ export default function Layout() {
     }
   }, [isAuthenticated, navigate]);
 
+  const handleMenuClick = ({ key }: { key: string }) => {
+    logger.info('Layout', 'navigate', { from: location.pathname, to: key });
+    navigate(key);
+  };
+
+  const handleLogout = () => {
+    logger.info('Layout', 'logout');
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
       <Sider breakpoint="lg" collapsedWidth={0}>
@@ -52,14 +64,14 @@ export default function Layout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={MENU_ITEMS}
-          onClick={({ key }) => navigate(key)}
+          onClick={handleMenuClick}
         />
       </Sider>
       <AntLayout>
         <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
           <LogoutOutlined
             style={{ fontSize: 16, cursor: 'pointer' }}
-            onClick={() => { logout(); navigate('/login', { replace: true }); }}
+            onClick={handleLogout}
           />
         </Header>
         <Content style={{ margin: 24 }}>

@@ -1,223 +1,281 @@
-"""对话管理领域服务。
+"""Company conversation intake and message projections."""
 
-提供对话 CRUD、消息添加（角色枚举 user/assistant/system/tool）、引用管理、
-软删除、归档（archived 状态不可写）和全文搜索能力。
-"""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+import json
+import uuid
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from ibreeze.schemas import (
-    ConversationCreate,
     ConversationResponse,
-    ConversationStatus,
-    ConversationUpdate,
-    MessageCreate,
     MessageResponse,
-    MessageRole,
+    SubmitUserMessageRequest,
+    SubmitUserMessageResponse,
 )
 
 
-# ── 内存存储 ──────────────────────────────────────────────────────────────
-
-_conversations: dict[str, dict[str, Any]] = {}
-_messages: dict[str, dict[str, Any]] = {}
+def _id() -> str:
+    return str(uuid.uuid4())
 
 
-def _now_utc() -> datetime:
-    """返回当前 UTC 时间"""
-    return datetime.now(timezone.utc)
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-# ── 对话 CRUD ─────────────────────────────────────────────────────────────
-
-def create_conversation(
-    company_id: str,
-    title: str | None = None,
-) -> ConversationResponse:
-    """创建空对话。"""
-    import uuid
-
-    conv_id = str(uuid.uuid4())
-    now = _now_utc()
-
-    record: dict[str, Any] = {
-        "id": conv_id,
-        "company_id": company_id,
-        "title": title,
-        "status": ConversationStatus.ACTIVE,
-        "is_deleted": False,
-        "created_at": now,
-        "updated_at": now,
-    }
-    _conversations[conv_id] = record
-    return ConversationResponse(**record)
+def _dt(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def list_conversations(
-    company_id: str,
-    status: ConversationStatus | None = None,
-    offset: int = 0,
-    limit: int = 20,
-) -> list[ConversationResponse]:
-    """分页列出对话，可按状态过滤。"""
-    active = [
-        c
-        for c in _conversations.values()
-        if not c["is_deleted"]
-        and c["company_id"] == company_id
-        and (status is None or c["status"] == status)
-    ]
-    return [ConversationResponse(**c) for c in active[offset : offset + limit]]
+async def _one(cursor: Any) -> Any | None:
+    return await cursor.fetchone()
 
 
-def get_conversation(conv_id: str) -> ConversationResponse:
-    """获取单个对话详情。"""
-    record = _conversations.get(conv_id)
-    if record is None or record["is_deleted"]:
-        raise KeyError(f"对话不存在: {conv_id}")
-    return ConversationResponse(**record)
-
-
-def update_conversation(
-    conv_id: str,
-    data: ConversationUpdate,
-) -> ConversationResponse:
-    """更新对话标题或状态。
-
-    archived 状态的对话不允许修改。
-    """
-    record = _conversations.get(conv_id)
-    if record is None or record["is_deleted"]:
-        raise KeyError(f"对话不存在: {conv_id}")
-
-    if record["status"] == ConversationStatus.ARCHIVED:
-        raise ValueError("已归档的对话不可修改")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        record[key] = value
-    record["updated_at"] = _now_utc()
-
-    return ConversationResponse(**record)
-
-
-def delete_conversation(conv_id: str) -> None:
-    """软删除对话。"""
-    record = _conversations.get(conv_id)
-    if record is None or record["is_deleted"]:
-        raise KeyError(f"对话不存在: {conv_id}")
-    record["is_deleted"] = True
-    record["updated_at"] = _now_utc()
-
-
-def archive_conversation(conv_id: str) -> ConversationResponse:
-    """归档对话。归档后不可写入新消息。"""
-    record = _conversations.get(conv_id)
-    if record is None or record["is_deleted"]:
-        raise KeyError(f"对话不存在: {conv_id}")
-
-    record["status"] = ConversationStatus.ARCHIVED
-    record["updated_at"] = _now_utc()
-    return ConversationResponse(**record)
-
-
-# ── 消息管理 ──────────────────────────────────────────────────────────────
-
-def add_message(
-    conv_id: str,
-    role: MessageRole,
-    content: str,
-    references: list[dict[str, Any]] | None = None,
-) -> MessageResponse:
-    """向对话添加消息。
-
-    archived 状态的对话不允许添加消息。
-    """
-    conv = _conversations.get(conv_id)
-    if conv is None or conv["is_deleted"]:
-        raise KeyError(f"对话不存在: {conv_id}")
-
-    if conv["status"] == ConversationStatus.ARCHIVED:
-        raise ValueError("已归档的对话不可添加消息")
-
-    import uuid
-
-    msg_id = str(uuid.uuid4())
-    now = _now_utc()
-
-    record: dict[str, Any] = {
-        "id": msg_id,
-        "conversation_id": conv_id,
-        "role": role,
-        "content": content,
-        "references": references or [],
-        "is_deleted": False,
-        "created_at": now,
-    }
-    _messages[msg_id] = record
-    conv["updated_at"] = now
-    return MessageResponse(**record)
-
-
-def list_messages(
-    conv_id: str,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[MessageResponse]:
-    """列出对话消息（按时间正序）。"""
-    if conv_id not in _conversations:
-        raise KeyError(f"对话不存在: {conv_id}")
-
-    msgs = sorted(
-        [
-            m
-            for m in _messages.values()
-            if m["conversation_id"] == conv_id and not m["is_deleted"]
-        ],
-        key=lambda m: m["created_at"],
+def _conversation(row: Any) -> ConversationResponse:
+    return ConversationResponse(
+        id=row["id"],
+        company_id=row["company_id"],
+        conversation_type=row["conversation_type"],
+        department_id=row["department_id"],
+        status=row["status"],
+        created_at=_dt(row["created_at"]),
     )
-    return [MessageResponse(**m) for m in msgs[offset : offset + limit]]
 
 
-def delete_message(msg_id: str) -> None:
-    """软删除消息。"""
-    record = _messages.get(msg_id)
-    if record is None or record["is_deleted"]:
-        raise KeyError(f"消息不存在: {msg_id}")
-    record["is_deleted"] = True
+def _message(row: Any) -> MessageResponse:
+    return MessageResponse(
+        id=row["id"],
+        company_id=row["company_id"],
+        conversation_id=row["conversation_id"],
+        task_id=row["task_id"],
+        source_event_id=row["source_event_id"],
+        sender_type=row["sender_type"],
+        sender_employee_id=row["sender_employee_id"],
+        message_type=row["message_type"],
+        content=row["content"],
+        artifact_refs_json=row["artifact_refs_json"],
+        created_at=_dt(row["created_at"]),
+    )
 
 
-# ── 搜索 ──────────────────────────────────────────────────────────────────
-
-def search_conversations(
+async def get_company_conversation(
+    db: Any,
     company_id: str,
-    query: str,
-    offset: int = 0,
-    limit: int = 20,
-) -> list[ConversationResponse]:
-    """全文搜索对话（基于标题和消息内容的简单匹配）。"""
-    query_lower = query.lower()
-    results: list[dict[str, Any]] = []
+) -> ConversationResponse:
+    cursor = await db.execute(
+        """SELECT c.* FROM conversations c
+           JOIN companies co ON co.company_conversation_id=c.id
+           WHERE co.id=? AND c.company_id=?""",
+        (company_id, company_id),
+    )
+    row = await _one(cursor)
+    if row is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    return _conversation(row)
 
-    for conv in _conversations.values():
-        if conv["is_deleted"] or conv["company_id"] != company_id:
-            continue
 
-        # 匹配标题
-        if conv.get("title") and query_lower in conv["title"].lower():
-            results.append(conv)
-            continue
+async def get_department_conversation(
+    db: Any,
+    company_id: str,
+    department_id: str,
+) -> ConversationResponse:
+    cursor = await db.execute(
+        """SELECT c.* FROM conversations c
+           JOIN departments d ON d.department_conversation_id=c.id
+           WHERE d.id=? AND d.company_id=? AND c.company_id=?""",
+        (department_id, company_id, company_id),
+    )
+    row = await _one(cursor)
+    if row is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    return _conversation(row)
 
-        # 匹配消息内容
-        for msg in _messages.values():
-            if (
-                msg["conversation_id"] == conv["id"]
-                and not msg["is_deleted"]
-                and query_lower in msg["content"].lower()
-            ):
-                results.append(conv)
-                break
 
-    return [ConversationResponse(**c) for c in results[offset : offset + limit]]
+async def list_messages(
+    db: Any,
+    company_id: str,
+    conversation_id: str,
+    *,
+    limit: int = 50,
+    after: tuple[str, str] | None = None,
+) -> list[MessageResponse]:
+    if after is None:
+        cursor = await db.execute(
+            """SELECT * FROM conversation_messages
+               WHERE company_id=? AND conversation_id=?
+               ORDER BY created_at ASC,id ASC LIMIT ?""",
+            (company_id, conversation_id, limit),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT * FROM conversation_messages
+               WHERE company_id=? AND conversation_id=?
+               AND (created_at > ? OR (created_at = ? AND id > ?))
+               ORDER BY created_at ASC,id ASC LIMIT ?""",
+            (
+                company_id,
+                conversation_id,
+                after[0],
+                after[0],
+                after[1],
+                limit,
+            ),
+        )
+    return [_message(row) for row in await cursor.fetchall()]
+
+
+async def submit_user_message(
+    db: Any,
+    data: SubmitUserMessageRequest,
+) -> SubmitUserMessageResponse:
+    if data.target_task_id and data.supersedes_task_id:
+        raise ValueError("VALIDATION_FAILED")
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cursor = await db.execute(
+            """SELECT co.status AS company_status, c.conversation_type,
+                      c.department_id
+               FROM companies co
+               JOIN conversations c ON c.id=? AND c.company_id=co.id
+               WHERE co.id=?""",
+            (data.conversation_id, data.company_id),
+        )
+        scope = await _one(cursor)
+        if scope is None:
+            raise ValueError("RESOURCE_NOT_FOUND")
+        if scope["company_status"] != "active":
+            raise ValueError("COMPANY_ARCHIVED")
+        if scope["conversation_type"] != "company" or scope["department_id"] is not None:
+            raise ValueError("COMPANY_SCOPE_VIOLATION")
+
+        now = _now()
+        event_id = _id()
+        message_id = _id()
+        task_id = data.target_task_id or _id()
+        if data.target_task_id:
+            cursor = await db.execute(
+                """SELECT * FROM company_tasks
+                   WHERE id=? AND company_id=?""",
+                (data.target_task_id, data.company_id),
+            )
+            task = await _one(cursor)
+            if task is None or task["status"] not in {
+                "awaiting_user_confirmation",
+                "revision_requested",
+            }:
+                raise ValueError("STATE_TRANSITION_INVALID")
+            task_version = task["version"] + 1
+            task_status: Literal["draft", "revision_requested"] = (
+                "revision_requested"
+            )
+            intake_mode: Literal[
+                "new_task",
+                "plan_revision",
+                "superseding_task",
+            ] = "plan_revision"
+        else:
+            task_version = 1
+            task_status = "draft"
+            intake_mode = "superseding_task" if data.supersedes_task_id else "new_task"
+            if data.supersedes_task_id:
+                cursor = await db.execute(
+                    """SELECT created_at,status FROM company_tasks
+                       WHERE id=? AND company_id=?""",
+                    (data.supersedes_task_id, data.company_id),
+                )
+                prior = await _one(cursor)
+                if prior is None or prior["status"] not in {
+                    "cancelled",
+                    "failed",
+                }:
+                    raise ValueError("STATE_TRANSITION_INVALID")
+
+        payload = json.dumps(
+            {
+                "company_id": data.company_id,
+                "aggregate_id": task_id,
+                "aggregate_version": task_version,
+                "conversation_id": data.conversation_id,
+                "message_id": message_id,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        await db.execute(
+            """INSERT INTO domain_events
+               (event_id,company_id,aggregate_type,aggregate_id,
+                aggregate_version,event_type,payload_json,trace_id,occurred_at)
+               VALUES (?,?,'company_task',?,?, 'conversation.user_message_submitted',
+                       ?,?,?)""",
+            (
+                event_id,
+                data.company_id,
+                task_id,
+                task_version,
+                payload,
+                _id(),
+                now,
+            ),
+        )
+
+        if data.target_task_id:
+            await db.execute(
+                """UPDATE company_tasks
+                   SET status='revision_requested',updated_at=?,version=?
+                   WHERE id=? AND company_id=?""",
+                (now, task_version, task_id, data.company_id),
+            )
+        else:
+            title = data.content.strip().splitlines()[0][:200]
+            await db.execute(
+                """INSERT INTO company_tasks
+                   (id,company_id,supersedes_task_id,company_conversation_id,
+                    user_message_event_id,title,status,resume_state,
+                    active_plan_id,created_at,updated_at,completed_at,version)
+                   VALUES (?,?,?,?,?,?,'draft',NULL,NULL,?,?,NULL,1)""",
+                (
+                    task_id,
+                    data.company_id,
+                    data.supersedes_task_id,
+                    data.conversation_id,
+                    event_id,
+                    title,
+                    now,
+                    now,
+                ),
+            )
+        await db.execute(
+            """INSERT INTO conversation_messages
+               (id,company_id,conversation_id,task_id,source_event_id,
+                sender_type,sender_employee_id,message_type,content,
+                artifact_refs_json,created_at)
+               VALUES (?,?,?,?,?,'user',NULL,'user_message',?,'[]',?)""",
+            (
+                message_id,
+                data.company_id,
+                data.conversation_id,
+                task_id,
+                event_id,
+                data.content,
+                now,
+            ),
+        )
+        await db.execute(
+            """INSERT INTO outbox_events
+               (id,domain_event_id,topic,payload_json,status,attempts,
+                next_attempt_at,created_at)
+               VALUES (?,?,'company_task.analysis.requested',?,
+                       'pending',0,?,?)""",
+            (_id(), event_id, payload, now, now),
+        )
+        await db.commit()
+        return SubmitUserMessageResponse(
+            message_id=message_id,
+            company_task_id=task_id,
+            task_status=task_status,
+            intake_mode=intake_mode,
+            analysis_queued=True,
+        )
+    except Exception:
+        await db.rollback()
+        raise

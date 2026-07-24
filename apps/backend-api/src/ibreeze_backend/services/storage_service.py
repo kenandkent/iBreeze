@@ -1,56 +1,59 @@
-"""Object storage service for skill packages."""
-import hashlib
+"""Filesystem-backed development object store with traversal-safe object keys."""
+
+from __future__ import annotations
+
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class ObjectStorage:
-    """Local filesystem object storage for skill packages."""
+    """Development adapter for the S3 object-store contract."""
 
-    def __init__(self, base_path: Path | None = None):
-        self.base_path = base_path or Path("storage/skills")
+    def __init__(self, base_path: Path | None = None) -> None:
+        self.base_path = (base_path or Path("storage")).resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def store(self, skill_id: str, version: str, zip_path: Path) -> Path:
-        """Store a skill ZIP file."""
-        skill_dir = self.base_path / skill_id
-        skill_dir.mkdir(parents=True, exist_ok=True)
-        dest = skill_dir / f"{version}.zip"
-        shutil.copy2(zip_path, dest)
-        return dest
+    def put_object(self, object_key: str, source: Path) -> Path:
+        destination = self._path(object_key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        return destination
 
-    def retrieve(self, skill_id: str, version: str) -> Path | None:
-        """Retrieve a skill ZIP file."""
-        path = self.base_path / skill_id / f"{version}.zip"
-        return path if path.exists() else None
+    def put_bytes(self, object_key: str, value: bytes) -> Path:
+        destination = self._path(object_key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        temporary.write_bytes(value)
+        temporary.replace(destination)
+        return destination
 
-    def delete(self, skill_id: str, version: str) -> bool:
-        """Delete a skill ZIP file."""
-        path = self.base_path / skill_id / f"{version}.zip"
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+    def get_bytes(self, object_key: str) -> bytes | None:
+        path = self.get_object_path(object_key)
+        return path.read_bytes() if path is not None else None
 
-    def list_versions(self, skill_id: str) -> list[str]:
-        """List all versions for a skill."""
-        skill_dir = self.base_path / skill_id
-        if not skill_dir.exists():
-            return []
-        return sorted(p.stem for p in skill_dir.glob("*.zip"))
+    def copy_object(self, source_key: str, destination_key: str) -> Path:
+        return self.put_object(destination_key, self._path(source_key))
 
-    def get_download_url(self, skill_id: str, version: str) -> str | None:
-        """Return local file path as download URL placeholder."""
-        path = self.base_path / skill_id / f"{version}.zip"
-        return str(path) if path.exists() else None
+    def get_object_path(self, object_key: str) -> Path | None:
+        path = self._path(object_key)
+        return path if path.is_file() else None
 
-    def get_object_sha256(self, skill_id: str, version: str) -> str | None:
-        """Compute SHA-256 of a stored skill package."""
-        path = self.base_path / skill_id / f"{version}.zip"
+    def delete_object(self, object_key: str) -> bool:
+        path = self._path(object_key)
         if not path.exists():
-            return None
-        sha256 = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha256.update(chunk)
-        return sha256.hexdigest()
+            return False
+        path.unlink()
+        return True
+
+    def _path(self, object_key: str) -> Path:
+        candidate = PurePosixPath(object_key)
+        if (
+            candidate.is_absolute()
+            or not candidate.parts
+            or any(part in {"", ".", ".."} for part in candidate.parts)
+        ):
+            raise ValueError("OBJECT_KEY_INVALID")
+        path = self.base_path.joinpath(*candidate.parts).resolve()
+        if not path.is_relative_to(self.base_path):
+            raise ValueError("OBJECT_KEY_INVALID")
+        return path

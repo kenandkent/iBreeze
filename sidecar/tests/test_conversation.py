@@ -1,153 +1,144 @@
-"""Conversation domain service tests."""
+"""Conversation intake transaction and scope tests."""
+
+from __future__ import annotations
+
+import aiosqlite
 import pytest
+
+from ibreeze.company import create_company
 from ibreeze.conversation import (
-    create_conversation,
-    list_conversations,
-    get_conversation,
-    update_conversation,
-    delete_conversation,
-    archive_conversation,
-    add_message,
+    get_company_conversation,
+    get_department_conversation,
     list_messages,
-    delete_message,
-    search_conversations,
+    submit_user_message,
 )
-from ibreeze.schemas import (
-    ConversationCreate,
-    ConversationStatus,
-    ConversationUpdate,
-    MessageCreate,
-    MessageRole,
-)
+from ibreeze.schemas import CompanyCreate, SubmitUserMessageRequest
 
 
-@pytest.fixture
-def sample_conversation():
-    """Create a sample conversation."""
-    return create_conversation("company-123", title="Test Conversation")
-
-
-def test_create_conversation():
-    """Test creating a conversation."""
-    conv = create_conversation("company-123", title="Test Conv")
-    assert conv.company_id == "company-123"
-    assert conv.title == "Test Conv"
-    assert conv.status == ConversationStatus.ACTIVE
-    assert conv.is_deleted is False
-
-
-def test_list_conversations():
-    """Test listing conversations."""
-    create_conversation("company-123", title="Conv 1")
-    create_conversation("company-123", title="Conv 2")
-    convs = list_conversations("company-123")
-    assert len(convs) >= 2
-
-
-def test_get_conversation(sample_conversation):
-    """Test getting a conversation by ID."""
-    fetched = get_conversation(sample_conversation.id)
-    assert fetched.id == sample_conversation.id
-    assert fetched.title == "Test Conversation"
-
-
-def test_get_conversation_not_found():
-    """Test getting a non-existent conversation."""
-    with pytest.raises(KeyError):
-        get_conversation("nonexistent-id")
-
-
-def test_update_conversation(sample_conversation):
-    """Test updating a conversation."""
-    update_data = ConversationUpdate(title="Updated Title")
-    updated = update_conversation(sample_conversation.id, update_data)
-    assert updated.title == "Updated Title"
-
-
-def test_delete_conversation(sample_conversation):
-    """Test soft deleting a conversation."""
-    delete_conversation(sample_conversation.id)
-    with pytest.raises(KeyError):
-        get_conversation(sample_conversation.id)
-
-
-def test_archive_conversation(sample_conversation):
-    """Test archiving a conversation."""
-    archived = archive_conversation(sample_conversation.id)
-    assert archived.status == ConversationStatus.ARCHIVED
-
-
-def test_update_archived_conversation_fails(sample_conversation):
-    """Test that archived conversation cannot be modified."""
-    archive_conversation(sample_conversation.id)
-    with pytest.raises(ValueError, match="已归档的对话不可修改"):
-        update_conversation(
-            sample_conversation.id,
-            ConversationUpdate(title="New Title"),
-        )
-
-
-def test_add_message(sample_conversation):
-    """Test adding a message to a conversation."""
-    msg = add_message(
-        sample_conversation.id,
-        MessageRole.USER,
-        "Hello world",
+async def _company(db: aiosqlite.Connection, profile_id: str, name: str):
+    return await create_company(
+        db,
+        CompanyCreate(
+            name=name,
+            introduction="按部门职责完成交付",
+            general_manager_name="总经理",
+            base_profile_version_id=profile_id,
+        ),
     )
-    assert msg.content == "Hello world"
-    assert msg.role == MessageRole.USER
-    assert msg.conversation_id == sample_conversation.id
 
 
-def test_add_message_to_archived_conversation_fails(sample_conversation):
-    """Test that message cannot be added to archived conversation."""
-    archive_conversation(sample_conversation.id)
-    with pytest.raises(ValueError, match="已归档的对话不可添加消息"):
-        add_message(
-            sample_conversation.id,
-            MessageRole.USER,
-            "Hello",
+@pytest.mark.asyncio
+async def test_company_message_creates_task_event_projection_and_outbox(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company = await _company(db, published_profile, "会话公司")
+    conversation = await get_company_conversation(db, company.id)
+    result = await submit_user_message(
+        db,
+        SubmitUserMessageRequest(
+            company_id=company.id,
+            conversation_id=conversation.id,
+            content="实现一个可交付的登录功能",
+        ),
+    )
+    assert result.task_status == "draft"
+    assert result.intake_mode == "new_task"
+    assert result.analysis_queued is True
+    assert result.model_dump().keys() == {
+        "message_id",
+        "company_task_id",
+        "task_status",
+        "intake_mode",
+        "analysis_queued",
+    }
+    messages = await list_messages(db, company.id, conversation.id)
+    assert [message.id for message in messages] == [result.message_id]
+    assert messages[0].task_id == result.company_task_id
+    assert (
+        await (
+            await db.execute(
+                """SELECT COUNT(*) FROM domain_events
+                   WHERE aggregate_id=? AND
+                   event_type='conversation.user_message_submitted'""",
+                (result.company_task_id,),
+            )
+        ).fetchone()
+    )[0] == 1
+    assert (
+        await (
+            await db.execute(
+                """SELECT COUNT(*) FROM outbox_events
+                   WHERE topic='company_task.analysis.requested'""",
+            )
+        ).fetchone()
+    )[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_plan_revision_reuses_task_without_new_run_id(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company = await _company(db, published_profile, "修订公司")
+    conversation = await get_company_conversation(db, company.id)
+    first = await submit_user_message(
+        db,
+        SubmitUserMessageRequest(
+            company_id=company.id,
+            conversation_id=conversation.id,
+            content="原始需求",
+        ),
+    )
+    await db.execute(
+        """UPDATE company_tasks SET status='awaiting_user_confirmation'
+           WHERE id=?""",
+        (first.company_task_id,),
+    )
+    await db.commit()
+    revised = await submit_user_message(
+        db,
+        SubmitUserMessageRequest(
+            company_id=company.id,
+            conversation_id=conversation.id,
+            content="请增加离线模式",
+            target_task_id=first.company_task_id,
+        ),
+    )
+    assert revised.company_task_id == first.company_task_id
+    assert revised.task_status == "revision_requested"
+    assert revised.intake_mode == "plan_revision"
+    assert len(await list_messages(db, company.id, conversation.id)) == 2
+
+
+@pytest.mark.asyncio
+async def test_conversation_enforces_company_scope(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    first = await _company(db, published_profile, "第一公司")
+    second = await _company(db, published_profile, "第二公司")
+    first_conversation = await get_company_conversation(db, first.id)
+    with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
+        await submit_user_message(
+            db,
+            SubmitUserMessageRequest(
+                company_id=second.id,
+                conversation_id=first_conversation.id,
+                content="越权消息",
+            ),
         )
-
-
-def test_list_messages(sample_conversation):
-    """Test listing messages in a conversation."""
-    add_message(sample_conversation.id, MessageRole.USER, "Msg 1")
-    add_message(sample_conversation.id, MessageRole.ASSISTANT, "Msg 2")
-    messages = list_messages(sample_conversation.id)
-    assert len(messages) == 2
-
-
-def test_delete_message(sample_conversation):
-    """Test soft deleting a message."""
-    msg = add_message(sample_conversation.id, MessageRole.USER, "To delete")
-    delete_message(msg.id)
-    messages = list_messages(sample_conversation.id)
-    assert len(messages) == 0
-
-
-def test_search_conversations(sample_conversation):
-    """Test searching conversations by title."""
-    results = search_conversations("company-123", "Test Conversation")
-    assert len(results) >= 1
-    assert any(r.title == "Test Conversation" for r in results)
-
-
-def test_search_conversations_by_message():
-    """Test searching conversations by message content."""
-    conv = create_conversation("company-123", title="Search Test")
-    add_message(conv.id, MessageRole.USER, "Unique search term XYZ")
-    results = search_conversations("company-123", "XYZ")
-    assert len(results) >= 1
-
-
-def test_conversation_extra_fields_forbidden():
-    """Test that extra fields are forbidden."""
-    from ibreeze.schemas import StrictModel
-    from pydantic import ValidationError
-
-    class TestModel(StrictModel):
-        name: str
-
-    with pytest.raises(ValidationError):
-        TestModel(name="test", extra_field="not allowed")
+    office = await get_department_conversation(
+        db,
+        first.id,
+        first.general_manager_office_id,
+    )
+    with pytest.raises(ValueError, match="COMPANY_SCOPE_VIOLATION"):
+        await submit_user_message(
+            db,
+            SubmitUserMessageRequest(
+                company_id=first.id,
+                conversation_id=office.id,
+                content="部门会话不能作为公司任务入口",
+            ),
+        )

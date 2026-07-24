@@ -3,6 +3,7 @@ import { Card, Row, Col, Tag, Typography, Button, Input, Space, Empty } from 'an
 import { PlayCircleOutlined, PoweroffOutlined, SendOutlined } from '@ant-design/icons';
 import type { AgentInfo } from '../types';
 import { useListAgents, useRunAgent, useStopAgent } from '../hooks/useAgent';
+import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 
@@ -27,8 +28,15 @@ export default function AgentPage() {
   const handleRun = async (agentId: string) => {
     const msg = messageInputs[agentId];
     if (!msg?.trim()) return;
-    await runMutation.mutateAsync({ agent_id: agentId, message: msg });
-    setMessageInputs((prev) => ({ ...prev, [agentId]: '' }));
+    try {
+      logger.info('AgentPage', 'run_start', { agentId });
+      await runMutation.mutateAsync({ agent_id: agentId, message: msg });
+      setMessageInputs((prev) => ({ ...prev, [agentId]: '' }));
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('AgentPage', 'run_failed', { agentId }, msg);
+    }
   };
 
   return (
@@ -65,7 +73,7 @@ export default function AgentPage() {
                       icon={<PoweroffOutlined />}
                       disabled={agent.status === 'stopped'}
                       loading={stopMutation.isPending}
-                      onClick={() => stopMutation.mutateAsync(agent.id)}
+                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync(agent.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', { agentId: agent.id }, msg); } }}
                     >
                       停止
                     </Button>

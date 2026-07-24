@@ -1,4 +1,5 @@
 """ZIP validation service tests."""
+
 import base64
 import io
 import zipfile
@@ -34,6 +35,7 @@ def _write_zip(tmp_path: Path, name: str, data: bytes) -> Path:
 # ---------------------------------------------------------------------------
 # validate_zip_structure
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_validate_zip_structure_valid(tmp_path: Path):
@@ -97,6 +99,7 @@ async def test_validate_zip_bad_zip(tmp_path: Path):
 # compute_zip_checksum
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_compute_zip_checksum(tmp_path: Path):
     """Test computing SHA256 checksum of a ZIP file."""
@@ -114,6 +117,7 @@ async def test_compute_zip_checksum(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # validate_zip_size
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_validate_zip_size(tmp_path: Path):
@@ -134,6 +138,7 @@ async def test_validate_zip_size(tmp_path: Path):
 # validate_uncompressed_size
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_validate_uncompressed_size(tmp_path: Path):
     """Test uncompressed size validation."""
@@ -146,6 +151,7 @@ async def test_validate_uncompressed_size(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # verify_signature
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_verify_signature_valid(tmp_path: Path):
@@ -189,10 +195,14 @@ async def test_verify_signature_wrong_key(tmp_path: Path):
     """Test that a signature from a different key is rejected."""
     key1 = Ed25519PrivateKey.generate()
     key2 = Ed25519PrivateKey.generate()
-    pub2_pem = key2.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    pub2_pem = (
+        key2.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
 
     data = b"hello world"
     path = _write_zip(tmp_path, "wrong_key.zip", data)

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, message } from 'antd';
+import { logger } from '../utils/logger';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useListModels, useCreateModel, useUpdateModel, useDeleteModel, useValidateModel, usePublishModel } from '../hooks/useModelCatalog';
 import type { ModelCatalogItem } from '../types';
@@ -38,6 +39,8 @@ export default function ModelCatalogPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const action = editing ? 'update' : 'create';
+    logger.info('ModelCatalogPage', `${action}_start`, { id: editing?.id, model_key: values.model_key });
     try {
       if (editing) {
         await updateModel.mutateAsync({ id: editing.id, ...values });
@@ -47,34 +50,45 @@ export default function ModelCatalogPage() {
         message.success('创建成功');
       }
       setModalOpen(false);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ModelCatalogPage', `${action}_failed`, { id: editing?.id, model_key: values.model_key }, msg);
       message.error('操作失败');
     }
   };
 
   const handleDelete = async (id: string) => {
+    logger.info('ModelCatalogPage', 'delete_start', { id });
     try {
       await deleteModel.mutateAsync(id);
       message.success('删除成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ModelCatalogPage', 'delete_failed', { id }, msg);
       message.error('删除失败');
     }
   };
 
   const handleValidate = async (id: string) => {
+    logger.info('ModelCatalogPage', 'validate_start', { id });
     try {
       await validateModel.mutateAsync(id);
       message.success('验证成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ModelCatalogPage', 'validate_failed', { id }, msg);
       message.error('验证失败');
     }
   };
 
   const handlePublish = async (id: string) => {
+    logger.info('ModelCatalogPage', 'publish_start', { id });
     try {
       await publishModel.mutateAsync(id);
       message.success('发布成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ModelCatalogPage', 'publish_failed', { id }, msg);
       message.error('发布失败');
     }
   };

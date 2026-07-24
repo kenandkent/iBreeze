@@ -10,6 +10,7 @@ import {
   useAddMessage,
   useArchiveConversation,
 } from '../hooks/useConversation';
+import { logger } from '../utils/logger';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -35,13 +36,27 @@ export default function ConversationPage() {
 
   const handleSend = async () => {
     if (!inputValue.trim() || !selectedId) return;
-    await addMessage.mutateAsync({ conversationId: selectedId, content: inputValue, role: 'user' });
-    setInputValue('');
+    try {
+      logger.info('ConversationPage', 'send_start', { conversationId: selectedId });
+      await addMessage.mutateAsync({ conversationId: selectedId, content: inputValue, role: 'user' });
+      setInputValue('');
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('ConversationPage', 'send_failed', { conversationId: selectedId }, msg);
+    }
   };
 
   const handleArchive = async (id: string) => {
-    await archiveMutation.mutateAsync(id);
-    if (selectedId === id) setSelectedId(null);
+    try {
+      logger.info('ConversationPage', 'archive_start', { id });
+      await archiveMutation.mutateAsync(id);
+      if (selectedId === id) setSelectedId(null);
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('ConversationPage', 'archive_failed', { id }, msg);
+    }
   };
 
   return (

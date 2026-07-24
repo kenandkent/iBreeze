@@ -11,6 +11,7 @@ import {
   useUpdateKnowledgeEntry,
   useArchiveKnowledgeEntry,
 } from '../hooks/useKnowledge';
+import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 
@@ -47,12 +48,20 @@ export default function KnowledgePage() {
 
   const handleSave = async () => {
     const values = await form.validateFields();
-    if (editingEntry) {
-      await updateMutation.mutateAsync({ id: editingEntry.id, ...values });
-    } else {
-      await createMutation.mutateAsync(values);
+    try {
+      if (editingEntry) {
+        logger.info('KnowledgePage', 'update_start', { id: editingEntry.id });
+        await updateMutation.mutateAsync({ id: editingEntry.id, ...values });
+      } else {
+        logger.info('KnowledgePage', 'create_start');
+        await createMutation.mutateAsync(values);
+      }
+      setDrawerOpen(false);
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('KnowledgePage', editingEntry ? 'update_failed' : 'create_failed', { id: editingEntry?.id }, msg);
     }
-    setDrawerOpen(false);
   };
 
   const columns: ColumnsType<KnowledgeEntry> = [
@@ -94,7 +103,7 @@ export default function KnowledgePage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewEntry(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           {record.status === 'active' && (
-            <Popconfirm title="确认归档？" onConfirm={() => archiveMutation.mutateAsync(record.id)}>
+            <Popconfirm title="确认归档？" onConfirm={async () => { try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', { id: record.id }, msg); } }}>
               <Button size="small" icon={<InboxOutlined />}>归档</Button>
             </Popconfirm>
           )}

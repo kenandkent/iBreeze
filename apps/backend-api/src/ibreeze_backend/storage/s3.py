@@ -1,4 +1,5 @@
 """S3-compatible object storage service for skill packages."""
+
 import hashlib
 import logging
 from pathlib import Path
@@ -31,17 +32,17 @@ class S3ObjectStorage:
     def store(self, skill_id: str, version: str, zip_path: Path) -> str:
         """
         Store a skill ZIP file in S3.
-        
+
         Args:
             skill_id: The skill identifier
             version: The skill version
             zip_path: Path to the ZIP file
-            
+
         Returns:
             The S3 object key
         """
         object_key = f"skills/{skill_id}/{version}.zip"
-        
+
         try:
             # 计算 SHA-256 用于 ETag
             sha256_hash = hashlib.sha256()
@@ -49,7 +50,7 @@ class S3ObjectStorage:
                 for chunk in iter(lambda: f.read(8192), b""):
                     sha256_hash.update(chunk)
             content_sha256 = sha256_hash.hexdigest()
-            
+
             # 上传到 S3
             self.client.upload_file(
                 str(zip_path),
@@ -64,10 +65,10 @@ class S3ObjectStorage:
                     },
                 },
             )
-            
+
             logger.info(f"Stored skill package: {object_key}")
             return object_key
-            
+
         except ClientError as e:
             logger.error(f"Failed to store skill package: {e}")
             raise
@@ -75,17 +76,17 @@ class S3ObjectStorage:
     def retrieve(self, skill_id: str, version: str, download_path: Path) -> bool:
         """
         Retrieve a skill ZIP file from S3.
-        
+
         Args:
             skill_id: The skill identifier
             version: The skill version
             download_path: Path to save the downloaded file
-            
+
         Returns:
             True if successful, False if not found
         """
         object_key = f"skills/{skill_id}/{version}.zip"
-        
+
         try:
             self.client.download_file(
                 self.bucket_name,
@@ -94,7 +95,7 @@ class S3ObjectStorage:
             )
             logger.info(f"Retrieved skill package: {object_key}")
             return True
-            
+
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return False
@@ -104,16 +105,16 @@ class S3ObjectStorage:
     def delete(self, skill_id: str, version: str) -> bool:
         """
         Delete a skill ZIP file from S3.
-        
+
         Args:
             skill_id: The skill identifier
             version: The skill version
-            
+
         Returns:
             True if successful, False if not found
         """
         object_key = f"skills/{skill_id}/{version}.zip"
-        
+
         try:
             self.client.delete_object(
                 Bucket=self.bucket_name,
@@ -121,7 +122,7 @@ class S3ObjectStorage:
             )
             logger.info(f"Deleted skill package: {object_key}")
             return True
-            
+
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return False
@@ -131,21 +132,21 @@ class S3ObjectStorage:
     def list_versions(self, skill_id: str) -> list[str]:
         """
         List all versions for a skill.
-        
+
         Args:
             skill_id: The skill identifier
-            
+
         Returns:
             List of version strings
         """
         prefix = f"skills/{skill_id}/"
-        
+
         try:
             response = self.client.list_objects_v2(
                 Bucket=self.bucket_name,
                 Prefix=prefix,
             )
-            
+
             versions = []
             for obj in response.get("Contents", []):
                 key = obj["Key"]
@@ -153,9 +154,9 @@ class S3ObjectStorage:
                 if key.endswith(".zip"):
                     version = key.split("/")[-1].replace(".zip", "")
                     versions.append(version)
-            
+
             return sorted(versions)
-            
+
         except ClientError as e:
             logger.error(f"Failed to list skill versions: {e}")
             raise
@@ -163,26 +164,26 @@ class S3ObjectStorage:
     def get_object_sha256(self, skill_id: str, version: str) -> str | None:
         """
         Get the SHA-256 hash of a stored skill package.
-        
+
         Args:
             skill_id: The skill identifier
             version: The skill version
-            
+
         Returns:
             SHA-256 hash string or None if not found
         """
         object_key = f"skills/{skill_id}/{version}.zip"
-        
+
         try:
             response = self.client.head_object(
                 Bucket=self.bucket_name,
                 Key=object_key,
             )
-            
+
             # 从元数据中获取 SHA-256
             metadata = response.get("Metadata", {})
             return metadata.get("content-sha256")
-            
+
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return None
@@ -192,23 +193,23 @@ class S3ObjectStorage:
     def object_exists(self, skill_id: str, version: str) -> bool:
         """
         Check if a skill package exists in S3.
-        
+
         Args:
             skill_id: The skill identifier
             version: The skill version
-            
+
         Returns:
             True if exists, False otherwise
         """
         object_key = f"skills/{skill_id}/{version}.zip"
-        
+
         try:
             self.client.head_object(
                 Bucket=self.bucket_name,
                 Key=object_key,
             )
             return True
-            
+
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return False

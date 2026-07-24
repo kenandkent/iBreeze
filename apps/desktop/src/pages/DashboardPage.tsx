@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Card, Col, Row, Statistic, Timeline, Button, Typography, Space } from 'antd';
 import {
   BankOutlined,
@@ -12,11 +13,14 @@ import { useListConversations } from '../hooks/useConversation';
 import { useListKnowledgeEntries } from '../hooks/useKnowledge';
 import { useListWorkspaces } from '../hooks/useWorkspace';
 import { useListAuditLogs } from '../hooks/useAudit';
+import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+
+  useEffect(() => { logger.info('DashboardPage', 'page_visit'); }, []);
 
   const { data: companies } = useListCompanies();
   const { data: conversations } = useListConversations();

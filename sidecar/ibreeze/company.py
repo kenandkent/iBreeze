@@ -5,27 +5,27 @@ Company + CompanyRevision + 总经理办公室 + DepartmentRevision +
 固定职责 + 总经理 Employee + 公司会话 + 办公室会话。
 任意失败全回滚，绝不返回部分对象。
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, cast
 
 from ibreeze.schemas import (
     CompanyCreate,
-    CompanyResponseDesignDoc,
+    CompanyResponse,
+    CompanyStatus,
     CompanyUpdate,
-    CreatedByType,
-    DepartmentType,
-    WorkflowRole,
 )
-from ibreeze.state_machine import StateTransitionError
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _sha256(data: str) -> str:
@@ -33,41 +33,94 @@ def _sha256(data: str) -> str:
 
 
 def _normalize_name(name: str) -> str:
-    return name.strip().lower()
+    normalized = unicodedata.normalize("NFKC", name)
+    return re.sub(r"\s+", " ", normalized.strip()).lower()
 
 
 def _new_id() -> str:
-    return str(uuid.uuid4()).replace("-", "")
+    return str(uuid.uuid4())
 
 
 async def _fetchall(cursor: Any) -> list[Any]:
     """兼容 sqlite3.Cursor 和 aiosqlite.Cursor 的 fetchall。"""
     result = cursor.fetchall()
     if hasattr(result, "__await__"):
+        return cast(list[Any], await result)
+    return cast(list[Any], result)
+
+
+async def _fetchone(cursor: Any) -> Any | None:
+    result = cursor.fetchone()
+    if hasattr(result, "__await__"):
         return await result
     return result
+
+
+def _parse_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _company_response(row: Any) -> CompanyResponse:
+    return CompanyResponse(
+        id=row["id"],
+        normalized_name=row["normalized_name"],
+        current_revision_id=row["current_revision_id"],
+        general_manager_office_id=row["general_manager_office_id"],
+        general_manager_employee_id=row["general_manager_employee_id"],
+        company_conversation_id=row["company_conversation_id"],
+        status=row["status"],
+        created_at=_parse_datetime(row["created_at"]),
+        updated_at=_parse_datetime(row["updated_at"]),
+        version=row["version"],
+    )
+
+
+async def get_company(db: Any, company_id: str) -> CompanyResponse:
+    cursor = await db.execute("SELECT * FROM companies WHERE id = ?", (company_id,))
+    row = await _fetchone(cursor)
+    if row is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    return _company_response(row)
+
+
+async def list_companies(
+    db: Any,
+    *,
+    limit: int = 50,
+    after: tuple[str, str] | None = None,
+) -> list[CompanyResponse]:
+    if after is None:
+        cursor = await db.execute(
+            """SELECT * FROM companies
+               ORDER BY created_at DESC, id DESC LIMIT ?""",
+            (limit,),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT * FROM companies
+               WHERE created_at < ? OR (created_at = ? AND id < ?)
+               ORDER BY created_at DESC, id DESC LIMIT ?""",
+            (after[0], after[0], after[1], limit),
+        )
+    return [_company_response(row) for row in await _fetchall(cursor)]
 
 
 async def create_company(
     db: Any,
     data: CompanyCreate,
-    *,
-    base_profile_version_id: str,
-) -> CompanyResponseDesignDoc:
+) -> CompanyResponse:
     """H.5 公司创建原子事务。
 
     参数:
         db: aiosqlite 连接对象
         data: 公司创建请求
-        base_profile_version_id: 已发布状态的底座版本 ID（必填）
-
     返回:
-        CompanyResponseDesignDoc
+        CompanyResponse
 
     异常:
         ValueError: 名称重复、底座不存在或底座未发布
     """
-    if not base_profile_version_id:
+    if not data.base_profile_version_id:
         raise ValueError("BASE_PROFILE_VERSION_REQUIRED")
 
     normalized_name = _normalize_name(data.name)
@@ -76,7 +129,7 @@ async def create_company(
     # ── 1. 校验底座版本 published + 名称唯一性（事务外读取）─────────────
     cur = await db.execute(
         "SELECT id FROM employee_base_profile_versions WHERE id = ? AND status = 'published'",
-        (base_profile_version_id,),
+        (data.base_profile_version_id,),
     )
     row = await _fetchall(cur)
     if not row:
@@ -99,9 +152,7 @@ async def create_company(
     current_fk = fk_row[0][0] if fk_row else 0
     if current_fk != 0:
         await db.execute("ROLLBACK")
-        raise RuntimeError(
-            "defer_foreign_keys is already ON — possible transaction boundary leak"
-        )
+        raise RuntimeError("defer_foreign_keys is already ON — possible transaction boundary leak")
     await db.execute("PRAGMA defer_foreign_keys = ON")
 
     try:
@@ -178,8 +229,14 @@ async def create_company(
         )
 
         # ── 7. 插入办公室 DepartmentRevision ────────────────────────────
+        office_description = (
+            "接收用户任务，依据公司介绍完成需求梳理、计划编排、部门分派、跨部门 Review、问题处理和最终汇报"
+        )
         office_rev_content = json.dumps(
-            {"name": "总经理办公室", "function_description": "全局管理"},
+            {
+                "name": "总经理办公室",
+                "function_description": office_description,
+            },
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -195,7 +252,7 @@ async def create_company(
                 office_id,
                 company_id,
                 "总经理办公室",
-                "全局管理",
+                office_description,
                 office_content_sha,
                 now,
             ),
@@ -215,7 +272,7 @@ async def create_company(
         )
 
         # ── 9. 插入总经理 Employee ──────────────────────────────────────
-        gm_display = "总经理"
+        gm_display = data.general_manager_name
         gm_normalized = _normalize_name(gm_display)
         await db.execute(
             """INSERT INTO employees
@@ -229,7 +286,7 @@ async def create_company(
                 office_id,
                 gm_display,
                 gm_normalized,
-                base_profile_version_id,
+                data.base_profile_version_id,
                 now,
                 now,
             ),
@@ -267,9 +324,7 @@ async def create_company(
             (company_id,),
         )
         office_rows = await _fetchall(cur)
-        assert len(office_rows) == 1, (
-            f"invariant 2 failed: expected 1 active GM office, got {len(office_rows)}"
-        )
+        assert len(office_rows) == 1, f"invariant 2 failed: expected 1 active GM office, got {len(office_rows)}"
 
         # 不变量 3: 总经理 Employee 属于该办公室且角色为 general_manager
         cur = await db.execute(
@@ -287,9 +342,7 @@ async def create_company(
             (office_id, company_id),
         )
         leader_rows = await _fetchall(cur)
-        assert leader_rows and leader_rows[0][0] == gm_employee_id, (
-            "invariant 4 failed: office leader != GM employee"
-        )
+        assert leader_rows and leader_rows[0][0] == gm_employee_id, "invariant 4 failed: office leader != GM employee"
 
         # 不变量 5: 公司会话类型为 company 且 department_id 为 null
         cur = await db.execute(
@@ -341,16 +394,16 @@ async def create_company(
         # ── 14. 提交 ───────────────────────────────────────────────────
         await db.commit()
 
-        return CompanyResponseDesignDoc(
+        return CompanyResponse(
             id=company_id,
             normalized_name=normalized_name,
             current_revision_id=company_revision_id,
             general_manager_office_id=office_id,
             general_manager_employee_id=gm_employee_id,
             company_conversation_id=company_conversation_id,
-            status="active",
-            created_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
+            status=CompanyStatus.ACTIVE,
+            created_at=_parse_datetime(now),
+            updated_at=_parse_datetime(now),
             version=1,
         )
 
@@ -364,9 +417,7 @@ async def create_company(
         fk_val = fk_after[0][0] if fk_after else 0
         if fk_val != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
-            raise RuntimeError(
-                "defer_foreign_keys was not restored to OFF after transaction"
-            )
+            raise RuntimeError("defer_foreign_keys was not restored to OFF after transaction")
 
 
 async def rename_company(
@@ -375,7 +426,7 @@ async def rename_company(
     data: CompanyUpdate,
     *,
     expected_version: int,
-) -> CompanyResponseDesignDoc:
+) -> CompanyResponse:
     """H.5 公司改名原子事务。
 
     同一 BEGIN IMMEDIATE 事务内：按 expected_version 锁定当前事实、
@@ -394,7 +445,9 @@ async def rename_company(
     try:
         # ── 按 expected_version 锁定当前公司 ────────────────────────────
         cur = await db.execute(
-            """SELECT id, version, current_revision_id, normalized_name
+            """SELECT id, version, current_revision_id, normalized_name,
+                      general_manager_office_id, general_manager_employee_id,
+                      company_conversation_id, status, created_at
                FROM companies WHERE id = ? AND version = ?""",
             (company_id, expected_version),
         )
@@ -404,6 +457,13 @@ async def rename_company(
 
         current_version = row[0][1]
         current_rev_id = row[0][2]
+        general_manager_office_id = row[0][4]
+        general_manager_employee_id = row[0][5]
+        company_conversation_id = row[0][6]
+        company_status = row[0][7]
+        created_at = row[0][8]
+        if company_status != "active":
+            raise ValueError("COMPANY_ARCHIVED")
 
         # ── 名称唯一性校验 ──────────────────────────────────────────────
         if normalized_name:
@@ -488,16 +548,16 @@ async def rename_company(
 
         await db.commit()
 
-        return CompanyResponseDesignDoc(
+        return CompanyResponse(
             id=company_id,
             normalized_name=new_norm,
             current_revision_id=new_rev_id,
-            general_manager_office_id="",
-            general_manager_employee_id="",
-            company_conversation_id="",
-            status="active",
-            created_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
+            general_manager_office_id=general_manager_office_id,
+            general_manager_employee_id=general_manager_employee_id,
+            company_conversation_id=company_conversation_id,
+            status=company_status,
+            created_at=_parse_datetime(created_at),
+            updated_at=_parse_datetime(now),
             version=new_version,
         )
 
@@ -510,3 +570,111 @@ async def rename_company(
         fk_val = fk_after[0][0] if fk_after else 0
         if fk_val != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
+
+
+async def archive_company(
+    db: Any,
+    company_id: str,
+    *,
+    expected_version: int,
+) -> CompanyResponse:
+    """Archive an idle company and all of its organizational children."""
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM companies WHERE id = ? AND version = ?",
+            (company_id, expected_version),
+        )
+        company = await _fetchone(cursor)
+        if company is None:
+            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+        if company["status"] != "active":
+            raise ValueError("STATE_TRANSITION_INVALID")
+
+        non_terminal = "'completed','cancelled','failed','rejected'"
+        cursor = await db.execute(
+            f"""SELECT COUNT(*) FROM company_tasks
+                WHERE company_id = ? AND status NOT IN ({non_terminal})""",
+            (company_id,),
+        )
+        row = await _fetchone(cursor)
+        assert row is not None
+        if row[0] != 0:
+            raise ValueError("STATE_TRANSITION_INVALID")
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM agent_runs
+               WHERE company_id = ? AND status NOT IN
+               ('succeeded','cancelled','timed_out','failed','lost')""",
+            (company_id,),
+        )
+        row = await _fetchone(cursor)
+        assert row is not None
+        if row[0] != 0:
+            raise ValueError("STATE_TRANSITION_INVALID")
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM human_approvals
+               WHERE company_id = ? AND status IN ('pending','allowed')""",
+            (company_id,),
+        )
+        row = await _fetchone(cursor)
+        assert row is not None
+        if row[0] != 0:
+            raise ValueError("STATE_TRANSITION_INVALID")
+
+        now = _now_iso()
+        new_version = expected_version + 1
+        await db.execute(
+            """UPDATE companies
+               SET status='archived', version=?, updated_at=?
+               WHERE id=? AND version=?""",
+            (new_version, now, company_id, expected_version),
+        )
+        await db.execute(
+            "UPDATE departments SET status='archived', updated_at=? WHERE company_id=?",
+            (now, company_id),
+        )
+        await db.execute(
+            "UPDATE conversations SET status='archived' WHERE company_id=?",
+            (company_id,),
+        )
+        await db.execute(
+            "UPDATE employees SET status='inactive', updated_at=? WHERE company_id=?",
+            (now, company_id),
+        )
+
+        event_id = _new_id()
+        payload = json.dumps(
+            {
+                "company_id": company_id,
+                "aggregate_id": company_id,
+                "aggregate_version": new_version,
+            },
+            sort_keys=True,
+        )
+        await db.execute(
+            """INSERT INTO domain_events
+               (event_id, company_id, aggregate_type, aggregate_id,
+                aggregate_version, event_type, payload_json, trace_id, occurred_at)
+               VALUES (?, ?, 'company', ?, ?, 'company.archived', ?, ?, ?)""",
+            (
+                event_id,
+                company_id,
+                company_id,
+                new_version,
+                payload,
+                _new_id(),
+                now,
+            ),
+        )
+        await db.execute(
+            """INSERT INTO outbox_events
+               (id, domain_event_id, topic, payload_json, status, attempts,
+                next_attempt_at, created_at)
+               VALUES (?, ?, 'company.archived', ?, 'pending', 0, ?, ?)""",
+            (_new_id(), event_id, payload, now, now),
+        )
+        await db.commit()
+        return await get_company(db, company_id)
+    except Exception:
+        await db.rollback()
+        raise

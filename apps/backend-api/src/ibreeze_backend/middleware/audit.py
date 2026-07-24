@@ -1,8 +1,9 @@
 """Audit logging middleware."""
+
 import time
 import uuid as _uuid
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -51,7 +52,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     actor_user_id=user_id,
                     action=action,
                     resource_type=resource_type,
-                    resource_id=_safe_uuid(rid := _extract_resource_id(path)),
+                    resource_id=_safe_uuid(_extract_resource_id(path)),
                     request_id=_uuid.UUID(request_id),
                     outcome="success" if 200 <= response.status_code < 400 else "failed",
                     ip_address=_get_client_ip(request),

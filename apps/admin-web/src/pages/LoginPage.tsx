@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { Form, Input, Button, Card, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { logger } from '../utils/logger';
 
 export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
@@ -10,17 +11,25 @@ export default function LoginPage() {
   const onFinish = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
+      logger.info('LoginPage', 'login_start', { email: values.email });
       const res = await fetch('/admin/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       });
-      if (!res.ok) throw new Error('登录失败');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        logger.error('LoginPage', 'login_http_error', { email: values.email, status: res.status, detail: body.detail });
+        throw new Error(body.detail || '登录失败');
+      }
       const data = await res.json();
       login(data.data.access_token, data.data.user);
+      logger.info('LoginPage', 'login_success', { email: values.email });
       message.success('登录成功');
-    } catch {
-      message.error('邮箱或密码错误');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '邮箱或密码错误';
+      logger.error('LoginPage', 'login_failed', { email: values.email }, msg);
+      message.error(msg);
     } finally {
       setLoading(false);
     }

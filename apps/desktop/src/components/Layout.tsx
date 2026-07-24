@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../utils/logger';
 
 const { Sider, Header, Content } = AntLayout;
 const { Text } = Typography;
@@ -35,8 +36,24 @@ export default function Layout() {
   const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useAppStore();
   const { user, logout } = useAuthStore();
 
+  const handleMenuClick = ({ key }: { key: string }) => {
+    logger.info('Layout', 'navigate', { from: location.pathname, to: key });
+    navigate(key);
+  };
+
+  const handleThemeToggle = (checked: boolean) => {
+    logger.info('Layout', 'theme_toggle', { theme: checked ? 'dark' : 'light' });
+    setTheme(checked ? 'dark' : 'light');
+  };
+
+  const handleLogout = () => {
+    logger.info('Layout', 'logout');
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   const userMenuItems = [
-    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: () => { logout(); navigate('/login', { replace: true }); } },
+    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout },
   ];
 
   return (
@@ -61,7 +78,7 @@ export default function Layout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={handleMenuClick}
         />
       </Sider>
 
@@ -72,7 +89,7 @@ export default function Layout() {
               <Text type="secondary" style={{ fontSize: 12 }}>深色</Text>
               <Switch
                 checked={theme === 'dark'}
-                onChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                onChange={handleThemeToggle}
                 size="small"
               />
             </Space>

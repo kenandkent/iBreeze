@@ -1,10 +1,8 @@
 """Response envelope schemas."""
-import uuid
-from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from typing import Any
 
-T = TypeVar("T")
+from pydantic import BaseModel
 
 
 class Meta(BaseModel):
@@ -21,15 +19,13 @@ class ErrorBody(BaseModel):
     field_errors: dict[str, list[str]] | None = None
 
 
-class EnvelopeResponse(BaseModel, Generic[T]):
+class EnvelopeResponse[T](BaseModel):
     data: T | None = None
     meta: Meta | None = None
     error: ErrorBody | None = None
 
 
-def success_response(
-    data: Any, request_id: str | None = None
-) -> dict[str, Any]:
+def success_response(data: Any, request_id: str | None = None) -> dict[str, Any]:
     return {
         "data": data,
         "meta": {"request_id": request_id} if request_id else None,
@@ -37,9 +33,7 @@ def success_response(
     }
 
 
-def error_response(
-    error: ErrorBody, request_id: str | None = None
-) -> dict[str, Any]:
+def error_response(error: ErrorBody, request_id: str | None = None) -> dict[str, Any]:
     if request_id:
         error.request_id = request_id
     return {

@@ -2,12 +2,12 @@
 
 对齐设计文档附录 H.1–H.14 的全部 DDL。
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1199,7 +1199,7 @@ BEGIN SELECT RAISE(ABORT, 'only draft profile version skills are mutable'); END;
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _content_sha256(data: str) -> str:
@@ -1224,9 +1224,7 @@ class LocalDB:
         self._db_path = str(db_path or DEFAULT_DB_PATH)
         self._read_pool_size = read_pool_size
         self._write_conn: aiosqlite.Connection | None = None
-        self._read_pool: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue(
-            maxsize=read_pool_size
-        )
+        self._read_pool: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue(maxsize=read_pool_size)
         self._pool_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
@@ -1235,6 +1233,7 @@ class LocalDB:
 
         # 写连接
         self._write_conn = await aiosqlite.connect(self._db_path)
+        self._write_conn.row_factory = aiosqlite.Row
         for pragma in _PRAGMAS:
             await self._write_conn.execute(pragma)
         await self._write_conn.execute("PRAGMA wal_autocheckpoint=1000")
@@ -1249,9 +1248,80 @@ class LocalDB:
                 await conn.execute(pragma)
             await self._read_pool.put(conn)
 
+    async def initialize_profile(
+        self,
+        *,
+        profile_id: str,
+        backend_origin: str,
+        app_user_id: str,
+        masked_identifier: str,
+        device_id: str,
+        allow_create: bool,
+    ) -> None:
+        """Create or verify the immutable Profile identity before RPC becomes ready."""
+        connection = self.write_connection
+        await connection.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = await connection.execute("SELECT * FROM local_profile LIMIT 2")
+            rows = list(await cursor.fetchall())
+            now = _now_iso()
+            if not rows:
+                if not allow_create:
+                    raise ValueError("PROFILE_IDENTITY_MISSING")
+                await connection.execute(
+                    """INSERT INTO local_profile
+                       (id,backend_origin,app_user_id,masked_identifier,device_id,
+                        created_at,last_opened_at)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (
+                        profile_id,
+                        backend_origin,
+                        app_user_id,
+                        masked_identifier,
+                        device_id,
+                        now,
+                        now,
+                    ),
+                )
+            elif len(rows) != 1:
+                raise ValueError("PROFILE_IDENTITY_MISMATCH")
+            else:
+                row = rows[0]
+                if (
+                    row["id"] != profile_id
+                    or row["backend_origin"] != backend_origin
+                    or row["app_user_id"] != app_user_id
+                    or row["device_id"] != device_id
+                    or (not allow_create and row["masked_identifier"] != masked_identifier)
+                ):
+                    raise ValueError("PROFILE_IDENTITY_MISMATCH")
+                await connection.execute(
+                    """UPDATE local_profile
+                       SET masked_identifier=?,last_opened_at=?
+                       WHERE id=?""",
+                    (masked_identifier, now, profile_id),
+                )
+            await connection.commit()
+        except Exception:
+            await connection.rollback()
+            raise
+
+    @property
+    def write_connection(self) -> aiosqlite.Connection:
+        """Return the initialized single-writer connection for atomic commands."""
+        if self._write_conn is None:
+            raise RuntimeError("数据库未初始化")
+        return self._write_conn
+
+    @property
+    def db_path(self) -> Path:
+        return Path(self._db_path)
+
     async def close(self) -> None:
         """关闭所有连接。"""
         if self._write_conn is not None:
+            if self._write_conn.in_transaction:
+                await self._write_conn.rollback()
             await self._write_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             await self._write_conn.close()
             self._write_conn = None
@@ -1278,9 +1348,7 @@ class LocalDB:
 
     # ── 写操作 ───────────────────────────────────────────────────────────
 
-    async def execute_write(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> aiosqlite.Cursor:
+    async def execute_write(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Cursor:
         """在写连接上执行语句。"""
         assert self._write_conn is not None, "数据库未初始化"
         cursor = await self._write_conn.execute(sql, params)
@@ -1293,9 +1361,7 @@ class LocalDB:
         await self._write_conn.executescript(sql)
         await self._write_conn.commit()
 
-    async def execute_many_write(
-        self, sql: str, params_list: list[tuple[Any, ...]]
-    ) -> None:
+    async def execute_many_write(self, sql: str, params_list: list[tuple[Any, ...]]) -> None:
         """在写连接上批量执行。"""
         assert self._write_conn is not None, "数据库未初始化"
         await self._write_conn.executemany(sql, params_list)
@@ -1303,9 +1369,7 @@ class LocalDB:
 
     # ── 读操作 ───────────────────────────────────────────────────────────
 
-    async def fetch_one(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> dict[str, Any] | None:
+    async def fetch_one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
         conn = await self._acquire_read()
         try:
             cursor = await conn.execute(sql, params)
@@ -1317,9 +1381,7 @@ class LocalDB:
         finally:
             await self._release_read(conn)
 
-    async def fetch_all(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> list[dict[str, Any]]:
+    async def fetch_all(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         conn = await self._acquire_read()
         try:
             cursor = await conn.execute(sql, params)
@@ -1329,9 +1391,7 @@ class LocalDB:
         finally:
             await self._release_read(conn)
 
-    async def fetch_val(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> Any:
+    async def fetch_val(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
         conn = await self._acquire_read()
         try:
             cursor = await conn.execute(sql, params)
@@ -1354,9 +1414,7 @@ class LocalDB:
     async def get_by_id(self, table: str, id: str) -> dict[str, Any] | None:
         return await self.fetch_one(f"SELECT * FROM {table} WHERE id = ?", (id,))
 
-    async def update_by_id(
-        self, table: str, id: str, data: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    async def update_by_id(self, table: str, id: str, data: dict[str, Any]) -> dict[str, Any] | None:
         if not data:
             return await self.get_by_id(table, id)
         set_clause = ", ".join(f"{k} = ?" for k in data.keys())
@@ -1387,9 +1445,7 @@ class LocalDB:
         sql = f"SELECT * FROM {table} {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?"
         return await self.fetch_all(sql, tuple(values + [limit, offset]))
 
-    async def count(
-        self, table: str, filters: dict[str, Any] | None = None
-    ) -> int:
+    async def count(self, table: str, filters: dict[str, Any] | None = None) -> int:
         where_parts: list[str] = []
         values: list[Any] = []
         if filters:
@@ -1397,7 +1453,5 @@ class LocalDB:
                 where_parts.append(f"{k} = ?")
                 values.append(v)
         where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-        result = await self.fetch_val(
-            f"SELECT COUNT(*) FROM {table} {where_sql}", tuple(values)
-        )
+        result = await self.fetch_val(f"SELECT COUNT(*) FROM {table} {where_sql}", tuple(values))
         return result or 0

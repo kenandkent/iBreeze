@@ -3,18 +3,10 @@
 覆盖 H.7 全部 9 种聚合的 ALLOWED_TRANSITIONS 表，
 验证合法迁移、非法迁移、终态和 resume_state 逻辑。
 """
+
 import pytest
 
 from ibreeze.state_machine import (
-    AgentRunState,
-    CompanyPlanVersionState,
-    CompanyTaskState,
-    DepartmentTaskState,
-    EmployeeTaskState,
-    HumanApprovalState,
-    ReviewAssignmentState,
-    ReviewIssueState,
-    TaskWorkspaceState,
     StateTransitionError,
     can_transition,
     get_allowed_targets,
@@ -23,8 +15,8 @@ from ibreeze.state_machine import (
     validate_resume_state,
 )
 
-
 # ── CompanyTask ────────────────────────────────────────────────────────────
+
 
 class TestCompanyTaskStateMachine:
     def test_draft_to_analyzing(self):
@@ -43,19 +35,13 @@ class TestCompanyTaskStateMachine:
         assert can_transition("CompanyTask", "analyzing", "failed")
 
     def test_awaiting_to_approved(self):
-        assert can_transition(
-            "CompanyTask", "awaiting_user_confirmation", "approved"
-        )
+        assert can_transition("CompanyTask", "awaiting_user_confirmation", "approved")
 
     def test_awaiting_to_revision_requested(self):
-        assert can_transition(
-            "CompanyTask", "awaiting_user_confirmation", "revision_requested"
-        )
+        assert can_transition("CompanyTask", "awaiting_user_confirmation", "revision_requested")
 
     def test_awaiting_to_rejected(self):
-        assert can_transition(
-            "CompanyTask", "awaiting_user_confirmation", "rejected"
-        )
+        assert can_transition("CompanyTask", "awaiting_user_confirmation", "rejected")
 
     def test_approved_to_dispatching(self):
         assert can_transition("CompanyTask", "approved", "dispatching")
@@ -88,9 +74,7 @@ class TestCompanyTaskStateMachine:
         assert is_terminal("CompanyTask", "rejected")
 
     def test_waiting_to_cancelled(self):
-        assert can_transition(
-            "CompanyTask", "waiting_resource", "cancelling"
-        )
+        assert can_transition("CompanyTask", "waiting_resource", "cancelling")
 
     def test_paused_to_cancelled(self):
         assert can_transition("CompanyTask", "paused", "cancelling")
@@ -104,6 +88,7 @@ class TestCompanyTaskStateMachine:
 
 
 # ── DepartmentTask ─────────────────────────────────────────────────────────
+
 
 class TestDepartmentTaskStateMachine:
     def test_draft_to_checking(self):
@@ -139,6 +124,7 @@ class TestDepartmentTaskStateMachine:
 
 # ── EmployeeTask ───────────────────────────────────────────────────────────
 
+
 class TestEmployeeTaskStateMachine:
     def test_assigned_to_ready(self):
         assert can_transition("EmployeeTask", "assigned", "ready")
@@ -172,6 +158,7 @@ class TestEmployeeTaskStateMachine:
 
 
 # ── AgentRun ───────────────────────────────────────────────────────────────
+
 
 class TestAgentRunStateMachine:
     def test_queued_to_probing(self):
@@ -219,6 +206,7 @@ class TestAgentRunStateMachine:
 
 # ── ReviewAssignment ──────────────────────────────────────────────────────
 
+
 class TestReviewAssignmentStateMachine:
     def test_assigned_to_in_review(self):
         assert can_transition("ReviewAssignment", "assigned", "in_review")
@@ -237,6 +225,7 @@ class TestReviewAssignmentStateMachine:
 
 
 # ── ReviewIssue ────────────────────────────────────────────────────────────
+
 
 class TestReviewIssueStateMachine:
     def test_open_to_fixing(self):
@@ -269,24 +258,19 @@ class TestReviewIssueStateMachine:
 
 # ── CompanyPlanVersion ────────────────────────────────────────────────────
 
+
 class TestCompanyPlanVersionStateMachine:
     def test_draft_to_awaiting(self):
-        assert can_transition(
-            "CompanyPlanVersion", "draft", "awaiting_user_confirmation"
-        )
+        assert can_transition("CompanyPlanVersion", "draft", "awaiting_user_confirmation")
 
     def test_draft_to_rejected(self):
         assert can_transition("CompanyPlanVersion", "draft", "rejected")
 
     def test_awaiting_to_approved(self):
-        assert can_transition(
-            "CompanyPlanVersion", "awaiting_user_confirmation", "approved"
-        )
+        assert can_transition("CompanyPlanVersion", "awaiting_user_confirmation", "approved")
 
     def test_awaiting_to_superseded(self):
-        assert can_transition(
-            "CompanyPlanVersion", "awaiting_user_confirmation", "superseded"
-        )
+        assert can_transition("CompanyPlanVersion", "awaiting_user_confirmation", "superseded")
 
     def test_approved_is_terminal(self):
         assert is_terminal("CompanyPlanVersion", "approved")
@@ -296,6 +280,7 @@ class TestCompanyPlanVersionStateMachine:
 
 
 # ── TaskWorkspace ──────────────────────────────────────────────────────────
+
 
 class TestTaskWorkspaceStateMachine:
     def test_preparing_to_active(self):
@@ -315,6 +300,7 @@ class TestTaskWorkspaceStateMachine:
 
 
 # ── HumanApproval ─────────────────────────────────────────────────────────
+
 
 class TestHumanApprovalStateMachine:
     def test_pending_to_allowed(self):
@@ -340,6 +326,7 @@ class TestHumanApprovalStateMachine:
 
 
 # ── 泛型函数 ──────────────────────────────────────────────────────────────
+
 
 class TestTransitionFunction:
     def test_valid_transition_returns_none(self):
@@ -369,15 +356,11 @@ class TestTransitionFunction:
 class TestValidateResumeState:
     def test_waiting_state_requires_resume(self):
         with pytest.raises(ValueError, match="resume_state required"):
-            validate_resume_state(
-                "CompanyTask", "waiting_resource", None
-            )
+            validate_resume_state("CompanyTask", "waiting_resource", None)
 
     def test_non_waiting_state_rejects_resume(self):
         with pytest.raises(ValueError, match="resume_state must be null"):
-            validate_resume_state(
-                "CompanyTask", "executing", "running"
-            )
+            validate_resume_state("CompanyTask", "executing", "running")
 
     def test_waiting_state_with_resume_ok(self):
         validate_resume_state("CompanyTask", "waiting_resource", "executing")

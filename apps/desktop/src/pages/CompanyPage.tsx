@@ -6,6 +6,7 @@ import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined
 import type { ColumnsType } from 'antd/es/table';
 import type { Company } from '../types';
 import { useListCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany } from '../hooks/useCompany';
+import { logger } from '../utils/logger';
 
 const { Title } = Typography;
 
@@ -35,12 +36,20 @@ export default function CompanyPage() {
 
   const handleSave = async () => {
     const values = await form.validateFields();
-    if (editingCompany) {
-      await updateMutation.mutateAsync({ id: editingCompany.id, ...values });
-    } else {
-      await createMutation.mutateAsync(values);
+    try {
+      if (editingCompany) {
+        logger.info('CompanyPage', 'update_start', { id: editingCompany.id });
+        await updateMutation.mutateAsync({ id: editingCompany.id, ...values });
+      } else {
+        logger.info('CompanyPage', 'create_start');
+        await createMutation.mutateAsync(values);
+      }
+      setDrawerOpen(false);
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('CompanyPage', editingCompany ? 'update_failed' : 'create_failed', { id: editingCompany?.id }, msg);
     }
-    setDrawerOpen(false);
   };
 
   const columns: ColumnsType<Company> = [
@@ -67,7 +76,7 @@ export default function CompanyPage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => { setEditingCompany(record); setDrawerOpen(true); }} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutateAsync(record.id)}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { try { logger.info('CompanyPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('CompanyPage', 'delete_failed', { id: record.id }, msg); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>

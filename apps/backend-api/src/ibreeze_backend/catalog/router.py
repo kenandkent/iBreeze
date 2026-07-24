@@ -1,37 +1,36 @@
-"""Catalog CRUD router."""
-import uuid
+"""Canonical v1 management routes for Agent, Model and Provider catalogs."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from __future__ import annotations
+
+import uuid
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.catalog.schemas import (
     AgentCreate,
-    AgentListResponse,
     AgentModelBindingCreate,
-    AgentModelBindingListResponse,
     AgentModelBindingResponse,
     AgentResponse,
     AgentUpdate,
     AgentVersionCreate,
-    AgentVersionListResponse,
     AgentVersionResponse,
     ModelCreate,
-    ModelListResponse,
     ModelResponse,
     ModelUpdate,
     ProviderCreate,
-    ProviderListResponse,
     ProviderModelBindingCreate,
-    ProviderModelBindingListResponse,
     ProviderModelBindingResponse,
     ProviderResponse,
     ProviderUpdate,
-    StatusTransitionRequest,
 )
 from ibreeze_backend.catalog.service import (
-    copy_agent_to_draft,
-    copy_model_to_draft,
-    copy_provider_to_draft,
+    clone_agent_revision,
+    clone_model_revision,
+    clone_provider_revision,
     create_agent,
     create_agent_model_binding,
     create_agent_version,
@@ -39,8 +38,11 @@ from ibreeze_backend.catalog.service import (
     create_provider,
     create_provider_model_binding,
     delete_agent,
+    delete_agent_model_binding,
+    delete_agent_version,
     delete_model,
     delete_provider,
+    delete_provider_model_binding,
     get_agent,
     get_model,
     get_provider,
@@ -50,514 +52,417 @@ from ibreeze_backend.catalog.service import (
     list_models,
     list_provider_model_bindings,
     list_providers,
-    transition_agent_status,
-    transition_model_status,
-    transition_provider_status,
     update_agent,
     update_model,
     update_provider,
+    validate_agent,
+    validate_model,
+    validate_provider,
 )
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
 
-router = APIRouter(prefix="/admin/api/v1/catalog", tags=["catalog"])
+router = APIRouter(prefix="/admin/api/v1", tags=["catalog"])
+def _if_match(value: str | None) -> int:
+    if value is None:
+        raise HTTPException(status_code=428, detail="IF_MATCH_REQUIRED")
+    try:
+        parsed = int(value.strip('"'))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID") from exc
+    if parsed < 1:
+        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID")
+    return parsed
 
 
-# --- Agents ---
+async def _call(operation: Callable[[], Awaitable[Any]]) -> Any:
+    try:
+        return await operation()
+    except ValueError as exc:
+        code = str(exc)
+        if code == "CATALOG_RESOURCE_NOT_FOUND":
+            http_status = 404
+        elif code in {
+            "CATALOG_REVISION_IMMUTABLE",
+            "OPTIMISTIC_LOCK_CONFLICT",
+            "CATALOG_LOGICAL_KEY_EXISTS",
+        }:
+            http_status = 409
+        else:
+            http_status = 422
+        raise HTTPException(status_code=http_status, detail=code) from exc
 
 
-@router.post(
-    "/agents",
-    response_model=AgentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+def _page[ResponseModel: BaseModel](
+    items: list[Any],
+    schema: type[ResponseModel],
+) -> dict[str, object]:
+    return {
+        "items": [schema.model_validate(item) for item in items],
+        "next_cursor": None,
+    }
+
+
+@router.post("/agents", status_code=status.HTTP_201_CREATED, response_model=AgentResponse)
 async def create_agent_endpoint(
     body: AgentCreate,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        agent = await create_agent(db, body.key, body.display_name, body.description)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return agent
+) -> AgentResponse:
+    return AgentResponse.model_validate(await _call(lambda: create_agent(db, body)))
 
 
-@router.get("/agents", response_model=AgentListResponse)
+@router.get("/agents")
 async def list_agents_endpoint(
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    agents, total = await list_agents(db, skip=skip, limit=limit)
-    return {"agents": agents, "total": total}
+) -> dict[str, object]:
+    return _page(await list_agents(db, limit), AgentResponse)
 
 
-@router.get("/agents/{agent_id}", response_model=AgentResponse)
+@router.get("/agents/{resource_id}", response_model=AgentResponse)
 async def get_agent_endpoint(
-    agent_id: uuid.UUID,
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
+) -> AgentResponse:
+    item = await get_agent(db, resource_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+    return AgentResponse.model_validate(item)
 
 
-@router.patch("/agents/{agent_id}", response_model=AgentResponse)
+@router.patch("/agents/{resource_id}", response_model=AgentResponse)
 async def update_agent_endpoint(
-    agent_id: uuid.UUID,
+    resource_id: uuid.UUID,
     body: AgentUpdate,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        agent = await update_agent(
-            db, agent_id, body.display_name, body.description
-        )
-        await db.refresh(agent)
-    except ValueError as e:
-        msg = str(e)
-        status = 409 if "published" in msg else 400
-        raise HTTPException(status_code=status, detail=msg)
-    return agent
+) -> AgentResponse:
+    item = await _call(lambda: update_agent(db, resource_id, body, _if_match(if_match)))
+    return AgentResponse.model_validate(item)
 
 
-@router.delete(
-    "/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/agents/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent_endpoint(
-    agent_id: uuid.UUID,
+    resource_id: uuid.UUID,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> None:
-    try:
-        await delete_agent(db, agent_id)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+) -> Response:
+    await _call(lambda: delete_agent(db, resource_id, _if_match(if_match)))
+    return Response(status_code=204)
 
 
-@router.patch("/agents/{agent_id}/status", response_model=AgentResponse)
-async def transition_agent_status_endpoint(
-    agent_id: uuid.UUID,
-    body: StatusTransitionRequest,
+@router.post("/agents/{resource_id}/validate", response_model=AgentResponse)
+async def validate_agent_endpoint(
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        agent = await transition_agent_status(db, agent_id, body.status)
-        await db.refresh(agent)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return agent
+) -> AgentResponse:
+    return AgentResponse.model_validate(await _call(lambda: validate_agent(db, resource_id)))
 
 
 @router.post(
-    "/agents/{agent_id}/copy-to-draft", response_model=AgentResponse
-)
-async def copy_agent_to_draft_endpoint(
-    agent_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        agent = await copy_agent_to_draft(db, agent_id)
-        await db.refresh(agent)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return agent
-
-
-# --- Agent Versions ---
-
-
-@router.post(
-    "/agents/{agent_id}/versions",
-    response_model=AgentVersionResponse,
+    "/agents/{resource_id}/revisions",
     status_code=status.HTTP_201_CREATED,
+    response_model=AgentResponse,
+)
+async def clone_agent_endpoint(
+    resource_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> AgentResponse:
+    return AgentResponse.model_validate(
+        await _call(lambda: clone_agent_revision(db, resource_id))
+    )
+
+
+@router.post(
+    "/agents/{resource_id}/versions",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AgentVersionResponse,
 )
 async def create_agent_version_endpoint(
-    agent_id: uuid.UUID,
+    resource_id: uuid.UUID,
     body: AgentVersionCreate,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        version = await create_agent_version(
-            db,
-            agent_id=agent_id,
-            executable_names=body.executable_names,
-            supported_platforms=body.supported_platforms,
-            min_version=body.min_version,
-            max_version_exclusive=body.max_version_exclusive,
-            probe_command=body.probe_command,
-            capability_tags=body.capability_tags,
-            network_domains=body.network_domains,
-            adapter_contract_version=body.adapter_contract_version,
-            content_sha256=body.content_sha256,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return version
+) -> AgentVersionResponse:
+    return AgentVersionResponse.model_validate(
+        await _call(lambda: create_agent_version(db, resource_id, body))
+    )
 
 
-@router.get(
-    "/agents/{agent_id}/versions", response_model=AgentVersionListResponse
-)
+@router.get("/agents/{resource_id}/versions")
 async def list_agent_versions_endpoint(
-    agent_id: uuid.UUID,
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    versions, total = await list_agent_versions(
-        db, agent_id=agent_id, skip=skip, limit=limit
-    )
-    return {"versions": versions, "total": total}
+) -> dict[str, object]:
+    return _page(await list_agent_versions(db, resource_id), AgentVersionResponse)
 
 
-# --- Models ---
+@router.delete(
+    "/agents/{resource_id}/versions/{version_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_agent_version_endpoint(
+    resource_id: uuid.UUID,
+    version_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> Response:
+    await _call(lambda: delete_agent_version(db, resource_id, version_id))
+    return Response(status_code=204)
 
 
 @router.post(
-    "/models",
-    response_model=ModelResponse,
+    "/agents/{resource_id}/model-bindings",
     status_code=status.HTTP_201_CREATED,
+    response_model=AgentModelBindingResponse,
 )
+async def create_agent_binding_endpoint(
+    resource_id: uuid.UUID,
+    body: AgentModelBindingCreate,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> AgentModelBindingResponse:
+    return AgentModelBindingResponse.model_validate(
+        await _call(lambda: create_agent_model_binding(db, resource_id, body))
+    )
+
+
+@router.get("/agents/{resource_id}/model-bindings")
+async def list_agent_bindings_endpoint(
+    resource_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    return _page(
+        await list_agent_model_bindings(db, resource_id),
+        AgentModelBindingResponse,
+    )
+
+
+@router.delete(
+    "/agents/{resource_id}/model-bindings/{binding_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_agent_binding_endpoint(
+    resource_id: uuid.UUID,
+    binding_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> Response:
+    await _call(lambda: delete_agent_model_binding(db, resource_id, binding_id))
+    return Response(status_code=204)
+
+
+@router.post("/models", status_code=status.HTTP_201_CREATED, response_model=ModelResponse)
 async def create_model_endpoint(
     body: ModelCreate,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        model = await create_model(
-            db,
-            provider_key=body.provider_key,
-            model_key=body.model_key,
-            display_name=body.display_name,
-            context_window=body.context_window,
-            supports_tools=body.supports_tools,
-            supports_streaming=body.supports_streaming,
-            supports_vision=body.supports_vision,
-        )
-        await db.refresh(model)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return model
+) -> ModelResponse:
+    return ModelResponse.model_validate(await _call(lambda: create_model(db, body)))
 
 
-@router.get("/models", response_model=ModelListResponse)
+@router.get("/models")
 async def list_models_endpoint(
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    models, total = await list_models(db, skip=skip, limit=limit)
-    return {"models": models, "total": total}
+) -> dict[str, object]:
+    return _page(await list_models(db, limit), ModelResponse)
 
 
-@router.get("/models/{model_id}", response_model=ModelResponse)
+@router.get("/models/{resource_id}", response_model=ModelResponse)
 async def get_model_endpoint(
-    model_id: uuid.UUID,
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    model = await get_model(db, model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-    return model
+) -> ModelResponse:
+    item = await get_model(db, resource_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+    return ModelResponse.model_validate(item)
 
 
-@router.patch("/models/{model_id}", response_model=ModelResponse)
+@router.patch("/models/{resource_id}", response_model=ModelResponse)
 async def update_model_endpoint(
-    model_id: uuid.UUID,
+    resource_id: uuid.UUID,
     body: ModelUpdate,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        model = await update_model(
-            db,
-            model_id,
-            display_name=body.display_name,
-            context_window=body.context_window,
-            supports_tools=body.supports_tools,
-            supports_streaming=body.supports_streaming,
-            supports_vision=body.supports_vision,
-        )
-        await db.refresh(model)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
-    return agent
+) -> ModelResponse:
+    return ModelResponse.model_validate(
+        await _call(lambda: update_model(db, resource_id, body, _if_match(if_match)))
+    )
 
 
-@router.delete(
-    "/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_agent_endpoint(
-    agent_id: uuid.UUID,
+@router.delete("/models/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_model_endpoint(
+    resource_id: uuid.UUID,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> None:
-    try:
-        await delete_agent(db, agent_id)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+) -> Response:
+    await _call(lambda: delete_model(db, resource_id, _if_match(if_match)))
+    return Response(status_code=204)
 
 
-@router.patch("/models/{model_id}/status", response_model=ModelResponse)
-async def transition_model_status_endpoint(
-    model_id: uuid.UUID,
-    body: StatusTransitionRequest,
+@router.post("/models/{resource_id}/validate", response_model=ModelResponse)
+async def validate_model_endpoint(
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        model = await transition_model_status(db, model_id, body.status)
-        await db.refresh(model)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return model
+) -> ModelResponse:
+    return ModelResponse.model_validate(await _call(lambda: validate_model(db, resource_id)))
 
 
 @router.post(
-    "/models/{model_id}/copy-to-draft", response_model=ModelResponse
+    "/models/{resource_id}/revisions",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ModelResponse,
 )
-async def copy_model_to_draft_endpoint(
-    model_id: uuid.UUID,
+async def clone_model_endpoint(
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        model = await copy_model_to_draft(db, model_id)
-        await db.refresh(model)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return model
-
-
-# --- Providers ---
+) -> ModelResponse:
+    return ModelResponse.model_validate(
+        await _call(lambda: clone_model_revision(db, resource_id))
+    )
 
 
 @router.post(
     "/providers",
-    response_model=ProviderResponse,
     status_code=status.HTTP_201_CREATED,
+    response_model=ProviderResponse,
 )
 async def create_provider_endpoint(
     body: ProviderCreate,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        provider = await create_provider(
-            db, body.display_name, body.base_url, body.api_protocol
-        )
-        await db.refresh(provider)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return provider
+) -> ProviderResponse:
+    return ProviderResponse.model_validate(await _call(lambda: create_provider(db, body)))
 
 
-@router.get("/providers", response_model=ProviderListResponse)
+@router.get("/providers")
 async def list_providers_endpoint(
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    providers, total = await list_providers(db, skip=skip, limit=limit)
-    return {"providers": providers, "total": total}
+) -> dict[str, object]:
+    return _page(await list_providers(db, limit), ProviderResponse)
 
 
-@router.get("/providers/{provider_id}", response_model=ProviderResponse)
+@router.get("/providers/{resource_id}", response_model=ProviderResponse)
 async def get_provider_endpoint(
-    provider_id: uuid.UUID,
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    provider = await get_provider(db, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Provider not found")
-    return provider
+) -> ProviderResponse:
+    item = await get_provider(db, resource_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+    return ProviderResponse.model_validate(item)
 
 
-@router.patch("/providers/{provider_id}", response_model=ProviderResponse)
+@router.patch("/providers/{resource_id}", response_model=ProviderResponse)
 async def update_provider_endpoint(
-    provider_id: uuid.UUID,
+    resource_id: uuid.UUID,
     body: ProviderUpdate,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        provider = await update_provider(
-            db,
-            provider_id,
-            display_name=body.display_name,
-            base_url=body.base_url,
-            api_protocol=body.api_protocol,
+) -> ProviderResponse:
+    return ProviderResponse.model_validate(
+        await _call(
+            lambda: update_provider(db, resource_id, body, _if_match(if_match))
         )
-        await db.refresh(provider)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
-    return model
+    )
 
 
-@router.delete(
-    "/models/{model_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_model_endpoint(
-    model_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> None:
-    try:
-        await delete_model(db, model_id)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
-
-
-@router.patch(
-    "/providers/{provider_id}/status", response_model=ProviderResponse
-)
-async def transition_provider_status_endpoint(
-    provider_id: uuid.UUID,
-    body: StatusTransitionRequest,
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        provider = await transition_provider_status(
-            db, provider_id, body.status
-        )
-        await db.refresh(provider)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return provider
-
-
-@router.delete(
-    "/providers/{provider_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/providers/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider_endpoint(
-    provider_id: uuid.UUID,
+    resource_id: uuid.UUID,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> None:
-    try:
-        await delete_provider(db, provider_id)
-    except ValueError as e:
-        msg = str(e)
-        raise HTTPException(status_code=409 if "published" in msg else 400, detail=msg)
+) -> Response:
+    await _call(lambda: delete_provider(db, resource_id, _if_match(if_match)))
+    return Response(status_code=204)
+
+
+@router.post("/providers/{resource_id}/validate", response_model=ProviderResponse)
+async def validate_provider_endpoint(
+    resource_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> ProviderResponse:
+    return ProviderResponse.model_validate(
+        await _call(lambda: validate_provider(db, resource_id))
+    )
 
 
 @router.post(
-    "/providers/{provider_id}/copy-to-draft",
+    "/providers/{resource_id}/revisions",
+    status_code=status.HTTP_201_CREATED,
     response_model=ProviderResponse,
 )
-async def copy_provider_to_draft_endpoint(
-    provider_id: uuid.UUID,
+async def clone_provider_endpoint(
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        provider = await copy_provider_to_draft(db, provider_id)
-        await db.refresh(provider)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return provider
-
-
-# --- Agent-Model Bindings ---
-
-
-@router.post(
-    "/agent-model-bindings",
-    response_model=AgentModelBindingResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_agent_model_binding_endpoint(
-    body: AgentModelBindingCreate,
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        binding = await create_agent_model_binding(
-            db,
-            agent_id=uuid.UUID(body.agent_id),
-            model_id=uuid.UUID(body.model_id),
-            agent_version_range=body.agent_version_range,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return binding
-
-
-@router.get(
-    "/agents/{agent_id}/model-bindings",
-    response_model=AgentModelBindingListResponse,
-)
-async def list_agent_model_bindings_endpoint(
-    agent_id: uuid.UUID,
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
-    db: AsyncSession = Depends(get_db_session),
-    _user: User = Depends(get_current_user),
-) -> dict:
-    bindings, total = await list_agent_model_bindings(
-        db, agent_id=agent_id, skip=skip, limit=limit
+) -> ProviderResponse:
+    return ProviderResponse.model_validate(
+        await _call(lambda: clone_provider_revision(db, resource_id))
     )
-    return {"bindings": bindings, "total": total}
-
-
-# --- Provider-Model Bindings ---
 
 
 @router.post(
-    "/provider-model-bindings",
-    response_model=ProviderModelBindingResponse,
+    "/providers/{resource_id}/model-bindings",
     status_code=status.HTTP_201_CREATED,
+    response_model=ProviderModelBindingResponse,
 )
-async def create_provider_model_binding_endpoint(
+async def create_provider_binding_endpoint(
+    resource_id: uuid.UUID,
     body: ProviderModelBindingCreate,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    try:
-        binding = await create_provider_model_binding(
-            db,
-            provider_id=uuid.UUID(body.provider_id),
-            model_id=uuid.UUID(body.model_id),
-            api_protocol=body.api_protocol,
-            capabilities=body.capabilities,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return binding
+) -> ProviderModelBindingResponse:
+    return ProviderModelBindingResponse.model_validate(
+        await _call(lambda: create_provider_model_binding(db, resource_id, body))
+    )
 
 
-@router.get(
-    "/providers/{provider_id}/model-bindings",
-    response_model=ProviderModelBindingListResponse,
-)
-async def list_provider_model_bindings_endpoint(
-    provider_id: uuid.UUID,
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=200),
+@router.get("/providers/{resource_id}/model-bindings")
+async def list_provider_bindings_endpoint(
+    resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
-) -> dict:
-    bindings, total = await list_provider_model_bindings(
-        db, provider_id=provider_id, skip=skip, limit=limit
+) -> dict[str, object]:
+    return _page(
+        await list_provider_model_bindings(db, resource_id),
+        ProviderModelBindingResponse,
     )
-    return {"bindings": bindings, "total": total}
+
+
+@router.delete(
+    "/providers/{resource_id}/model-bindings/{binding_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_provider_binding_endpoint(
+    resource_id: uuid.UUID,
+    binding_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> Response:
+    await _call(lambda: delete_provider_model_binding(db, resource_id, binding_id))
+    return Response(status_code=204)

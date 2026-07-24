@@ -1,7 +1,7 @@
 """Structured logging configuration."""
+
 import logging
 import sys
-from typing import Any
 
 
 def setup_logging(level: str = "INFO", json_format: bool = False) -> None:

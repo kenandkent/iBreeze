@@ -1,250 +1,200 @@
-/// Sidecar 客户端，通过 HTTP JSON-RPC 与后端服务通信
+//! Authenticated, length-framed JSON-RPC client over a Unix domain socket.
+
+use std::path::{Path, PathBuf};
+
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use hmac::{Hmac, Mac};
+use rand::RngCore;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde_json::Value;
+use sha2::Sha256;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::UnixStream;
+use tokio::sync::Mutex;
+use uuid::Uuid;
+use zeroize::Zeroizing;
+
 use crate::error::AppError;
+use crate::rpc::protocol::{
+    JsonRpcRequest, JsonRpcResponse, RpcMeta, MAX_FRAME_BYTES, PROTOCOL_VERSION,
+};
+
+type HmacSha256 = Hmac<Sha256>;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HandshakeResponse {
+    ipc_session_id: Uuid,
+    protocol_version: u32,
+    profile_status: String,
+    database_status: String,
+    migration_version: String,
+}
 
 pub struct SidecarClient {
-    base_url: String,
-    client: reqwest::Client,
+    socket_path: PathBuf,
+    stream: Mutex<Option<UnixStream>>,
+    ipc_session_id: Mutex<Option<Uuid>>,
+    window_session_id: Uuid,
 }
 
 impl SidecarClient {
-    pub fn new(port: u16) -> Self {
+    pub fn new(socket_path: impl Into<PathBuf>) -> Self {
         Self {
-            base_url: format!("http://127.0.0.1:{}", port),
-            client: reqwest::Client::new(),
+            socket_path: socket_path.into(),
+            stream: Mutex::new(None),
+            ipc_session_id: Mutex::new(None),
+            window_session_id: Uuid::new_v4(),
         }
     }
 
-    /// 通用 JSON-RPC 调用
-    pub async fn call<T: serde::de::DeserializeOwned>(
+    pub fn socket_path(&self) -> &Path {
+        &self.socket_path
+    }
+
+    pub async fn connect_and_handshake(
         &self,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Result<T, AppError> {
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            "id": 1,
-        });
-
-        let response = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| AppError::Network(e.to_string()))?;
-
-        let body: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| AppError::Network(e.to_string()))?;
-
-        if let Some(error) = body.get("error") {
-            return Err(AppError::Sidecar(
-                error
-                    .get("message")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("Unknown error")
-                    .to_string(),
+        startup_token: Zeroizing<Vec<u8>>,
+        app_version: &str,
+        launch_id: Uuid,
+    ) -> Result<(), AppError> {
+        if startup_token.len() != 32 {
+            return Err(AppError::Security(
+                "IPC startup token must contain 32 bytes".to_owned(),
             ));
         }
-
-        let result = body
-            .get("result")
-            .ok_or_else(|| AppError::Sidecar("No result in response".to_string()))?;
-
-        serde_json::from_value(result.clone()).map_err(|e| AppError::Internal(e.to_string()))
-    }
-
-    // === Company 方法 ===
-
-    pub async fn company_create(
-        &self,
-        data: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call("company.create", data).await
-    }
-
-    pub async fn company_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("company.list", serde_json::json!({})).await
-    }
-
-    pub async fn company_get(&self, id: &str) -> Result<serde_json::Value, AppError> {
-        self.call("company.get", serde_json::json!({"id": id}))
+        let stream = UnixStream::connect(&self.socket_path)
             .await
-    }
+            .map_err(|error| AppError::Sidecar(format!("connect UDS: {error}")))?;
+        *self.stream.lock().await = Some(stream);
 
-    pub async fn company_update(
-        &self,
-        id: &str,
-        data: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let mut params = data;
-        params["id"] = serde_json::Value::String(id.to_string());
-        self.call("company.update", params).await
-    }
-
-    pub async fn company_delete(&self, id: &str) -> Result<(), AppError> {
-        self.call("company.delete", serde_json::json!({"id": id}))
-            .await
-    }
-
-    // === Conversation 方法 ===
-
-    pub async fn conversation_create(
-        &self,
-        title: &str,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call(
-            "conversation.create",
-            serde_json::json!({"title": title}),
-        )
-        .await
-    }
-
-    pub async fn conversation_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("conversation.list", serde_json::json!({})).await
-    }
-
-    pub async fn conversation_get(&self, id: &str) -> Result<serde_json::Value, AppError> {
-        self.call("conversation.get", serde_json::json!({"id": id}))
-            .await
-    }
-
-    pub async fn conversation_archive(&self, id: &str) -> Result<(), AppError> {
-        self.call("conversation.archive", serde_json::json!({"id": id}))
-            .await
-    }
-
-    pub async fn conversation_message_add(
-        &self,
-        conv_id: &str,
-        role: &str,
-        content: &str,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call(
-            "conversation.message.add",
+        let mut nonce = [0_u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+        let nonce_base64 = BASE64.encode(nonce);
+        let mut mac = HmacSha256::new_from_slice(&startup_token)
+            .map_err(|_| AppError::Security("invalid IPC token".to_owned()))?;
+        mac.update(app_version.as_bytes());
+        mac.update(PROTOCOL_VERSION.to_string().as_bytes());
+        mac.update(launch_id.to_string().as_bytes());
+        mac.update(nonce_base64.as_bytes());
+        let proof = BASE64.encode(mac.finalize().into_bytes());
+        let request = JsonRpcRequest::new(
+            "system.handshake",
             serde_json::json!({
-                "conversation_id": conv_id,
-                "role": role,
-                "content": content,
+                "app_version": app_version,
+                "protocol_version": PROTOCOL_VERSION,
+                "launch_id": launch_id,
+                "nonce": nonce_base64,
+                "proof": proof,
             }),
-        )
-        .await
+            RpcMeta {
+                trace_id: Uuid::new_v4(),
+                ipc_session_id: None,
+                window_session_id: self.window_session_id,
+                idempotency_key: None,
+            },
+        );
+        let response: HandshakeResponse = self.exchange(request).await?;
+        if response.protocol_version != PROTOCOL_VERSION
+            || response.profile_status != "ready"
+            || response.database_status != "ready"
+            || response.migration_version.is_empty()
+        {
+            self.disconnect().await;
+            return Err(AppError::Sidecar(
+                "Sidecar returned an invalid readiness contract".to_owned(),
+            ));
+        }
+        *self.ipc_session_id.lock().await = Some(response.ipc_session_id);
+        Ok(())
     }
 
-    pub async fn conversation_message_list(
+    pub async fn call<T: DeserializeOwned>(
         &self,
-        conv_id: &str,
-    ) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call(
-            "conversation.message.list",
-            serde_json::json!({"conversation_id": conv_id}),
-        )
-        .await
+        method: &str,
+        params: Value,
+        idempotency_key: Option<Uuid>,
+    ) -> Result<T, AppError> {
+        let session = (*self.ipc_session_id.lock().await)
+            .ok_or_else(|| AppError::Sidecar("Sidecar profile is not open".to_owned()))?;
+        let request = JsonRpcRequest::new(
+            method,
+            params,
+            RpcMeta {
+                trace_id: Uuid::new_v4(),
+                ipc_session_id: Some(session),
+                window_session_id: self.window_session_id,
+                idempotency_key,
+            },
+        );
+        self.exchange(request).await
     }
 
-    // === Knowledge 方法 ===
-
-    pub async fn knowledge_create(
-        &self,
-        data: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call("knowledge.create", data).await
+    pub async fn disconnect(&self) {
+        *self.stream.lock().await = None;
+        *self.ipc_session_id.lock().await = None;
     }
 
-    pub async fn knowledge_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("knowledge.list", serde_json::json!({})).await
-    }
-
-    pub async fn knowledge_search(&self, query: &str) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call(
-            "knowledge.search",
-            serde_json::json!({"query": query}),
-        )
-        .await
-    }
-
-    // === Workspace 方法 ===
-
-    pub async fn workspace_create(
-        &self,
-        name: &str,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call("workspace.create", serde_json::json!({"name": name}))
+    async fn exchange<T: DeserializeOwned>(&self, request: JsonRpcRequest) -> Result<T, AppError> {
+        let request_id = request.id.clone();
+        let payload =
+            serde_json::to_vec(&request).map_err(|error| AppError::Internal(error.to_string()))?;
+        if payload.is_empty() || payload.len() > MAX_FRAME_BYTES {
+            return Err(AppError::Validation(
+                "RPC request exceeds frame limit".to_owned(),
+            ));
+        }
+        let mut guard = self.stream.lock().await;
+        let stream = guard
+            .as_mut()
+            .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
+        stream
+            .write_all(&(payload.len() as u32).to_be_bytes())
             .await
-    }
-
-    pub async fn workspace_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("workspace.list", serde_json::json!({})).await
-    }
-
-    pub async fn workspace_get(&self, id: &str) -> Result<serde_json::Value, AppError> {
-        self.call("workspace.get", serde_json::json!({"id": id}))
+            .map_err(|error| AppError::Sidecar(format!("write frame: {error}")))?;
+        stream
+            .write_all(&payload)
             .await
-    }
-
-    // === Orchestration 方法 ===
-
-    pub async fn orchestration_create(
-        &self,
-        name: &str,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call(
-            "orchestration.create",
-            serde_json::json!({"name": name}),
-        )
-        .await
-    }
-
-    pub async fn orchestration_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("orchestration.list", serde_json::json!({})).await
-    }
-
-    pub async fn orchestration_run(&self, id: &str) -> Result<serde_json::Value, AppError> {
-        self.call("orchestration.run", serde_json::json!({"id": id}))
+            .map_err(|error| AppError::Sidecar(format!("write payload: {error}")))?;
+        stream
+            .flush()
             .await
-    }
-
-    // === Agent 方法 ===
-
-    pub async fn agent_run(
-        &self,
-        agent_id: &str,
-        message: &str,
-    ) -> Result<serde_json::Value, AppError> {
-        self.call(
-            "agent.run",
-            serde_json::json!({"agent_id": agent_id, "message": message}),
-        )
-        .await
-    }
-
-    pub async fn agent_list(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call("agent.list", serde_json::json!({})).await
-    }
-
-    pub async fn agent_stop(&self, agent_id: &str) -> Result<(), AppError> {
-        self.call("agent.stop", serde_json::json!({"agent_id": agent_id}))
+            .map_err(|error| AppError::Sidecar(format!("flush payload: {error}")))?;
+        let size = stream
+            .read_u32()
             .await
-    }
-
-    // === Audit 方法 ===
-
-    pub async fn audit_log(&self, data: serde_json::Value) -> Result<(), AppError> {
-        self.call("audit.log", data).await
-    }
-
-    pub async fn audit_export(
-        &self,
-        start_time: &str,
-        end_time: &str,
-    ) -> Result<Vec<serde_json::Value>, AppError> {
-        self.call(
-            "audit.export",
-            serde_json::json!({"start_time": start_time, "end_time": end_time}),
-        )
-        .await
+            .map_err(|error| AppError::Sidecar(format!("read frame: {error}")))?
+            as usize;
+        if size == 0 || size > MAX_FRAME_BYTES {
+            return Err(AppError::Sidecar(
+                "Sidecar returned an invalid frame length".to_owned(),
+            ));
+        }
+        let mut response_payload = vec![0_u8; size];
+        stream
+            .read_exact(&mut response_payload)
+            .await
+            .map_err(|error| AppError::Sidecar(format!("read payload: {error}")))?;
+        let response: JsonRpcResponse = serde_json::from_slice(&response_payload)
+            .map_err(|error| AppError::Sidecar(format!("decode response: {error}")))?;
+        if response.jsonrpc != "2.0" || response.id != request_id {
+            return Err(AppError::Sidecar(
+                "Sidecar response correlation failed".to_owned(),
+            ));
+        }
+        if let Some(error) = response.error {
+            let code = error
+                .data
+                .map(|data| data.code)
+                .unwrap_or_else(|| format!("RPC_{}", error.code));
+            return Err(AppError::Sidecar(format!("{code}: {}", error.message)));
+        }
+        let value = response
+            .result
+            .ok_or_else(|| AppError::Sidecar("RPC result is missing".to_owned()))?;
+        serde_json::from_value(value).map_err(|error| {
+            AppError::Sidecar(format!("RPC result does not match contract: {error}"))
+        })
     }
 }

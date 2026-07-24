@@ -1,4 +1,5 @@
 """IP-based rate limiting for auth endpoints."""
+
 import time
 from collections import defaultdict
 

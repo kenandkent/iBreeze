@@ -1,161 +1,99 @@
-"""Compatibility rule service with evaluation logic."""
+"""Compatibility rule state machine."""
+
+from __future__ import annotations
+
+import re
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.compatibility.models import CompatibilityRule
+from ibreeze_backend.compatibility.schemas import RuleCreate, RuleUpdate
+
+_VERSION_RANGE = re.compile(r"^[0-9A-Za-z.*<>=~^|+\-\s]+$")
 
 
-async def create_rule(
-    db: AsyncSession,
-    subject_type: str,
-    subject_version_range: dict | None,
-    dependency_type: str,
-    dependency_version_range: dict | None,
-    result: str,
-    reason_code: str | None,
-    priority: int,
-) -> CompatibilityRule:
-    rule = CompatibilityRule(
-        subject_type=subject_type,
-        subject_version_range=subject_version_range,
-        dependency_type=dependency_type,
-        dependency_version_range=dependency_version_range,
-        result=result,
-        reason_code=reason_code,
-        priority=priority,
-    )
-    db.add(rule)
+def _validate_version_range(value: str) -> None:
+    if not _VERSION_RANGE.fullmatch(value) or not any(character.isdigit() for character in value):
+        raise ValueError("COMPATIBILITY_VERSION_RANGE_INVALID")
+
+
+async def create_rule(db: AsyncSession, body: RuleCreate) -> CompatibilityRule:
+    item = CompatibilityRule(**body.model_dump(), status="draft", version=1)
+    db.add(item)
     await db.flush()
-    return rule
+    return item
 
 
-async def get_rule(
-    db: AsyncSession, rule_id: uuid.UUID
-) -> CompatibilityRule | None:
-    result = await db.execute(
-        select(CompatibilityRule).where(CompatibilityRule.id == rule_id)
-    )
+async def get_rule(db: AsyncSession, rule_id: uuid.UUID) -> CompatibilityRule | None:
+    result = await db.execute(select(CompatibilityRule).where(CompatibilityRule.id == rule_id))
     return result.scalar_one_or_none()
 
 
-async def list_rules(
-    db: AsyncSession, skip: int, limit: int
-) -> tuple[list[CompatibilityRule], int]:
-    count_result = await db.execute(
-        select(func.count(CompatibilityRule.id))
-    )
-    total = count_result.scalar() or 0
-    result = await db.execute(
-        select(CompatibilityRule)
-        .order_by(
-            CompatibilityRule.priority.desc(),
-            CompatibilityRule.created_at.desc(),
+async def list_rules(db: AsyncSession, limit: int = 50) -> list[CompatibilityRule]:
+    return list(
+        await db.scalars(
+            select(CompatibilityRule)
+            .order_by(CompatibilityRule.created_at.desc())
+            .limit(limit)
         )
-        .offset(skip)
-        .limit(limit)
     )
-    return list(result.scalars().all()), total
 
 
 async def update_rule(
     db: AsyncSession,
     rule_id: uuid.UUID,
-    subject_type: str | None,
-    subject_version_range: dict | None,
-    dependency_type: str | None,
-    dependency_version_range: dict | None,
-    result: str | None,
-    reason_code: str | None,
-    priority: int | None,
+    body: RuleUpdate,
+    expected_version: int,
 ) -> CompatibilityRule:
-    rule = await get_rule(db, rule_id)
-    if not rule:
-        raise ValueError("Rule not found")
-
-    if subject_type is not None:
-        rule.subject_type = subject_type
-    if subject_version_range is not None:
-        rule.subject_version_range = subject_version_range
-    if dependency_type is not None:
-        rule.dependency_type = dependency_type
-    if dependency_version_range is not None:
-        rule.dependency_version_range = dependency_version_range
-    if result is not None:
-        rule.result = result
-    if reason_code is not None:
-        rule.reason_code = reason_code
-    if priority is not None:
-        rule.priority = priority
-
+    item = await _locked_rule(db, rule_id)
+    _assert_mutable(item)
+    if item.version != expected_version:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    for name, value in body.model_dump(exclude_unset=True).items():
+        setattr(item, name, value)
+    item.status = "draft"
+    item.version += 1
     await db.flush()
-    return rule
+    return item
 
 
-async def delete_rule(db: AsyncSession, rule_id: uuid.UUID) -> None:
-    rule = await get_rule(db, rule_id)
-    if not rule:
-        raise ValueError("Rule not found")
-    await db.delete(rule)
-    await db.flush()
-
-
-def _version_in_range(
-    version: str | None, version_range: dict | None
-) -> bool:
-    if not version_range:
-        return True
-    if not version:
-        return True
-
-    min_v = version_range.get("min")
-    max_v = version_range.get("max")
-
-    if min_v and version < min_v:
-        return False
-    if max_v and version >= max_v:
-        return False
-    return True
-
-
-async def evaluate(
+async def delete_rule(
     db: AsyncSession,
-    subject_type: str,
-    subject_version: str | None,
-    dependency_type: str,
-    dependency_version: str | None,
-) -> tuple[str, str | None, str | None]:
+    rule_id: uuid.UUID,
+    expected_version: int,
+) -> None:
+    item = await _locked_rule(db, rule_id)
+    _assert_mutable(item)
+    if item.version != expected_version:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    await db.delete(item)
+    await db.flush()
+
+
+async def validate_rule(db: AsyncSession, rule_id: uuid.UUID) -> CompatibilityRule:
+    item = await _locked_rule(db, rule_id)
+    _assert_mutable(item)
+    _validate_version_range(item.subject_version_range)
+    _validate_version_range(item.dependency_version_range)
+    item.status = "validated"
+    await db.flush()
+    return item
+
+
+async def _locked_rule(db: AsyncSession, rule_id: uuid.UUID) -> CompatibilityRule:
     result = await db.execute(
-        select(CompatibilityRule).where(
-            CompatibilityRule.subject_type == subject_type,
-            CompatibilityRule.dependency_type == dependency_type,
-        )
+        select(CompatibilityRule)
+        .where(CompatibilityRule.id == rule_id)
+        .with_for_update()
     )
-    rules = list(result.scalars().all())
+    item = result.scalar_one_or_none()
+    if item is None:
+        raise ValueError("CATALOG_RESOURCE_NOT_FOUND")
+    return item
 
-    matched = []
-    for rule in rules:
-        if not _version_in_range(subject_version, rule.subject_version_range):
-            continue
-        if not _version_in_range(
-            dependency_version, rule.dependency_version_range
-        ):
-            continue
-        matched.append(rule)
 
-    if not matched:
-        return "allow", None, None
-
-    matched.sort(key=lambda r: r.priority, reverse=True)
-
-    highest_priority = matched[0].priority
-    top_rules = [r for r in matched if r.priority == highest_priority]
-
-    deny_rules = [r for r in top_rules if r.result == "deny"]
-    if deny_rules:
-        winner = deny_rules[0]
-        return winner.result, winner.reason_code, str(winner.id)
-
-    winner = top_rules[0]
-    return winner.result, winner.reason_code, str(winner.id)
+def _assert_mutable(item: CompatibilityRule) -> None:
+    if item.status == "published":
+        raise ValueError("CATALOG_REVISION_IMMUTABLE")

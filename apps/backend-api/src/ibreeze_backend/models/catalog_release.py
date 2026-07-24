@@ -1,10 +1,12 @@
-"""Catalog release and item models – aligned with design doc G.7 + legacy compat."""
+"""Immutable Catalog Release models from design section G.7."""
+
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ibreeze_backend.db.session import Base
@@ -12,70 +14,49 @@ from ibreeze_backend.models.base import UUIDPrimaryKeyMixin
 
 
 class CatalogRelease(UUIDPrimaryKeyMixin, Base):
-    """Catalog release – G.7 catalog_releases table + legacy compat fields."""
     __tablename__ = "catalog_releases"
     __table_args__ = (
         CheckConstraint("release_sequence > 0", name="ck_release_sequence"),
         CheckConstraint(
-            "status IN ('draft','publishing','published','failed')",
+            "status IN ('publishing','published','failed')",
             name="ck_release_status",
         ),
     )
 
-    release_sequence: Mapped[int] = mapped_column(
-        BigInteger, unique=True, nullable=False
-    )
-    minimum_client_version: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="0.0.0"
-    )
-    manifest_object_key: Mapped[str] = mapped_column(
-        Text, unique=True, nullable=False, default=""
-    )
-    manifest_sha256: Mapped[str] = mapped_column(
-        String(64), nullable=False, default=""
-    )
-    signature: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    signing_key_id: Mapped[str] = mapped_column(
-        String(100), nullable=False, default=""
-    )
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+    release_sequence: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    minimum_client_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_object_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    signature: Mapped[str] = mapped_column(Text, nullable=False)
+    signing_key_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
     )
-    created_at: Mapped[str] = mapped_column(String(32), nullable=False, default="")
-    published_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # ── Legacy compat properties (router uses these) ───────────────────
-    @property
-    def version(self) -> str:
-        return self.minimum_client_version
-
-    @version.setter
-    def version(self, value: str) -> None:
-        self.minimum_client_version = value
-
-    @property
-    def manifest(self) -> dict:
-        return {}
-
-    @manifest.setter
-    def manifest(self, value: dict) -> None:
-        pass
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class CatalogReleaseItem(UUIDPrimaryKeyMixin, Base):
-    """Item within a catalog release – G.7 catalog_release_items table."""
+class CatalogReleaseItem(Base):
     __tablename__ = "catalog_release_items"
+    __table_args__ = (
+        CheckConstraint(
+            """resource_type IN (
+                'agent_revision','agent_version','model','provider',
+                'skill_revision','skill_version','compatibility_rule'
+            )""",
+            name="ck_release_item_type",
+        ),
+    )
 
     release_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("catalog_releases.id", ondelete="CASCADE"),
+        primary_key=True,
     )
-    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    resource_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
-    resource_version_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    resource_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    resource_version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)

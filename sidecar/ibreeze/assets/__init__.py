@@ -1,4 +1,5 @@
 """Bundled runtime assets for offline deployments."""
+
 from importlib import resources
 
 ASSETS_PACKAGE = "ibreeze.assets"

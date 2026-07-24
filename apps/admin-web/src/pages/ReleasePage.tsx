@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Drawer, Form, Input, Space, Typography, message } from 'antd';
 import { PlusOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { logger } from '../utils/logger';
 import { useListReleases, useCreateRelease, useEmergencyDisable } from '../hooks/useReleases';
 import type { Release } from '../types';
 
@@ -26,7 +27,8 @@ export default function ReleasePage() {
       message.success('发布创建成功');
       setCreateModalOpen(false);
       form.resetFields();
-    } catch {
+    } catch (error) {
+      logger.error('ReleasePage', 'create_release_failed', undefined, error);
       message.error('发布创建失败');
     }
   };
@@ -38,7 +40,8 @@ export default function ReleasePage() {
       message.success('紧急禁用已执行');
       setEmergencyModal(false);
       emergencyForm.resetFields();
-    } catch {
+    } catch (error) {
+      logger.error('ReleasePage', 'emergency_disable_failed', undefined, error);
       message.error('紧急禁用失败');
     }
   };

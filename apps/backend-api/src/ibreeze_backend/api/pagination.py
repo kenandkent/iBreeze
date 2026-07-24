@@ -1,7 +1,8 @@
 """Cursor-based pagination helpers."""
+
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -26,7 +27,7 @@ def decode_cursor(cursor_str: str) -> tuple[datetime, UUID]:
         payload = json.loads(decoded)
         dt = datetime.fromisoformat(payload["created_at"])
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt, UUID(payload["id"])
     except Exception:
         raise ValueError("Invalid cursor")

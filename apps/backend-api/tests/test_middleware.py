@@ -1,11 +1,12 @@
 """Middleware tests."""
+
 import uuid
 from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from fastapi import Request
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,29 +15,23 @@ from ibreeze_backend.middleware.audit import (
     _get_client_ip,
     _is_auth_endpoint,
     _resource_type_from_path,
-    AuditMiddleware,
 )
-from ibreeze_backend.middleware.idempotency import IdempotencyMiddleware
 from ibreeze_backend.middleware.ratelimit import RateLimitMiddleware
 from ibreeze_backend.models.audit_log import AdminAuditLog as AuditLog
-
 
 # ---------------------------------------------------------------------------
 # Audit middleware helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_audit_middleware_logs_request(
-    client: AsyncClient, admin_tokens: dict, monkeypatch: pytest.MonkeyPatch,
-    db_engine, db_session: AsyncSession
+    client: AsyncClient, admin_tokens: dict, monkeypatch: pytest.MonkeyPatch, db_engine, db_session: AsyncSession
 ):
     """Test that the audit middleware writes an audit log for API requests."""
-    from ibreeze_backend.middleware.audit import async_session_factory as _orig
-    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    test_factory = async_sessionmaker(
-        db_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    test_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(
         "ibreeze_backend.middleware.audit.async_session_factory",
         test_factory,
@@ -49,7 +44,7 @@ async def test_audit_middleware_logs_request(
 
     result = await db_session.execute(select(AuditLog))
     logs = result.scalars().all()
-    matching = [l for l in logs if "admin" in (l.resource_type or "")]
+    matching = [record for record in logs if "admin" in (record.resource_type or "")]
     assert len(matching) >= 1
 
     log = matching[0]
@@ -60,25 +55,21 @@ async def test_audit_middleware_logs_request(
 
 @pytest.mark.asyncio
 async def test_audit_middleware_skips_health(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, db_engine,
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    db_engine,
 ):
     """Test that the audit middleware skips health check endpoints."""
-    from ibreeze_backend.middleware.audit import async_session_factory as _orig
-    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-    from ibreeze_backend.middleware.audit import write_audit_log
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    test_factory = async_sessionmaker(
-        db_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    test_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(
         "ibreeze_backend.middleware.audit.async_session_factory",
         test_factory,
     )
 
     mock_write = AsyncMock()
-    monkeypatch.setattr(
-        "ibreeze_backend.middleware.audit.write_audit_log", mock_write
-    )
+    monkeypatch.setattr("ibreeze_backend.middleware.audit.write_audit_log", mock_write)
 
     await client.get("/health")
 
@@ -103,34 +94,53 @@ def test_is_auth_endpoint():
 
 
 def test_get_client_ip():
-    req = Request({
-        "type": "http", "method": "GET", "path": "/test",
-        "headers": [(b"x-forwarded-for", b"10.0.0.1, 10.0.0.2")],
-        "query_string": b"", "client": None,
-        "server": ("test", 80), "scheme": "http",
-    })
+    req = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [(b"x-forwarded-for", b"10.0.0.1, 10.0.0.2")],
+            "query_string": b"",
+            "client": None,
+            "server": ("test", 80),
+            "scheme": "http",
+        }
+    )
     assert _get_client_ip(req) == "10.0.0.1"
 
-    req2 = Request({
-        "type": "http", "method": "GET", "path": "/test",
-        "headers": [], "query_string": b"",
-        "client": ("192.168.1.1", 12345),
-        "server": ("test", 80), "scheme": "http",
-    })
+    req2 = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [],
+            "query_string": b"",
+            "client": ("192.168.1.1", 12345),
+            "server": ("test", 80),
+            "scheme": "http",
+        }
+    )
     assert _get_client_ip(req2) == "192.168.1.1"
 
-    req3 = Request({
-        "type": "http", "method": "GET", "path": "/test",
-        "headers": [], "query_string": b"",
-        "client": None,
-        "server": ("test", 80), "scheme": "http",
-    })
+    req3 = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [],
+            "query_string": b"",
+            "client": None,
+            "server": ("test", 80),
+            "scheme": "http",
+        }
+    )
     assert _get_client_ip(req3) == ""
 
 
 # ---------------------------------------------------------------------------
 # Rate-limit middleware
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_ratelimit_middleware_blocks_excessive_requests():
@@ -139,6 +149,7 @@ async def test_ratelimit_middleware_blocks_excessive_requests():
 
     async def ok_response(request):
         from starlette.responses import JSONResponse
+
         return JSONResponse(status_code=200, content={"ok": True})
 
     scope = {
@@ -156,7 +167,7 @@ async def test_ratelimit_middleware_blocks_excessive_requests():
 
     for i in range(5):
         resp = await middleware.dispatch(request, ok_response)
-        assert resp.status_code == 200, f"Request {i+1} should succeed"
+        assert resp.status_code == 200, f"Request {i + 1} should succeed"
 
     resp = await middleware.dispatch(request, ok_response)
     assert resp.status_code == 429
@@ -168,13 +179,13 @@ async def test_ratelimit_middleware_blocks_excessive_requests():
 # Idempotency middleware
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 def patch_middleware_factories(monkeypatch, db_engine):
     """Patch both audit and idempotency middleware to use the test DB."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-    test_factory = async_sessionmaker(
-        db_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(
         "ibreeze_backend.middleware.audit.async_session_factory",
         test_factory,
@@ -187,26 +198,86 @@ def patch_middleware_factories(monkeypatch, db_engine):
 
 @pytest.mark.asyncio
 async def test_idempotency_middleware_reuses_response(
-    client: AsyncClient, admin_tokens: dict,
+    client: AsyncClient,
+    admin_tokens: dict,
     patch_middleware_factories,
 ):
-    """Test that the idempotency middleware caches and reuses responses."""
+    """The same principal/key/body returns the original write response."""
     key = str(uuid.uuid4())
     headers = {
         "Idempotency-Key": key,
         "Authorization": f"Bearer {admin_tokens['access_token']}",
     }
+    body = {
+        "email": "idempotent@example.com",
+        "display_name": "Idempotent User",
+        "password": "Pass1234",
+        "user_type": "app_user",
+    }
 
-    resp1 = await client.get("/admin/api/v1/users", headers=headers)
-    assert resp1.status_code == 200
+    resp1 = await client.post(
+        "/admin/api/v1/users",
+        json=body,
+        headers=headers,
+    )
+    assert resp1.status_code == 201
 
-    resp2 = await client.get("/admin/api/v1/users", headers=headers)
-    assert resp2.status_code == 200
+    resp2 = await client.post(
+        "/admin/api/v1/users",
+        json=body,
+        headers=headers,
+    )
+    assert resp2.status_code == 201
+    assert resp2.json() == resp1.json()
+
+
+@pytest.mark.asyncio
+async def test_non_auth_write_requires_uuid_idempotency_key(
+    client: AsyncClient,
+    admin_tokens: dict,
+):
+    """Non-authentication writes fail before dispatch without a valid key."""
+    from ibreeze_backend.main import app
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as raw_client:
+        response = await raw_client.post(
+            "/admin/api/v1/users",
+            json={
+                "email": "missing-key@example.com",
+                "display_name": "Missing Key",
+                "password": "Pass1234",
+                "user_type": "app_user",
+            },
+            headers={"Authorization": (f"Bearer {admin_tokens['access_token']}")},
+        )
+        invalid = await raw_client.post(
+            "/admin/api/v1/users",
+            json={
+                "email": "invalid-key@example.com",
+                "display_name": "Invalid Key",
+                "password": "Pass1234",
+                "user_type": "app_user",
+            },
+            headers={
+                "Authorization": (f"Bearer {admin_tokens['access_token']}"),
+                "Idempotency-Key": "not-a-uuid",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+    assert invalid.status_code == 400
+    assert invalid.json()["code"] == "IDEMPOTENCY_KEY_INVALID"
 
 
 @pytest.mark.asyncio
 async def test_idempotency_middleware_conflict_on_different_body(
-    client: AsyncClient, admin_tokens: dict,
+    client: AsyncClient,
+    admin_tokens: dict,
     patch_middleware_factories,
 ):
     """Test that reusing an idempotency key with a different body returns 409."""
@@ -214,14 +285,24 @@ async def test_idempotency_middleware_conflict_on_different_body(
 
     resp1 = await client.post(
         "/admin/api/v1/users",
-        json={"email": "user_a@example.com", "password": "Pass1234", "user_type": "app_user"},
+        json={
+            "email": "user_a@example.com",
+            "display_name": "User A",
+            "password": "Pass1234",
+            "user_type": "app_user",
+        },
         headers={"Idempotency-Key": key, "Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     assert resp1.status_code == 201
 
     resp2 = await client.post(
         "/admin/api/v1/users",
-        json={"email": "user_b@example.com", "password": "Pass5678", "user_type": "app_user"},
+        json={
+            "email": "user_b@example.com",
+            "display_name": "User B",
+            "password": "Pass5678",
+            "user_type": "app_user",
+        },
         headers={"Idempotency-Key": key, "Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     assert resp2.status_code == 409

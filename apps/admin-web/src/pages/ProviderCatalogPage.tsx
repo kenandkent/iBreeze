@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
+import { logger } from '../utils/logger';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider } from '../hooks/useProviderCatalog';
 import type { ProviderCatalogItem } from '../types';
@@ -36,6 +37,8 @@ export default function ProviderCatalogPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const action = editing ? 'update' : 'create';
+    logger.info('ProviderCatalogPage', `${action}_start`, { id: editing?.id, display_name: values.display_name });
     try {
       if (editing) {
         await updateProvider.mutateAsync({ id: editing.id, ...values });
@@ -45,16 +48,21 @@ export default function ProviderCatalogPage() {
         message.success('创建成功');
       }
       setModalOpen(false);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ProviderCatalogPage', `${action}_failed`, { id: editing?.id, display_name: values.display_name }, msg);
       message.error('操作失败');
     }
   };
 
   const handleDelete = async (id: string) => {
+    logger.info('ProviderCatalogPage', 'delete_start', { id });
     try {
       await deleteProvider.mutateAsync(id);
       message.success('删除成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ProviderCatalogPage', 'delete_failed', { id }, msg);
       message.error('删除失败');
     }
   };

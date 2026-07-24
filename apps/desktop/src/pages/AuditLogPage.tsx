@@ -6,6 +6,7 @@ import { DownloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import type { AuditLogEntry } from '../types';
 import { useListAuditLogs, useExportAuditLogs } from '../hooks/useAudit';
+import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -35,18 +36,25 @@ export default function AuditLogPage() {
   const exportMutation = useExportAuditLogs();
 
   const handleExport = async () => {
-    const data = await exportMutation.mutateAsync({
-      start_time: startTime,
-      end_time: endTime,
-      event_type: eventType,
-    });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      logger.info('AuditLogPage', 'export_start', { event_type: eventType });
+      const data = await exportMutation.mutateAsync({
+        start_time: startTime,
+        end_time: endTime,
+        event_type: eventType,
+      });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('AuditLogPage', 'export_failed', { event_type: eventType }, msg);
+    }
   };
 
   return (

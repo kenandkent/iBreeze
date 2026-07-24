@@ -1,4 +1,5 @@
 """In-memory request metrics collection."""
+
 import threading
 import time
 from collections import defaultdict
@@ -11,9 +12,7 @@ _duration_count: dict[str, int] = defaultdict(int)
 _started_at: float = time.time()
 
 
-def record_request(
-    duration: float, method: str, path: str, status_code: int
-) -> None:
+def record_request(duration: float, method: str, path: str, status_code: int) -> None:
     key = f"{method} {path}"
     with _lock:
         _request_counts[key] += 1

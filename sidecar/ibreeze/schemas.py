@@ -4,58 +4,58 @@ Aligns with design doc appendices E, H.3–H.14, J (RPC).
 All timestamps are RFC 3339 UTC with 'Z' suffix.
 All IDs are UUID v4 strings.
 """
+
 from __future__ import annotations
 
-import re
 from datetime import datetime
-from enum import Enum
+from enum import IntEnum, StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ── 枚举定义 ──────────────────────────────────────────────────────────────
 
-class CompanyStatus(str, Enum):
+
+class CompanyStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
 
 
-class DepartmentType(str, Enum):
+class DepartmentType(StrEnum):
     GENERAL_MANAGER_OFFICE = "general_manager_office"
     STANDARD = "standard"
 
 
-class ConversationType(str, Enum):
+class ConversationType(StrEnum):
     COMPANY = "company"
     DEPARTMENT = "department"
 
 
-class WorkflowRole(str, Enum):
+class WorkflowRole(StrEnum):
     GENERAL_MANAGER = "general_manager"
     DEPARTMENT_LEADER = "department_leader"
     MEMBER = "member"
 
 
-class EmployeeStatus(str, Enum):
+class EmployeeStatus(StrEnum):
     ACTIVE = "active"
     DRAINING = "draining"
     INACTIVE = "inactive"
     UNAVAILABLE = "unavailable"
 
 
-class ProfileType(str, Enum):
+class ProfileType(StrEnum):
     AGENT_CLI = "agent_cli"
     API_MODEL = "api_model"
 
 
-class ProfileVersionStatus(str, Enum):
+class ProfileVersionStatus(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     RETIRED = "retired"
 
 
-class CompanyTaskStatus(str, Enum):
+class CompanyTaskStatus(StrEnum):
     DRAFT = "draft"
     ANALYZING = "analyzing"
     AWAITING_USER_CONFIRMATION = "awaiting_user_confirmation"
@@ -78,7 +78,7 @@ class CompanyTaskStatus(str, Enum):
     FAILED = "failed"
 
 
-class PlanVersionStatus(str, Enum):
+class PlanVersionStatus(StrEnum):
     DRAFT = "draft"
     AWAITING_USER_CONFIRMATION = "awaiting_user_confirmation"
     APPROVED = "approved"
@@ -86,7 +86,7 @@ class PlanVersionStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class DepartmentTaskStatus(str, Enum):
+class DepartmentTaskStatus(StrEnum):
     DRAFT = "draft"
     CHECKING_RESOURCES = "checking_resources"
     READY = "ready"
@@ -101,7 +101,7 @@ class DepartmentTaskStatus(str, Enum):
     FAILED = "failed"
 
 
-class EmployeeTaskStatus(str, Enum):
+class EmployeeTaskStatus(StrEnum):
     ASSIGNED = "assigned"
     READY = "ready"
     RUNNING = "running"
@@ -114,12 +114,12 @@ class EmployeeTaskStatus(str, Enum):
     FAILED = "failed"
 
 
-class TaskKind(str, Enum):
+class TaskKind(StrEnum):
     STANDARD = "standard"
     MERGE = "merge"
 
 
-class AgentRunStatus(str, Enum):
+class AgentRunStatus(StrEnum):
     QUEUED = "queued"
     PROBING = "probing"
     STARTING = "starting"
@@ -135,7 +135,7 @@ class AgentRunStatus(str, Enum):
     LOST = "lost"
 
 
-class RunPurpose(str, Enum):
+class RunPurpose(StrEnum):
     INTERACTIVE_TURN = "interactive_turn"
     COMPANY_PLAN = "company_plan"
     TASK_EXECUTION = "task_execution"
@@ -147,14 +147,14 @@ class RunPurpose(str, Enum):
     KNOWLEDGE_INDEX = "knowledge_index"
 
 
-class AdapterType(str, Enum):
+class AdapterType(StrEnum):
     CODEX_CLI = "codex_cli"
     CLAUDE_CODE = "claude_code"
     OPENCODE = "opencode"
     API_MODEL = "api_model"
 
 
-class WorkItemType(str, Enum):
+class WorkItemType(StrEnum):
     INTERACTIVE_TURN = "interactive_turn"
     COMPANY_PLAN = "company_plan"
     EMPLOYEE_TASK = "employee_task"
@@ -166,21 +166,21 @@ class WorkItemType(str, Enum):
     KNOWLEDGE_INDEX = "knowledge_index"
 
 
-class QueuePriority(int, Enum):
+class QueuePriority(IntEnum):
     HIGH = 0
     NORMAL = 10
     LOW = 20
     BACKGROUND = 30
 
 
-class QueueItemStatus(str, Enum):
+class QueueItemStatus(StrEnum):
     READY = "ready"
     LEASED = "leased"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
-class ToolExecutionStatus(str, Enum):
+class ToolExecutionStatus(StrEnum):
     REQUESTED = "requested"
     APPROVED = "approved"
     STARTED = "started"
@@ -189,12 +189,12 @@ class ToolExecutionStatus(str, Enum):
     UNCERTAIN = "uncertain"
 
 
-class ApprovalType(str, Enum):
+class ApprovalType(StrEnum):
     EXTERNAL_WRITE = "external_write"
     UNCERTAIN_RECOVERY = "uncertain_recovery"
 
 
-class ApprovalStatus(str, Enum):
+class ApprovalStatus(StrEnum):
     PENDING = "pending"
     ALLOWED = "allowed"
     DENIED = "denied"
@@ -202,13 +202,13 @@ class ApprovalStatus(str, Enum):
     CONSUMED = "consumed"
 
 
-class VerificationStatus(str, Enum):
+class VerificationStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
 
 
-class ArtifactType(str, Enum):
+class ArtifactType(StrEnum):
     SOURCE_CODE_PATCH = "source_code_patch"
     DOCUMENT = "document"
     TEST_CASE = "test_case"
@@ -228,13 +228,13 @@ class ArtifactType(str, Enum):
     MANIFEST = "manifest"
 
 
-class CreatedByType(str, Enum):
+class CreatedByType(StrEnum):
     USER = "user"
     AGENT = "agent"
     SYSTEM = "system"
 
 
-class ReviewAssignmentStatus(str, Enum):
+class ReviewAssignmentStatus(StrEnum):
     ASSIGNED = "assigned"
     IN_REVIEW = "in_review"
     SUBMITTED = "submitted"
@@ -242,20 +242,20 @@ class ReviewAssignmentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class ReviewVerdict(str, Enum):
+class ReviewVerdict(StrEnum):
     PASS = "pass"
     NEEDS_CHANGES = "needs_changes"
     FAILED = "failed"
 
 
-class ReviewIssueSeverity(str, Enum):
+class ReviewIssueSeverity(StrEnum):
     BLOCKER = "blocker"
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class ReviewIssueStatus(str, Enum):
+class ReviewIssueStatus(StrEnum):
     OPEN = "open"
     FIXING = "fixing"
     RESOLVED = "resolved"
@@ -264,18 +264,18 @@ class ReviewIssueStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class WorkspaceGrantStatus(str, Enum):
+class WorkspaceGrantStatus(StrEnum):
     ACTIVE = "active"
     REVOKED = "revoked"
     STALE = "stale"
 
 
-class PathType(str, Enum):
+class PathType(StrEnum):
     CODE_REPOSITORY = "code_repository"
     IMPORT_SOURCE = "import_source"
 
 
-class TaskWorkspaceStatus(str, Enum):
+class TaskWorkspaceStatus(StrEnum):
     PREPARING = "preparing"
     ACTIVE = "active"
     READY_TO_APPLY = "ready_to_apply"
@@ -283,65 +283,65 @@ class TaskWorkspaceStatus(str, Enum):
     ABANDONED = "abandoned"
 
 
-class KnowledgeVisibility(str, Enum):
+class KnowledgeVisibility(StrEnum):
     COMPANY = "company"
     DEPARTMENT = "department"
     TASK = "task"
     PRIVATE = "private"
 
 
-class EmbeddingStatus(str, Enum):
+class EmbeddingStatus(StrEnum):
     BUILDING = "building"
     ACTIVE = "active"
     RETIRED = "retired"
     FAILED = "failed"
 
 
-class BackupType(str, Enum):
+class BackupType(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MANUAL = "manual"
     PRE_UPGRADE = "pre_upgrade"
 
 
-class BackupStatus(str, Enum):
+class BackupStatus(StrEnum):
     CREATING = "creating"
     COMPLETED = "completed"
     FAILED = "failed"
     DELETED = "deleted"
 
 
-class AuditActorType(str, Enum):
+class AuditActorType(StrEnum):
     USER = "user"
     EMPLOYEE = "employee"
     SYSTEM = "system"
 
 
-class AuditOutcome(str, Enum):
+class AuditOutcome(StrEnum):
     SUCCESS = "success"
     DENIED = "denied"
     FAILED = "failed"
 
 
-class CatalogCacheReleaseStatus(str, Enum):
+class CatalogCacheReleaseStatus(StrEnum):
     STAGING = "staging"
     ACTIVE = "active"
     RETIRED = "retired"
     INVALID = "invalid"
 
 
-class InstalledSkillStatus(str, Enum):
+class InstalledSkillStatus(StrEnum):
     INSTALLED = "installed"
     DISABLED = "disabled"
     CORRUPT = "corrupt"
 
 
-class CheckpointStorageType(str, Enum):
+class CheckpointStorageType(StrEnum):
     SQLITE_BLOB = "sqlite_blob"
     FILE = "file"
 
 
-class SnapshotPurpose(str, Enum):
+class SnapshotPurpose(StrEnum):
     INTERACTIVE_TURN = "interactive_turn"
     COMPANY_PLAN = "company_plan"
     TASK_EXECUTION = "task_execution"
@@ -354,22 +354,33 @@ class SnapshotPurpose(str, Enum):
 
 # ── 工作区配置 ────────────────────────────────────────────────────────────
 
+
 class StrictModel(BaseModel):
     """所有 schema 的基类，禁止额外字段"""
+
     model_config = ConfigDict(extra="forbid")
 
 
 # ── Company ───────────────────────────────────────────────────────────────
 
+
 class CompanyCreate(StrictModel):
     name: Annotated[str, Field(min_length=1, max_length=100)]
     introduction: Annotated[str, Field(min_length=1, max_length=20000)]
+    general_manager_name: Annotated[
+        str,
+        Field(min_length=1, max_length=100),
+    ]
+    base_profile_version_id: str
 
 
 class CompanyUpdate(StrictModel):
-    name: str | None = None
-    introduction: str | None = None
-    expected_version: int | None = None
+    name: Annotated[str | None, Field(default=None, min_length=1, max_length=100)]
+    introduction: Annotated[
+        str | None,
+        Field(default=None, min_length=1, max_length=20000),
+    ]
+    expected_version: Annotated[int, Field(ge=1)]
 
 
 class CompanyRevision(StrictModel):
@@ -385,8 +396,9 @@ class CompanyRevision(StrictModel):
     created_at: datetime
 
 
-class CompanyResponseDesignDoc(StrictModel):
-    """设计文档 H.3 完整字段。"""
+class CompanyResponse(StrictModel):
+    """Company aggregate response defined by H.3."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -401,24 +413,14 @@ class CompanyResponseDesignDoc(StrictModel):
     version: int
 
 
-class CompanyResponse(StrictModel):
-    """向后兼容版本，旧领域服务过渡期使用。"""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    name: str
-    introduction: str | None = None
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-
 # ── Department ────────────────────────────────────────────────────────────
+
 
 class DepartmentCreate(StrictModel):
     name: Annotated[str, Field(min_length=1, max_length=100)]
     function_description: Annotated[str, Field(min_length=1, max_length=10000)]
-    leader_employee_id: str
+    leader_name: Annotated[str, Field(min_length=1, max_length=100)]
+    base_profile_version_id: str
 
 
 class DepartmentUpdate(StrictModel):
@@ -477,6 +479,7 @@ class DepartmentResponse(StrictModel):
 
 # ── Employee ──────────────────────────────────────────────────────────────
 
+
 class EmployeeCreate(StrictModel):
     display_name: Annotated[str, Field(min_length=1, max_length=100)]
     base_profile_version_id: str
@@ -506,6 +509,7 @@ class EmployeeResponse(StrictModel):
 
 # ── Conversation ──────────────────────────────────────────────────────────
 
+
 class ConversationResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -519,10 +523,27 @@ class ConversationResponse(StrictModel):
 
 # ── Message ───────────────────────────────────────────────────────────────
 
+
 class MessageCreate(StrictModel):
     content: Annotated[str, Field(min_length=1)]
     task_id: str | None = None
     artifact_refs_json: str = "[]"
+
+
+class SubmitUserMessageRequest(StrictModel):
+    company_id: str
+    conversation_id: str
+    content: Annotated[str, Field(min_length=1)]
+    target_task_id: str | None = None
+    supersedes_task_id: str | None = None
+
+
+class SubmitUserMessageResponse(StrictModel):
+    message_id: str
+    company_task_id: str
+    task_status: Literal["draft", "revision_requested"]
+    intake_mode: Literal["new_task", "plan_revision", "superseding_task"]
+    analysis_queued: Literal[True]
 
 
 class MessageResponse(StrictModel):
@@ -543,6 +564,7 @@ class MessageResponse(StrictModel):
 
 # ── DomainEvent ───────────────────────────────────────────────────────────
 
+
 class DomainEventResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -559,6 +581,7 @@ class DomainEventResponse(StrictModel):
 
 
 # ── CompanyTask ───────────────────────────────────────────────────────────
+
 
 class CompanyTaskCreate(StrictModel):
     title: Annotated[str, Field(min_length=1)]
@@ -588,6 +611,7 @@ class CompanyTaskUpdate(StrictModel):
 
 # ── CompanyPlanVersion ────────────────────────────────────────────────────
 
+
 class PlanConfirm(StrictModel):
     plan_id: str
     version_number: int
@@ -611,6 +635,7 @@ class PlanVersionResponse(StrictModel):
 
 # ── TaskContextSnapshot ───────────────────────────────────────────────────
 
+
 class TaskContextSnapshotResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -626,6 +651,7 @@ class TaskContextSnapshotResponse(StrictModel):
 
 
 # ── DepartmentTask ────────────────────────────────────────────────────────
+
 
 class DepartmentTaskCreate(StrictModel):
     department_id: str
@@ -656,6 +682,7 @@ class DepartmentTaskResponse(StrictModel):
 
 # ── EmployeeTask ──────────────────────────────────────────────────────────
 
+
 class EmployeeTaskCreate(StrictModel):
     employee_id: str
     task_kind: TaskKind
@@ -681,6 +708,7 @@ class EmployeeTaskResponse(StrictModel):
 
 
 # ── EmployeeBaseProfile ───────────────────────────────────────────────────
+
 
 class EmployeeBaseProfileResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
@@ -732,6 +760,7 @@ class ProfileSkillBindingResponse(StrictModel):
 
 # ── AgentRun ──────────────────────────────────────────────────────────────
 
+
 class AgentRunResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -780,6 +809,7 @@ class AgentRunEventResponse(StrictModel):
 
 # ── Runtime Queue & Lease ─────────────────────────────────────────────────
 
+
 class RuntimeQueueResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -812,6 +842,7 @@ class RuntimeLeaseResponse(StrictModel):
 
 # ── Checkpoint ────────────────────────────────────────────────────────────
 
+
 class CheckpointResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -828,6 +859,7 @@ class CheckpointResponse(StrictModel):
 
 
 # ── ToolExecution ─────────────────────────────────────────────────────────
+
 
 class ToolExecutionResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
@@ -848,6 +880,7 @@ class ToolExecutionResponse(StrictModel):
 
 # ── HumanApproval ─────────────────────────────────────────────────────────
 
+
 class HumanApprovalResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -867,6 +900,7 @@ class HumanApprovalResponse(StrictModel):
 
 # ── VerificationResult ────────────────────────────────────────────────────
 
+
 class VerificationResultResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -884,6 +918,7 @@ class VerificationResultResponse(StrictModel):
 
 
 # ── Artifact ──────────────────────────────────────────────────────────────
+
 
 class ArtifactCreate(StrictModel):
     company_task_id: str
@@ -921,6 +956,7 @@ class ArtifactResponse(StrictModel):
 
 
 # ── Review ────────────────────────────────────────────────────────────────
+
 
 class ReviewAssignmentResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
@@ -972,6 +1008,7 @@ class ReviewIssueResponse(StrictModel):
 
 # ── WorkspaceGrant & TaskWorkspace ────────────────────────────────────────
 
+
 class WorkspaceGrantCreate(StrictModel):
     normalized_path: str
     security_bookmark: bytes
@@ -1013,6 +1050,7 @@ class TaskWorkspaceResponse(StrictModel):
 
 # ── Knowledge ─────────────────────────────────────────────────────────────
 
+
 class KnowledgeItemCreate(StrictModel):
     title: Annotated[str, Field(min_length=1)]
     content: Annotated[str, Field(min_length=1)]
@@ -1022,6 +1060,31 @@ class KnowledgeItemCreate(StrictModel):
     owner_employee_id: str | None = None
     source_artifact_id: str | None = None
     source_message_event_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_source_and_scope(self) -> KnowledgeItemCreate:
+        if (self.source_artifact_id is None) == (
+            self.source_message_event_id is None
+        ):
+            raise ValueError("exactly one knowledge source is required")
+        scope = (
+            self.department_id,
+            self.task_id,
+            self.owner_employee_id,
+        )
+        allowed = {
+            KnowledgeVisibility.COMPANY: (None, None, None),
+            KnowledgeVisibility.DEPARTMENT: (self.department_id, None, None),
+            KnowledgeVisibility.TASK: (None, self.task_id, None),
+            KnowledgeVisibility.PRIVATE: (None, None, self.owner_employee_id),
+        }
+        expected = allowed[self.visibility]
+        if scope != expected or (
+            self.visibility is not KnowledgeVisibility.COMPANY
+            and all(value is None for value in expected)
+        ):
+            raise ValueError("knowledge visibility scope is invalid")
+        return self
 
 
 class KnowledgeItemResponse(StrictModel):
@@ -1058,6 +1121,7 @@ class EmbeddingGenerationResponse(StrictModel):
 
 # ── CatalogCache ──────────────────────────────────────────────────────────
 
+
 class CatalogCacheReleaseResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1087,6 +1151,7 @@ class InstalledSkillVersionResponse(StrictModel):
 
 # ── BackupRecord ──────────────────────────────────────────────────────────
 
+
 class BackupRecordResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1103,6 +1168,7 @@ class BackupRecordResponse(StrictModel):
 
 
 # ── AuditLog ──────────────────────────────────────────────────────────────
+
 
 class AuditLogResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True)
@@ -1123,387 +1189,102 @@ class AuditLogResponse(StrictModel):
 
 # ── 分页 ──────────────────────────────────────────────────────────────────
 
+
 class PaginationParams(StrictModel):
     cursor: str | None = None
     limit: Annotated[int, Field(default=50, ge=1, le=200)]
 
 
 class PaginatedResponse(StrictModel):
-    items: list = []
+    items: list[object] = Field(default_factory=list)
     next_cursor: str | None = None
     has_more: bool = False
 
 
 # ── RPC Idempotency ───────────────────────────────────────────────────────
 
+
 class IdempotencyKey(StrictModel):
     idempotency_key: str
 
 
-# ── 向后兼容别名（旧领域服务过渡期使用）─────────────────────────────────
-# 以下别名保留给尚未重写的领域服务，待 company.py / conversation.py /
-# knowledge.py / workspace.py / orchestration.py / employee.py / audit.py /
-# agent_runtime.py 重写后移除。
-
-from enum import Enum as _Enum
+# ── RPC command/query params ──────────────────────────────────────────────
 
 
-class MessageRole(_Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-    TOOL = "tool"
+class ScopedGetRequest(StrictModel):
+    id: str
+    company_id: str
 
 
-class ConversationStatus(_Enum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"
+class ScopedListRequest(StrictModel):
+    company_id: str
+    filter: dict[str, object] = Field(default_factory=dict)
+    cursor: str | None = None
+    limit: Annotated[int, Field(default=50, ge=1, le=200)]
 
 
-class KnowledgeType(_Enum):
-    FAQ = "FAQ"
-    DOC = "DOC"
-    URL = "URL"
+class CompanyListRequest(StrictModel):
+    filter: dict[str, object] = Field(default_factory=dict)
+    cursor: str | None = None
+    limit: Annotated[int, Field(default=50, ge=1, le=200)]
 
 
-class KnowledgeStatus(_Enum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"
+class CompanyArchiveRequest(StrictModel):
+    company_id: str
+    expected_version: Annotated[int, Field(ge=1)]
 
 
-class WorkspaceMemberRole(_Enum):
-    ADMIN = "admin"
-    EDITOR = "editor"
-    VIEWER = "viewer"
-
-
-class OrchestrationStatus(_Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-
-
-class OrchestrationNodeType(_Enum):
-    AGENT = "agent"
-    TOOL = "tool"
-    GATEWAY = "gateway"
-    TRANSFORM = "transform"
-    INPUT = "input"
-    OUTPUT = "output"
-
-
-class OrchestrationRunStatus(_Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ConversationCreate(StrictModel):
-    title: str | None = None
+class CompanyUpdateRequest(CompanyUpdate):
     company_id: str
 
 
-class ConversationUpdate(StrictModel):
-    title: str | None = None
-    status: ConversationStatus | None = None
-
-
-class ConversationResponseCompat(StrictModel):
-    """向后兼容版本，旧 conversation.py 过渡期使用。"""
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class DepartmentCreateRequest(DepartmentCreate):
     company_id: str
-    title: str | None = None
-    status: ConversationStatus = ConversationStatus.ACTIVE
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime | None = None
 
 
-class MessageCreateCompat(StrictModel):
-    role: MessageRole
-    content: str
-    references: list[dict] | None = None
+class DepartmentUpdateRequest(DepartmentUpdate):
+    company_id: str
+    department_id: str
 
 
-class MessageResponseCompat(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class DepartmentSetLeaderRequest(StrictModel):
+    company_id: str
+    department_id: str
+    employee_id: str
+    expected_version: Annotated[int, Field(ge=1)]
+
+
+class EmployeeCreateRequest(EmployeeCreate):
+    company_id: str
+    department_id: str
+
+
+class EmployeeUpdateDisplayRequest(EmployeeUpdateDisplay):
+    company_id: str
+    employee_id: str
+
+
+class EmployeeUpdateBaseProfileRequest(StrictModel):
+    company_id: str
+    employee_id: str
+    base_profile_version_id: str
+    expected_version: Annotated[int, Field(ge=1)]
+
+
+class EmployeeUpdateStatusRequest(StrictModel):
+    company_id: str
+    employee_id: str
+    status: EmployeeStatus
+    expected_version: Annotated[int, Field(ge=1)]
+
+
+class ListMessagesRequest(StrictModel):
+    company_id: str
     conversation_id: str
-    role: MessageRole
-    content: str
-    references: list[dict] = []
-    is_deleted: bool = False
-    created_at: datetime
+    cursor: str | None = None
+    limit: Annotated[int, Field(default=50, ge=1, le=200)]
 
 
-class KnowledgeEntryCreate(StrictModel):
-    title: str
-    content: str
-    type: KnowledgeType
-    tags: list[str] | None = None
-
-
-class KnowledgeEntryUpdate(StrictModel):
-    title: str | None = None
-    content: str | None = None
-    type: KnowledgeType | None = None
-    tags: list[str] | None = None
-
-
-class KnowledgeEntryResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    title: str
-    content: str
-    type: KnowledgeType
-    status: KnowledgeStatus
-    content_sha256: str
-    tags: list[str] = []
-    version: int
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-
-class KnowledgeStatsResponse(StrictModel):
-    total: int
-    active: int
-    archived: int
-    by_type: dict[str, int]
-    by_tag: dict[str, int]
-
-
-class WorkspaceCreate(StrictModel):
-    name: str
-    description: str | None = None
+class DepartmentConversationRequest(StrictModel):
     company_id: str
-
-
-class WorkspaceUpdate(StrictModel):
-    name: str | None = None
-    description: str | None = None
-
-
-class WorkspaceResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    company_id: str
-    name: str
-    description: str | None
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-
-class WorkspaceMemberAdd(StrictModel):
-    user_id: str
-    role: WorkspaceMemberRole
-
-
-class WorkspaceMemberRemove(StrictModel):
-    user_id: str
-
-
-class WorkspaceMemberResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    workspace_id: str
-    user_id: str
-    role: WorkspaceMemberRole
-    created_at: datetime
-
-
-class WorkspaceConfigUpdate(StrictModel):
-    key: str
-    value: str
-
-
-class WorkspaceConfigResponse(StrictModel):
-    key: str
-    value: str
-    updated_at: datetime
-
-
-class OrchestrationCreate(StrictModel):
-    name: str
-    description: str | None = None
-    company_id: str
-    nodes: list[dict] | None = None
-    edges: list[dict] | None = None
-
-
-class OrchestrationUpdate(StrictModel):
-    name: str | None = None
-    description: str | None = None
-
-
-class OrchestrationNodeCreate(StrictModel):
-    name: str
-    node_type: OrchestrationNodeType
-    config: dict | None = None
-
-
-class OrchestrationNodeResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    orchestration_id: str
-    name: str
-    node_type: OrchestrationNodeType
-    config: dict | None
-    created_at: datetime
-
-
-class OrchestrationEdgeCreate(StrictModel):
-    source_node_id: str
-    target_node_id: str
-
-
-class OrchestrationEdgeResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    orchestration_id: str
-    source_node_id: str
-    target_node_id: str
-    created_at: datetime
-
-
-class OrchestrationResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    company_id: str
-    name: str
-    description: str | None
-    status: OrchestrationStatus
-    version: int
-    is_deleted: bool = False
-    nodes: list[OrchestrationNodeResponse] = []
-    edges: list[OrchestrationEdgeResponse] = []
-    created_at: datetime
-    updated_at: datetime
-
-
-class OrchestrationRunResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    orchestration_id: str
-    orchestration_version: int
-    status: OrchestrationRunStatus
-    started_at: datetime
-    completed_at: datetime | None
-    result: dict | None = None
-    error: str | None = None
-
-
-class EmployeeCreateCompat(StrictModel):
-    name: str
-    department_id: str | None = None
-    role: str = "member"
-    email: str | None = None
-    company_id: str
-
-
-class EmployeeUpdateCompat(StrictModel):
-    name: str | None = None
-    department_id: str | None = None
-    role: str | None = None
-    email: str | None = None
-
-
-class EmployeeResponseCompat(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    company_id: str
-    name: str
-    department_id: str | None
-    role: str
-    email: str | None
-    status: str
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-
-class DepartmentCreateCompat(StrictModel):
-    name: str
-    parent_id: str | None = None
-    company_id: str
-
-
-class DepartmentResponseCompat(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    company_id: str
-    name: str
-    parent_id: str | None
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-
-class AuditEventCreate(StrictModel):
-    event_type: str
-    actor_type: str
-    actor_id: str | None = None
-    resource_type: str
-    resource_id: str | None = None
-    outcome: AuditOutcome
-    detail: dict | None = None
-    company_id: str | None = None
-
-
-class AuditEventResponse(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    row_sequence: int
-    company_id: str | None
-    actor_type: str
-    actor_id: str | None
-    action: str
-    resource_type: str
-    resource_id: str | None
-    outcome: AuditOutcome
-    detail: dict
-    created_at: datetime
-
-
-class AgentRunRequest(StrictModel):
-    agent_id: str
-    user_id: str
-    message: str
-
-
-class AgentResponseCompat(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    name: str
-    status: str
-    model: str
-    created_at: datetime
-    updated_at: datetime
-
-
-class AgentRunResponseCompat(StrictModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    agent_id: str
-    user_id: str
-    status: str
-    response: str | None = None
-    started_at: datetime
-    completed_at: datetime | None = None
-
-
-# 别名映射，使旧 import 路径继续工作
-AgentResponse = AgentResponseCompat
-AgentRunResponse = AgentRunResponseCompat
-ConversationResponse = ConversationResponseCompat
-MessageCreate = MessageCreateCompat
-MessageResponse = MessageResponseCompat
-EmployeeCreate = EmployeeCreateCompat
-EmployeeUpdate = EmployeeUpdateCompat
-EmployeeResponse = EmployeeResponseCompat
-DepartmentCreate = DepartmentCreateCompat
-DepartmentResponse = DepartmentResponseCompat
+    department_id: str

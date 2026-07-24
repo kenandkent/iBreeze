@@ -1,4 +1,5 @@
 """Release management router."""
+
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.catalog_release import CatalogRelease
 from ibreeze_backend.models.skill import Skill
+from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.releases.emergency import (
     create_emergency_disable,
     get_latest_emergency_disable,
@@ -22,8 +24,10 @@ from ibreeze_backend.releases.manifest import (
     compute_manifest_signature,
     manifest_to_bytes,
 )
-from ibreeze_backend.security.keys import load_or_create_signing_keys
+from ibreeze_backend.security.keys import get_signed_keyset, load_or_create_signing_keys
 from ibreeze_backend.settings import settings
+
+logger = get_logger("ibreeze.releases")
 
 admin_router = APIRouter(prefix="/admin/api/v1", tags=["admin-releases"])
 public_router = APIRouter(prefix="/api/v1", tags=["releases"])
@@ -38,10 +42,13 @@ class EmergencyDisableCreate(BaseModel):
     skill_ids: list[str]
 
 
+@public_router.get("/catalog/keys")
+async def get_catalog_keys_endpoint() -> dict[str, object]:
+    return get_signed_keyset(Path(settings.catalog_key_dir))
+
+
 async def _next_release_sequence(db: AsyncSession) -> int:
-    result = await db.execute(
-        select(CatalogRelease).order_by(CatalogRelease.release_sequence.desc()).limit(1)
-    )
+    result = await db.execute(select(CatalogRelease).order_by(CatalogRelease.release_sequence.desc()).limit(1))
     latest = result.scalar_one_or_none()
     if not latest:
         return 1
@@ -57,10 +64,11 @@ async def create_release_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user=Depends(get_current_user),
 ) -> dict:
+    logger.info("create_release", extra={"version": body.version, "notes": body.notes})
     sequence = await _next_release_sequence(db)
     manifest = await build_manifest(db, sequence)
 
-    key_dir = Path(settings.token_secret or "keys")
+    key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     private_key = serialization.load_pem_private_key(private_pem, password=None)
 
@@ -85,6 +93,10 @@ async def create_release_endpoint(
     db.add(release)
     await db.flush()
 
+    logger.info(
+        "create_release_success",
+        extra={"release_id": str(release.id), "sequence": release.release_sequence, "version": release.version},
+    )
     return {
         "id": str(release.id),
         "version": release.version,
@@ -100,19 +112,21 @@ async def publish_release_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _current_user=Depends(get_current_user),
 ) -> dict:
-    result = await db.execute(
-        select(CatalogRelease).where(CatalogRelease.id == release_id)
-    )
+    logger.info("publish_release", extra={"release_id": str(release_id)})
+    result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
     release = result.scalar_one_or_none()
     if not release:
+        logger.warning("publish_release_failed", extra={"reason": "not_found", "release_id": str(release_id)})
         raise HTTPException(status_code=404, detail="Release not found")
     if release.status == "published":
+        logger.warning("publish_release_failed", extra={"reason": "already_published", "release_id": str(release_id)})
         raise HTTPException(status_code=400, detail="Release already published")
 
     release.status = "published"
     release.published_at = datetime.now(UTC).isoformat()
     await db.flush()
 
+    logger.info("publish_release_success", extra={"release_id": str(release.id), "published_at": release.published_at})
     return {
         "id": str(release.id),
         "version": release.version,
@@ -130,19 +144,24 @@ async def create_emergency_disable_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user=Depends(get_current_user),
 ) -> dict:
-    import hashlib, json as _json
+    logger.info("create_emergency_disable", extra={"skill_ids": body.skill_ids, "actor": current_user.id})
+    import hashlib
+    import json as _json
+
     payload = {"skill_ids": body.skill_ids}
     payload_bytes = _json.dumps(payload, sort_keys=True).encode()
     payload_sha = hashlib.sha256(payload_bytes).hexdigest()
 
-    from ibreeze_backend.security.keys import load_or_create_signing_keys
-    from ibreeze_backend.releases.manifest import compute_manifest_signature
     from pathlib import Path
+
+    from ibreeze_backend.releases.manifest import compute_manifest_signature
+    from ibreeze_backend.security.keys import load_or_create_signing_keys
     from ibreeze_backend.settings import settings
 
-    key_dir = Path(settings.token_secret or "keys")
+    key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     from cryptography.hazmat.primitives import serialization as _ser
+
     private_key = _ser.load_pem_private_key(private_pem, password=None)
     signature = compute_manifest_signature(payload_bytes, private_key)
 
@@ -158,9 +177,7 @@ async def create_emergency_disable_endpoint(
     # 实际禁用列表中的所有 skill
     for sid in body.skill_ids:
         try:
-            skill_result = await db.execute(
-                select(Skill).where(Skill.id == uuid.UUID(sid))
-            )
+            skill_result = await db.execute(select(Skill).where(Skill.id == uuid.UUID(sid)))
             skill = skill_result.scalar_one_or_none()
             if skill:
                 skill.is_active = False
@@ -168,6 +185,10 @@ async def create_emergency_disable_endpoint(
             pass
 
     await db.flush()
+    logger.info(
+        "create_emergency_disable_success",
+        extra={"disable_id": str(disable.id), "sequence": disable.sequence, "skill_ids": body.skill_ids},
+    )
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
@@ -181,8 +202,10 @@ async def get_latest_emergency_disable_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _current_user=Depends(get_current_user),
 ) -> dict:
+    logger.info("get_latest_emergency_disable")
     disable = await get_latest_emergency_disable(db)
     if not disable:
+        logger.warning("get_latest_emergency_disable_failed", extra={"reason": "not_found"})
         raise HTTPException(status_code=404, detail="No emergency disables found")
     skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
     return {
@@ -197,6 +220,7 @@ async def get_latest_emergency_disable_endpoint(
 async def get_latest_manifest_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    logger.info("get_latest_manifest")
     result = await db.execute(
         select(CatalogRelease)
         .where(CatalogRelease.status == "published")
@@ -205,6 +229,7 @@ async def get_latest_manifest_endpoint(
     )
     release = result.scalar_one_or_none()
     if not release:
+        logger.warning("get_latest_manifest_failed", extra={"reason": "no_published_release"})
         raise HTTPException(status_code=404, detail="No published release found")
     manifest = await build_manifest(db, release.release_sequence)
     return manifest
@@ -215,11 +240,11 @@ async def get_release_endpoint(
     release_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    result = await db.execute(
-        select(CatalogRelease).where(CatalogRelease.id == release_id)
-    )
+    logger.info("get_release", extra={"release_id": str(release_id)})
+    result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
     release = result.scalar_one_or_none()
     if not release:
+        logger.warning("get_release_failed", extra={"reason": "not_found", "release_id": str(release_id)})
         raise HTTPException(status_code=404, detail="Release not found")
     return {
         "id": str(release.id),
@@ -235,18 +260,19 @@ async def get_release_endpoint(
 
 # 公开目录查询端点
 
+
 @public_router.get("/catalog/agents")
 async def list_agents_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """列出所有已发布的 Agent"""
+    logger.info("list_agents")
     from ibreeze_backend.catalog.models import AgentCatalog
-    
-    result = await db.execute(
-        select(AgentCatalog).where(AgentCatalog.status == "published")
-    )
+
+    result = await db.execute(select(AgentCatalog).where(AgentCatalog.status == "published"))
     agents = result.scalars().all()
-    
+
+    logger.info("list_agents_success", extra={"total": len(agents)})
     return {
         "data": [
             {
@@ -268,8 +294,9 @@ async def list_agent_models_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """列出指定 Agent 可用的模型"""
+    logger.info("list_agent_models", extra={"agent_id": str(agent_id)})
     from ibreeze_backend.catalog.models import AgentCatalog, AgentModelBinding, ModelCatalog
-    
+
     # 验证 Agent 存在且已发布
     agent_result = await db.execute(
         select(AgentCatalog).where(
@@ -279,32 +306,32 @@ async def list_agent_models_endpoint(
     )
     agent = agent_result.scalar_one_or_none()
     if not agent:
+        logger.warning("list_agent_models_failed", extra={"reason": "agent_not_found", "agent_id": str(agent_id)})
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     # 获取绑定的模型
-    binding_result = await db.execute(
-        select(AgentModelBinding).where(AgentModelBinding.agent_id == agent_id)
-    )
+    binding_result = await db.execute(select(AgentModelBinding).where(AgentModelBinding.agent_id == agent_id))
     bindings = binding_result.scalars().all()
-    
+
     models = []
     for binding in bindings:
-        model_result = await db.execute(
-            select(ModelCatalog).where(ModelCatalog.id == binding.model_id)
-        )
+        model_result = await db.execute(select(ModelCatalog).where(ModelCatalog.id == binding.model_id))
         model = model_result.scalar_one_or_none()
         if model and model.status == "published":
-            models.append({
-                "id": str(model.id),
-                "provider_key": model.provider_key,
-                "model_key": model.model_key,
-                "display_name": model.display_name,
-                "context_window": model.context_window,
-                "supports_tools": model.supports_tools,
-                "supports_streaming": model.supports_streaming,
-                "supports_vision": model.supports_vision,
-            })
-    
+            models.append(
+                {
+                    "id": str(model.id),
+                    "provider_key": model.provider_key,
+                    "model_key": model.model_key,
+                    "display_name": model.display_name,
+                    "context_window": model.context_window,
+                    "supports_tools": model.supports_tools,
+                    "supports_streaming": model.supports_streaming,
+                    "supports_vision": model.supports_vision,
+                }
+            )
+
+    logger.info("list_agent_models_success", extra={"agent_id": str(agent_id), "total": len(models)})
     return {
         "data": models,
         "meta": {"total": len(models)},
@@ -316,13 +343,13 @@ async def list_providers_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """列出所有已发布的 Provider"""
+    logger.info("list_providers")
     from ibreeze_backend.models.catalog import ProviderCatalog
-    
-    result = await db.execute(
-        select(ProviderCatalog).where(ProviderCatalog.status == "published")
-    )
+
+    result = await db.execute(select(ProviderCatalog).where(ProviderCatalog.status == "published"))
     providers = result.scalars().all()
-    
+
+    logger.info("list_providers_success", extra={"total": len(providers)})
     return {
         "data": [
             {
@@ -343,8 +370,9 @@ async def list_provider_models_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """列出指定 Provider 可用的模型"""
-    from ibreeze_backend.catalog.models import ProviderCatalog, ProviderModelBinding, ModelCatalog
-    
+    logger.info("list_provider_models", extra={"provider_id": str(provider_id)})
+    from ibreeze_backend.catalog.models import ModelCatalog, ProviderCatalog, ProviderModelBinding
+
     # 验证 Provider 存在且已发布
     provider_result = await db.execute(
         select(ProviderCatalog).where(
@@ -354,32 +382,36 @@ async def list_provider_models_endpoint(
     )
     provider = provider_result.scalar_one_or_none()
     if not provider:
+        logger.warning(
+            "list_provider_models_failed", extra={"reason": "provider_not_found", "provider_id": str(provider_id)}
+        )
         raise HTTPException(status_code=404, detail="Provider not found")
-    
+
     # 获取绑定的模型
     binding_result = await db.execute(
         select(ProviderModelBinding).where(ProviderModelBinding.provider_id == provider_id)
     )
     bindings = binding_result.scalars().all()
-    
+
     models = []
     for binding in bindings:
-        model_result = await db.execute(
-            select(ModelCatalog).where(ModelCatalog.id == binding.model_id)
-        )
+        model_result = await db.execute(select(ModelCatalog).where(ModelCatalog.id == binding.model_id))
         model = model_result.scalar_one_or_none()
         if model and model.status == "published":
-            models.append({
-                "id": str(model.id),
-                "provider_key": model.provider_key,
-                "model_key": model.model_key,
-                "display_name": model.display_name,
-                "context_window": model.context_window,
-                "supports_tools": model.supports_tools,
-                "supports_streaming": model.supports_streaming,
-                "supports_vision": model.supports_vision,
-            })
-    
+            models.append(
+                {
+                    "id": str(model.id),
+                    "provider_key": model.provider_key,
+                    "model_key": model.model_key,
+                    "display_name": model.display_name,
+                    "context_window": model.context_window,
+                    "supports_tools": model.supports_tools,
+                    "supports_streaming": model.supports_streaming,
+                    "supports_vision": model.supports_vision,
+                }
+            )
+
+    logger.info("list_provider_models_success", extra={"provider_id": str(provider_id), "total": len(models)})
     return {
         "data": models,
         "meta": {"total": len(models)},
@@ -391,13 +423,13 @@ async def list_skills_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """列出所有已发布的 Skill"""
+    logger.info("list_skills")
     from ibreeze_backend.models.skill import Skill
-    
-    result = await db.execute(
-        select(Skill).where(Skill.status.in_(["published", "active"]))
-    )
+
+    result = await db.execute(select(Skill).where(Skill.status.in_(["published", "active"])))
     skills = result.scalars().all()
-    
+
+    logger.info("list_skills_success", extra={"total": len(skills)})
     return {
         "data": [
             {
@@ -419,8 +451,10 @@ async def get_latest_emergency_disable_public_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """获取最新紧急禁用"""
+    logger.info("get_latest_emergency_disable_public")
     disable = await get_latest_emergency_disable(db)
     if not disable:
+        logger.warning("get_latest_emergency_disable_public_failed", extra={"reason": "not_found"})
         raise HTTPException(status_code=404, detail="No emergency disables found")
     skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
     return {

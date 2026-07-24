@@ -48,6 +48,9 @@ coverage/
 .env
 .env.local
 .env.*.local
+runtime-keys/
+apps/backend-api/runtime-keys/
+apps/backend-api/dev-token-secret-change-me/
 
 # Logs
 *.log

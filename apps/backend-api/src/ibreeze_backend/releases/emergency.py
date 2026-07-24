@@ -1,4 +1,5 @@
 """Emergency disable service – aligned with design doc G.7."""
+
 import uuid
 from datetime import UTC, datetime
 
@@ -47,8 +48,6 @@ async def get_latest_emergency_disable(
 ) -> EmergencyDisableRelease | None:
     """Get the latest emergency disable release."""
     result = await db.execute(
-        select(EmergencyDisableRelease)
-        .order_by(EmergencyDisableRelease.sequence.desc())
-        .limit(1)
+        select(EmergencyDisableRelease).order_by(EmergencyDisableRelease.sequence.desc()).limit(1)
     )
     return result.scalar_one_or_none()

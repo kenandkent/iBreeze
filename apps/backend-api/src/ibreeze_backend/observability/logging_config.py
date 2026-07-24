@@ -1,10 +1,10 @@
 """Structured logging configuration with redaction."""
+
 import json
 import logging
 import re
 import sys
-from datetime import datetime, timezone
-
+from datetime import UTC, datetime
 
 REDACTED = "***REDACTED***"
 
@@ -29,14 +29,10 @@ class RedactionFilter(logging.Filter):
         if record.args:
             if isinstance(record.args, dict):
                 record.args = {
-                    k: self._redact_string(str(v)) if isinstance(v, str) else v
-                    for k, v in record.args.items()
+                    k: self._redact_string(str(v)) if isinstance(v, str) else v for k, v in record.args.items()
                 }
             elif isinstance(record.args, tuple):
-                record.args = tuple(
-                    self._redact_string(str(a)) if isinstance(a, str) else a
-                    for a in record.args
-                )
+                record.args = tuple(self._redact_string(str(a)) if isinstance(a, str) else a for a in record.args)
         return True
 
     def _redact_string(self, text: str) -> str:
@@ -48,7 +44,7 @@ class RedactionFilter(logging.Filter):
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, object] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.msg,
@@ -62,7 +58,7 @@ class JSONFormatter(logging.Formatter):
 
 class ConsoleFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
         return f"{timestamp} [{record.levelname}] {record.name}: {record.msg}"
 
 

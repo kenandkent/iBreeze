@@ -1,4 +1,5 @@
 """Append-only admin audit logging service – aligned with design doc G.7."""
+
 import uuid
 from datetime import UTC, datetime
 

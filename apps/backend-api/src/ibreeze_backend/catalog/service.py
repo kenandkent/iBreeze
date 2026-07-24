@@ -1,7 +1,17 @@
-"""Catalog service with status machine enforcement."""
-import uuid
+"""Catalog revision state machines and deterministic validation."""
 
-from sqlalchemy import func, select
+from __future__ import annotations
+
+import hashlib
+import ipaddress
+import json
+import re
+import uuid
+from collections.abc import Sequence
+from typing import Protocol
+from urllib.parse import urlsplit, urlunsplit
+
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.catalog.models import (
@@ -12,492 +22,632 @@ from ibreeze_backend.catalog.models import (
     ProviderCatalog,
     ProviderModelBinding,
 )
+from ibreeze_backend.catalog.schemas import (
+    AgentCreate,
+    AgentModelBindingCreate,
+    AgentUpdate,
+    AgentVersionCreate,
+    ModelCreate,
+    ModelUpdate,
+    ProviderCreate,
+    ProviderModelBindingCreate,
+    ProviderUpdate,
+)
 
-VALID_TRANSITIONS = {
-    "draft": {"validated"},
-    "validated": {"published"},
+_SEMVER = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+_DOMAIN = re.compile(
+    r"^(?:\*\.)?(?=.{1,253}\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
+_FORBIDDEN_REQUEST_KEYS = {
+    "model",
+    "stream",
+    "tools",
+    "messages",
+    "input",
+    "authorization",
+    "api_key",
+    "url",
 }
 
-
-def _validate_transition(current: str, target: str) -> None:
-    allowed = VALID_TRANSITIONS.get(current, set())
-    if target not in allowed:
-        raise ValueError(
-            f"Invalid status transition: {current} -> {target}"
-        )
+class MutableCatalogResource(Protocol):
+    status: str
+    version: int
 
 
-async def create_agent(
-    db: AsyncSession, key: str, display_name: str, description: str | None
-) -> AgentCatalog:
-    existing = await db.execute(
-        select(AgentCatalog).where(AgentCatalog.key == key)
+def _semver(value: str) -> tuple[int, int, int, tuple[str, ...]]:
+    match = _SEMVER.fullmatch(value)
+    if match is None:
+        raise ValueError("CATALOG_SEMVER_INVALID")
+    prerelease = tuple((match.group(4) or "").split(".")) if match.group(4) else ()
+    return int(match.group(1)), int(match.group(2)), int(match.group(3)), prerelease
+
+
+def _validate_range(minimum: str, maximum: str) -> None:
+    if _semver(minimum) >= _semver(maximum):
+        raise ValueError("CATALOG_VERSION_RANGE_INVALID")
+
+
+def _content_sha256(payload: dict[str, object]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _assert_mutable[CatalogParent: MutableCatalogResource](resource: CatalogParent) -> None:
+    if resource.status == "published":
+        raise ValueError("CATALOG_REVISION_IMMUTABLE")
+
+
+def _assert_version[CatalogParent: MutableCatalogResource](
+    resource: CatalogParent,
+    expected_version: int,
+) -> None:
+    if resource.version != expected_version:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+
+def _normalize_provider_url(value: str) -> str:
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("PROVIDER_BASE_URL_INVALID")
+    try:
+        host = parsed.hostname.encode("idna").decode("ascii").lower()
+    except UnicodeError as exc:
+        raise ValueError("PROVIDER_BASE_URL_INVALID") from exc
+    try:
+        address = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        address = None
+    if address is not None and (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
+    ):
+        raise ValueError("PROVIDER_BASE_URL_FORBIDDEN")
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path.rstrip("/")
+    return urlunsplit(("https", f"{host}{port}", path, "", ""))
+
+
+def _validate_domains(domains: Sequence[str]) -> list[str]:
+    normalized: list[str] = []
+    for value in domains:
+        domain = value.rstrip(".").encode("idna").decode("ascii").lower()
+        if not _DOMAIN.fullmatch(domain):
+            raise ValueError("CATALOG_NETWORK_DOMAIN_INVALID")
+        normalized.append(domain)
+    if len(normalized) != len(set(normalized)):
+        raise ValueError("CATALOG_NETWORK_DOMAIN_DUPLICATE")
+    return normalized
+
+
+def _validate_model_values(model: ModelCatalog) -> None:
+    if model.context_window < 8192 or not 1 <= model.max_output_tokens <= model.context_window - 4096:
+        raise ValueError("MODEL_CAPABILITY_INVALID")
+    if not model.supports_streaming:
+        raise ValueError("MODEL_STREAMING_REQUIRED")
+
+
+async def create_agent(db: AsyncSession, body: AgentCreate) -> AgentCatalog:
+    exists = await db.scalar(
+        select(func.count()).select_from(AgentCatalog).where(AgentCatalog.key == body.key)
     )
-    if existing.scalar_one_or_none():
-        raise ValueError("Agent key already exists")
-
-    agent = AgentCatalog(
-        key=key,
-        display_name=display_name,
-        description=description,
-    )
-    db.add(agent)
+    if exists:
+        raise ValueError("CATALOG_LOGICAL_KEY_EXISTS")
+    resource = AgentCatalog(**body.model_dump(), catalog_revision=1, status="draft", version=1)
+    db.add(resource)
     await db.flush()
-    return agent
+    return resource
 
 
-async def get_agent(db: AsyncSession, agent_id: uuid.UUID) -> AgentCatalog | None:
-    result = await db.execute(
-        select(AgentCatalog).where(AgentCatalog.id == agent_id)
-    )
+async def get_agent(db: AsyncSession, resource_id: uuid.UUID) -> AgentCatalog | None:
+    result = await db.execute(select(AgentCatalog).where(AgentCatalog.id == resource_id))
     return result.scalar_one_or_none()
 
 
-async def list_agents(
-    db: AsyncSession, skip: int, limit: int
-) -> tuple[list[AgentCatalog], int]:
-    count_result = await db.execute(select(func.count(AgentCatalog.id)))
-    total = count_result.scalar() or 0
-    result = await db.execute(
-        select(AgentCatalog).order_by(AgentCatalog.created_at.desc()).offset(skip).limit(limit)
-    )
-    return list(result.scalars().all()), total
+async def list_agents(db: AsyncSession, limit: int = 50) -> list[AgentCatalog]:
+    result = await db.scalars(select(AgentCatalog).order_by(AgentCatalog.created_at.desc()).limit(limit))
+    return list(result)
 
 
 async def update_agent(
     db: AsyncSession,
-    agent_id: uuid.UUID,
-    display_name: str | None,
-    description: str | None,
+    resource_id: uuid.UUID,
+    body: AgentUpdate,
+    expected_version: int,
 ) -> AgentCatalog:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise ValueError("Agent not found")
-    if agent.status == "published":
-        raise ValueError("Cannot update published agent")
-    if display_name is not None:
-        agent.display_name = display_name
-    if description is not None:
-        agent.description = description
+    resource = await _locked(db, AgentCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    for name, value in body.model_dump(exclude_unset=True).items():
+        setattr(resource, name, value)
+    resource.status = "draft"
+    resource.version += 1
     await db.flush()
-    return agent
+    return resource
 
 
-async def transition_agent_status(
-    db: AsyncSession, agent_id: uuid.UUID, target_status: str
-) -> AgentCatalog:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise ValueError("Agent not found")
-    _validate_transition(agent.status, target_status)
-    agent.status = target_status
-    agent.catalog_revision += 1
-    await db.flush()
-    return agent
-
-
-async def delete_agent(db: AsyncSession, agent_id: uuid.UUID) -> None:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise ValueError("Agent not found")
-    if agent.status == "published":
-        raise ValueError("Cannot delete published agent")
-    await db.delete(agent)
+async def delete_agent(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    resource = await _locked(db, AgentCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    await db.delete(resource)
     await db.flush()
 
 
-async def copy_agent_to_draft(
-    db: AsyncSession, agent_id: uuid.UUID
-) -> AgentCatalog:
-    source = await get_agent(db, agent_id)
-    if not source:
-        raise ValueError("Agent not found")
+async def validate_agent(db: AsyncSession, resource_id: uuid.UUID) -> AgentCatalog:
+    resource = await _locked(db, AgentCatalog, resource_id)
+    _assert_mutable(resource)
+    versions = list(
+        await db.scalars(
+            select(AgentVersionRange).where(AgentVersionRange.agent_id == resource_id)
+        )
+    )
+    if not versions:
+        raise ValueError("AGENT_VERSION_REQUIRED")
+    for item in versions:
+        _validate_range(item.min_version, item.max_version_exclusive)
+        _validate_domains(item.network_domains)
+    for index, left in enumerate(versions):
+        for right in versions[index + 1 :]:
+            if set(left.supported_platforms) & set(right.supported_platforms) and (
+                _semver(left.min_version) < _semver(right.max_version_exclusive)
+                and _semver(right.min_version) < _semver(left.max_version_exclusive)
+            ):
+                raise ValueError("AGENT_VERSION_RANGE_OVERLAP")
+    resource.status = "validated"
+    await db.flush()
+    return resource
+
+
+async def clone_agent_revision(db: AsyncSession, resource_id: uuid.UUID) -> AgentCatalog:
+    source = await _locked(db, AgentCatalog, resource_id)
     if source.status != "published":
-        raise ValueError("Can only copy published agent to draft")
-
-    new_agent = AgentCatalog(
-        key=f"{source.key}-draft",
+        raise ValueError("CATALOG_REVISION_SOURCE_NOT_PUBLISHED")
+    revision = (
+        await db.scalar(
+            select(func.max(AgentCatalog.catalog_revision)).where(AgentCatalog.key == source.key)
+        )
+        or 0
+    ) + 1
+    clone = AgentCatalog(
+        key=source.key,
+        catalog_revision=revision,
         display_name=source.display_name,
         description=source.description,
         status="draft",
+        version=1,
     )
-    db.add(new_agent)
+    db.add(clone)
     await db.flush()
-
-    versions_result = await db.execute(
-        select(AgentVersionRange).where(
-            AgentVersionRange.agent_id == agent_id
-        )
+    versions = await db.scalars(
+        select(AgentVersionRange).where(AgentVersionRange.agent_id == source.id)
     )
-    for v in versions_result.scalars().all():
-        new_version = AgentVersionRange(
-            agent_id=new_agent.id,
-            executable_names=v.executable_names,
-            supported_platforms=v.supported_platforms,
-            min_version=v.min_version,
-            max_version_exclusive=v.max_version_exclusive,
-            probe_command=v.probe_command,
-            capability_tags=v.capability_tags,
-            network_domains=v.network_domains,
-            adapter_contract_version=v.adapter_contract_version,
-            content_sha256=v.content_sha256,
+    for version_item in versions:
+        db.add(
+            AgentVersionRange(
+                agent_id=clone.id,
+                min_version=version_item.min_version,
+                max_version_exclusive=version_item.max_version_exclusive,
+                executable_names=version_item.executable_names,
+                supported_platforms=version_item.supported_platforms,
+                probe_argv=version_item.probe_argv,
+                capability_tags=version_item.capability_tags,
+                network_domains=version_item.network_domains,
+                adapter_contract_version=version_item.adapter_contract_version,
+                content_sha256=version_item.content_sha256,
+            )
         )
-        db.add(new_version)
-
+    bindings = await db.scalars(
+        select(AgentModelBinding).where(AgentModelBinding.agent_id == source.id)
+    )
+    for binding_item in bindings:
+        db.add(
+            AgentModelBinding(
+                agent_id=clone.id,
+                model_id=binding_item.model_id,
+                min_agent_version=binding_item.min_agent_version,
+                max_agent_version_exclusive=binding_item.max_agent_version_exclusive,
+            )
+        )
     await db.flush()
-    return new_agent
+    return clone
 
 
 async def create_agent_version(
     db: AsyncSession,
     agent_id: uuid.UUID,
-    executable_names: list[str] | None,
-    supported_platforms: list[str] | None,
-    min_version: str | None,
-    max_version_exclusive: str | None,
-    probe_command: dict | None,
-    capability_tags: list[str] | None,
-    network_domains: list[str] | None,
-    adapter_contract_version: int | None,
-    content_sha256: str | None,
+    body: AgentVersionCreate,
 ) -> AgentVersionRange:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise ValueError("Agent not found")
-
+    agent = await _locked(db, AgentCatalog, agent_id)
+    _assert_mutable(agent)
+    _validate_range(body.min_version, body.max_version_exclusive)
+    domains = _validate_domains(body.network_domains)
+    payload = {**body.model_dump(), "network_domains": domains}
     version = AgentVersionRange(
         agent_id=agent_id,
-        executable_names=executable_names,
-        supported_platforms=supported_platforms,
-        min_version=min_version,
-        max_version_exclusive=max_version_exclusive,
-        probe_command=probe_command,
-        capability_tags=capability_tags,
-        network_domains=network_domains,
-        adapter_contract_version=adapter_contract_version,
-        content_sha256=content_sha256,
+        **payload,
+        content_sha256=_content_sha256(payload),
     )
     db.add(version)
+    agent.status = "draft"
+    agent.version += 1
     await db.flush()
     return version
 
 
-async def list_agent_versions(
-    db: AsyncSession, agent_id: uuid.UUID, skip: int, limit: int
-) -> tuple[list[AgentVersionRange], int]:
-    count_result = await db.execute(
-        select(func.count(AgentVersionRange.id)).where(
-            AgentVersionRange.agent_id == agent_id
+async def list_agent_versions(db: AsyncSession, agent_id: uuid.UUID) -> list[AgentVersionRange]:
+    return list(
+        await db.scalars(
+            select(AgentVersionRange)
+            .where(AgentVersionRange.agent_id == agent_id)
+            .order_by(AgentVersionRange.created_at)
         )
     )
-    total = count_result.scalar() or 0
-    result = await db.execute(
-        select(AgentVersionRange)
-        .where(AgentVersionRange.agent_id == agent_id)
-        .order_by(AgentVersionRange.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    return list(result.scalars().all()), total
 
 
-async def create_model(
+async def delete_agent_version(
     db: AsyncSession,
-    provider_key: str,
-    model_key: str,
-    display_name: str,
-    context_window: int | None,
-    supports_tools: bool,
-    supports_streaming: bool,
-    supports_vision: bool,
-) -> ModelCatalog:
-    model = ModelCatalog(
-        provider_key=provider_key,
-        model_key=model_key,
-        display_name=display_name,
-        context_window=context_window,
-        supports_tools=supports_tools,
-        supports_streaming=supports_streaming,
-        supports_vision=supports_vision,
+    agent_id: uuid.UUID,
+    version_id: uuid.UUID,
+) -> None:
+    agent = await _locked(db, AgentCatalog, agent_id)
+    _assert_mutable(agent)
+    item = await db.scalar(
+        select(AgentVersionRange)
+        .where(
+            AgentVersionRange.id == version_id,
+            AgentVersionRange.agent_id == agent_id,
+        )
+        .with_for_update()
     )
-    db.add(model)
+    if item is None or item.published_at is not None:
+        raise ValueError("CATALOG_CHILD_IMMUTABLE_OR_MISSING")
+    await db.delete(item)
+    agent.status = "draft"
+    agent.version += 1
     await db.flush()
-    return model
 
 
-async def get_model(db: AsyncSession, model_id: uuid.UUID) -> ModelCatalog | None:
-    result = await db.execute(
-        select(ModelCatalog).where(ModelCatalog.id == model_id)
+async def create_model(db: AsyncSession, body: ModelCreate) -> ModelCatalog:
+    exists = await db.scalar(
+        select(func.count())
+        .select_from(ModelCatalog)
+        .where(
+            ModelCatalog.provider_key == body.provider_key,
+            ModelCatalog.model_key == body.model_key,
+        )
     )
+    if exists:
+        raise ValueError("CATALOG_LOGICAL_KEY_EXISTS")
+    resource = ModelCatalog(**body.model_dump(), catalog_revision=1, status="draft", version=1)
+    _validate_model_values(resource)
+    db.add(resource)
+    await db.flush()
+    return resource
+
+
+async def get_model(db: AsyncSession, resource_id: uuid.UUID) -> ModelCatalog | None:
+    result = await db.execute(select(ModelCatalog).where(ModelCatalog.id == resource_id))
     return result.scalar_one_or_none()
 
 
-async def list_models(
-    db: AsyncSession, skip: int, limit: int
-) -> tuple[list[ModelCatalog], int]:
-    count_result = await db.execute(select(func.count(ModelCatalog.id)))
-    total = count_result.scalar() or 0
-    result = await db.execute(
-        select(ModelCatalog).order_by(ModelCatalog.created_at.desc()).offset(skip).limit(limit)
+async def list_models(db: AsyncSession, limit: int = 50) -> list[ModelCatalog]:
+    return list(
+        await db.scalars(select(ModelCatalog).order_by(ModelCatalog.created_at.desc()).limit(limit))
     )
-    return list(result.scalars().all()), total
 
 
 async def update_model(
     db: AsyncSession,
-    model_id: uuid.UUID,
-    display_name: str | None,
-    context_window: int | None,
-    supports_tools: bool | None,
-    supports_streaming: bool | None,
-    supports_vision: bool | None,
+    resource_id: uuid.UUID,
+    body: ModelUpdate,
+    expected_version: int,
 ) -> ModelCatalog:
-    model = await get_model(db, model_id)
-    if not model:
-        raise ValueError("Model not found")
-    if model.status == "published":
-        raise ValueError("Cannot update published model")
-    if display_name is not None:
-        model.display_name = display_name
-    if context_window is not None:
-        model.context_window = context_window
-    if supports_tools is not None:
-        model.supports_tools = supports_tools
-    if supports_streaming is not None:
-        model.supports_streaming = supports_streaming
-    if supports_vision is not None:
-        model.supports_vision = supports_vision
+    resource = await _locked(db, ModelCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    for name, value in body.model_dump(exclude_unset=True).items():
+        setattr(resource, name, value)
+    _validate_model_values(resource)
+    resource.status = "draft"
+    resource.version += 1
     await db.flush()
-    return model
+    return resource
 
 
-async def transition_model_status(
-    db: AsyncSession, model_id: uuid.UUID, target_status: str
-) -> ModelCatalog:
-    model = await get_model(db, model_id)
-    if not model:
-        raise ValueError("Model not found")
-    _validate_transition(model.status, target_status)
-    model.status = target_status
-    await db.flush()
-    return model
-
-
-async def delete_model(db: AsyncSession, model_id: uuid.UUID) -> None:
-    model = await get_model(db, model_id)
-    if not model:
-        raise ValueError("Model not found")
-    if model.status == "published":
-        raise ValueError("Cannot delete published model")
-    await db.delete(model)
+async def delete_model(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    resource = await _locked(db, ModelCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    await db.delete(resource)
     await db.flush()
 
 
-async def copy_model_to_draft(
-    db: AsyncSession, model_id: uuid.UUID
-) -> ModelCatalog:
-    source = await get_model(db, model_id)
-    if not source:
-        raise ValueError("Model not found")
+async def validate_model(db: AsyncSession, resource_id: uuid.UUID) -> ModelCatalog:
+    resource = await _locked(db, ModelCatalog, resource_id)
+    _assert_mutable(resource)
+    _validate_model_values(resource)
+    resource.status = "validated"
+    await db.flush()
+    return resource
+
+
+async def clone_model_revision(db: AsyncSession, resource_id: uuid.UUID) -> ModelCatalog:
+    source = await _locked(db, ModelCatalog, resource_id)
     if source.status != "published":
-        raise ValueError("Can only copy published model to draft")
-
-    new_model = ModelCatalog(
+        raise ValueError("CATALOG_REVISION_SOURCE_NOT_PUBLISHED")
+    revision = (
+        await db.scalar(
+            select(func.max(ModelCatalog.catalog_revision)).where(
+                ModelCatalog.provider_key == source.provider_key,
+                ModelCatalog.model_key == source.model_key,
+            )
+        )
+        or 0
+    ) + 1
+    clone = ModelCatalog(
         provider_key=source.provider_key,
         model_key=source.model_key,
         display_name=source.display_name,
         context_window=source.context_window,
+        max_output_tokens=source.max_output_tokens,
+        tokenizer_key=source.tokenizer_key,
         supports_tools=source.supports_tools,
         supports_streaming=source.supports_streaming,
         supports_vision=source.supports_vision,
+        catalog_revision=revision,
         status="draft",
+        version=1,
     )
-    db.add(new_model)
+    db.add(clone)
     await db.flush()
-    return new_model
+    return clone
 
 
-async def create_provider(
-    db: AsyncSession,
-    display_name: str,
-    base_url: str | None,
-    api_protocol: str,
-) -> ProviderCatalog:
-    provider = ProviderCatalog(
-        display_name=display_name,
-        base_url=base_url,
-        api_protocol=api_protocol,
+async def create_provider(db: AsyncSession, body: ProviderCreate) -> ProviderCatalog:
+    exists = await db.scalar(
+        select(func.count()).select_from(ProviderCatalog).where(ProviderCatalog.key == body.key)
     )
-    db.add(provider)
+    if exists:
+        raise ValueError("CATALOG_LOGICAL_KEY_EXISTS")
+    values = body.model_dump()
+    values["base_url"] = _normalize_provider_url(body.base_url)
+    resource = ProviderCatalog(**values, catalog_revision=1, status="draft", version=1)
+    db.add(resource)
     await db.flush()
-    return provider
+    return resource
 
 
-async def get_provider(
-    db: AsyncSession, provider_id: uuid.UUID
-) -> ProviderCatalog | None:
-    result = await db.execute(
-        select(ProviderCatalog).where(ProviderCatalog.id == provider_id)
-    )
+async def get_provider(db: AsyncSession, resource_id: uuid.UUID) -> ProviderCatalog | None:
+    result = await db.execute(select(ProviderCatalog).where(ProviderCatalog.id == resource_id))
     return result.scalar_one_or_none()
 
 
-async def list_providers(
-    db: AsyncSession, skip: int, limit: int
-) -> tuple[list[ProviderCatalog], int]:
-    count_result = await db.execute(select(func.count(ProviderCatalog.id)))
-    total = count_result.scalar() or 0
-    result = await db.execute(
-        select(ProviderCatalog).order_by(ProviderCatalog.created_at.desc()).offset(skip).limit(limit)
+async def list_providers(db: AsyncSession, limit: int = 50) -> list[ProviderCatalog]:
+    return list(
+        await db.scalars(
+            select(ProviderCatalog).order_by(ProviderCatalog.created_at.desc()).limit(limit)
+        )
     )
-    return list(result.scalars().all()), total
 
 
 async def update_provider(
     db: AsyncSession,
-    provider_id: uuid.UUID,
-    display_name: str | None,
-    base_url: str | None,
-    api_protocol: str | None,
+    resource_id: uuid.UUID,
+    body: ProviderUpdate,
+    expected_version: int,
 ) -> ProviderCatalog:
-    provider = await get_provider(db, provider_id)
-    if not provider:
-        raise ValueError("Provider not found")
-    if provider.status == "published":
-        raise ValueError("Cannot update published provider")
-    if display_name is not None:
-        provider.display_name = display_name
-    if base_url is not None:
-        provider.base_url = base_url
-    if api_protocol is not None:
-        provider.api_protocol = api_protocol
+    resource = await _locked(db, ProviderCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    values = body.model_dump(exclude_unset=True)
+    if "base_url" in values:
+        values["base_url"] = _normalize_provider_url(str(values["base_url"]))
+    for name, value in values.items():
+        setattr(resource, name, value)
+    resource.status = "draft"
+    resource.version += 1
     await db.flush()
-    return provider
+    return resource
 
 
-async def transition_provider_status(
-    db: AsyncSession, provider_id: uuid.UUID, target_status: str
-) -> ProviderCatalog:
-    provider = await get_provider(db, provider_id)
-    if not provider:
-        raise ValueError("Provider not found")
-    _validate_transition(provider.status, target_status)
-    provider.status = target_status
-    await db.flush()
-    return provider
-
-
-async def delete_provider(db: AsyncSession, provider_id: uuid.UUID) -> None:
-    provider = await get_provider(db, provider_id)
-    if not provider:
-        raise ValueError("Provider not found")
-    if provider.status == "published":
-        raise ValueError("Cannot delete published provider")
-    await db.delete(provider)
+async def delete_provider(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    resource = await _locked(db, ProviderCatalog, resource_id)
+    _assert_mutable(resource)
+    _assert_version(resource, expected_version)
+    await db.delete(resource)
     await db.flush()
 
 
-async def copy_provider_to_draft(
-    db: AsyncSession, provider_id: uuid.UUID
-) -> ProviderCatalog:
-    source = await get_provider(db, provider_id)
-    if not source:
-        raise ValueError("Provider not found")
+async def validate_provider(db: AsyncSession, resource_id: uuid.UUID) -> ProviderCatalog:
+    resource = await _locked(db, ProviderCatalog, resource_id)
+    _assert_mutable(resource)
+    resource.base_url = _normalize_provider_url(resource.base_url)
+    resource.status = "validated"
+    await db.flush()
+    return resource
+
+
+async def clone_provider_revision(db: AsyncSession, resource_id: uuid.UUID) -> ProviderCatalog:
+    source = await _locked(db, ProviderCatalog, resource_id)
     if source.status != "published":
-        raise ValueError("Can only copy published provider to draft")
-
-    new_provider = ProviderCatalog(
+        raise ValueError("CATALOG_REVISION_SOURCE_NOT_PUBLISHED")
+    revision = (
+        await db.scalar(
+            select(func.max(ProviderCatalog.catalog_revision)).where(
+                ProviderCatalog.key == source.key
+            )
+        )
+        or 0
+    ) + 1
+    clone = ProviderCatalog(
+        key=source.key,
+        catalog_revision=revision,
         display_name=source.display_name,
+        protocol=source.protocol,
         base_url=source.base_url,
-        api_protocol=source.api_protocol,
+        auth_scheme=source.auth_scheme,
         status="draft",
+        version=1,
     )
-    db.add(new_provider)
+    db.add(clone)
     await db.flush()
-    return new_provider
+    bindings = await db.scalars(
+        select(ProviderModelBinding).where(ProviderModelBinding.provider_id == source.id)
+    )
+    for item in bindings:
+        db.add(
+            ProviderModelBinding(
+                provider_id=clone.id,
+                model_id=item.model_id,
+                provider_model_name=item.provider_model_name,
+                request_defaults=item.request_defaults,
+            )
+        )
+    await db.flush()
+    return clone
 
 
 async def create_agent_model_binding(
     db: AsyncSession,
     agent_id: uuid.UUID,
-    model_id: uuid.UUID,
-    agent_version_range: dict | None,
+    body: AgentModelBindingCreate,
 ) -> AgentModelBinding:
-    agent = await get_agent(db, agent_id)
-    if not agent:
-        raise ValueError("Agent not found")
-    model = await get_model(db, model_id)
-    if not model:
-        raise ValueError("Model not found")
-
-    binding = AgentModelBinding(
-        agent_id=agent_id,
-        model_id=model_id,
-        agent_version_range=agent_version_range,
-    )
-    db.add(binding)
+    agent = await _locked(db, AgentCatalog, agent_id)
+    _assert_mutable(agent)
+    model = await get_model(db, body.model_id)
+    if model is None:
+        raise ValueError("MODEL_NOT_FOUND")
+    _validate_range(body.min_agent_version, body.max_agent_version_exclusive)
+    versions = await list_agent_versions(db, agent_id)
+    if not any(
+        _semver(item.min_version) <= _semver(body.min_agent_version)
+        and _semver(body.max_agent_version_exclusive) <= _semver(item.max_version_exclusive)
+        for item in versions
+    ):
+        raise ValueError("AGENT_MODEL_BINDING_RANGE_INVALID")
+    item = AgentModelBinding(agent_id=agent_id, **body.model_dump())
+    db.add(item)
+    agent.status = "draft"
+    agent.version += 1
     await db.flush()
-    return binding
+    return item
 
 
 async def list_agent_model_bindings(
-    db: AsyncSession, agent_id: uuid.UUID, skip: int, limit: int
-) -> tuple[list[AgentModelBinding], int]:
-    count_result = await db.execute(
-        select(func.count(AgentModelBinding.id)).where(
-            AgentModelBinding.agent_id == agent_id
+    db: AsyncSession,
+    agent_id: uuid.UUID,
+) -> list[AgentModelBinding]:
+    return list(
+        await db.scalars(
+            select(AgentModelBinding)
+            .where(AgentModelBinding.agent_id == agent_id)
+            .order_by(AgentModelBinding.created_at)
         )
     )
-    total = count_result.scalar() or 0
-    result = await db.execute(
+
+
+async def delete_agent_model_binding(
+    db: AsyncSession,
+    agent_id: uuid.UUID,
+    binding_id: uuid.UUID,
+) -> None:
+    agent = await _locked(db, AgentCatalog, agent_id)
+    _assert_mutable(agent)
+    item = await db.scalar(
         select(AgentModelBinding)
-        .where(AgentModelBinding.agent_id == agent_id)
-        .order_by(AgentModelBinding.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .where(
+            AgentModelBinding.id == binding_id,
+            AgentModelBinding.agent_id == agent_id,
+        )
+        .with_for_update()
     )
-    return list(result.scalars().all()), total
+    if item is None:
+        raise ValueError("CATALOG_BINDING_NOT_FOUND")
+    await db.delete(item)
+    agent.status = "draft"
+    agent.version += 1
+    await db.flush()
 
 
 async def create_provider_model_binding(
     db: AsyncSession,
     provider_id: uuid.UUID,
-    model_id: uuid.UUID,
-    api_protocol: str,
-    capabilities: dict | None,
+    body: ProviderModelBindingCreate,
 ) -> ProviderModelBinding:
-    provider = await get_provider(db, provider_id)
-    if not provider:
-        raise ValueError("Provider not found")
-    model = await get_model(db, model_id)
-    if not model:
-        raise ValueError("Model not found")
-
-    binding = ProviderModelBinding(
-        provider_id=provider_id,
-        model_id=model_id,
-        api_protocol=api_protocol,
-        capabilities=capabilities,
-    )
-    db.add(binding)
+    provider = await _locked(db, ProviderCatalog, provider_id)
+    _assert_mutable(provider)
+    if await get_model(db, body.model_id) is None:
+        raise ValueError("MODEL_NOT_FOUND")
+    lowered = {key.lower() for key in body.request_defaults}
+    if lowered & _FORBIDDEN_REQUEST_KEYS:
+        raise ValueError("PROVIDER_REQUEST_DEFAULTS_FORBIDDEN")
+    item = ProviderModelBinding(provider_id=provider_id, **body.model_dump())
+    db.add(item)
+    provider.status = "draft"
+    provider.version += 1
     await db.flush()
-    return binding
+    return item
 
 
 async def list_provider_model_bindings(
-    db: AsyncSession, provider_id: uuid.UUID, skip: int, limit: int
-) -> tuple[list[ProviderModelBinding], int]:
-    count_result = await db.execute(
-        select(func.count(ProviderModelBinding.id)).where(
-            ProviderModelBinding.provider_id == provider_id
+    db: AsyncSession,
+    provider_id: uuid.UUID,
+) -> list[ProviderModelBinding]:
+    return list(
+        await db.scalars(
+            select(ProviderModelBinding)
+            .where(ProviderModelBinding.provider_id == provider_id)
+            .order_by(ProviderModelBinding.created_at)
         )
     )
-    total = count_result.scalar() or 0
-    result = await db.execute(
+
+
+async def delete_provider_model_binding(
+    db: AsyncSession,
+    provider_id: uuid.UUID,
+    binding_id: uuid.UUID,
+) -> None:
+    provider = await _locked(db, ProviderCatalog, provider_id)
+    _assert_mutable(provider)
+    item = await db.scalar(
         select(ProviderModelBinding)
-        .where(ProviderModelBinding.provider_id == provider_id)
-        .order_by(ProviderModelBinding.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .where(
+            ProviderModelBinding.id == binding_id,
+            ProviderModelBinding.provider_id == provider_id,
+        )
+        .with_for_update()
     )
-    return list(result.scalars().all()), total
+    if item is None:
+        raise ValueError("CATALOG_BINDING_NOT_FOUND")
+    await db.delete(item)
+    provider.status = "draft"
+    provider.version += 1
+    await db.flush()
+
+
+async def _locked[CatalogParent: AgentCatalog | ModelCatalog | ProviderCatalog](
+    db: AsyncSession,
+    model: type[CatalogParent],
+    resource_id: uuid.UUID,
+) -> CatalogParent:
+    statement: Select[tuple[CatalogParent]] = select(model).where(model.id == resource_id).with_for_update()
+    resource = await db.scalar(statement)
+    if resource is None:
+        raise ValueError("CATALOG_RESOURCE_NOT_FOUND")
+    return resource

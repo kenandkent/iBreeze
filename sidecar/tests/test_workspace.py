@@ -1,111 +1,80 @@
-"""Workspace domain service tests."""
+"""Workspace path authorization tests."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
 import pytest
-from ibreeze.workspace import (
-    create_workspace,
-    list_workspaces,
-    get_workspace,
-    update_workspace,
-    delete_workspace,
-    add_member,
-    remove_member,
-    list_members,
-    update_config,
+
+from ibreeze.workspace import WorkspaceBoundary
+
+
+def test_workspace_allows_relative_read_and_write(tmp_path: Path) -> None:
+    workspace = tmp_path / "run"
+    workspace.mkdir()
+    source = workspace / "src"
+    source.mkdir()
+    file = source / "main.py"
+    file.write_text("print('ok')", encoding="utf-8")
+    boundary = WorkspaceBoundary(workspace)
+    assert boundary.resolve_workspace_path(
+        "src/main.py",
+        for_write=False,
+    ) == file
+    assert boundary.resolve_workspace_path(
+        "src/new.py",
+        for_write=True,
+    ) == source / "new.py"
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["../secret", "/tmp/secret"],
 )
-from ibreeze.schemas import (
-    WorkspaceUpdate,
-    WorkspaceMemberAdd,
-    WorkspaceMemberRole,
-    WorkspaceConfigUpdate,
-)
+def test_workspace_rejects_lexical_escape(
+    tmp_path: Path,
+    path: str,
+) -> None:
+    workspace = tmp_path / "run"
+    workspace.mkdir()
+    boundary = WorkspaceBoundary(workspace)
+    with pytest.raises(ValueError, match="WORKSPACE_ACCESS_DENIED"):
+        boundary.resolve_workspace_path(path, for_write=True)
 
 
-def test_create_workspace():
-    ws = create_workspace(company_id="c1", name="Test Workspace", description="A test workspace")
-    assert ws.name == "Test Workspace"
-    assert ws.description == "A test workspace"
-    assert ws.company_id == "c1"
-    assert ws.is_deleted is False
-    assert ws.id is not None
+def test_workspace_rejects_symlink_escape(tmp_path: Path) -> None:
+    workspace = tmp_path / "run"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    secret = outside / "secret.txt"
+    secret.write_text("secret", encoding="utf-8")
+    (workspace / "link").symlink_to(outside, target_is_directory=True)
+    boundary = WorkspaceBoundary(workspace)
+    with pytest.raises(ValueError, match="WORKSPACE_ACCESS_DENIED"):
+        boundary.resolve_workspace_path("link/secret.txt", for_write=False)
+    with pytest.raises(ValueError, match="WORKSPACE_ACCESS_DENIED"):
+        boundary.resolve_workspace_path("link/new.txt", for_write=True)
 
 
-def test_list_workspaces():
-    create_workspace(company_id="c1", name="WS A")
-    create_workspace(company_id="c1", name="WS B")
-    results = list_workspaces(company_id="c1")
-    names = [w.name for w in results]
-    assert "WS A" in names
-    assert "WS B" in names
-
-
-def test_get_workspace():
-    ws = create_workspace(company_id="c1", name="Get Test")
-    fetched = get_workspace(ws.id)
-    assert fetched.id == ws.id
-    assert fetched.name == "Get Test"
-
-
-def test_get_workspace_not_found():
-    with pytest.raises(KeyError):
-        get_workspace("nonexistent-id")
-
-
-def test_update_workspace():
-    ws = create_workspace(company_id="c1", name="Old Name")
-    updated = update_workspace(ws.id, WorkspaceUpdate(name="New Name", description="Updated desc"))
-    assert updated.name == "New Name"
-    assert updated.description == "Updated desc"
-
-
-def test_delete_workspace():
-    ws = create_workspace(company_id="c1", name="To Delete")
-    delete_workspace(ws.id)
-    with pytest.raises(KeyError):
-        get_workspace(ws.id)
-
-
-def test_add_member():
-    ws = create_workspace(company_id="c1", name="Members WS")
-    member = add_member(ws.id, WorkspaceMemberAdd(user_id="u1", role=WorkspaceMemberRole.EDITOR))
-    assert member.workspace_id == ws.id
-    assert member.user_id == "u1"
-    assert member.role == WorkspaceMemberRole.EDITOR
-
-
-def test_add_member_duplicate():
-    ws = create_workspace(company_id="c1", name="Dup Members")
-    add_member(ws.id, WorkspaceMemberAdd(user_id="u1", role=WorkspaceMemberRole.VIEWER))
-    with pytest.raises(ValueError, match="已是工作区成员"):
-        add_member(ws.id, WorkspaceMemberAdd(user_id="u1", role=WorkspaceMemberRole.ADMIN))
-
-
-def test_remove_member():
-    ws = create_workspace(company_id="c1", name="Remove Member WS")
-    add_member(ws.id, WorkspaceMemberAdd(user_id="u1", role=WorkspaceMemberRole.VIEWER))
-    remove_member(ws.id, "u1")
-    members = list_members(ws.id)
-    assert len(members) == 0
-
-
-def test_remove_member_not_found():
-    ws = create_workspace(company_id="c1", name="No Member")
-    with pytest.raises(KeyError):
-        remove_member(ws.id, "nonexistent-user")
-
-
-def test_list_members():
-    ws = create_workspace(company_id="c1", name="List Members WS")
-    add_member(ws.id, WorkspaceMemberAdd(user_id="u1", role=WorkspaceMemberRole.ADMIN))
-    add_member(ws.id, WorkspaceMemberAdd(user_id="u2", role=WorkspaceMemberRole.EDITOR))
-    members = list_members(ws.id)
-    assert len(members) == 2
-    user_ids = [m.user_id for m in members]
-    assert "u1" in user_ids
-    assert "u2" in user_ids
-
-
-def test_update_workspace_config():
-    ws = create_workspace(company_id="c1", name="Config WS")
-    cfg = update_config(ws.id, WorkspaceConfigUpdate(key="theme", value="dark"))
-    assert cfg.key == "theme"
-    assert cfg.value == "dark"
-    assert cfg.updated_at is not None
+def test_external_paths_are_read_only_and_explicit(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "run"
+    external = tmp_path / "external"
+    other = tmp_path / "other"
+    for directory in (workspace, external, other):
+        directory.mkdir()
+    allowed = external / "input.txt"
+    allowed.write_text("input", encoding="utf-8")
+    denied = other / "input.txt"
+    denied.write_text("input", encoding="utf-8")
+    boundary = WorkspaceBoundary(
+        workspace,
+        external_read_roots=(external,),
+    )
+    assert boundary.resolve_external_read(allowed) == allowed
+    with pytest.raises(ValueError, match="WORKSPACE_ACCESS_DENIED"):
+        boundary.resolve_external_read(denied)
+    with pytest.raises(ValueError, match="HUMAN_APPROVAL_REQUIRED"):
+        boundary.authorize_external_write(allowed)

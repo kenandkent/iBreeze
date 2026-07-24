@@ -1,4 +1,5 @@
 """RFC 9457 Problem Details error handling."""
+
 import uuid
 from typing import Any
 
@@ -6,7 +7,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 
-class ProblemDetail(Exception):
+class ProblemDetailError(Exception):
     def __init__(
         self,
         status: int,
@@ -41,7 +42,7 @@ class ProblemDetail(Exception):
         return body
 
 
-async def problem_detail_handler(request: Request, exc: ProblemDetail) -> JSONResponse:
+async def problem_detail_handler(request: Request, exc: ProblemDetailError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status,
         content=exc.to_dict(),
@@ -71,7 +72,7 @@ def raise_problem(
     field_errors: dict[str, list[str]] | None = None,
 ) -> None:
     title = _STATUS_TITLES.get(status_code, "Error")
-    raise ProblemDetail(
+    raise ProblemDetailError(
         status=status_code,
         title=title,
         code=code,

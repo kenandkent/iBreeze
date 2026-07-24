@@ -24,7 +24,8 @@ export default function RegisterPage() {
       setSuccess(true);
       setTimeout(() => navigate('/login', { replace: true }), 1500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '注册失败');
+      const err = e as Record<string, unknown>;
+      setError((err?.error as string) || (e instanceof Error ? e.message : '注册失败，请稍后重试'));
     } finally {
       setLoading(false);
     }

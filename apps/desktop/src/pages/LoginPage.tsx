@@ -5,6 +5,7 @@ import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore } from '../stores/authStore';
 import type { AuthResult } from '../types';
+import { logger } from '../utils/logger';
 
 const { Title } = Typography;
 
@@ -18,10 +19,12 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
+      logger.info('LoginPage', 'login_start', { email: values.email });
       const result = await invoke<AuthResult>('login', {
         email: values.email,
         password: values.password,
       });
+      logger.info('LoginPage', 'login_success', { email: values.email });
       login(result.access_token, result.refresh_token, {
         id: 'current',
         user_type: result.user_type as 'admin' | 'app_user',
@@ -31,7 +34,10 @@ export default function LoginPage() {
       });
       navigate('/dashboard', { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '登录失败');
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : '登录失败');
+      logger.error('LoginPage', 'login_failed', { email: values.email }, msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }

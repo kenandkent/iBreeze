@@ -1,4 +1,5 @@
 """Manifest builder and signing for catalog releases."""
+
 import json
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -15,14 +16,16 @@ async def build_manifest(db: AsyncSession, sequence: int) -> dict:
 
     resources = []
     for skill in skills:
-        resources.append({
-            "id": str(skill.id),
-            "name": skill.name,
-            "version": skill.version,
-            "category": skill.category,
-            "compatibility": skill.compatibility,
-            "content_sha256": skill.checksum or "",
-        })
+        resources.append(
+            {
+                "id": str(skill.id),
+                "name": skill.name,
+                "version": skill.version,
+                "category": skill.category,
+                "compatibility": skill.compatibility,
+                "content_sha256": skill.checksum or "",
+            }
+        )
 
     manifest = {
         "release_sequence": sequence,
@@ -31,9 +34,7 @@ async def build_manifest(db: AsyncSession, sequence: int) -> dict:
     return manifest
 
 
-def compute_manifest_signature(
-    manifest_bytes: bytes, private_key: Ed25519PrivateKey
-) -> str:
+def compute_manifest_signature(manifest_bytes: bytes, private_key: Ed25519PrivateKey) -> str:
     """Sign manifest bytes with Ed25519 and return hex signature."""
     signature = private_key.sign(manifest_bytes)
     return signature.hex()

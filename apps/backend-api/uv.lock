@@ -670,7 +670,7 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "httpx" },
     { name = "mypy" },
@@ -688,23 +688,26 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35,<2" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28,<1" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13,<2" },
     { name = "passlib", extras = ["argon2"], specifier = ">=1.7,<2" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.10,<3" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.0,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0,<9" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24,<1" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0,<7" },
     { name = "python-multipart", specifier = ">=0.0.18" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
     { name = "structlog", specifier = ">=24.0,<25" },
-    { name = "testcontainers", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=4.0,<5" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "mypy", specifier = ">=1.13,<2" },
+    { name = "pytest", specifier = ">=8.0,<9" },
+    { name = "pytest-asyncio", specifier = ">=0.24,<1" },
+    { name = "pytest-cov", specifier = ">=6.0,<7" },
+    { name = "ruff", specifier = ">=0.8,<1" },
+    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.0,<5" },
+]
 
 [[package]]
 name = "idna"

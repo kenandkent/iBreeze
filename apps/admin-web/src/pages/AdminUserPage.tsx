@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, Popconfirm, Tooltip, message } from 'antd';
+import { logger } from '../utils/logger';
 import { PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, KeyOutlined, StopOutlined } from '@ant-design/icons';
 import { useListAdminUsers, useCreateAdminUser, useUpdateAdminUser, useDeleteAdminUser, useResetPassword, useRevokeSessions } from '../hooks/useAdminUsers';
 import type { AdminUser } from '../types';
@@ -34,6 +35,8 @@ export default function AdminUserPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const action = editing ? 'update' : 'create';
+    logger.info('AdminUserPage', `${action}_start`, { id: editing?.id, email: values.email });
     try {
       if (editing) {
         await updateUser.mutateAsync({ id: editing.id, ...values });
@@ -43,16 +46,21 @@ export default function AdminUserPage() {
         message.success('创建成功');
       }
       setModalOpen(false);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AdminUserPage', `${action}_failed`, { id: editing?.id, email: values.email }, msg);
       message.error('操作失败');
     }
   };
 
   const handleDelete = async (id: string) => {
+    logger.info('AdminUserPage', 'delete_start', { id });
     try {
       await deleteUser.mutateAsync(id);
       message.success('删除成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AdminUserPage', 'delete_failed', { id }, msg);
       message.error('删除失败');
     }
   };
@@ -60,21 +68,27 @@ export default function AdminUserPage() {
   const handleResetPassword = async () => {
     const values = await resetPwdForm.validateFields();
     if (!resetPwdModal) return;
+    logger.info('AdminUserPage', 'reset_password_start', { id: resetPwdModal.id });
     try {
       await resetPassword.mutateAsync({ id: resetPwdModal.id, new_password: values.new_password });
       message.success('密码重置成功');
       setResetPwdModal(null);
       resetPwdForm.resetFields();
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AdminUserPage', 'reset_password_failed', { id: resetPwdModal.id }, msg);
       message.error('密码重置失败');
     }
   };
 
   const handleRevokeSessions = async (id: string) => {
+    logger.info('AdminUserPage', 'revoke_sessions_start', { id });
     try {
       await revokeSessions.mutateAsync(id);
       message.success('会话已撤销');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AdminUserPage', 'revoke_sessions_failed', { id }, msg);
       message.error('撤销失败');
     }
   };

@@ -13,6 +13,7 @@ import {
   useRunOrchestration,
   useListOrchestrationRuns,
 } from '../hooks/useOrchestration';
+import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 
@@ -43,19 +44,36 @@ export default function OrchestrationPage() {
 
   const handleSave = async () => {
     const values = await form.validateFields();
-    if (editing) {
-      await updateMutation.mutateAsync({ id: editing.id, ...values });
-    } else {
-      await createMutation.mutateAsync(values);
+    try {
+      if (editing) {
+        logger.info('OrchestrationPage', 'update_start', { id: editing.id });
+        await updateMutation.mutateAsync({ id: editing.id, ...values });
+      } else {
+        logger.info('OrchestrationPage', 'create_start');
+        await createMutation.mutateAsync(values);
+      }
+      setDrawerOpen(false);
+    } catch (e) {
+      const err = e as Record<string, unknown>;
+      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+      logger.error('OrchestrationPage', editing ? 'update_failed' : 'create_failed', { id: editing?.id }, msg);
     }
-    setDrawerOpen(false);
   };
 
   const handleRun = async (id: string) => {
     Modal.confirm({
       title: '确认运行',
       content: '确定要运行此编排吗？',
-      onOk: () => runMutation.mutateAsync(id),
+      onOk: async () => {
+        try {
+          logger.info('OrchestrationPage', 'run_start', { id });
+          await runMutation.mutateAsync(id);
+        } catch (e) {
+          const err = e as Record<string, unknown>;
+          const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
+          logger.error('OrchestrationPage', 'run_failed', { id }, msg);
+        }
+      },
     });
   };
 
@@ -87,7 +105,7 @@ export default function OrchestrationPage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewOrch(record)} />
           <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleRun(record.id)}>运行</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutateAsync(record.id)}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { try { logger.info('OrchestrationPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('OrchestrationPage', 'delete_failed', { id: record.id }, msg); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>

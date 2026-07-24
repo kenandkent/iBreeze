@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
+import { logger } from '../utils/logger';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useListAgents, useCreateAgent, useUpdateAgent, useDeleteAgent, useValidateAgent, usePublishAgent } from '../hooks/useAgentCatalog';
 import type { AgentCatalogItem } from '../types';
@@ -38,6 +39,8 @@ export default function AgentCatalogPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const action = editing ? 'update' : 'create';
+    logger.info('AgentCatalogPage', `${action}_start`, { id: editing?.id, key: values.key });
     try {
       if (editing) {
         await updateAgent.mutateAsync({ id: editing.id, ...values });
@@ -47,34 +50,45 @@ export default function AgentCatalogPage() {
         message.success('创建成功');
       }
       setModalOpen(false);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AgentCatalogPage', `${action}_failed`, { id: editing?.id, key: values.key }, msg);
       message.error('操作失败');
     }
   };
 
   const handleDelete = async (id: string) => {
+    logger.info('AgentCatalogPage', 'delete_start', { id });
     try {
       await deleteAgent.mutateAsync(id);
       message.success('删除成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AgentCatalogPage', 'delete_failed', { id }, msg);
       message.error('删除失败');
     }
   };
 
   const handleValidate = async (id: string) => {
+    logger.info('AgentCatalogPage', 'validate_start', { id });
     try {
       await validateAgent.mutateAsync(id);
       message.success('验证成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AgentCatalogPage', 'validate_failed', { id }, msg);
       message.error('验证失败');
     }
   };
 
   const handlePublish = async (id: string) => {
+    logger.info('AgentCatalogPage', 'publish_start', { id });
     try {
       await publishAgent.mutateAsync(id);
       message.success('发布成功');
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('AgentCatalogPage', 'publish_failed', { id }, msg);
       message.error('发布失败');
     }
   };

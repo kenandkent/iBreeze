@@ -1,4 +1,5 @@
 """Release management tests."""
+
 import io
 import uuid
 import zipfile
@@ -9,8 +10,6 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.models.catalog_release import CatalogRelease
-from ibreeze_backend.models.emergency_disable import EmergencyDisableRelease as EmergencyDisable
 from ibreeze_backend.models.skill import Skill
 from ibreeze_backend.skills.service import install_skill
 
@@ -99,9 +98,7 @@ async def test_publish_already_published(client: AsyncClient, admin_tokens: dict
 
 
 @pytest.mark.asyncio
-async def test_get_latest_manifest(
-    client: AsyncClient, admin_tokens: dict, db_session: AsyncSession, tmp_path: Path
-):
+async def test_get_latest_manifest(client: AsyncClient, admin_tokens: dict, db_session: AsyncSession, tmp_path: Path):
     """Test getting the latest published manifest."""
     skill_id = str(uuid.uuid4())
     zip_path = tmp_path / "manifest_skill.zip"
@@ -150,18 +147,14 @@ async def test_create_emergency_disable(
     assert skill_id in data["disabled_skill_ids"]
     assert "created_at" in data
 
-    result = await db_session.execute(
-        select(Skill).where(Skill.id == uuid.UUID(skill_id))
-    )
+    result = await db_session.execute(select(Skill).where(Skill.id == uuid.UUID(skill_id)))
     skill = result.scalar_one_or_none()
     assert skill is not None
     assert skill.is_active is False
 
 
 @pytest.mark.asyncio
-async def test_get_latest_emergency_disable(
-    client: AsyncClient, admin_tokens: dict
-):
+async def test_get_latest_emergency_disable(client: AsyncClient, admin_tokens: dict):
     """Test getting the latest emergency disable record."""
     await client.post(
         "/admin/api/v1/emergency-disables",
@@ -184,9 +177,7 @@ async def test_get_latest_emergency_disable(
 
 
 @pytest.mark.asyncio
-async def test_get_release_by_id(
-    client: AsyncClient, admin_tokens: dict
-):
+async def test_get_release_by_id(client: AsyncClient, admin_tokens: dict):
     """Test getting a release by its ID."""
     create_resp = await client.post(
         "/admin/api/v1/catalog/releases",

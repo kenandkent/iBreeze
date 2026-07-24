@@ -1,124 +1,211 @@
-"""Knowledge domain service tests."""
+"""Knowledge source, transaction and permission tests."""
+
+from __future__ import annotations
+
+import json
+
+import aiosqlite
 import pytest
+
+from ibreeze.company import create_company
+from ibreeze.conversation import submit_user_message
 from ibreeze.knowledge import (
-    create_knowledge_entry,
-    list_knowledge_entries,
-    get_knowledge_entry,
-    update_knowledge_entry,
-    archive_knowledge_entry,
-    search_knowledge_entries,
-    get_knowledge_stats,
+    get_knowledge,
+    import_knowledge,
+    list_knowledge,
+    permitted_knowledge_ids,
+    remove_knowledge,
 )
 from ibreeze.schemas import (
-    KnowledgeEntryUpdate,
-    KnowledgeType,
-    KnowledgeStatus,
+    CompanyCreate,
+    KnowledgeItemCreate,
+    KnowledgeVisibility,
+    SubmitUserMessageRequest,
 )
 
 
-def test_create_knowledge_entry():
-    entry = create_knowledge_entry(title="Test FAQ", content="What is this?", type=KnowledgeType.FAQ)
-    assert entry.title == "Test FAQ"
-    assert entry.content == "What is this?"
-    assert entry.type == KnowledgeType.FAQ
-    assert entry.status == KnowledgeStatus.ACTIVE
-    assert entry.version == 1
-    assert entry.is_deleted is False
-    assert entry.content_sha256 is not None
-
-
-def test_create_knowledge_entry_with_tags():
-    entry = create_knowledge_entry(
-        title="Tagged Entry",
-        content="Tagged content",
-        type=KnowledgeType.DOC,
-        tags=["guide", "setup"],
+async def _scope(db: aiosqlite.Connection, profile_id: str, name: str):
+    company = await create_company(
+        db,
+        CompanyCreate(
+            name=name,
+            introduction="知识权限测试公司",
+            general_manager_name="总经理",
+            base_profile_version_id=profile_id,
+        ),
     )
-    assert entry.tags == ["guide", "setup"]
-    assert "guide" in entry.tags
+    intake = await submit_user_message(
+        db,
+        SubmitUserMessageRequest(
+            company_id=company.id,
+            conversation_id=company.company_conversation_id,
+            content="生成稳定消息事件",
+        ),
+    )
+    message = await (
+        await db.execute(
+            "SELECT source_event_id FROM conversation_messages WHERE id=?",
+            (intake.message_id,),
+        )
+    ).fetchone()
+    return company, intake, message[0]
 
 
-def test_list_knowledge_entries():
-    create_knowledge_entry(title="FAQ 1", content="Content 1", type=KnowledgeType.FAQ)
-    create_knowledge_entry(title="DOC 1", content="Content 2", type=KnowledgeType.DOC)
-    entries = list_knowledge_entries()
-    assert len(entries) >= 2
+@pytest.mark.asyncio
+async def test_import_is_atomic_and_event_payload_excludes_content(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, source_event = await _scope(
+        db,
+        published_profile,
+        "知识导入公司",
+    )
+    imported = await import_knowledge(
+        db,
+        company.id,
+        KnowledgeItemCreate(
+            title="交付规范",
+            content="所有实现必须经过独立 Review。",
+            visibility=KnowledgeVisibility.COMPANY,
+            source_message_event_id=source_event,
+        ),
+    )
+    assert (await get_knowledge(db, company.id, imported.id)).content_sha256
+    assert [item.id for item in await list_knowledge(db, company.id)] == [
+        imported.id
+    ]
+    event = await (
+        await db.execute(
+            """SELECT payload_json FROM domain_events
+               WHERE aggregate_id=? AND event_type='knowledge.imported'""",
+            (imported.id,),
+        )
+    ).fetchone()
+    payload = json.loads(event[0])
+    assert "content" not in payload
+    assert payload["content_sha256"] == imported.content_sha256
+    assert (
+        await (
+            await db.execute(
+                """SELECT COUNT(*) FROM outbox_events
+                   WHERE topic='knowledge.index.requested'""",
+            )
+        ).fetchone()
+    )[0] == 1
 
 
-def test_list_knowledge_entries_filter_by_type():
-    create_knowledge_entry(title="URL Only", content="URL content", type=KnowledgeType.URL)
-    urls = list_knowledge_entries(type=KnowledgeType.URL)
-    assert all(e.type == KnowledgeType.URL for e in urls)
+@pytest.mark.asyncio
+async def test_permission_candidates_are_filtered_before_retrieval(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, intake, source_event = await _scope(
+        db,
+        published_profile,
+        "知识隔离公司",
+    )
+    employee_id = company.general_manager_employee_id
+    department_id = company.general_manager_office_id
+    items = []
+    for visibility, scope in (
+        (KnowledgeVisibility.COMPANY, {}),
+        (
+            KnowledgeVisibility.DEPARTMENT,
+            {"department_id": department_id},
+        ),
+        (
+            KnowledgeVisibility.TASK,
+            {"task_id": intake.company_task_id},
+        ),
+        (
+            KnowledgeVisibility.PRIVATE,
+            {"owner_employee_id": employee_id},
+        ),
+    ):
+        items.append(
+            await import_knowledge(
+                db,
+                company.id,
+                KnowledgeItemCreate(
+                    title=f"{visibility.value} 规范",
+                    content=f"{visibility.value} 可见内容",
+                    visibility=visibility,
+                    source_message_event_id=source_event,
+                    **scope,
+                ),
+            )
+        )
+    allowed = await permitted_knowledge_ids(
+        db,
+        company.id,
+        employee_id=employee_id,
+        department_id=department_id,
+        company_task_id=intake.company_task_id,
+    )
+    assert set(allowed) == {item.id for item in items}
+    unrelated = await permitted_knowledge_ids(
+        db,
+        company.id,
+        employee_id="00000000-0000-4000-8000-000000000000",
+        department_id=None,
+        company_task_id=None,
+    )
+    assert unrelated == [items[0].id]
 
 
-def test_get_knowledge_entry():
-    entry = create_knowledge_entry(title="Get Test", content="Get content", type=KnowledgeType.FAQ)
-    fetched = get_knowledge_entry(entry.id)
-    assert fetched.id == entry.id
-    assert fetched.title == "Get Test"
+@pytest.mark.asyncio
+async def test_remove_records_fact_before_deleting_item(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, source_event = await _scope(
+        db,
+        published_profile,
+        "知识删除公司",
+    )
+    item = await import_knowledge(
+        db,
+        company.id,
+        KnowledgeItemCreate(
+            title="临时规范",
+            content="待删除正文",
+            visibility=KnowledgeVisibility.COMPANY,
+            source_message_event_id=source_event,
+        ),
+    )
+    result = await remove_knowledge(db, company.id, item.id)
+    assert result == {"id": item.id, "removed": True}
+    with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
+        await get_knowledge(db, company.id, item.id)
+    removed = await (
+        await db.execute(
+            """SELECT aggregate_version,payload_json FROM domain_events
+               WHERE aggregate_id=? AND event_type='knowledge.removed'""",
+            (item.id,),
+        )
+    ).fetchone()
+    assert removed[0] == 2
+    assert "待删除正文" not in removed[1]
 
 
-def test_get_knowledge_entry_not_found():
-    with pytest.raises(KeyError):
-        get_knowledge_entry("nonexistent-id")
-
-
-def test_update_knowledge_entry():
-    entry = create_knowledge_entry(title="Old Title", content="Old content", type=KnowledgeType.DOC)
-    updated = update_knowledge_entry(entry.id, KnowledgeEntryUpdate(title="New Title"))
-    assert updated.title == "New Title"
-    assert updated.content == "Old content"
-    assert updated.version == 1
-
-
-def test_update_knowledge_entry_content_bumps_version():
-    entry = create_knowledge_entry(title="Version Test", content="v1 content", type=KnowledgeType.DOC)
-    updated = update_knowledge_entry(entry.id, KnowledgeEntryUpdate(content="v2 content"))
-    assert updated.version == 2
-    assert updated.content_sha256 != entry.content_sha256
-
-
-def test_delete_knowledge_entry():
-    entry = create_knowledge_entry(title="To Archive", content="Archive me", type=KnowledgeType.FAQ)
-    archived = archive_knowledge_entry(entry.id)
-    assert archived.status == KnowledgeStatus.ARCHIVED
-
-
-def test_search_knowledge():
-    create_knowledge_entry(title="Python Guide", content="Learn Python", type=KnowledgeType.DOC)
-    create_knowledge_entry(title="JAVA Guide", content="Learn Java", type=KnowledgeType.DOC)
-    results = search_knowledge_entries("Python")
-    assert len(results) >= 1
-    assert any("Python" in r.title for r in results)
-
-
-def test_search_knowledge_by_content():
-    create_knowledge_entry(title="Unique", content="very specific query term", type=KnowledgeType.FAQ)
-    results = search_knowledge_entries("specific query")
-    assert len(results) >= 1
-
-
-def test_get_knowledge_stats():
-    create_knowledge_entry(title="Stats FAQ", content="Stats content", type=KnowledgeType.FAQ, tags=["tag1"])
-    create_knowledge_entry(title="Stats DOC", content="More stats", type=KnowledgeType.DOC, tags=["tag1", "tag2"])
-    stats = get_knowledge_stats()
-    assert stats.total >= 2
-    assert stats.active >= 2
-    assert stats.by_type.get("FAQ", 0) >= 1
-    assert stats.by_type.get("DOC", 0) >= 1
-    assert stats.by_tag.get("tag1", 0) >= 2
-
-
-def test_create_duplicate_content_hash():
-    content = "Same content different types"
-    faq_entry = create_knowledge_entry(title="FAQ Version", content=content, type=KnowledgeType.FAQ)
-    url_entry = create_knowledge_entry(title="URL Version", content=content, type=KnowledgeType.URL)
-    assert faq_entry.content_sha256 == url_entry.content_sha256
-    assert faq_entry.id != url_entry.id
-
-
-def test_create_duplicate_content_same_type_raises():
-    content = "Duplicate same type content"
-    create_knowledge_entry(title="First", content=content, type=KnowledgeType.DOC)
-    with pytest.raises(ValueError, match="内容重复"):
-        create_knowledge_entry(title="Second", content=content, type=KnowledgeType.DOC)
+@pytest.mark.asyncio
+async def test_cross_company_source_is_rejected_by_composite_fk(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    first, _, source_event = await _scope(db, published_profile, "来源公司")
+    second, _, _ = await _scope(db, published_profile, "目标公司")
+    with pytest.raises(aiosqlite.IntegrityError):
+        await import_knowledge(
+            db,
+            second.id,
+            KnowledgeItemCreate(
+                title="越权来源",
+                content="不能导入",
+                visibility=KnowledgeVisibility.COMPANY,
+                source_message_event_id=source_event,
+            ),
+        )
+    assert await list_knowledge(db, second.id) == []
+    assert first.id != second.id

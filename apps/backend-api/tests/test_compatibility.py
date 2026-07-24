@@ -1,193 +1,131 @@
-"""Compatibility rule tests."""
+"""Compatibility-rule contract tests."""
+
+from __future__ import annotations
+
 import uuid
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.compatibility.service import (
-    create_rule,
-    delete_rule,
-    evaluate,
-    get_rule,
-    list_rules,
-    update_rule,
-)
-
-_RULE_ARGS = {
-    "subject_type": "agent",
-    "subject_version_range": {"min": "0.1.0", "max": "1.0.0"},
-    "dependency_type": "model",
-    "dependency_version_range": {"min": "1.0.0", "max": "2.0.0"},
-    "result": "deny",
-    "reason_code": "tested",
-    "priority": 100,
-}
+from ibreeze_backend.compatibility.models import CompatibilityRule
 
 
-# ---------------------------------------------------------------------------
-# Service-level CRUD tests (avoid response_model serialisation issues)
-# ---------------------------------------------------------------------------
+def _body() -> dict[str, object]:
+    return {
+        "subject_type": "agent",
+        "subject_id": str(uuid.uuid4()),
+        "subject_version_range": ">=1.0.0 <2.0.0",
+        "dependency_type": "model",
+        "dependency_key": "openai/gpt-5",
+        "dependency_version_range": "^1.0.0",
+        "decision": "allow",
+        "reason_code": "contract_tested",
+        "priority": 100,
+    }
 
-@pytest.mark.asyncio
-async def test_create_rule(db_session: AsyncSession):
-    """Test creating a compatibility rule via service."""
-    rule = await create_rule(db_session, **_RULE_ARGS)
-    assert rule.subject_type == "agent"
-    assert rule.dependency_type == "model"
-    assert rule.result == "deny"
-    assert rule.reason_code == "tested"
-    assert rule.priority == 100
-    assert rule.id is not None
+
+def _headers(tokens: dict[str, object], match: str | None = None) -> dict[str, str]:
+    result = {"Authorization": f"Bearer {tokens['access_token']}"}
+    if match is not None:
+        result["If-Match"] = match
+    return result
 
 
 @pytest.mark.asyncio
-async def test_create_rule_allow(db_session: AsyncSession):
-    """Test creating a rule with allow result."""
-    rule = await create_rule(db_session, **{**_RULE_ARGS, "result": "allow"})
-    assert rule.result == "allow"
-
-
-@pytest.mark.asyncio
-async def test_create_rule_deny(db_session: AsyncSession):
-    """Test creating a rule with deny result."""
-    rule = await create_rule(db_session, **_RULE_ARGS)
-    assert rule.result == "deny"
-
-
-@pytest.mark.asyncio
-async def test_list_rules(db_session: AsyncSession):
-    """Test listing compatibility rules."""
-    await create_rule(db_session, **_RULE_ARGS)
-    await create_rule(db_session, **{
-        **_RULE_ARGS,
-        "subject_type": "skill",
-        "dependency_type": "agent",
-    })
-
-    rules, total = await list_rules(db_session, skip=0, limit=20)
-    assert total >= 2
-    assert len(rules) >= 2
-
-
-@pytest.mark.asyncio
-async def test_get_rule(db_session: AsyncSession):
-    """Test getting a specific rule by id."""
-    rule = await create_rule(db_session, **_RULE_ARGS)
-
-    fetched = await get_rule(db_session, rule.id)
-    assert fetched is not None
-    assert fetched.id == rule.id
-    assert fetched.result == "deny"
-
-
-@pytest.mark.asyncio
-async def test_get_rule_not_found(db_session: AsyncSession):
-    """Test getting a nonexistent rule returns None."""
-    fake_id = uuid.uuid4()
-    result = await get_rule(db_session, fake_id)
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_update_rule(db_session: AsyncSession):
-    """Test updating a compatibility rule."""
-    rule = await create_rule(db_session, **_RULE_ARGS)
-
-    updated = await update_rule(
-        db_session, rule.id,
-        result="allow",
-        reason_code="updated_reason",
-        priority=None,
-        subject_type=None,
-        subject_version_range=None,
-        dependency_type=None,
-        dependency_version_range=None,
+async def test_rule_crud_validate_and_locking(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+) -> None:
+    created = await client.post(
+        "/admin/api/v1/compatibility-rules",
+        json=_body(),
+        headers=_headers(admin_tokens),
     )
-    assert updated.result == "allow"
-    assert updated.reason_code == "updated_reason"
-    assert updated.priority == _RULE_ARGS["priority"]
+    assert created.status_code == 201, created.text
+    item = created.json()
+    assert item["status"] == "draft"
+    assert item["version"] == 1
+
+    missing_match = await client.patch(
+        f"/admin/api/v1/compatibility-rules/{item['id']}",
+        json={"decision": "deny"},
+        headers=_headers(admin_tokens),
+    )
+    assert missing_match.status_code == 428
+    updated = await client.patch(
+        f"/admin/api/v1/compatibility-rules/{item['id']}",
+        json={"decision": "deny"},
+        headers=_headers(admin_tokens, "1"),
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["decision"] == "deny"
+    assert updated.json()["version"] == 2
+
+    validated = await client.post(
+        f"/admin/api/v1/compatibility-rules/{item['id']}/validate",
+        headers=_headers(admin_tokens),
+    )
+    assert validated.status_code == 200, validated.text
+    assert validated.json()["status"] == "validated"
 
 
 @pytest.mark.asyncio
-async def test_delete_rule(db_session: AsyncSession):
-    """Test deleting a compatibility rule."""
-    rule = await create_rule(db_session, **_RULE_ARGS)
+async def test_rule_validation_rejects_ambiguous_version_range(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+) -> None:
+    created = await client.post(
+        "/admin/api/v1/compatibility-rules",
+        json={**_body(), "subject_version_range": "latest"},
+        headers=_headers(admin_tokens),
+    )
+    assert created.status_code == 201
+    response = await client.post(
+        f"/admin/api/v1/compatibility-rules/{created.json()['id']}/validate",
+        headers=_headers(admin_tokens),
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "COMPATIBILITY_VERSION_RANGE_INVALID"
 
-    await delete_rule(db_session, rule.id)
-
-    fetched = await get_rule(db_session, rule.id)
-    assert fetched is None
-
-
-# ---------------------------------------------------------------------------
-# HTTP-based evaluate tests (returns plain dict, no response_model)
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_evaluate_allow(db_session: AsyncSession, client: AsyncClient, admin_tokens: dict):
-    """Test evaluation returns allow when no deny rule matches."""
-    await create_rule(db_session, **{**_RULE_ARGS, "result": "allow", "priority": 50})
+async def test_published_rule_is_immutable(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+    db_session: AsyncSession,
+) -> None:
+    created = await client.post(
+        "/admin/api/v1/compatibility-rules",
+        json=_body(),
+        headers=_headers(admin_tokens),
+    )
+    rule = await db_session.get(CompatibilityRule, uuid.UUID(created.json()["id"]))
+    assert rule is not None
+    rule.status = "published"
     await db_session.commit()
-
-    response = await client.post(
-        "/admin/api/v1/compatibility/evaluate",
-        json={
-            "subject_type": "agent",
-            "subject_version": "0.5.0",
-            "dependency_type": "model",
-            "dependency_version": "1.5.0",
-        },
-        headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
+    response = await client.delete(
+        f"/admin/api/v1/compatibility-rules/{rule.id}",
+        headers=_headers(admin_tokens, "1"),
     )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["result"] == "allow"
+    assert response.status_code == 409
+    assert response.json()["detail"] == "CATALOG_REVISION_IMMUTABLE"
 
 
 @pytest.mark.asyncio
-async def test_evaluate_deny_wins(db_session: AsyncSession, client: AsyncClient, admin_tokens: dict):
-    """Test that deny overrides allow at the same priority."""
-    for result in ("allow", "deny"):
-        await create_rule(db_session, **{
-            **_RULE_ARGS,
-            "result": result,
-            "reason_code": f"rule_{result}",
-            "priority": 100,
-        })
-    await db_session.commit()
-
-    response = await client.post(
-        "/admin/api/v1/compatibility/evaluate",
-        json={
-            "subject_type": "agent",
-            "subject_version": "0.5.0",
-            "dependency_type": "model",
-            "dependency_version": "1.5.0",
-        },
-        headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
+async def test_rule_list_uses_cursor_shape(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+) -> None:
+    await client.post(
+        "/admin/api/v1/compatibility-rules",
+        json=_body(),
+        headers=_headers(admin_tokens),
+    )
+    response = await client.get(
+        "/admin/api/v1/compatibility-rules",
+        headers=_headers(admin_tokens),
     )
     assert response.status_code == 200
-    data = response.json()
-    assert data["result"] == "deny"
-    assert data["reason_code"] == "rule_deny"
-
-
-@pytest.mark.asyncio
-async def test_evaluate_no_match(client: AsyncClient, admin_tokens: dict):
-    """Test evaluation returns allow when no rule matches."""
-    response = await client.post(
-        "/admin/api/v1/compatibility/evaluate",
-        json={
-            "subject_type": "unknown_type",
-            "subject_version": "0.5.0",
-            "dependency_type": "unknown_dep",
-            "dependency_version": "1.5.0",
-        },
-        headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["result"] == "allow"
-    assert data["reason_code"] is None
-    assert data["matched_rule_id"] is None
+    assert response.json()["items"]
+    assert response.json()["next_cursor"] is None

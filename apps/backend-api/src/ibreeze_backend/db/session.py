@@ -1,5 +1,7 @@
 """Database session management."""
+
 from collections.abc import AsyncGenerator
+from contextvars import ContextVar
 
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import (
@@ -39,8 +41,18 @@ async_session_factory = async_sessionmaker(
     expire_on_commit=False,
 )
 
+request_session: ContextVar[AsyncSession | None] = ContextVar(
+    "request_session",
+    default=None,
+)
+
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    shared_session = request_session.get()
+    if shared_session is not None:
+        yield shared_session
+        return
+
     async with async_session_factory() as session:
         try:
             yield session

@@ -1,349 +1,375 @@
-"""Authentication tests."""
+"""G.5/G.11 authentication contract tests."""
+
+import base64
+import json
+import uuid
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
 
+from ibreeze_backend.auth.service import (
+    ADMIN_AUDIENCE,
+    APP_AUDIENCE,
+    AUTH_ISSUER,
+    OFFLINE_AUDIENCE,
+    get_auth_keys,
+    verify_access_token,
+)
+from ibreeze_backend.security.keys import load_or_create_signing_keys
+from ibreeze_backend.settings import settings
+
+
+def _login_body(identifier: str, password: str) -> dict[str, str]:
+    return {
+        "identifier": identifier,
+        "password": password,
+        "device_id": str(uuid.uuid4()),
+    }
+
+
+def _decode_offline_ticket(token: str) -> dict[str, object]:
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    key = get_auth_keys()["keys"][0]
+    raw = base64.urlsafe_b64decode(str(key["x"]) + "==")
+    public_key = Ed25519PublicKey.from_public_bytes(raw)
+    return jwt.decode(
+        token,
+        public_key,
+        algorithms=["EdDSA"],
+        audience=OFFLINE_AUDIENCE,
+        issuer=AUTH_ISSUER,
+        options={
+            "require": [
+                "iss",
+                "aud",
+                "sub",
+                "device_id",
+                "backend_origin",
+                "iat",
+                "exp",
+                "jti",
+            ]
+        },
+    )
+
 
 @pytest.mark.asyncio
-async def test_register_success(client: AsyncClient):
-    """Test successful user registration."""
+async def test_register_creates_app_user_without_session(client: AsyncClient):
     response = await client.post(
-        "/auth/register",
-        json={
-            "email": "newuser@example.com",
-            "password": "password123",
-            "confirm_password": "password123",
-        },
+        "/api/v1/auth/register",
+        json={"email": "User@Example.COM", "password": "password123"},
     )
     assert response.status_code == 201
-    data = response.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
+    assert response.json()["data"] == {
+        "user": {
+            "id": response.json()["data"]["user"]["id"],
+            "user_type": "app_user",
+            "username": None,
+                "email": "user@example.com",
+                "display_name": "user@example.com",
+                "masked_identifier": "u***@example.com",
+                "status": "active",
+        }
+    }
+    assert "access_token" not in response.text
 
 
 @pytest.mark.asyncio
-async def test_register_email_normalization(client: AsyncClient):
-    """Test email is normalized to lowercase."""
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "User@Example.COM",
-            "password": "password123",
-            "confirm_password": "password123",
-        },
-    )
-    assert response.status_code == 201
-
-
-@pytest.mark.asyncio
-async def test_register_password_too_short(client: AsyncClient):
-    """Test registration with too short password."""
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "password": "short",
-            "confirm_password": "short",
-        },
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_register_password_too_long(client: AsyncClient):
-    """Test registration with too long password."""
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "password": "a" * 129,
-            "confirm_password": "a" * 129,
-        },
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_register_password_mismatch(client: AsyncClient):
-    """Test registration with mismatched passwords."""
-    response = await client.post(
-        "/auth/register",
-        json={
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"email": "test@example.com", "password": "short"},
+        {
             "email": "test@example.com",
             "password": "password123",
-            "confirm_password": "password456",
-        },
-    )
-    assert response.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_register_duplicate_email(client: AsyncClient, test_user):
-    """Test registration with duplicate email."""
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": test_user.email,
-            "password": "password123",
-            "confirm_password": "password123",
-        },
-    )
-    assert response.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_register_ignores_user_type(client: AsyncClient):
-    """Test that registration ignores user_type field."""
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "password": "password123",
-            "confirm_password": "password123",
             "user_type": "admin",
         },
-    )
-    assert response.status_code == 201
-
-
-@pytest.mark.asyncio
-async def test_login_success(client: AsyncClient, test_user):
-    """Test successful login."""
-    response = await client.post(
-        "/auth/login",
-        json={
-            "email": test_user.email,
-            "password": "testpassword123",
-        },
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["user_type"] == "app_user"
-
-
-@pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient, test_user):
-    """Test login with wrong password."""
-    response = await client.post(
-        "/auth/login",
-        json={
-            "email": test_user.email,
-            "password": "wrongpassword",
-        },
-    )
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials"
-
-
-@pytest.mark.asyncio
-async def test_login_nonexistent_user(client: AsyncClient):
-    """Test login with nonexistent user (should not reveal user doesn't exist)."""
-    response = await client.post(
-        "/auth/login",
-        json={
-            "email": "nonexistent@example.com",
+        {
+            "email": "test@example.com",
             "password": "password123",
+            "confirm_password": "password123",
         },
+    ],
+)
+async def test_register_rejects_invalid_or_unknown_fields(
+    client: AsyncClient,
+    payload: dict[str, str],
+):
+    response = await client.post("/api/v1/auth/register", json=payload)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_duplicate_email(client: AsyncClient, test_user):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={"email": test_user.email.upper(), "password": "password123"},
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_app_login_returns_complete_rotatable_bundle(client: AsyncClient, test_user):
+    device_id = uuid.uuid4()
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": test_user.email,
+            "password": "testpassword123",
+            "device_id": str(device_id),
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["user"]["user_type"] == "app_user"
+    assert data["refresh_token"]
+    assert data["offline_session_ticket"]
+    assert data["refresh_token_expires_in"] == 2_592_000
+    assert data["offline_session_ticket_expires_in"] == 2_592_000
+    assert data["access_token_expires_in"] == 900
+    assert data["pwd_change_required"] is False
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert verify_access_token(data["access_token"], APP_AUDIENCE) is not None
+    assert verify_access_token(data["access_token"], ADMIN_AUDIENCE) is None
+    ticket = _decode_offline_ticket(data["offline_session_ticket"])
+    assert ticket == {
+        "iss": AUTH_ISSUER,
+        "aud": OFFLINE_AUDIENCE,
+        "sub": str(test_user.id),
+        "device_id": str(device_id),
+        "backend_origin": AUTH_ISSUER,
+        "iat": ticket["iat"],
+        "exp": ticket["exp"],
+        "jti": ticket["jti"],
+    }
+    import jwt
+
+    key = get_auth_keys()["keys"][0]
+    raw = base64.urlsafe_b64decode(str(key["x"]) + "==")
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    with pytest.raises(jwt.InvalidAudienceError):
+        jwt.decode(
+            data["offline_session_ticket"],
+            Ed25519PublicKey.from_public_bytes(raw),
+            algorithms=["EdDSA"],
+            audience=APP_AUDIENCE,
+            issuer=AUTH_ISSUER,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("identifier", "password"),
+    [
+        ("missing@example.com", "password123"),
+        ("fixture", "wrongpassword"),
+    ],
+)
+async def test_login_does_not_disclose_account_state(client: AsyncClient, test_user, identifier: str, password: str):
+    actual_identifier = test_user.email if identifier == "fixture" else identifier
+    response = await client.post(
+        "/api/v1/auth/login",
+        json=_login_body(actual_identifier, password),
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid credentials"
 
 
 @pytest.mark.asyncio
-async def test_login_disabled_user(client: AsyncClient, test_user, db_session):
-    """Test login with disabled user."""
-    from ibreeze_backend.models.user import User
-
-    test_user.is_active = False
-    await db_session.commit()
-
+async def test_disabled_user_cannot_login(client: AsyncClient, test_user, db_session):
+    test_user.status = "disabled"
+    await db_session.flush()
     response = await client.post(
-        "/auth/login",
-        json={
-            "email": test_user.email,
-            "password": "testpassword123",
-        },
+        "/api/v1/auth/login",
+        json=_login_body(test_user.email, "testpassword123"),
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid credentials"
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_audience(client: AsyncClient, test_user):
-    """Test login with wrong audience."""
+async def test_five_failures_lock_account_for_fifteen_minutes(client: AsyncClient, test_user):
+    for _ in range(5):
+        response = await client.post(
+            "/api/v1/auth/login",
+            json=_login_body(test_user.email, "wrongpassword"),
+        )
+        assert response.status_code == 401
     response = await client.post(
-        "/admin/api/v1/auth/login",
-        json={
-            "email": test_user.email,
-            "password": "testpassword123",
-        },
+        "/api/v1/auth/login",
+        json=_login_body(test_user.email, "testpassword123"),
     )
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_refresh_token_rotation(client: AsyncClient, user_tokens):
-    """Test refresh token rotation."""
+async def test_app_identity_cannot_use_admin_login(client: AsyncClient, test_user):
     response = await client.post(
-        "/auth/refresh",
-        json={
-            "refresh_token": user_tokens["refresh_token"],
-        },
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "token_type" in data
-
-
-@pytest.mark.asyncio
-async def test_refresh_token_replay_detection(client: AsyncClient, user_tokens):
-    """Test refresh token replay detection."""
-    # First refresh should succeed
-    response1 = await client.post(
-        "/auth/refresh",
-        json={
-            "refresh_token": user_tokens["refresh_token"],
-        },
-    )
-    assert response1.status_code == 200
-
-    # Second refresh with same token should fail (replay detected)
-    response2 = await client.post(
-        "/auth/refresh",
-        json={
-            "refresh_token": user_tokens["refresh_token"],
-        },
-    )
-    assert response2.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_logout(client: AsyncClient, user_tokens):
-    """Test logout."""
-    response = await client.post(
-        "/auth/logout",
-        headers={
-            "Authorization": f"Bearer {user_tokens['access_token']}",
-        },
-    )
-    assert response.status_code == 204
-
-    # Refresh should fail after logout
-    response = await client.post(
-        "/auth/refresh",
-        json={
-            "refresh_token": user_tokens["refresh_token"],
-        },
+        "/admin/api/v1/auth/login",
+        json=_login_body(test_user.email, "testpassword123"),
     )
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_logout_all(client: AsyncClient, user_tokens):
-    """Test logout all devices."""
+async def test_refresh_rotates_token_and_replay_revokes_family(client: AsyncClient, user_tokens):
+    first = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": user_tokens["refresh_token"]},
+    )
+    assert first.status_code == 200
+    replacement = first.json()["data"]["refresh_token"]
+    assert replacement != user_tokens["refresh_token"]
+
+    replay = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": user_tokens["refresh_token"]},
+    )
+    assert replay.status_code == 401
+
+    revoked_replacement = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": replacement},
+    )
+    assert revoked_replacement.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_current_family(client: AsyncClient, user_tokens):
     response = await client.post(
-        "/auth/logout-all",
-        headers={
-            "Authorization": f"Bearer {user_tokens['access_token']}",
-        },
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
+    )
+    assert response.status_code == 204
+    refresh = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": user_tokens["refresh_token"]},
+    )
+    assert refresh.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_all_revokes_all_families(client: AsyncClient, user_tokens):
+    response = await client.post(
+        "/api/v1/auth/logout-all",
+        headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
     )
     assert response.status_code == 204
 
 
 @pytest.mark.asyncio
-async def test_change_password(client: AsyncClient, user_tokens):
-    """Test password change."""
+async def test_change_password_rotates_family(client: AsyncClient, user_tokens):
     response = await client.post(
-        "/auth/change-password",
+        "/api/v1/auth/change-password",
         json={
-            "old_password": "testpassword123",
+            "current_password": "testpassword123",
             "new_password": "newpassword123",
-            "confirm_password": "newpassword123",
         },
-        headers={
-            "Authorization": f"Bearer {user_tokens['access_token']}",
-        },
+        headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
     )
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-
-
-@pytest.mark.asyncio
-async def test_change_password_wrong_old_password(client: AsyncClient, user_tokens):
-    """Test password change with wrong old password."""
-    response = await client.post(
-        "/auth/change-password",
-        json={
-            "old_password": "wrongpassword",
-            "new_password": "newpassword123",
-            "confirm_password": "newpassword123",
-        },
-        headers={
-            "Authorization": f"Bearer {user_tokens['access_token']}",
-        },
+    assert response.json()["data"]["refresh_token"]
+    old_refresh = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": user_tokens["refresh_token"]},
     )
-    assert response.status_code == 400
+    assert old_refresh.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_admin_login(client: AsyncClient, test_admin):
-    """Test admin login."""
+async def test_password_change_gate_allows_only_change_or_logout(
+    client: AsyncClient, test_user, user_tokens, db_session
+):
+    test_user.must_change_password = True
+    await db_session.flush()
+
+    denied = await client.post(
+        "/api/v1/auth/logout-all",
+        headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "AUTH_PASSWORD_CHANGE_REQUIRED"
+
+    changed = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "testpassword123",
+            "new_password": "newpassword123",
+        },
+        headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
+    )
+    assert changed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_admin_login_uses_username_and_http_only_cookie(client: AsyncClient, test_admin):
     response = await client.post(
         "/admin/api/v1/auth/login",
-        json={
-            "email": test_admin.email,
-            "password": "admin123456",
-        },
+        json=_login_body(test_admin.username, "admin123456"),
     )
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["user_type"] == "admin"
+    data = response.json()["data"]
+    assert data["user"]["user_type"] == "admin"
+    assert "refresh_token" not in data
+    assert "offline_session_ticket" not in data
+    cookie = response.headers["set-cookie"]
+    assert "ibreeze_admin_refresh=" in cookie
+    assert "HttpOnly" in cookie
+    assert "Secure" in cookie
+    assert "SameSite=strict" in cookie
+    assert "Path=/admin/api/v1/auth" in cookie
+    assert verify_access_token(data["access_token"], ADMIN_AUDIENCE) is not None
+    assert verify_access_token(data["access_token"], APP_AUDIENCE) is None
 
 
 @pytest.mark.asyncio
-async def test_admin_refresh(client: AsyncClient, admin_tokens):
-    """Test admin token refresh."""
+async def test_admin_refresh_reads_cookie_and_never_returns_token(client: AsyncClient, admin_tokens):
     response = await client.post(
         "/admin/api/v1/auth/refresh",
-        json={
-            "refresh_token": admin_tokens["refresh_token"],
-        },
+        headers={"Cookie": (f"ibreeze_admin_refresh={admin_tokens['refresh_token']}")},
     )
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
+    assert "refresh_token" not in response.json()["data"]
+    assert "ibreeze_admin_refresh=" in response.headers["set-cookie"]
 
 
 @pytest.mark.asyncio
-async def test_admin_logout(client: AsyncClient, admin_tokens):
-    """Test admin logout."""
-    response = await client.post(
-        "/admin/api/v1/auth/logout",
-        headers={
-            "Authorization": f"Bearer {admin_tokens['access_token']}",
-        },
-    )
-    assert response.status_code == 204
-
-
-@pytest.mark.asyncio
-async def test_get_auth_keys(client: AsyncClient, user_tokens):
-    """Test get auth keys endpoint."""
-    response = await client.get(
-        "/auth/keys",
-        headers={
-            "Authorization": f"Bearer {user_tokens['access_token']}",
-        },
-    )
+async def test_auth_keyset_is_complete_and_signed(client: AsyncClient):
+    response = await client.get("/api/v1/auth/keys")
     assert response.status_code == 200
-    data = response.json()
-    assert "keys" in data
-    assert len(data["keys"]) > 0
-    assert data["keys"][0]["kty"] == "OKP"
-    assert data["keys"][0]["crv"] == "Ed25519"
+    data = response.json()["data"]
+    assert data["signature_algorithm"] == "Ed25519"
+    assert data["signature"]
+    assert data["issued_at"]
+    assert data["expires_at"]
+    assert data["keys"][0] == {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "kid": data["keys"][0]["kid"],
+        "use": "sig",
+        "alg": "EdDSA",
+        "x": data["keys"][0]["x"],
+        "status": "active",
+    }
+    from cryptography.hazmat.primitives import serialization
+
+    _, catalog_public_pem, catalog_kid = load_or_create_signing_keys(
+        Path(settings.catalog_key_dir)
+    )
+    assert data["signing_key_id"] == catalog_kid
+    public_key = serialization.load_pem_public_key(catalog_public_pem)
+    signed_payload = {
+        "keys": data["keys"],
+        "issued_at": data["issued_at"],
+        "expires_at": data["expires_at"],
+    }
+    canonical = json.dumps(signed_payload, sort_keys=True, separators=(",", ":")).encode()
+    public_key.verify(
+        base64.urlsafe_b64decode(data["signature"] + "=="),
+        canonical,
+    )

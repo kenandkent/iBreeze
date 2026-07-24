@@ -1,98 +1,136 @@
-"""ZIP validation and signature service."""
-import base64
+"""Strict Skill ZIP validation and hashing."""
+
+from __future__ import annotations
+
 import hashlib
+import json
+import stat
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from cryptography.exceptions import InvalidSignature
+from pydantic import ValidationError
+
+from ibreeze_backend.skills.schemas import SkillManifest
+
+MAX_OBJECT_BYTES = 50 * 1024 * 1024
+MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+MAX_ENTRIES = 1000
 
 
-def validate_zip_structure(zip_path: Path) -> tuple[bool, list[str]]:
-    """Validate ZIP file structure for skill packages."""
-    errors = []
+def validate_skill_zip(
+    zip_path: Path,
+    *,
+    expected_key: str,
+    expected_version: str,
+) -> tuple[SkillManifest, str, str]:
+    if zip_path.stat().st_size < 1 or zip_path.stat().st_size > MAX_OBJECT_BYTES:
+        raise ValueError("SKILL_PACKAGE_SIZE_INVALID")
+    object_sha256 = _file_sha256(zip_path)
     try:
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            # Check for required files
-            names = zf.namelist()
-            has_manifest = any("manifest.json" in name for name in names)
-            has_skill = any(name.endswith(".py") for name in names)
-
-            if not has_manifest:
-                errors.append("Missing manifest.json")
-            if not has_skill:
-                errors.append("No Python skill files found")
-
-            # Check for suspicious files
-            for name in names:
-                if name.startswith("/") or ".." in name:
-                    errors.append(f"Suspicious path: {name}")
-                if name.endswith(".exe") or name.endswith(".sh"):
-                    errors.append(f"Potentially dangerous file: {name}")
-
-    except zipfile.BadZipFile:
-        errors.append("Invalid ZIP file")
-
-    return len(errors) == 0, errors
-
-
-def compute_zip_checksum(zip_path: Path) -> str:
-    """Compute SHA256 checksum of a ZIP file."""
-    sha256 = hashlib.sha256()
-    with open(zip_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
-
-
-def verify_signature(zip_path: Path, signature: str, public_key_pem: str) -> bool:
-    """
-    Verify ZIP file signature using Ed25519.
-    
-    Args:
-        zip_path: Path to the ZIP file
-        signature: Base64-encoded signature
-        public_key_pem: PEM-encoded public key
-        
-    Returns:
-        True if signature is valid, False otherwise
-    """
-    try:
-        # 加载公钥
-        public_key = serialization.load_pem_public_key(public_key_pem.encode())
-        
-        # 确保是 Ed25519 公钥
-        if not isinstance(public_key, Ed25519PublicKey):
-            return False
-        
-        # 读取 ZIP 文件内容
-        with open(zip_path, "rb") as f:
-            data = f.read()
-        
-        # 解码签名
-        signature_bytes = base64.b64decode(signature)
-        
-        # 验证签名
-        public_key.verify(signature_bytes, data)
-        return True
-        
-    except (InvalidSignature, Exception):
-        return False
+        with zipfile.ZipFile(zip_path) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_ENTRIES:
+                raise ValueError("SKILL_PACKAGE_ENTRY_LIMIT")
+            normalized: dict[str, zipfile.ZipInfo] = {}
+            total_size = 0
+            for entry in entries:
+                path = _normalize_path(entry.filename)
+                if path in normalized:
+                    raise ValueError("SKILL_PACKAGE_DUPLICATE_PATH")
+                normalized[path] = entry
+                total_size += entry.file_size
+                if total_size > MAX_UNCOMPRESSED_BYTES:
+                    raise ValueError("SKILL_PACKAGE_UNCOMPRESSED_LIMIT")
+                mode = entry.external_attr >> 16
+                file_type = stat.S_IFMT(mode)
+                if file_type not in {0, stat.S_IFREG, stat.S_IFDIR}:
+                    raise ValueError("SKILL_PACKAGE_SPECIAL_FILE")
+            manifest_entry = normalized.get("skill.json")
+            if manifest_entry is None or manifest_entry.is_dir():
+                raise ValueError("SKILL_MANIFEST_MISSING")
+            if "instructions.md" not in normalized:
+                raise ValueError("SKILL_INSTRUCTIONS_MISSING")
+            try:
+                raw_manifest = json.loads(archive.read(manifest_entry))
+                manifest = SkillManifest.model_validate(raw_manifest)
+            except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+                raise ValueError("SKILL_MANIFEST_INVALID") from exc
+            _validate_manifest(
+                archive,
+                normalized,
+                manifest,
+                expected_key=expected_key,
+                expected_version=expected_version,
+            )
+    except zipfile.BadZipFile as exc:
+        raise ValueError("SKILL_PACKAGE_INVALID_ZIP") from exc
+    canonical = json.dumps(
+        manifest.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return manifest, object_sha256, hashlib.sha256(canonical).hexdigest()
 
 
-def validate_zip_size(zip_path: Path, max_upload: int = 50 * 1024 * 1024) -> bool:
-    """Validate ZIP file is within upload size limit."""
-    return zip_path.stat().st_size <= max_upload
+def _validate_manifest(
+    archive: zipfile.ZipFile,
+    entries: dict[str, zipfile.ZipInfo],
+    manifest: SkillManifest,
+    *,
+    expected_key: str,
+    expected_version: str,
+) -> None:
+    if manifest.key != expected_key or manifest.version != expected_version:
+        raise ValueError("SKILL_MANIFEST_IDENTITY_MISMATCH")
+    file_entries = {
+        path
+        for path, entry in entries.items()
+        if not entry.is_dir() and path != "skill.json"
+    }
+    declared: dict[str, object] = {}
+    for item in manifest.files:
+        path = _normalize_path(item.path)
+        if path == "skill.json" or path in declared:
+            raise ValueError("SKILL_MANIFEST_FILE_SET_INVALID")
+        if item.executable != (item.interpreter is not None):
+            raise ValueError("SKILL_MANIFEST_EXECUTABLE_INVALID")
+        declared[path] = item
+        entry = entries.get(path)
+        if entry is None or entry.is_dir():
+            raise ValueError("SKILL_MANIFEST_FILE_SET_INVALID")
+        actual = hashlib.sha256(archive.read(entry)).hexdigest()
+        if actual != item.sha256:
+            raise ValueError("SKILL_MANIFEST_FILE_HASH_MISMATCH")
+    if set(declared) != file_entries or manifest.entrypoint not in declared:
+        raise ValueError("SKILL_MANIFEST_FILE_SET_INVALID")
+    _validate_domains(manifest.network_domains)
 
 
-def validate_uncompressed_size(
-    zip_path: Path, max_total: int = 200 * 1024 * 1024
-) -> bool:
-    """Validate total uncompressed size is within limit."""
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            total = sum(info.file_size for info in zf.infolist())
-            return total <= max_total
-    except zipfile.BadZipFile:
-        return False
+def _normalize_path(value: str) -> str:
+    if "\\" in value or "\x00" in value:
+        raise ValueError("SKILL_PACKAGE_PATH_INVALID")
+    path = PurePosixPath(value)
+    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError("SKILL_PACKAGE_PATH_INVALID")
+    return path.as_posix().rstrip("/")
+
+
+def _validate_domains(values: list[str]) -> None:
+    for value in values:
+        if (
+            not value
+            or "://" in value
+            or value == "*"
+            or "/" in value
+            or value.startswith(".")
+            or value.endswith(".")
+        ):
+            raise ValueError("SKILL_NETWORK_DOMAIN_INVALID")
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

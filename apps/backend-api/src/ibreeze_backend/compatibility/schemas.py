@@ -1,58 +1,40 @@
-"""Compatibility rule schemas."""
+"""Compatibility rule REST contracts."""
+
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
-
-
-class CompatibilityRuleCreate(BaseModel):
-    subject_type: str = Field(..., min_length=1, max_length=64)
-    subject_version_range: dict | None = None
-    dependency_type: str = Field(..., min_length=1, max_length=64)
-    dependency_version_range: dict | None = None
-    result: str = Field(..., pattern="^(allow|deny)$")
-    reason_code: str | None = Field(default=None, max_length=64)
-    priority: int = 0
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class CompatibilityRuleUpdate(BaseModel):
-    subject_type: str | None = Field(default=None, min_length=1, max_length=64)
-    subject_version_range: dict | None = None
-    dependency_type: str | None = Field(default=None, min_length=1, max_length=64)
-    dependency_version_range: dict | None = None
-    result: str | None = Field(default=None, pattern="^(allow|deny)$")
-    reason_code: str | None = Field(default=None, max_length=64)
+class RuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject_type: Literal["agent", "model", "skill", "client"]
+    subject_id: uuid.UUID
+    subject_version_range: str = Field(min_length=1, max_length=200)
+    dependency_type: Literal["agent", "model", "skill", "platform", "client"]
+    dependency_key: str = Field(min_length=1, max_length=200)
+    dependency_version_range: str = Field(min_length=1, max_length=200)
+    decision: Literal["allow", "deny"]
+    reason_code: str = Field(min_length=1, max_length=100)
+    priority: int
+
+
+class RuleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject_version_range: str | None = Field(default=None, min_length=1, max_length=200)
+    dependency_version_range: str | None = Field(default=None, min_length=1, max_length=200)
+    decision: Literal["allow", "deny"] | None = None
+    reason_code: str | None = Field(default=None, min_length=1, max_length=100)
     priority: int | None = None
 
 
-class CompatibilityRuleResponse(BaseModel):
+class RuleResponse(RuleCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
-    subject_type: str
-    subject_version_range: dict | None
-    dependency_type: str
-    dependency_version_range: dict | None
-    result: str
-    reason_code: str | None
-    priority: int
+    status: Literal["draft", "validated", "published"]
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class CompatibilityRuleListResponse(BaseModel):
-    rules: list[CompatibilityRuleResponse]
-    total: int
-
-
-class EvaluateRequest(BaseModel):
-    subject_type: str = Field(..., min_length=1, max_length=64)
-    subject_version: str | None = None
-    dependency_type: str = Field(..., min_length=1, max_length=64)
-    dependency_version: str | None = None
-
-
-class EvaluateResponse(BaseModel):
-    result: str
-    reason_code: str | None = None
-    matched_rule_id: str | None = None
+    version: int

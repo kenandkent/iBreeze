@@ -1,187 +1,153 @@
-"""Catalog schemas with proper types for Pydantic v2 + SQLAlchemy."""
+"""Strict REST contracts for Agent, Model and Provider catalog resources."""
+
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
-
-
-class AgentCreate(BaseModel):
-    key: str = Field(..., min_length=1, max_length=128)
-    display_name: str = Field(..., min_length=1, max_length=255)
-    description: str | None = None
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class AgentUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = None
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
-class AgentResponse(BaseModel):
+class AgentCreate(StrictModel):
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    display_name: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=20_000)
+
+
+class AgentUpdate(StrictModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, min_length=1, max_length=20_000)
+
+
+class AgentResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
     key: str
     catalog_revision: int
     display_name: str
-    description: str | None
-    status: str
+    description: str
+    status: Literal["draft", "validated", "published"]
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class AgentListResponse(BaseModel):
-    agents: list[AgentResponse]
-    total: int
+    version: int
 
 
-class AgentVersionCreate(BaseModel):
-    executable_names: list[str] | None = None
-    supported_platforms: list[str] | None = None
-    min_version: str | None = None
-    max_version_exclusive: str | None = None
-    probe_command: dict | None = None
-    capability_tags: list[str] | None = None
-    network_domains: list[str] | None = None
-    adapter_contract_version: int | None = None
-    content_sha256: str | None = None
+class AgentVersionCreate(StrictModel):
+    min_version: str = Field(min_length=1, max_length=64)
+    max_version_exclusive: str = Field(min_length=1, max_length=64)
+    executable_names: list[str] = Field(min_length=1)
+    supported_platforms: list[str] = Field(min_length=1)
+    probe_argv: list[str] = Field(min_length=1)
+    capability_tags: list[str] = Field(default_factory=list)
+    network_domains: list[str] = Field(default_factory=list)
+    adapter_contract_version: int = Field(ge=1)
 
 
-class AgentVersionResponse(BaseModel):
+class AgentVersionResponse(AgentVersionCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
     agent_id: uuid.UUID
-    executable_names: list[str] | None
-    supported_platforms: list[str] | None
-    min_version: str | None
-    max_version_exclusive: str | None
-    probe_command: dict | None
-    capability_tags: list[str] | None
-    network_domains: list[str] | None
-    adapter_contract_version: int | None
-    content_sha256: str | None
+    content_sha256: str
+    published_at: datetime | None
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
-class AgentVersionListResponse(BaseModel):
-    versions: list[AgentVersionResponse]
-    total: int
+class ModelCreate(StrictModel):
+    provider_key: str = Field(min_length=1, max_length=64)
+    model_key: str = Field(min_length=1, max_length=200)
+    display_name: str = Field(min_length=1, max_length=100)
+    context_window: int = Field(ge=8192)
+    max_output_tokens: int = Field(ge=1)
+    tokenizer_key: str = Field(min_length=1, max_length=100)
+    supports_tools: bool
+    supports_streaming: bool
+    supports_vision: bool
 
 
-class ModelCreate(BaseModel):
-    provider_key: str = Field(..., min_length=1, max_length=128)
-    model_key: str = Field(..., min_length=1, max_length=128)
-    display_name: str = Field(..., min_length=1, max_length=255)
-    context_window: int | None = None
-    supports_tools: bool = False
-    supports_streaming: bool = False
-    supports_vision: bool = False
-
-
-class ModelUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=255)
-    context_window: int | None = None
+class ModelUpdate(StrictModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    context_window: int | None = Field(default=None, ge=8192)
+    max_output_tokens: int | None = Field(default=None, ge=1)
+    tokenizer_key: str | None = Field(default=None, min_length=1, max_length=100)
     supports_tools: bool | None = None
     supports_streaming: bool | None = None
     supports_vision: bool | None = None
 
 
-class ModelResponse(BaseModel):
+class ModelResponse(ModelCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
-    provider_key: str
-    model_key: str
-    display_name: str
-    context_window: int | None
-    supports_tools: bool
-    supports_streaming: bool
-    supports_vision: bool
-    status: str
+    catalog_revision: int
+    status: Literal["draft", "validated", "published"]
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class ModelListResponse(BaseModel):
-    models: list[ModelResponse]
-    total: int
+    version: int
 
 
-class ProviderCreate(BaseModel):
-    display_name: str = Field(..., min_length=1, max_length=255)
-    base_url: str | None = Field(default=None, max_length=512)
-    api_protocol: str = Field(..., min_length=1, max_length=32)
+class ProviderCreate(StrictModel):
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    display_name: str = Field(min_length=1, max_length=100)
+    protocol: Literal[
+        "openai_responses",
+        "anthropic_messages",
+        "openai_chat_completions",
+    ]
+    base_url: str = Field(min_length=1, max_length=2048)
+    auth_scheme: Literal["bearer", "x-api-key"]
 
 
-class ProviderUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=255)
-    base_url: str | None = Field(default=None, max_length=512)
-    api_protocol: str | None = Field(default=None, min_length=1, max_length=32)
+class ProviderUpdate(StrictModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    protocol: Literal[
+        "openai_responses",
+        "anthropic_messages",
+        "openai_chat_completions",
+    ] | None = None
+    base_url: str | None = Field(default=None, min_length=1, max_length=2048)
+    auth_scheme: Literal["bearer", "x-api-key"] | None = None
 
 
-class ProviderResponse(BaseModel):
+class ProviderResponse(ProviderCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
-    display_name: str
-    base_url: str | None
-    api_protocol: str
-    status: str
+    catalog_revision: int
+    status: Literal["draft", "validated", "published"]
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class ProviderListResponse(BaseModel):
-    providers: list[ProviderResponse]
-    total: int
+    version: int
 
 
-class AgentModelBindingCreate(BaseModel):
-    agent_id: str
-    model_id: str
-    agent_version_range: dict | None = None
+class AgentModelBindingCreate(StrictModel):
+    model_id: uuid.UUID
+    min_agent_version: str = Field(min_length=1, max_length=64)
+    max_agent_version_exclusive: str = Field(min_length=1, max_length=64)
 
 
-class AgentModelBindingResponse(BaseModel):
+class AgentModelBindingResponse(AgentModelBindingCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
     agent_id: uuid.UUID
-    model_id: uuid.UUID
-    agent_version_range: dict | None
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
-class AgentModelBindingListResponse(BaseModel):
-    bindings: list[AgentModelBindingResponse]
-    total: int
+class ProviderModelBindingCreate(StrictModel):
+    model_id: uuid.UUID
+    provider_model_name: str = Field(min_length=1, max_length=200)
+    request_defaults: dict[str, Any] = Field(default_factory=dict)
 
 
-class ProviderModelBindingCreate(BaseModel):
-    provider_id: str
-    model_id: str
-    api_protocol: str = Field(..., min_length=1, max_length=32)
-    capabilities: dict | None = None
-
-
-class ProviderModelBindingResponse(BaseModel):
+class ProviderModelBindingResponse(ProviderModelBindingCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
     provider_id: uuid.UUID
-    model_id: uuid.UUID
-    api_protocol: str
-    capabilities: dict | None
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
-class ProviderModelBindingListResponse(BaseModel):
-    bindings: list[ProviderModelBindingResponse]
-    total: int
-
-
-class StatusTransitionRequest(BaseModel):
-    status: str = Field(..., pattern="^(draft|validated|published)$")
+class CursorPage(StrictModel):
+    items: list[Any]
+    next_cursor: str | None
