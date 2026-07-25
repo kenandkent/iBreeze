@@ -165,9 +165,9 @@ def verify_access_token(token: str, expected_audience: str) -> dict[str, Any] | 
         return None
 
 
-def verify_token(token: str) -> dict[str, Any] | None:
-    """Verify an access token for audit-only identity extraction."""
-    return verify_access_token(token, APP_AUDIENCE) or verify_access_token(token, ADMIN_AUDIENCE)
+def verify_token(token: str, *, expected_audience: str) -> dict[str, Any] | None:
+    """Verify an access token with explicit audience enforcement."""
+    return verify_access_token(token, expected_audience)
 
 
 async def _revoke_family(

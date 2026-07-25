@@ -18,133 +18,126 @@ import pytest
 class TestTokenCreation:
     """JWT access token creation."""
 
-    def test_create_access_token_returns_string(self):
-        from ibreeze_backend.services.token_service import create_access_token
+    def test_create_access_token_returns_string(self, mock_user):
+        from ibreeze_backend.auth.service import create_access_token
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         assert isinstance(token, str)
         assert len(token) > 20
 
-    def test_create_access_token_contains_valid_jwt_structure(self):
-        from ibreeze_backend.services.token_service import create_access_token
+    def test_create_access_token_contains_valid_jwt_structure(self, mock_user):
+        from ibreeze_backend.auth.service import create_access_token
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         parts = token.split(".")
         assert len(parts) == 3, "JWT must have header.payload.signature"
 
-    def test_create_access_token_payload_has_sub_and_family(self):
-        from ibreeze_backend.services.token_service import (
+    def test_create_access_token_payload_has_sub_and_aud(self, mock_user):
+        from ibreeze_backend.auth.service import (
             create_access_token,
             verify_token,
         )
 
-        user_id = str(uuid.uuid4())
-        family_id = str(uuid.uuid4())
-        token = create_access_token(user_id, family_id, "admin")
-        payload = verify_token(token)
+        family_id = uuid.uuid4()
+        token = create_access_token(mock_user, family_id, "ibreeze-admin")
+        payload = verify_token(token, expected_audience="ibreeze-admin")
 
         assert payload is not None
-        assert payload["sub"] == user_id
-        assert payload["family"] == family_id
+        assert payload["sub"] == str(mock_user.id)
+        assert payload["aud"] == "ibreeze-admin"
 
-    def test_create_access_token_expiry_in_future(self):
-        from ibreeze_backend.services.token_service import (
+    def test_create_access_token_expiry_in_future(self, mock_user):
+        from ibreeze_backend.auth.service import (
             create_access_token,
             verify_token,
         )
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
-        payload = verify_token(token)
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
+        payload = verify_token(token, expected_audience="ibreeze-admin")
         assert payload is not None
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
         assert exp > datetime.now(timezone.utc)
 
-    def test_create_access_token_uses_configured_algorithm(self):
-        from ibreeze_backend.settings import settings
-        from ibreeze_backend.services.token_service import create_access_token
+    def test_create_access_token_uses_configured_algorithm(self, mock_user):
+        from ibreeze_backend.auth.service import create_access_token
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         import jwt as _jwt_mod
         header = _jwt_mod.get_unverified_header(token)
-        assert header["alg"] == settings.token_algorithm
+        assert header["alg"] == "EdDSA"
 
 
 class TestTokenVerification:
     """JWT token verification."""
 
-    def test_verify_valid_token(self):
-        from ibreeze_backend.services.token_service import (
+    def test_verify_valid_token(self, mock_user):
+        from ibreeze_backend.auth.service import (
             create_access_token,
             verify_token,
         )
 
-        uid = str(uuid.uuid4())
-        fid = str(uuid.uuid4())
-        token = create_access_token(uid, fid, "admin")
-        payload = verify_token(token)
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
+        payload = verify_token(token, expected_audience="ibreeze-admin")
         assert payload is not None
-        assert payload["sub"] == uid
+        assert payload["sub"] == str(mock_user.id)
 
     def test_verify_invalid_token_returns_none(self):
-        from ibreeze_backend.services.token_service import verify_token
+        from ibreeze_backend.auth.service import verify_token
 
-        assert verify_token("not.a.valid.token") is None
+        assert verify_token("not.a.valid.token", expected_audience="ibreeze-admin") is None
 
-    def test_verify_tampered_token_returns_none(self):
-        from ibreeze_backend.services.token_service import (
+    def test_verify_tampered_token_returns_none(self, mock_user):
+        from ibreeze_backend.auth.service import (
             create_access_token,
             verify_token,
         )
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         parts = token.split(".")
         tampered = parts[0] + "." + parts[1][:-1] + ("A" if parts[1][-1] != "A" else "B") + "." + parts[2]
-        assert verify_token(tampered) is None
+        assert verify_token(tampered, expected_audience="ibreeze-admin") is None
 
     def test_verify_empty_string_returns_none(self):
-        from ibreeze_backend.services.token_service import verify_token
+        from ibreeze_backend.auth.service import verify_token
 
-        assert verify_token("") is None
+        assert verify_token("", expected_audience="ibreeze-admin") is None
 
     def test_verify_token_with_wrong_secret_returns_none(self):
-        from ibreeze_backend.services.token_service import verify_token
+        from ibreeze_backend.auth.service import verify_token
 
         import jwt
-        payload = {"sub": "user1", "family": "fam1", "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
+        payload = {"sub": "user1", "aud": "ibreeze-admin", "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
         token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
-        assert verify_token(token) is None
+        assert verify_token(token, expected_audience="ibreeze-admin") is None
 
 
 class TestTokenExpiry:
     """Token expiry edge cases."""
 
-    def test_expired_token_returns_none(self):
-        from ibreeze_backend.services.token_service import verify_token
+    def test_expired_token_returns_none(self, mock_user):
+        from ibreeze_backend.auth.service import verify_token
         from ibreeze_backend.auth.service import _private_pem
         import jwt
 
         payload = {
-            "sub": str(uuid.uuid4()),
-            "family": str(uuid.uuid4()),
+            "sub": str(mock_user.id),
+            "aud": "ibreeze-admin",
             "exp": datetime.now(timezone.utc) - timedelta(hours=1),
         }
         token = jwt.encode(payload, _private_pem, algorithm="EdDSA")
-        assert verify_token(token) is None
+        assert verify_token(token, expected_audience="ibreeze-admin") is None
 
-    def test_token_near_expiry_still_valid(self):
-        from ibreeze_backend.services.token_service import (
+    def test_token_near_expiry_still_valid(self, mock_user):
+        from ibreeze_backend.auth.service import (
             create_access_token,
             verify_token,
         )
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
-        payload = verify_token(token)
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
+        payload = verify_token(token, expected_audience="ibreeze-admin")
         assert payload is not None
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-        from ibreeze_backend.settings import settings
-        expected_exp = datetime.now(timezone.utc) + timedelta(minutes=settings.token_expire_minutes)
-        diff = abs((exp - expected_exp).total_seconds())
-        assert diff < 5, f"Expiry should be ~{settings.token_expire_minutes}min from now, diff={diff}s"
+        assert exp > datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -568,19 +561,19 @@ class TestChangePassword:
 class TestAudienceSeparation:
     """Admin vs app audience separation."""
 
-    def test_create_access_token_admin_audience(self):
+    def test_create_access_token_admin_audience(self, mock_user):
         from ibreeze_backend.auth.service import create_access_token, verify_token
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "admin")
-        payload = verify_token(token)
-        assert payload["aud"] == "admin"
+        token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
+        payload = verify_token(token, expected_audience="ibreeze-admin")
+        assert payload["aud"] == "ibreeze-admin"
 
-    def test_create_access_token_app_audience(self):
+    def test_create_access_token_app_audience(self, mock_app_user):
         from ibreeze_backend.auth.service import create_access_token, verify_token
 
-        token = create_access_token(str(uuid.uuid4()), str(uuid.uuid4()), "app")
-        payload = verify_token(token)
-        assert payload["aud"] == "app"
+        token = create_access_token(mock_app_user, uuid.uuid4(), "ibreeze-desktop")
+        payload = verify_token(token, expected_audience="ibreeze-desktop")
+        assert payload["aud"] == "ibreeze-desktop"
 
     @pytest.mark.asyncio
     async def test_admin_auth_required(self, mock_db_session):

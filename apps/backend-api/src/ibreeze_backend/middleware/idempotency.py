@@ -38,11 +38,18 @@ def _is_auth_path(path: str) -> bool:
     return path.startswith("/api/v1/auth/") or path.startswith("/admin/api/v1/auth/")
 
 
+def _audience_from_path(path: str) -> str:
+    if path.startswith("/admin/"):
+        return "ibreeze-admin"
+    return "ibreeze-desktop"
+
+
 def _principal_id(request: Request) -> uuid.UUID | None:
     authorization = request.headers.get("authorization", "")
     if not authorization.startswith("Bearer "):
         return None
-    payload = verify_token(authorization[7:])
+    audience = _audience_from_path(request.url.path)
+    payload = verify_token(authorization[7:], expected_audience=audience)
     if payload is None:
         return None
     try:

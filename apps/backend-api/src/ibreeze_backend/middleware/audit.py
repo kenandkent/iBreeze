@@ -71,7 +71,8 @@ def _extract_user_id(request: Request) -> _uuid.UUID | None:
     try:
         from ibreeze_backend.auth.service import verify_token
 
-        payload = verify_token(auth[7:])
+        audience = "ibreeze-admin" if request.url.path.startswith("/admin/") else "ibreeze-desktop"
+        payload = verify_token(auth[7:], expected_audience=audience)
         if payload and "sub" in payload:
             return _uuid.UUID(payload["sub"])
     except Exception:

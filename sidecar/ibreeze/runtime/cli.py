@@ -162,3 +162,138 @@ def _minimal_environment() -> dict[str, str]:
         for key, value in os.environ.items()
         if key in allowed
     }
+
+
+class CodexCliAdapter:
+    """Adapter for OpenAI Codex CLI."""
+
+    def __init__(self, executable: str | Path | None = None) -> None:
+        path = executable or shutil.which("codex")
+        if path is None:
+            raise ValueError("CODEX_EXECUTABLE_NOT_FOUND")
+        self._adapter = CliAdapter(path)
+
+    async def probe(self, *, timeout_seconds: float = 5) -> AgentProbe:
+        return await probe_agent("codex_cli", timeout_seconds=timeout_seconds)
+
+    async def run(
+        self,
+        prompt: str,
+        *,
+        workspace: str | Path,
+        model: str = "codex-mini-latest",
+        approval_mode: str = "suggest",
+        timeout_seconds: float = 300,
+    ) -> ProcessResult:
+        arguments = [
+            "--model", model,
+            "--approval-mode", approval_mode,
+            "--quiet",
+            prompt,
+        ]
+        return await self._adapter.run(
+            arguments,
+            workspace=workspace,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def cancel(self, process: asyncio.subprocess.Process) -> None:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError:
+            process.kill()
+
+
+class ClaudeCodeAdapter:
+    """Adapter for Anthropic Claude Code CLI."""
+
+    def __init__(self, executable: str | Path | None = None) -> None:
+        path = executable or shutil.which("claude")
+        if path is None:
+            raise ValueError("CLAUDE_EXECUTABLE_NOT_FOUND")
+        self._adapter = CliAdapter(path)
+
+    async def probe(self, *, timeout_seconds: float = 5) -> AgentProbe:
+        return await probe_agent("claude_code", timeout_seconds=timeout_seconds)
+
+    async def run(
+        self,
+        prompt: str,
+        *,
+        workspace: str | Path,
+        model: str = "claude-sonnet-4-20250514",
+        permission_mode: str = "acceptEdits",
+        timeout_seconds: float = 300,
+    ) -> ProcessResult:
+        arguments = [
+            "--model", model,
+            "--permission-mode", permission_mode,
+            "--print",
+            prompt,
+        ]
+        return await self._adapter.run(
+            arguments,
+            workspace=workspace,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def cancel(self, process: asyncio.subprocess.Process) -> None:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError:
+            process.kill()
+
+
+class OpenCodeAdapter:
+    """Adapter for OpenCode CLI."""
+
+    def __init__(self, executable: str | Path | None = None) -> None:
+        path = executable or shutil.which("opencode")
+        if path is None:
+            raise ValueError("OPENCODE_EXECUTABLE_NOT_FOUND")
+        self._adapter = CliAdapter(path)
+
+    async def probe(self, *, timeout_seconds: float = 5) -> AgentProbe:
+        return await probe_agent("opencode", timeout_seconds=timeout_seconds)
+
+    async def run(
+        self,
+        prompt: str,
+        *,
+        workspace: str | Path,
+        model: str = "anthropic/claude-sonnet-4-20250514",
+        timeout_seconds: float = 300,
+    ) -> ProcessResult:
+        arguments = [
+            "--model", model,
+            "--non-interactive",
+            prompt,
+        ]
+        return await self._adapter.run(
+            arguments,
+            workspace=workspace,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def cancel(self, process: asyncio.subprocess.Process) -> None:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError:
+            process.kill()
+
+
+def create_adapter(
+    adapter_type: AdapterName,
+    executable: str | Path | None = None,
+) -> CodexCliAdapter | ClaudeCodeAdapter | OpenCodeAdapter:
+    """Factory function to create the appropriate CLI adapter."""
+    adapters = {
+        "codex_cli": CodexCliAdapter,
+        "claude_code": ClaudeCodeAdapter,
+        "opencode": OpenCodeAdapter,
+    }
+    adapter_cls = adapters[adapter_type]
+    return adapter_cls(executable)

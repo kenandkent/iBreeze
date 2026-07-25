@@ -65,7 +65,7 @@ export function usePublishAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<AgentCatalogItem>(`${API_BASE}/agents/${id}/revisions`, { method: 'POST' }),
+      fetchJson<AgentCatalogItem>(`${API_BASE}/agents/${id}/publish`, { method: 'POST' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   });
 }

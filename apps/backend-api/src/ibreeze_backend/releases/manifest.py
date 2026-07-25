@@ -6,24 +6,32 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.models.skill import Skill
+from ibreeze_backend.models.skill import Skill, SkillVersion
 
 
 async def build_manifest(db: AsyncSession, sequence: int) -> dict:
-    """Generate manifest from active skills with content hashes."""
-    result = await db.execute(select(Skill).where(Skill.status.in_(["published", "active"])))
+    """Generate manifest from published skills with content hashes."""
+    result = await db.execute(select(Skill).where(Skill.status == "published"))
     skills = result.scalars().all()
 
     resources = []
     for skill in skills:
+        version_result = await db.execute(
+            select(SkillVersion)
+            .where(SkillVersion.skill_id == skill.id)
+            .order_by(SkillVersion.created_at.desc())
+            .limit(1)
+        )
+        latest_version = version_result.scalar_one_or_none()
+        content_sha256 = latest_version.content_sha256 if latest_version else ""
+
         resources.append(
             {
                 "id": str(skill.id),
-                "name": skill.name,
+                "key": skill.key,
+                "display_name": skill.display_name,
                 "version": skill.version,
-                "category": skill.category,
-                "compatibility": skill.compatibility,
-                "content_sha256": skill.checksum or "",
+                "content_sha256": content_sha256,
             }
         )
 

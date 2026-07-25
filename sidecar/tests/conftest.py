@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import aiosqlite
 import pytest
@@ -12,6 +13,19 @@ import pytest_asyncio
 
 from ibreeze.company import _sha256
 from ibreeze.local_db import LocalDB
+
+
+@pytest.fixture
+def mock_db_session():
+    """Create a mock async database session."""
+    session = AsyncMock()
+    session.execute = AsyncMock()
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    session.delete = MagicMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    return session
 
 
 @pytest_asyncio.fixture
