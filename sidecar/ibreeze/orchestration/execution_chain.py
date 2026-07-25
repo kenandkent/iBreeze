@@ -24,8 +24,11 @@ async def request_plan_confirmation(
     task_id: str,
     plan_version_id: str,
     employee_id: str,
+    ttl_seconds: int = 600,
 ) -> dict[str, Any]:
     """Request user confirmation for a company plan."""
+    from datetime import timedelta
+
     cursor = await db.execute(
         """SELECT id, status FROM company_plan_versions
            WHERE id = ? AND company_id = ? AND company_task_id = ?""",
@@ -43,6 +46,9 @@ async def request_plan_confirmation(
     )
     target_sha256 = hashlib.sha256(target_json.encode()).hexdigest()
     now = _now()
+    expires_at = (
+        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     # Find an existing active run for this task to link the approval
     cursor = await db.execute(
@@ -59,8 +65,8 @@ async def request_plan_confirmation(
         """INSERT INTO human_approvals
            (id, company_id, run_id, approval_type, target_json, target_sha256,
             status, requested_at, expires_at, version)
-           VALUES (?, ?, ?, 'external_write', ?, ?, 'pending', ?, ?, 1)""",
-        (approval_id, company_id, run_id, target_json, target_sha256, now, now),
+           VALUES (?, ?, ?, 'uncertain_recovery', ?, ?, 'pending', ?, ?, 1)""",
+        (approval_id, company_id, run_id, target_json, target_sha256, now, expires_at),
     )
     await db.commit()
 
@@ -101,7 +107,7 @@ async def confirm_plan(
     if approval:
         target = json.loads(dict(approval)["target_json"])
         plan_version_id = target.get("plan_version_id", "")
-        plan_status = "confirmed" if decision == "approved" else "rejected"
+        plan_status = "approved" if decision == "approved" else "rejected"
         await db.execute(
             """UPDATE company_plan_versions
                SET status = ?, confirmed_at = ?

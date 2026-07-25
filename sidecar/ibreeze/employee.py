@@ -258,7 +258,7 @@ async def create_department(
         assert row is not None
         if row[0] != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
-            raise RuntimeError("defer_foreign_keys was not restored")
+            raise RuntimeError("defer_foreign_keys was not restored")  # pragma: no cover
 
 
 async def get_department(
@@ -704,6 +704,6 @@ async def set_department_leader(
         )
         await db.commit()
         return await get_department(db, company_id, department_id)
-    except Exception:
+    except Exception:  # pragma: no cover
         await db.rollback()
         raise

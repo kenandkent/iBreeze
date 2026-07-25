@@ -43,7 +43,7 @@ class RoleBehavior:
         return {
             "action": "organize_work",
             "task_id": task.get("id"),
-            "department_id": context.get("department_id", ""),
+            "department_id": self.department_id,
             "analysis": f"部门负责人组织本部门工作: {task.get('title', '')}",
             "sub_tasks": [],
         }

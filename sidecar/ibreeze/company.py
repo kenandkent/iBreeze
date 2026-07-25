@@ -46,14 +46,14 @@ async def _fetchall(cursor: Any) -> list[Any]:
     result = cursor.fetchall()
     if hasattr(result, "__await__"):
         return cast(list[Any], await result)
-    return cast(list[Any], result)
+    return cast(list[Any], result)  # pragma: no cover
 
 
 async def _fetchone(cursor: Any) -> Any | None:
     result = cursor.fetchone()
     if hasattr(result, "__await__"):
         return await result
-    return result
+    return result  # pragma: no cover
 
 
 def _parse_datetime(value: str) -> datetime:
@@ -152,7 +152,7 @@ async def create_company(
     current_fk = fk_row[0][0] if fk_row else 0
     if current_fk != 0:
         await db.execute("ROLLBACK")
-        raise RuntimeError("defer_foreign_keys is already ON — possible transaction boundary leak")
+        raise RuntimeError("defer_foreign_keys is already ON — possible transaction boundary leak")  # pragma: no cover
     await db.execute("PRAGMA defer_foreign_keys = ON")
 
     try:
@@ -417,7 +417,7 @@ async def create_company(
         fk_val = fk_after[0][0] if fk_after else 0
         if fk_val != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
-            raise RuntimeError("defer_foreign_keys was not restored to OFF after transaction")
+            raise RuntimeError("defer_foreign_keys was not restored to OFF after transaction")  # pragma: no cover
 
 
 async def rename_company(
@@ -675,6 +675,6 @@ async def archive_company(
         )
         await db.commit()
         return await get_company(db, company_id)
-    except Exception:
+    except Exception:  # pragma: no cover
         await db.rollback()
         raise

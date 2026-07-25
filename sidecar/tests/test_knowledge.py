@@ -15,6 +15,7 @@ from ibreeze.knowledge import (
     list_knowledge,
     permitted_knowledge_ids,
     remove_knowledge,
+    search_knowledge,
 )
 from ibreeze.schemas import (
     CompanyCreate,
@@ -196,7 +197,7 @@ async def test_cross_company_source_is_rejected_by_composite_fk(
 ) -> None:
     first, _, source_event = await _scope(db, published_profile, "来源公司")
     second, _, _ = await _scope(db, published_profile, "目标公司")
-    with pytest.raises(aiosqlite.IntegrityError):
+    with pytest.raises(ValueError, match="SOURCE_EVENT_COMPANY_MISMATCH"):
         await import_knowledge(
             db,
             second.id,
@@ -209,3 +210,158 @@ async def test_cross_company_source_is_rejected_by_composite_fk(
         )
     assert await list_knowledge(db, second.id) == []
     assert first.id != second.id
+
+
+@pytest.mark.asyncio
+async def test_import_to_nonexistent_company(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
+        await import_knowledge(
+            db,
+            "00000000-0000-4000-8000-000000000000",
+            KnowledgeItemCreate(
+                title="不存在的公司",
+                content="应该失败",
+                visibility=KnowledgeVisibility.COMPANY,
+                source_message_event_id="00000000-0000-4000-8000-000000000001",
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_import_to_archived_company(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, source_event = await _scope(db, published_profile, "归档公司")
+    await db.execute(
+        "UPDATE companies SET status='archived' WHERE id=?", (company.id,)
+    )
+    await db.commit()
+    with pytest.raises(ValueError, match="COMPANY_ARCHIVED"):
+        await import_knowledge(
+            db,
+            company.id,
+            KnowledgeItemCreate(
+                title="归档后导入",
+                content="应该失败",
+                visibility=KnowledgeVisibility.COMPANY,
+                source_message_event_id=source_event,
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_cross_company_artifact_is_rejected(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    first, _, _ = await _scope(db, published_profile, "制品来源公司")
+    second, _, _ = await _scope(db, published_profile, "制品目标公司")
+    fake_artifact = "00000000-0000-4000-8000-000000000001"
+    with pytest.raises(ValueError, match="SOURCE_ARTIFACT_COMPANY_MISMATCH"):
+        await import_knowledge(
+            db,
+            second.id,
+            KnowledgeItemCreate(
+                title="越权制品",
+                content="不能导入",
+                visibility=KnowledgeVisibility.COMPANY,
+                source_artifact_id=fake_artifact,
+            ),
+        )
+    assert await list_knowledge(db, second.id) == []
+    assert first.id != second.id
+
+
+@pytest.mark.asyncio
+async def test_list_knowledge_with_pagination(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, source_event = await _scope(db, published_profile, "分页公司")
+    items = []
+    for i in range(3):
+        item = await import_knowledge(
+            db,
+            company.id,
+            KnowledgeItemCreate(
+                title=f"分页条目-{i}",
+                content=f"分页内容-{i}",
+                visibility=KnowledgeVisibility.COMPANY,
+                source_message_event_id=source_event,
+            ),
+        )
+        items.append(item)
+    all_items = await list_knowledge(db, company.id)
+    assert len(all_items) == 3
+    first_page = await list_knowledge(db, company.id, limit=2)
+    assert len(first_page) == 2
+    last_item = first_page[-1]
+    second_page = await list_knowledge(
+        db, company.id, limit=2, after=(last_item.created_at.isoformat(), last_item.id)
+    )
+    assert len(second_page) == 1
+    assert second_page[0].id == items[0].id
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, source_event = await _scope(db, published_profile, "搜索测试公司")
+    item = await import_knowledge(
+        db,
+        company.id,
+        KnowledgeItemCreate(
+            title="代码审查规范",
+            content="所有代码必须经过两人审查",
+            visibility=KnowledgeVisibility.COMPANY,
+            source_message_event_id=source_event,
+        ),
+    )
+    results = await search_knowledge(
+        db,
+        company.id,
+        "代码审查",
+        run_id="test-run-1",
+        employee_id=company.general_manager_employee_id,
+        department_id=None,
+        company_task_id=None,
+    )
+    assert len(results) >= 0
+    log_row = await (
+        await db.execute(
+            "SELECT COUNT(*) FROM knowledge_access_logs WHERE run_id=?",
+            ("test-run-1",),
+        )
+    ).fetchone()
+    assert log_row[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_empty_candidates(
+    db: aiosqlite.Connection,
+    published_profile: str,
+) -> None:
+    company, _, _ = await _scope(db, published_profile, "空搜索公司")
+    results = await search_knowledge(
+        db,
+        company.id,
+        "无关查询",
+        run_id="test-run-2",
+        employee_id="unknown-employee",
+        department_id=None,
+        company_task_id=None,
+    )
+    assert results == []
+    log_row = await (
+        await db.execute(
+            "SELECT COUNT(*) FROM knowledge_access_logs WHERE run_id=?",
+            ("test-run-2",),
+        )
+    ).fetchone()
+    assert log_row[0] == 1

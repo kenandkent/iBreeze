@@ -880,6 +880,12 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
     created_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
     UNIQUE(id, company_id),
+    FOREIGN KEY(source_artifact_id, company_id) REFERENCES artifacts(id, company_id),
+    FOREIGN KEY(source_message_event_id, company_id) REFERENCES domain_events(event_id, company_id),
+    FOREIGN KEY(owner_employee_id, company_id) REFERENCES employees(id, company_id),
+    FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
+    FOREIGN KEY(task_id, company_id) REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(embedding_generation_id, company_id) REFERENCES embedding_generations(id, company_id),
     CHECK((source_artifact_id IS NULL) <> (source_message_event_id IS NULL)),
     CHECK(
         (visibility = 'company' AND department_id IS NULL AND task_id IS NULL AND owner_employee_id IS NULL)

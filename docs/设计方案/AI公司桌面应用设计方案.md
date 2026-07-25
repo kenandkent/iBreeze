@@ -392,7 +392,7 @@ must_change_password = true
 - `agent_cli`：选择 Agent Catalog 项和该 Agent 可用模型。
 - `api_model`：选择 API Provider 和模型；任务由 Built-in Agent Runtime 驱动完整 Agent Loop。
 
-底座是本地可复用模板，不属于任何公司；职员实例才属于公司。
+底座是本地可复用模板，属于创建它的公司（`company_id` 隔离）；不同公司各自维护自己的底座，不共享。职员实例是底座在具体部门中的运行时实例。
 
 ### 9.2 版本字段
 

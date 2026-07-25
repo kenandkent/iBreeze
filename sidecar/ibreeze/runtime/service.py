@@ -45,9 +45,10 @@ async def probe_provider(
     company_id: str,
     provider_id: str,
 ) -> dict[str, object]:
-    """Check if provider is reachable."""
+    """Check if provider (base profile) is available."""
     cursor = await db.execute(
-        "SELECT id FROM employee_base_profiles WHERE employee_id = ? AND company_id = ?",
+        """SELECT p.id FROM employee_base_profiles p
+           WHERE p.id = ? AND p.company_id = ? AND p.status = 'active'""",
         (provider_id, company_id),
     )
     profile = await cursor.fetchone()
@@ -60,7 +61,12 @@ async def list_available_models(
 ) -> list[dict[str, object]]:
     """List all available models with status."""
     cursor = await db.execute(
-        "SELECT employee_id, agent_cli, api_model FROM employee_base_profiles WHERE company_id = ? AND status = 'published'",
+        """SELECT p.id AS profile_id, p.name, v.profile_type,
+                  v.runtime_binding_json
+           FROM employee_base_profiles p
+           JOIN employee_base_profile_versions v ON v.id = p.current_version_id
+           WHERE p.company_id = ? AND p.status = 'active'
+             AND v.status = 'published'""",
         (company_id,),
     )
     rows = await cursor.fetchall()
@@ -213,6 +219,8 @@ async def resume_run(
     run_id: str,
 ) -> dict[str, object]:
     """Resume a paused/waiting run."""
+    from ibreeze.state_machine import transition
+
     now = _now()
 
     await db.execute("BEGIN IMMEDIATE")
@@ -230,6 +238,7 @@ async def resume_run(
             raise ValueError("STATE_TRANSITION_INVALID")
 
         resume_to = run["resume_state"] or "running"
+        transition("AgentRun", run["status"], resume_to)
 
         cursor = await db.execute(
             """UPDATE agent_runs

@@ -323,7 +323,6 @@ class TestListCompanyTasks:
         assert tasks == []
 
 
-@pytest.mark.asyncio
 class TestStateTransitionFunction:
     """Generic state machine transition validation."""
 

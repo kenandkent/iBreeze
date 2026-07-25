@@ -1148,13 +1148,21 @@ class RPCServer:
 
     async def _task_confirm_plan(self, params: dict[str, Any]) -> object:
         from .task.service import confirm_plan
+        from .orchestration.dispatcher import dispatch_company_task
 
-        return await confirm_plan(
+        result = await confirm_plan(
             self._connection,
             params["company_id"],
             params["task_id"],
             params["employee_id"],
         )
+        # Trigger dispatch: parse plan → create dept/emp tasks → enqueue runs
+        dispatch_result = await dispatch_company_task(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+        )
+        return {**result, "dispatch": dispatch_result}
 
     async def _task_request_plan_revision(self, params: dict[str, Any]) -> object:
         from .task.service import request_plan_revision
@@ -1369,15 +1377,25 @@ class RPCServer:
         now = _now()
         await self._connection.execute(
             "INSERT INTO department_responsibilities "
-            "(id, department_id, company_id, title, description, sort_order, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(id, department_id, company_id, responsibility_key, name, description, "
+            "accepted_task_types_json, required_capability_tags_json, "
+            "deliverable_types_json, quality_gates_json, "
+            "upstream_keys_json, downstream_keys_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 rid,
                 params["department_id"],
                 params["company_id"],
-                params["title"],
+                params["responsibility_key"],
+                params["name"],
                 params.get("description", ""),
-                params.get("sort_order", 0),
+                params.get("accepted_task_types_json", "[]"),
+                params.get("required_capability_tags_json", "[]"),
+                params.get("deliverable_types_json", "[]"),
+                params.get("quality_gates_json", "[]"),
+                params.get("upstream_keys_json", "[]"),
+                params.get("downstream_keys_json", "[]"),
+                now,
                 now,
             ),
         )
@@ -1388,12 +1406,12 @@ class RPCServer:
         now = _now()
         await self._connection.execute(
             "UPDATE department_responsibilities "
-            "SET title=?, description=?, sort_order=? "
+            "SET name=?, description=?, updated_at=? "
             "WHERE id=? AND company_id=?",
             (
-                params["title"],
+                params["name"],
                 params.get("description", ""),
-                params.get("sort_order", 0),
+                now,
                 params["id"],
                 params["company_id"],
             ),
@@ -1435,7 +1453,7 @@ class RPCServer:
 
     async def _artifact_list(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM artifacts WHERE company_id=? AND task_id=? "
+            "SELECT * FROM artifacts WHERE company_id=? AND company_task_id=? "
             "ORDER BY created_at DESC",
             (params["company_id"], params["task_id"]),
         )
@@ -1463,7 +1481,7 @@ class RPCServer:
     async def _workspace_apply(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='applied', applied_at=? "
+            "UPDATE task_workspaces SET status='applied', updated_at=? "
             "WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
@@ -1473,7 +1491,7 @@ class RPCServer:
     async def _workspace_abandon(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='abandoned', abandoned_at=? "
+            "UPDATE task_workspaces SET status='abandoned', updated_at=? "
             "WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
@@ -1483,7 +1501,7 @@ class RPCServer:
     async def _workspace_cleanup_task(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='cleaned', cleaned_at=? "
+            "UPDATE task_workspaces SET status='abandoned', cleaned_at=? "
             "WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
@@ -1499,33 +1517,34 @@ class RPCServer:
         now = _now()
         await self._connection.execute(
             "INSERT INTO review_reports "
-            "(id, assignment_id, company_id, artifact_id, reviewer_employee_id, "
-            "verdict, summary, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, company_id, assignment_id, reviewer_run_id, verdict, "
+            "report_artifact_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 rid,
-                params["assignment_id"],
                 params["company_id"],
-                params["artifact_id"],
-                params["reviewer_employee_id"],
+                params["assignment_id"],
+                params["reviewer_run_id"],
                 params["verdict"],
-                params.get("summary", ""),
+                params["report_artifact_id"],
                 now,
             ),
         )
         await self._connection.execute(
-            "UPDATE review_assignments SET status='completed', completed_at=? "
-            "WHERE id=?",
-            (now, params["assignment_id"]),
+            "UPDATE review_assignments SET status='submitted', submitted_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["assignment_id"], params["company_id"]),
         )
         await self._connection.commit()
         return {"id": rid, "created_at": now}
 
     async def _review_list_issues(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM review_issues WHERE company_id=? AND artifact_id=? "
-            "ORDER BY created_at DESC",
-            (params["company_id"], params["artifact_id"]),
+            "SELECT ri.* FROM review_issues ri "
+            "JOIN review_reports rr ON rr.id = ri.review_report_id AND rr.company_id = ri.company_id "
+            "WHERE ri.company_id=? AND rr.report_artifact_id=? "
+            "ORDER BY ri.created_at DESC",
+            (params["company_id"], params["report_artifact_id"]),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows] if rows else []
@@ -1537,29 +1556,29 @@ class RPCServer:
         now = _now()
         await self._connection.execute(
             "INSERT INTO review_assignments "
-            "(id, company_id, artifact_id, task_id, reviewer_employee_id, "
-            "status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, 'assigned', ?)",
+            "(id, company_id, artifact_id, reviewer_employee_id, review_round, "
+            "reviewed_sha256, status, assigned_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'assigned', ?)",
             (
                 aid,
                 params["company_id"],
                 params["artifact_id"],
-                params["task_id"],
                 params["reviewer_employee_id"],
+                params.get("review_round", 1),
+                params.get("reviewed_sha256", ""),
                 now,
             ),
         )
         await self._connection.commit()
-        return {"id": aid, "created_at": now}
+        return {"id": aid, "assigned_at": now}
 
     async def _review_resolve_issue(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE review_issues SET status='resolved', resolved_at=?, "
-            "resolution_note=? WHERE id=? AND company_id=?",
+            "UPDATE review_issues SET status='resolved', updated_at=?, "
+            "version=version+1 WHERE id=? AND company_id=?",
             (
                 now,
-                params.get("resolution_note", ""),
                 params["issue_id"],
                 params["company_id"],
             ),
@@ -1572,7 +1591,7 @@ class RPCServer:
     async def _approval_list_pending(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
             "SELECT * FROM human_approvals WHERE company_id=? AND status='pending' "
-            "ORDER BY created_at DESC",
+            "ORDER BY requested_at DESC",
             (params["company_id"],),
         )
         rows = await cursor.fetchall()
@@ -1580,13 +1599,14 @@ class RPCServer:
 
     async def _approval_resolve(self, params: dict[str, Any]) -> object:
         now = _now()
+        decision = params["decision"]
+        new_status = "allowed" if decision in ("approve", "allowed") else "denied"
         await self._connection.execute(
-            "UPDATE human_approvals SET status=?, resolved_at=?, resolution_note=? "
+            "UPDATE human_approvals SET status=?, resolved_at=? "
             "WHERE id=? AND company_id=?",
             (
-                params["decision"],
+                new_status,
                 now,
-                params.get("resolution_note", ""),
                 params["approval_id"],
                 params["company_id"],
             ),
@@ -1597,42 +1617,38 @@ class RPCServer:
     # ── Knowledge ─────────────────────────────────────────────────────
 
     async def _knowledge_import(self, params: dict[str, Any]) -> object:
-        import uuid as _uuid_mod
+        from ibreeze.knowledge.service import import_knowledge
+        from ibreeze.schemas import KnowledgeItemCreate, KnowledgeVisibility
 
-        kid = str(_uuid_mod.uuid4())
-        now = _now()
-        await self._connection.execute(
-            "INSERT INTO knowledge_items "
-            "(id, company_id, title, content, source_type, visibility, "
-            "status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-            (
-                kid,
-                params["company_id"],
-                params["title"],
-                params["content"],
-                params.get("source_type", "manual"),
-                params.get("visibility", "company"),
-                now,
-                now,
-            ),
+        data = KnowledgeItemCreate(
+            title=params["title"],
+            content=params["content"],
+            visibility=KnowledgeVisibility(params.get("visibility", "company")),
+            source_artifact_id=params.get("source_artifact_id"),
+            source_message_event_id=params.get("source_message_event_id"),
+            owner_employee_id=params.get("owner_employee_id"),
+            department_id=params.get("department_id"),
+            task_id=params.get("task_id"),
         )
-        await self._connection.commit()
-        return {"id": kid, "created_at": now}
+        result = await import_knowledge(self._connection, params["company_id"], data)
+        return {"id": result.id, "created_at": result.created_at.isoformat()}
 
     async def _knowledge_remove(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE knowledge_items SET status='archived', updated_at=? "
-            "WHERE id=? AND company_id=?",
-            (now, params["item_id"], params["company_id"]),
+            "DELETE FROM knowledge_fts WHERE knowledge_id=? AND company_id=?",
+            (params["item_id"], params["company_id"]),
+        )
+        await self._connection.execute(
+            "DELETE FROM knowledge_items WHERE id=? AND company_id=?",
+            (params["item_id"], params["company_id"]),
         )
         await self._connection.commit()
-        return {"archived_at": now}
+        return {"removed": True, "removed_at": now}
 
     async def _knowledge_list(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM knowledge_items WHERE company_id=? AND status='active' "
+            "SELECT * FROM knowledge_items WHERE company_id=? "
             "ORDER BY created_at DESC",
             (params["company_id"],),
         )
@@ -1642,11 +1658,11 @@ class RPCServer:
     async def _knowledge_search(self, params: dict[str, Any]) -> object:
         query = params["query"]
         cursor = await self._connection.execute(
-            "SELECT ki.* FROM knowledge_items ki "
-            "JOIN knowledge_fts fts ON ki.id = fts.rowid "
-            "WHERE knowledge_fts MATCH ? AND ki.company_id=? AND ki.status='active' "
-            "LIMIT 20",
-            (query, params["company_id"]),
+            "SELECT ki.* FROM knowledge_fts fts "
+            "JOIN knowledge_items ki ON ki.id=fts.knowledge_id AND ki.company_id=fts.company_id "
+            "WHERE fts.company_id=? AND knowledge_fts MATCH ? "
+            "ORDER BY bm25(knowledge_fts) LIMIT 20",
+            (params["company_id"], query),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows] if rows else []
@@ -1660,9 +1676,10 @@ class RPCServer:
         now = _now()
         await self._connection.execute(
             "INSERT INTO backup_records "
-            "(id, company_id, backup_type, status, file_path, sha256, created_at) "
-            "VALUES (?, ?, ?, 'creating', '', '', ?)",
-            (bid, params["company_id"], params.get("backup_type", "manual"), now),
+            "(id, backup_type, archive_path, archive_size, archive_sha256, "
+            "manifest_json, status, created_at) "
+            "VALUES (?, ?, ?, 0, '', '{}', 'creating', ?)",
+            (bid, params.get("backup_type", "manual"), params.get("archive_path", ""), now),
         )
         await self._connection.commit()
         return {"id": bid, "status": "creating", "created_at": now}
@@ -1670,17 +1687,16 @@ class RPCServer:
     async def _backup_restore(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE backup_records SET status='restored', restored_at=? "
-            "WHERE id=? AND company_id=?",
-            (now, params["backup_id"], params["company_id"]),
+            "UPDATE backup_records SET status='completed', completed_at=? "
+            "WHERE id=?",
+            (now, params["backup_id"]),
         )
         await self._connection.commit()
         return {"restored_at": now}
 
     async def _backup_list(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM backup_records WHERE company_id=? ORDER BY created_at DESC",
-            (params["company_id"],),
+            "SELECT * FROM backup_records ORDER BY created_at DESC",
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows] if rows else []
@@ -1689,20 +1705,32 @@ class RPCServer:
 
     async def _settings_get(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM local_preferences WHERE key LIKE ?",
-            (params.get("prefix", "%"),),
+            "SELECT cli_global_concurrency, log_retention_days, version "
+            "FROM local_preferences WHERE singleton_id=1",
         )
-        rows = await cursor.fetchall()
-        return {r["key"]: r["value"] for r in rows} if rows else {}
+        row = await cursor.fetchone()
+        if row is None:
+            return {}
+        return dict(row)
 
     async def _settings_update(self, params: dict[str, Any]) -> object:
         now = _now()
-        for key, value in params["settings"].items():
-            await self._connection.execute(
-                "INSERT OR REPLACE INTO local_preferences (key, value, updated_at) "
-                "VALUES (?, ?, ?)",
-                (key, value, now),
-            )
+        settings = params["updates"]
+        sets = []
+        vals: list[Any] = []
+        for key in ("cli_global_concurrency", "log_retention_days"):
+            if key in settings:
+                sets.append(f"{key}=?")
+                vals.append(settings[key])
+        if not sets:
+            return {"updated_at": now}
+        sets.append("updated_at=?")
+        vals.append(now)
+        sets.append("version=version+1")
+        await self._connection.execute(
+            f"UPDATE local_preferences SET {', '.join(sets)} WHERE singleton_id=1",
+            tuple(vals),
+        )
         await self._connection.commit()
         return {"updated_at": now}
 
@@ -1719,7 +1747,7 @@ class RPCServer:
     async def _event_replay(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
             "SELECT * FROM domain_events WHERE company_id=? "
-            "ORDER BY created_at DESC LIMIT ?",
+            "ORDER BY occurred_at DESC LIMIT ?",
             (params["company_id"], params.get("limit", 100)),
         )
         rows = await cursor.fetchall()
@@ -1732,7 +1760,7 @@ class RPCServer:
 
     async def _catalog_get_active_release(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM catalog_cache_releases WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+            "SELECT * FROM catalog_cache_releases WHERE status = 'active' ORDER BY downloaded_at DESC LIMIT 1"
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
@@ -1747,23 +1775,36 @@ class RPCServer:
         return []
 
     async def _catalog_install_skill(self, params: dict[str, Any]) -> object:
+        package_sha256 = params.get("package_sha256", "")
+        if len(package_sha256) != 64:
+            raise ValueError("INVALID_PACKAGE_SHA256: expected 64 hex chars")
         now = _now()
-        skill_id = str(uuid.uuid4())
         await self._connection.execute(
-            "INSERT INTO installed_skill_versions (id, skill_id, skill_version, installed_at, status) VALUES (?, ?, ?, ?, 'active')",
-            (skill_id, params["skill_id"], params["skill_version"], now),
+            "INSERT INTO installed_skill_versions "
+            "(skill_version_id, skill_id, version, package_path, package_sha256, "
+            "catalog_release_id, status, installed_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'installed', ?)",
+            (
+                params["skill_version_id"],
+                params["skill_id"],
+                params["skill_version"],
+                params.get("package_path", ""),
+                package_sha256,
+                params.get("catalog_release_id", ""),
+                now,
+            ),
         )
         await self._connection.commit()
-        return {"installed": True, "skill_id": skill_id, "installed_at": now}
+        return {"installed": True, "skill_id": params["skill_id"], "installed_at": now}
 
     async def _catalog_remove_skill(self, params: dict[str, Any]) -> object:
-        now = _now()
         await self._connection.execute(
-            "UPDATE installed_skill_versions SET status = 'removed', removed_at = ? WHERE skill_id = ?",
-            (now, params["skill_id"]),
+            "UPDATE installed_skill_versions SET status='disabled' "
+            "WHERE skill_id=?",
+            (params["skill_id"],),
         )
         await self._connection.commit()
-        return {"removed": True, "removed_at": now}
+        return {"removed": True}
 
     async def _catalog_verify_cache(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(

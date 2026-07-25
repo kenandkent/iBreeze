@@ -41,6 +41,7 @@ from ibreeze.runtime.model_loop import (
     ToolPermission,
 )
 from ibreeze.runtime.process_supervisor import ProcessSupervisor, get_supervisor
+from ibreeze.runtime.run_executor import execute_single_run, run_consumer_loop
 from ibreeze.runtime.scheduler import (
     acquire_lease,
     dequeue_next,
@@ -93,6 +94,7 @@ __all__ = [
     "create_transport",
     "dequeue_next",
     "enqueue",
+    "execute_single_run",
     "get_status",
     "get_supervisor",
     "heartbeat_lease",
@@ -100,6 +102,7 @@ __all__ = [
     "probe_agent",
     "release_lease",
     "resume",
+    "run_consumer_loop",
     "start",
     "store_event",
     "update_fairness",

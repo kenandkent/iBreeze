@@ -35,9 +35,8 @@ async def compact_events(db: Any, run_id: str) -> dict[str, Any]:
     transcript_parts: list[str] = []
     for event in events:
         event_type: str = event["event_type"]
-        payload: dict[str, Any] = (
-            json.loads(event["payload_json"]) if event.get("payload_json") else {}
-        )
+        raw = event["payload_json"]
+        payload: dict[str, Any] = json.loads(raw) if raw else {}
 
         if event_type == "run.started":
             transcript_parts.append(

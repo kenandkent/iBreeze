@@ -79,6 +79,12 @@ async def start(
 
     effective_work_item = work_item_id or company_task_id
 
+    VALID_WORK_ITEM_TYPES = {
+        "interactive_turn", "company_plan", "employee_task", "review",
+        "verification", "repair", "merge", "summary",
+    }
+    work_item_type = run_purpose if run_purpose in VALID_WORK_ITEM_TYPES else "employee_task"
+
     # Create agent run record
     await db.execute(
         """INSERT INTO agent_runs
@@ -120,7 +126,7 @@ async def start(
         (
             _id(),
             company_id,
-            run_purpose,
+            work_item_type,
             effective_work_item,
             job_id,
             run_id,

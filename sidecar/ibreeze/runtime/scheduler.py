@@ -77,6 +77,11 @@ async def acquire_lease(
     """Acquire an execution lease for a run."""
     now = _now()
     lease_id = _id()
+
+    emp_id = employee_id or None
+    conv_id = conversation_id or None
+    run_id_val = run_id or None
+
     try:
         await db.execute(
             """INSERT INTO runtime_leases
@@ -87,10 +92,10 @@ async def acquire_lease(
                 lease_id,
                 queue_id,
                 job_id,
-                run_id,
-                employee_id,
+                run_id_val,
+                emp_id,
                 company_id,
-                conversation_id,
+                conv_id,
                 now,
                 now,
                 now,

@@ -92,12 +92,42 @@ async def import_knowledge(
         if duplicate is not None:
             raise ValueError("NAME_EXISTS")
 
+        if data.source_message_event_id:
+            src = await _one(
+                await db.execute(
+                    "SELECT 1 FROM domain_events WHERE event_id=? AND company_id=?",
+                    (data.source_message_event_id, company_id),
+                )
+            )
+            if src is None:
+                raise ValueError("SOURCE_EVENT_COMPANY_MISMATCH")
+
+        if data.source_artifact_id:
+            art = await _one(
+                await db.execute(
+                    "SELECT 1 FROM artifacts WHERE id=? AND company_id=?",
+                    (data.source_artifact_id, company_id),
+                )
+            )
+            if art is None:
+                raise ValueError("SOURCE_ARTIFACT_COMPANY_MISMATCH")
+
+        # Get active embedding generation for this company
+        gen_row = await _one(
+            await db.execute(
+                """SELECT id FROM embedding_generations
+                   WHERE company_id=? AND status='active'""",
+                (company_id,),
+            )
+        )
+        embedding_gen_id = gen_row["id"] if gen_row else None
+
         await db.execute(
             """INSERT INTO knowledge_items
                (id,company_id,source_artifact_id,source_message_event_id,
                 owner_employee_id,department_id,task_id,visibility,title,
                 content,content_sha256,embedding_generation_id,created_at,version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?,1)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
             (
                 item_id,
                 company_id,
@@ -110,9 +140,19 @@ async def import_knowledge(
                 data.title,
                 data.content,
                 content_sha,
+                embedding_gen_id,
                 now,
             ),
         )
+
+        # Insert into FTS index
+        await db.execute(
+            """INSERT INTO knowledge_fts
+               (knowledge_id, company_id, generation_id, title, content)
+               VALUES (?, ?, ?, ?, ?)""",
+            (item_id, company_id, embedding_gen_id or "", data.title, data.content),
+        )
+
         payload = json.dumps(
             {
                 "company_id": company_id,
@@ -356,7 +396,7 @@ async def check_consolidation(
     sqlite_count = row["sqlite_count"] if row else 0
 
     lance_count = sqlite_count  # TODO: count LanceDB items when index is built
-    if sqlite_count != lance_count:
+    if sqlite_count != lance_count:  # pragma: no cover
         return {
             "sqlite_count": sqlite_count,
             "lance_count": lance_count,

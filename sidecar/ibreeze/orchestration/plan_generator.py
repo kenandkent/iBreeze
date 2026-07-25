@@ -26,6 +26,8 @@ async def generate_company_plan(
     introduction: str,
     general_manager_office: str,
     departments: list[dict[str, Any]],
+    company_task_id: str,
+    generated_by_run_id: str,
 ) -> dict[str, Any]:
     """Generate a CompanyPlan based on company info and department structures.
 
@@ -83,14 +85,6 @@ async def generate_company_plan(
     canonical_json = json.dumps(sections, ensure_ascii=False, sort_keys=True)
     content_sha256 = hashlib.sha256(canonical_json.encode()).hexdigest()
 
-    # Look up the company's conversation to link the plan
-    cursor = await db.execute(
-        "SELECT company_conversation_id FROM companies WHERE id = ?",
-        (company_id,),
-    )
-    company_row = await cursor.fetchone()
-    company_conversation_id = dict(company_row)["company_conversation_id"] if company_row else ""
-
     version_id = _id()
     await db.execute(
         """INSERT INTO company_plan_versions
@@ -99,11 +93,11 @@ async def generate_company_plan(
            VALUES (?, ?, ?, 1, ?, ?, ?, 'draft', ?)""",
         (
             version_id,
-            plan_id,
+            company_task_id,
             company_id,
             canonical_json,
             content_sha256,
-            company_conversation_id,
+            generated_by_run_id,
             now,
         ),
     )

@@ -95,11 +95,11 @@ async def create_release_endpoint(
 
     logger.info(
         "create_release_success",
-        extra={"release_id": str(release.id), "sequence": release.release_sequence, "version": release.version},
+        extra={"release_id": str(release.id), "sequence": release.release_sequence, "version": body.version},
     )
     return {
         "id": str(release.id),
-        "version": release.version,
+        "version": body.version,
         "release_sequence": release.release_sequence,
         "status": release.status,
         "signing_key_id": kid,
@@ -129,7 +129,7 @@ async def publish_release_endpoint(
     logger.info("publish_release_success", extra={"release_id": str(release.id), "published_at": release.published_at})
     return {
         "id": str(release.id),
-        "version": release.version,
+        "version": release.minimum_client_version,
         "status": release.status,
         "published_at": release.published_at,
     }
@@ -248,10 +248,9 @@ async def get_release_endpoint(
         raise HTTPException(status_code=404, detail="Release not found")
     return {
         "id": str(release.id),
-        "version": release.version,
-        "manifest": release.manifest,
+        "version": release.minimum_client_version,
+        "manifest_object_key": release.manifest_object_key,
         "status": release.status,
-        "notes": release.notes,
         "release_sequence": release.release_sequence,
         "signing_key_id": release.signing_key_id,
         "published_at": release.published_at,

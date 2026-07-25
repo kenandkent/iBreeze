@@ -98,8 +98,10 @@ async def check_skill(
 ) -> CheckResult:
     """Check 4: Required skill installed."""
     cursor = await db.execute(
-        """SELECT id FROM skill_installations
-           WHERE skill_id=? AND company_id=? AND status='active'""",
+        """SELECT 1 FROM profile_skill_bindings psb
+           JOIN employee_base_profile_versions epv ON epv.id = psb.profile_version_id
+           JOIN employee_base_profiles ebp ON ebp.id = epv.profile_id
+           WHERE psb.skill_id = ? AND ebp.company_id = ? AND epv.status = 'published'""",
         (skill_id, company_id),
     )
     row = await cursor.fetchone()

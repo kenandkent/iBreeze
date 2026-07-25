@@ -21,6 +21,7 @@ from ibreeze.review.service import (
     create_review_issue,
     list_review_issues,
     resolve_review_issue,
+    start_fixing_review_issue,
 )
 from ibreeze.schemas import (
     CompanyCreate,
@@ -309,6 +310,12 @@ class TestIssueCloseGuard:
             severity="blocker",
             description="严重问题",
         )
+        fixing = await start_fixing_review_issue(
+            db,
+            company.id,
+            issue_id=issue["id"],
+        )
+        assert fixing["status"] == "fixing"
         resolved = await resolve_review_issue(
             db,
             company.id,

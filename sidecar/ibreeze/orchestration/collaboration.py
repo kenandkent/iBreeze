@@ -59,8 +59,13 @@ async def create_independent_subtasks(
             )
         )
         await db.execute(
-            "INSERT INTO subtasks (id, parent_task_id, department_id, title, status) VALUES (?, ?, ?, ?, ?)",
-            (subtask_id, company_task_id, "", task_input.get("title", ""), "draft"),
+            """INSERT INTO employee_tasks
+               (id, company_id, department_task_id, employee_id, task_kind, objective,
+                acceptance_criteria_json, status, resume_state, created_at, updated_at, version)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (subtask_id, company_id, company_task_id, employee_id,
+             "independent", json.dumps(task_input), json.dumps([]),
+             "pending", json.dumps({}), _now(), _now(), 1),
         )
     await db.commit()
     return subtasks

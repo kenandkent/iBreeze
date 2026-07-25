@@ -142,7 +142,6 @@ class TestApprovalService:
             mock_db_session,
             "comp-1",
             run_id="run-1",
-            employee_id="emp-1",
             target_path="/tmp/test.txt",
             action="write",
             old_hash=None,
@@ -159,7 +158,6 @@ class TestApprovalService:
             mock_db_session,
             "comp-1",
             run_id="run-1",
-            employee_id="emp-1",
             reason="Database corrupted",
         )
         assert result["status"] == "pending"
@@ -176,9 +174,8 @@ class TestApprovalService:
             "comp-1",
             approval_id="app-1",
             decision="approve",
-            resolved_by_employee_id="emp-2",
         )
-        assert result["status"] == "approved"
+        assert result["status"] == "allowed"
 
     @pytest.mark.asyncio
     async def test_resolve_approval_not_found(self, mock_db_session):
@@ -191,7 +188,6 @@ class TestApprovalService:
                 "comp-1",
                 approval_id="nonexistent",
                 decision="approve",
-                resolved_by_employee_id="emp-2",
             )
 
     @pytest.mark.asyncio
@@ -229,14 +225,13 @@ class TestApprovalService:
             "comp-1",
             approval_id="app-1",
             decision="deny",
-            resolved_by_employee_id="emp-2",
         )
         assert result["status"] == "denied"
 
     @pytest.mark.asyncio
     async def test_resolve_approval_already_resolved(self, mock_db_session):
         mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "app-1", "status": "approved"})
+            fetchone=AsyncMock(return_value={"id": "app-1", "status": "allowed"})
         ))
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await resolve_approval(
@@ -244,7 +239,6 @@ class TestApprovalService:
                 "comp-1",
                 approval_id="app-1",
                 decision="approve",
-                resolved_by_employee_id="emp-2",
             )
 
 

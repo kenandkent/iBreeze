@@ -17,7 +17,7 @@ for _p in (_backend_root, _sidecar_root):
 def mock_db_session():
     """Create a mock async database session."""
     session = AsyncMock()
-    session.execute = AsyncMock()
+    session.execute = AsyncMock(return_value=MagicMock())
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.delete = AsyncMock()
@@ -65,6 +65,14 @@ def mock_user():
     user.is_active = True
     user.protected = True
     user.hashed_password = "$argon2id$..."
+    user.must_change_password = False
+    user.display_name = "Admin"
+    user.status = "active"
+    user.failed_login_count = 0
+    user.locked_until = None
+    user.last_login_at = None
+    user.version = 1
+    user.password_hash = "$argon2id$..."
     return user
 
 
@@ -80,6 +88,14 @@ def mock_app_user():
     user.is_active = True
     user.protected = False
     user.hashed_password = "$argon2id$..."
+    user.must_change_password = False
+    user.display_name = "App User"
+    user.status = "active"
+    user.failed_login_count = 0
+    user.locked_until = None
+    user.last_login_at = None
+    user.version = 1
+    user.password_hash = "$argon2id$..."
     return user
 
 

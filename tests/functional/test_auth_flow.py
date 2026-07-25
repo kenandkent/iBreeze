@@ -5,10 +5,19 @@ Covers design spec sections:
 - Token algorithm, expiry, payload structure
 """
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+def _mock_jwt_user(user_type="admin"):
+    """Create a mock user suitable for JWT creation."""
+    u = MagicMock()
+    u.id = uuid.uuid4()
+    u.user_type = user_type
+    u.must_change_password = False
+    return u
 
 
 # ---------------------------------------------------------------------------
@@ -152,23 +161,22 @@ class TestTokenFamily:
         from ibreeze_backend.auth.service import _create_token_family
 
         user_id = uuid.uuid4()
-        family = await _create_token_family(mock_db_session, user_id, uuid.uuid4())
+        family, token, raw_token = await _create_token_family(mock_db_session, user_id, uuid.uuid4())
 
         assert family.user_id == user_id
-        assert family.family_id is not None
-        assert len(family.family_id) == 36  # UUID format
-        assert family.status == "active"
-        mock_db_session.add.assert_called_once()
-        mock_db_session.flush.assert_awaited_once()
+        assert isinstance(raw_token, str)
+        assert len(raw_token) > 10
+        mock_db_session.add.assert_called()
+        mock_db_session.flush.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_create_multiple_families_unique_ids(self, mock_db_session):
         from ibreeze_backend.auth.service import _create_token_family
 
         user_id = uuid.uuid4()
-        f1 = await _create_token_family(mock_db_session, user_id)
-        f2 = await _create_token_family(mock_db_session, user_id)
-        assert f1.family_id != f2.family_id
+        f1, _, raw1 = await _create_token_family(mock_db_session, user_id, uuid.uuid4())
+        f2, _, raw2 = await _create_token_family(mock_db_session, user_id, uuid.uuid4())
+        assert raw1 != raw2
 
 
 class TestTokenRotation:
@@ -178,37 +186,64 @@ class TestTokenRotation:
     async def test_rotate_valid_active_token(self, mock_db_session):
         from ibreeze_backend.auth.service import (
             create_access_token,
+            refresh_tokens as rotate_token,
         )
         from ibreeze_backend.models.token_family import RefreshTokenFamily
 
         user_id = uuid.uuid4()
-        family_id = str(uuid.uuid4())
+        family_id = uuid.uuid4()
 
-        old_family = MagicMock(spec=RefreshTokenFamily)
+        stored_token = MagicMock(spec=["family_id", "revoked_at", "consumed_at", "expires_at", "id", "replaced_by_id"])
+        stored_token.family_id = family_id
+        stored_token.revoked_at = None
+        stored_token.consumed_at = None
+        stored_token.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        stored_token.id = uuid.uuid4()
+        stored_token.replaced_by_id = None
+
+        old_family = MagicMock()
         old_family.user_id = user_id
-        old_family.family_id = family_id
+        old_family.id = family_id
         old_family.status = "active"
+        old_family.revoked_at = None
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = old_family
-        mock_db_session.execute.return_value = mock_result
+        _mock_user = MagicMock()
+        _mock_user.id = user_id
+        _mock_user.user_type = "admin"
+        _mock_user.must_change_password = False
+        _mock_user.status = "active"
 
-        old_token = create_access_token(MagicMock(spec=["id", "user_type", "must_change_password"]), uuid.uuid4(), "admin")
-        result = await rotate_token(mock_db_session, old_token)
+        call_count = [0]
+        def side_effect(stmt):
+            call_count[0] += 1
+            result = MagicMock()
+            if call_count[0] == 1:
+                result.scalar_one_or_none.return_value = stored_token
+            elif call_count[0] == 2:
+                result.scalar_one.return_value = old_family
+            else:
+                result.scalar_one_or_none.return_value = _mock_user
+            return result
+
+        mock_db_session.execute.side_effect = side_effect
+
+        old_token = create_access_token(_mock_user, family_id, "ibreeze-admin")
+        result = await rotate_token(mock_db_session, old_token, "ibreeze-admin")
 
         assert result is not None
-        new_token, new_family = result
-        assert isinstance(new_token, str)
-        assert new_token != old_token
-        assert old_family.status == "rotated"
-        assert old_family.rotated_at is not None
+        assert "access_token" in result
+        assert "refresh_token" in result
 
     @pytest.mark.asyncio
     async def test_rotate_invalid_token_returns_none(self, mock_db_session):
         from ibreeze_backend.auth.service import refresh_tokens as rotate_token
 
-        result = await rotate_token(mock_db_session, "invalid.token.here")
-        assert result is None
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="Invalid refresh token"):
+            await rotate_token(mock_db_session, "invalid.token.here", "ibreeze-admin")
 
     @pytest.mark.asyncio
     async def test_rotate_token_with_no_family_returns_none(self, mock_db_session):
@@ -216,42 +251,54 @@ class TestTokenRotation:
         from ibreeze_backend.auth.service import _private_pem
         import jwt
 
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+
         payload = {
             "sub": str(uuid.uuid4()),
             "exp": datetime.now(timezone.utc) + timedelta(hours=1),
         }
         token = jwt.encode(payload, _private_pem, algorithm="EdDSA")
-        result = await rotate_token(mock_db_session, token)
-        assert result is None
+        with pytest.raises(ValueError, match="Invalid refresh token"):
+            await rotate_token(mock_db_session, token, "ibreeze-admin")
 
     @pytest.mark.asyncio
     async def test_rotate_token_with_nonexistent_family_returns_none(self, mock_db_session):
         from ibreeze_backend.auth.service import refresh_tokens as rotate_token, create_access_token
 
-        token = create_access_token(MagicMock(spec=["id", "user_type", "must_change_password"]), uuid.uuid4(), "admin")
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        result = await rotate_token(mock_db_session, token)
-        assert result is None
+        with pytest.raises(ValueError, match="Invalid refresh token"):
+            await rotate_token(mock_db_session, token, "ibreeze-admin")
 
     @pytest.mark.asyncio
     async def test_rotate_already_rotated_family_returns_none(self, mock_db_session):
         from ibreeze_backend.auth.service import refresh_tokens as rotate_token, create_access_token
-        from ibreeze_backend.models.token_family import RefreshTokenFamily
 
-        family = MagicMock(spec=RefreshTokenFamily)
-        family.family_id = str(uuid.uuid4())
-        family.status = "rotated"
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db_session.execute.return_value = mock_result
+        call_count = [0]
+        def side_effect(stmt):
+            call_count[0] += 1
+            result = MagicMock()
+            if call_count[0] == 1:
+                result.scalar_one_or_none.return_value = MagicMock()
+            elif call_count[0] == 2:
+                family = MagicMock()
+                family.revoked_at = datetime.now(UTC)
+                result.scalar_one.return_value = family
+            else:
+                result.scalar_one_or_none.return_value = MagicMock(user_type="admin", status="active")
+            return result
 
-        token = create_access_token(MagicMock(spec=["id", "user_type", "must_change_password"]), uuid.UUID(family.family_id), "admin")
-        result = await rotate_token(mock_db_session, token)
-        assert result is None
+        mock_db_session.execute.side_effect = side_effect
+
+        with pytest.raises(ValueError, match="Refresh token replay detected"):
+            await rotate_token(mock_db_session, token, "ibreeze-admin")
 
 
 class TestTokenRevocation:
@@ -259,7 +306,7 @@ class TestTokenRevocation:
 
     @pytest.mark.asyncio
     async def test_revoke_existing_family(self, mock_db_session):
-        from ibreeze_backend.auth.service import logout as revoke_family
+        from ibreeze_backend.auth.service import logout as revoke_family, create_access_token
 
         family = MagicMock()
         family.status = "active"
@@ -267,19 +314,20 @@ class TestTokenRevocation:
         mock_result.scalar_one_or_none.return_value = family
         mock_db_session.execute.return_value = mock_result
 
-        result = await revoke_family(mock_db_session, "some-family-id")
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
+        result = await revoke_family(mock_db_session, token, "ibreeze-admin")
         assert result is True
-        assert family.status == "revoked"
 
     @pytest.mark.asyncio
     async def test_revoke_nonexistent_family(self, mock_db_session):
-        from ibreeze_backend.auth.service import logout as revoke_family
+        from ibreeze_backend.auth.service import logout as revoke_family, create_access_token
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        result = await revoke_family(mock_db_session, "nonexistent")
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
+        result = await revoke_family(mock_db_session, token, "ibreeze-admin")
         assert result is False
 
 
@@ -328,10 +376,16 @@ class TestLogin:
         user = MagicMock(spec=User)
         user.id = uuid.uuid4()
         user.email = "test@ibreeze.local"
+        user.username = "test@ibreeze.local"
         user.user_type = "admin"
-        user.hashed_password = argon2.hash("correct_password")
+        user.password_hash = argon2.hash("correct_password")
         user.is_active = True
         user.must_change_password = False
+        user.status = "active"
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.last_login_at = None
+        user.version = 1
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = user
@@ -348,9 +402,12 @@ class TestLogin:
         from passlib.hash import argon2
 
         user = MagicMock()
-        user.hashed_password = argon2.hash("correct_password")
+        user.password_hash = argon2.hash("correct_password")
         user.is_active = True
+        user.status = "active"
         user.user_type = "admin"
+        user.failed_login_count = 0
+        user.locked_until = None
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = user
@@ -376,15 +433,16 @@ class TestLogin:
         from passlib.hash import argon2
 
         user = MagicMock()
-        user.hashed_password = argon2.hash("password")
+        user.password_hash = argon2.hash("password")
         user.is_active = False
+        user.status = "disabled"
         user.user_type = "admin"
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = user
         mock_db_session.execute.return_value = mock_result
 
-        with pytest.raises(ValueError, match="Account is disabled"):
+        with pytest.raises(ValueError, match="Invalid credentials"):
             await login(mock_db_session, "test@ibreeze.local", "password", "admin", uuid.uuid4())
 
     @pytest.mark.asyncio
@@ -393,9 +451,11 @@ class TestLogin:
         from passlib.hash import argon2
 
         user = MagicMock()
-        user.hashed_password = argon2.hash("password")
+        user.password_hash = argon2.hash("password")
         user.is_active = True
         user.user_type = "app_user"
+        user.status = "active"
+        user.username = "test@ibreeze.local"
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = user
@@ -441,7 +501,7 @@ class TestRefreshTokens:
         mock_db_session.execute.side_effect = side_effect
 
         token = create_refresh_token(user_id, family_id, "admin")
-        result = await refresh_tokens(mock_db_session, token)
+        result = await refresh_tokens(mock_db_session, token, "admin")
         assert "access_token" in result
         assert "refresh_token" in result
 
@@ -450,7 +510,7 @@ class TestRefreshTokens:
         from ibreeze_backend.auth.service import refresh_tokens
 
         with pytest.raises(ValueError, match="Invalid refresh token"):
-            await refresh_tokens(mock_db_session, "invalid.token.here")
+            await refresh_tokens(mock_db_session, "invalid.token.here", "admin")
 
     @pytest.mark.asyncio
     async def test_refresh_token_reuse_detection(self, mock_db_session):
@@ -465,15 +525,15 @@ class TestRefreshTokens:
 
         token = create_refresh_token(user_id, family_id, "admin")
         with pytest.raises(ValueError, match="Refresh token replay detected"):
-            await refresh_tokens(mock_db_session, token)
+            await refresh_tokens(mock_db_session, token, "admin")
 
     @pytest.mark.asyncio
     async def test_refresh_non_refresh_token_type(self, mock_db_session):
         from ibreeze_backend.auth.service import refresh_tokens, create_access_token
 
-        token = create_access_token(MagicMock(spec=["id", "user_type", "must_change_password"]), uuid.uuid4(), "admin")
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "admin")
         with pytest.raises(ValueError, match="Invalid refresh token"):
-            await refresh_tokens(mock_db_session, token)
+            await refresh_tokens(mock_db_session, token, "admin")
 
 
 class TestLogout:
@@ -489,8 +549,8 @@ class TestLogout:
         mock_result.scalar_one_or_none.return_value = family
         mock_db_session.execute.return_value = mock_result
 
-        token = create_access_token(MagicMock(spec=["id", "user_type", "must_change_password"]), uuid.uuid4(), "admin")
-        result = await logout(mock_db_session, token)
+        token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "admin")
+        result = await logout(mock_db_session, token, "admin")
         assert result is True
         assert family.status == "revoked"
 
@@ -498,7 +558,7 @@ class TestLogout:
     async def test_logout_invalid_token(self, mock_db_session):
         from ibreeze_backend.auth.service import logout
 
-        result = await logout(mock_db_session, "invalid.token")
+        result = await logout(mock_db_session, "invalid.token", "admin")
         assert result is False
 
 
@@ -514,6 +574,9 @@ class TestChangePassword:
         user.id = uuid.uuid4()
         user.hashed_password = argon2.hash("old_password")
         user.user_type = "admin"
+        user.must_change_password = True
+        user.version = 1
+        user.status = "active"
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = user

@@ -1,4 +1,4 @@
-"""API error handling tests — ProblemDetail format, validation, generic handler.
+"""API error handling tests — ProblemDetailError format, validation, generic handler.
 
 Covers design spec sections:
 - G.14 Error handling (RFC 9457 Problem Details)
@@ -9,13 +9,13 @@ from unittest.mock import MagicMock
 import pytest
 
 
-class TestProblemDetail:
-    """ProblemDetail error response format."""
+class TestProblemDetailError:
+    """ProblemDetailError error response format."""
 
     def test_problem_detail_format(self):
-        from ibreeze_backend.api.errors import ProblemDetail
+        from ibreeze_backend.api.errors import ProblemDetailError
 
-        exc = ProblemDetail(
+        exc = ProblemDetailError(
             status=400,
             title="Bad Request",
             code="VALIDATION_ERROR",
@@ -31,9 +31,9 @@ class TestProblemDetail:
         assert "request_id" in body
 
     def test_problem_detail_with_field_errors(self):
-        from ibreeze_backend.api.errors import ProblemDetail
+        from ibreeze_backend.api.errors import ProblemDetailError
 
-        exc = ProblemDetail(
+        exc = ProblemDetailError(
             status=422,
             title="Unprocessable Entity",
             code="VALIDATION_ERROR",
@@ -45,16 +45,16 @@ class TestProblemDetail:
         assert body["field_errors"]["email"] == ["Invalid email format"]
 
     def test_validation_error(self):
-        from ibreeze_backend.api.errors import ProblemDetail, raise_problem
+        from ibreeze_backend.api.errors import ProblemDetailError, raise_problem
 
-        with pytest.raises(ProblemDetail) as exc_info:
+        with pytest.raises(ProblemDetailError) as exc_info:
             raise_problem(400, "VALIDATION_ERROR", "Invalid input")
         assert exc_info.value.status == 400
 
     def test_not_found_error(self):
-        from ibreeze_backend.api.errors import ProblemDetail, raise_problem
+        from ibreeze_backend.api.errors import ProblemDetailError, raise_problem
 
-        with pytest.raises(ProblemDetail) as exc_info:
+        with pytest.raises(ProblemDetailError) as exc_info:
             raise_problem(404, "NOT_FOUND", "Resource not found")
         assert exc_info.value.status == 404
 

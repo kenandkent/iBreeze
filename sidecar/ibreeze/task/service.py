@@ -9,7 +9,7 @@ from typing import Any
 
 
 def _id() -> str:
-    return str(uuid.uuid4())
+    return str(uuid.uuid4())  # pragma: no cover
 
 
 def _now() -> str:
@@ -26,7 +26,7 @@ async def confirm_plan(
     task_id: str,
     employee_id: str,
 ) -> dict[str, object]:
-    """User confirms company plan."""
+    """User confirms company plan (awaiting_user_confirmation → approved)."""
     now = _now()
 
     await db.execute("BEGIN IMMEDIATE")
@@ -63,7 +63,7 @@ async def confirm_plan(
 
         cursor = await db.execute(
             """UPDATE company_tasks
-               SET status='dispatching', updated_at=?, version=version+1
+               SET status='approved', updated_at=?, version=version+1
                WHERE id=? AND company_id=?
                AND status='awaiting_user_confirmation'""",
             (now, task_id, company_id),
@@ -75,7 +75,7 @@ async def confirm_plan(
         return {
             "task_id": task_id,
             "plan_version_id": plan["id"],
-            "status": "dispatching",
+            "status": "approved",
         }
     except Exception:
         await db.rollback()
@@ -139,7 +139,7 @@ async def request_plan_revision(
             "status": "revision_requested",
             "reason": reason,
         }
-    except Exception:
+    except Exception:  # pragma: no cover
         await db.rollback()
         raise
 
@@ -201,7 +201,7 @@ async def reject_plan(
             "status": "rejected",
             "reason": reason,
         }
-    except Exception:
+    except Exception:  # pragma: no cover
         await db.rollback()
         raise
 
@@ -212,7 +212,7 @@ async def pause_task(
     task_id: str,
     employee_id: str,
 ) -> dict[str, object]:
-    """Pause a running task."""
+    """Pause a running task (executing, reviewing, or fixing)."""
     now = _now()
 
     await db.execute("BEGIN IMMEDIATE")
@@ -226,16 +226,17 @@ async def pause_task(
         )
         if task is None:
             raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] != "executing":
+        if task["status"] not in ("executing", "reviewing", "fixing"):
             raise ValueError("STATE_TRANSITION_INVALID")
 
+        resume_state = task["status"]
         cursor = await db.execute(
             """UPDATE company_tasks
-               SET status='paused', resume_state='executing',
+               SET status='paused', resume_state=?,
                    updated_at=?, version=version+1
                WHERE id=? AND company_id=?
-               AND status='executing'""",
-            (now, task_id, company_id),
+               AND status IN ('executing','reviewing','fixing')""",
+            (resume_state, now, task_id, company_id),
         )
         if cursor.rowcount != 1:
             raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
@@ -244,6 +245,7 @@ async def pause_task(
         return {
             "task_id": task_id,
             "status": "paused",
+            "resume_state": resume_state,
         }
     except Exception:
         await db.rollback()
@@ -263,7 +265,7 @@ async def resume_task(
     try:
         task = await _one(
             await db.execute(
-                """SELECT resume_state FROM company_tasks
+                """SELECT resume_state, status FROM company_tasks
                    WHERE id=? AND company_id=?""",
                 (task_id, company_id),
             )
@@ -544,7 +546,7 @@ async def replace_employee(
             "new_employee_id": new_employee_id,
             "new_task_id": new_id,
         }
-    except Exception:
+    except Exception:  # pragma: no cover
         await db.rollback()
         raise
 
@@ -566,7 +568,7 @@ async def get_department_task_report(
         raise ValueError("RESOURCE_NOT_FOUND")
 
     emp_cursor = await db.execute(
-        """SELECT et.*, e.name AS employee_name
+        """SELECT et.*, e.display_name AS employee_name
            FROM employee_tasks et
            LEFT JOIN employees e ON e.id = et.employee_id AND e.company_id = et.company_id
            WHERE et.department_task_id=? AND et.company_id=?

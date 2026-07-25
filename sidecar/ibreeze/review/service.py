@@ -230,6 +230,31 @@ async def create_review_issue(
     }
 
 
+async def start_fixing_review_issue(
+    db: Any,
+    company_id: str,
+    *,
+    issue_id: str,
+) -> dict[str, object]:
+    """Transition a review issue from open to fixing."""
+    now = _now()
+
+    cursor = await db.execute(
+        """UPDATE review_issues
+           SET status='fixing', updated_at=?, version=version+1
+           WHERE id=? AND company_id=? AND status='open'""",
+        (now, issue_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("STATE_TRANSITION_INVALID")
+
+    await db.commit()
+    return {
+        "id": issue_id,
+        "status": "fixing",
+    }
+
+
 async def resolve_review_issue(
     db: Any,
     company_id: str,
@@ -237,14 +262,14 @@ async def resolve_review_issue(
     issue_id: str,
     resolution: str,
 ) -> dict[str, object]:
-    """Resolve a review issue."""
+    """Resolve a review issue (fixing → resolved)."""
     now = _now()
 
     cursor = await db.execute(
         """UPDATE review_issues
            SET status='resolved', rejection_reason=?,
                updated_at=?, version=version+1
-           WHERE id=? AND company_id=? AND status='open'""",
+           WHERE id=? AND company_id=? AND status='fixing'""",
         (resolution, now, issue_id, company_id),
     )
     if cursor.rowcount != 1:

@@ -134,8 +134,12 @@ class CliAdapter:
             )
             timed_out = False
         except TimeoutError:
-            process.kill()
-            stdout, stderr = await process.communicate()
+            process.terminate()
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+            except (TimeoutError, asyncio.TimeoutError):
+                process.kill()
+                stdout, stderr = await process.communicate()
             timed_out = True
         if len(stdout) + len(stderr) > self._max_output_bytes:
             raise ValueError("AGENT_OUTPUT_LIMIT_EXCEEDED")

@@ -18,7 +18,10 @@ iBreeze 是一个以"模拟公司运作方式"组织多个 Agent 协作完成任
 │ └─ Agent Runtime Gateway                                    │
 │    ├─ Built-in Agent Runtime                                │
 │    ├─ Codex / Claude Code / OpenCode Adapter                │
-│    └─ Tool / Permission / Workspace / Checkpoint            │
+│    ├─ Checkpoint / Event Compactor                           │
+│    ├─ Run Executor / Verification Loop                       │
+│    ├─ Dispatcher (Orchestration)                             │
+│    └─ Tool / Permission / Workspace                          │
 └─────────────────────────────────────────────────────────────┘
                          │ HTTPS
                          ▼

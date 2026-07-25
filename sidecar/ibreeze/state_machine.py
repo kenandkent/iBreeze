@@ -411,6 +411,7 @@ _AGENT_RUN_TRANSITIONS: dict[AgentRunState, frozenset[AgentRunState]] = {
     ),
     AgentRunState.WAITING_APPROVAL: frozenset(
         {
+            AgentRunState.RUNNING,
             AgentRunState.CANCELLED,
             AgentRunState.TIMED_OUT,
             AgentRunState.FAILED,
@@ -418,6 +419,7 @@ _AGENT_RUN_TRANSITIONS: dict[AgentRunState, frozenset[AgentRunState]] = {
     ),
     AgentRunState.WAITING_RESOURCE: frozenset(
         {
+            AgentRunState.RUNNING,
             AgentRunState.CANCELLED,
             AgentRunState.TIMED_OUT,
             AgentRunState.FAILED,

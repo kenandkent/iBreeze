@@ -16,6 +16,7 @@ from ibreeze.orchestration.department_matcher import (
     DepartmentResponsibilityProfile,
     match_departments,
 )
+from ibreeze.orchestration.dispatcher import dispatch_company_task
 from ibreeze.orchestration.execution_chain import (
     confirm_plan,
     modify_plan,
@@ -72,6 +73,7 @@ __all__ = [
     "confirm_plan",
     "create_role_behavior",
     "create_subtasks",
+    "dispatch_company_task",
     "generate_company_plan",
     "generate_company_review",
     "generate_department_report",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -25,7 +25,6 @@ async def request_external_write_approval(
     company_id: str,
     *,
     run_id: str,
-    employee_id: str,
     target_path: str,
     action: str,
     old_hash: str | None,
@@ -35,28 +34,29 @@ async def request_external_write_approval(
     """Request approval for an external write operation."""
     approval_id = _id()
     now = _now()
+    expires_at = (
+        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     await db.execute("BEGIN IMMEDIATE")
     try:
+        target_json = json.dumps(
+            {"path": target_path, "action": action, "old_hash": old_hash, "new_hash": new_hash},
+            sort_keys=True,
+        )
         await db.execute(
             """INSERT INTO human_approvals
-               (id, company_id, run_id, employee_id, approval_type,
-                target_path, action, old_hash, new_hash,
-                ttl_seconds, status, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id, company_id, run_id, approval_type,
+                target_json, target_sha256, status, requested_at, expires_at)
+               VALUES (?,?,'external_write',?,?, 'pending',?,?)""",
             (
                 approval_id,
                 company_id,
                 run_id,
-                employee_id,
-                "external_write",
-                target_path,
-                action,
-                old_hash,
+                target_json,
                 new_hash,
-                ttl_seconds,
-                "pending",
                 now,
+                expires_at,
             ),
         )
 
@@ -78,35 +78,35 @@ async def request_uncertain_recovery_approval(
     company_id: str,
     *,
     run_id: str,
-    employee_id: str,
     reason: str,
     ttl_seconds: int = 600,
 ) -> dict[str, object]:
     """Request approval for uncertain recovery operation."""
+    import hashlib
+
     approval_id = _id()
     now = _now()
+    expires_at = (
+        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     await db.execute("BEGIN IMMEDIATE")
     try:
+        target_json = json.dumps({"reason": reason}, sort_keys=True)
+        target_sha = hashlib.sha256(reason.encode("utf-8")).hexdigest()
         await db.execute(
             """INSERT INTO human_approvals
-               (id, company_id, run_id, employee_id, approval_type,
-                target_path, action, old_hash, new_hash,
-                ttl_seconds, status, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id, company_id, run_id, approval_type,
+                target_json, target_sha256, status, requested_at, expires_at)
+               VALUES (?,?,'uncertain_recovery',?,?, 'pending',?,?)""",
             (
                 approval_id,
                 company_id,
                 run_id,
-                employee_id,
-                "uncertain_recovery",
-                "",
-                reason,
-                None,
-                None,
-                ttl_seconds,
-                "pending",
+                target_json,
+                target_sha,
                 now,
+                expires_at,
             ),
         )
 
@@ -128,8 +128,6 @@ async def resolve_approval(
     *,
     approval_id: str,
     decision: str,
-    resolved_by_employee_id: str,
-    receipt_hash: str | None = None,
 ) -> dict[str, object]:
     """Resolve an approval request (approve or deny)."""
     now = _now()
@@ -148,21 +146,19 @@ async def resolve_approval(
         if approval["status"] != "pending":
             raise ValueError("STATE_TRANSITION_INVALID")
 
-        new_status = "approved" if decision == "approve" else "denied"
+        new_status = "allowed" if decision in ("approve", "allowed") else "denied"
 
         await db.execute(
             """UPDATE human_approvals
-               SET status=?, resolved_by=?, resolved_at=?,
-                   receipt_hash=COALESCE(?, receipt_hash)
+               SET status=?, resolved_at=?
                WHERE id=? AND company_id=?""",
-            (new_status, resolved_by_employee_id, now, receipt_hash, approval_id, company_id),
+            (new_status, now, approval_id, company_id),
         )
 
         await db.commit()
         return {
             "id": approval_id,
             "status": new_status,
-            "resolved_by": resolved_by_employee_id,
         }
     except Exception:
         await db.rollback()
@@ -190,7 +186,7 @@ async def list_pending_approvals(
     cursor = await db.execute(
         f"""SELECT * FROM human_approvals
             WHERE {where}
-            ORDER BY created_at ASC
+            ORDER BY requested_at ASC
             LIMIT ?""",
         tuple(params),
     )
@@ -208,7 +204,7 @@ async def expire_stale_approvals(
         """UPDATE human_approvals
            SET status='expired', resolved_at=?
            WHERE company_id=? AND status='pending'
-           AND datetime(created_at, '+' || ttl_seconds || ' seconds') < datetime(?)""",
+           AND expires_at < ?""",
         (now, company_id, now),
     )
     await db.commit()

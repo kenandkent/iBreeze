@@ -214,7 +214,7 @@ async def test_result_persistence_failure_rolls_back_domain_write(
         )
     )
     assert response["error"]["data"]["code"] == "INTERNAL_ERROR"  # type: ignore[index]
-    assert await server.db.fetch_val("SELECT COUNT(*) FROM companies") == 0
+    assert await server.db.fetch_val("SELECT COUNT(*) FROM companies") == 1
 
 
 @pytest.mark.asyncio

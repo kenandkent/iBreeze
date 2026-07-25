@@ -269,7 +269,6 @@ class TestLeaseReclaimOnTimeout:
         assert lease_count["cnt"] == 0
 
 
-@pytest.mark.asyncio
 class TestVerificationFixLimit:
     """RUN-010: Verification loop should have a fix limit."""
 
@@ -301,7 +300,6 @@ class TestVerificationFixLimit:
         assert can_transition("AgentRun", "lost", "failed")
 
 
-@pytest.mark.asyncio
 class TestAdapterResultContradiction:
     """RUN-012: Adapter result contradictions should be flagged."""
 
