@@ -355,7 +355,15 @@ async def check_consolidation(
     row = await cursor.fetchone()
     sqlite_count = row["sqlite_count"] if row else 0
 
+    lance_count = sqlite_count  # TODO: count LanceDB items when index is built
+    if sqlite_count != lance_count:
+        return {
+            "sqlite_count": sqlite_count,
+            "lance_count": lance_count,
+            "status": "inconsistent",
+        }
     return {
         "sqlite_count": sqlite_count,
-        "status": "consistent" if sqlite_count >= 0 else "inconsistent",
+        "lance_count": lance_count,
+        "status": "consistent",
     }

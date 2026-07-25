@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -85,12 +86,36 @@ async def assign_reviewer(
         raise
 
 
+async def start_review(
+    db: Any,
+    company_id: str,
+    *,
+    assignment_id: str,
+) -> dict[str, object]:
+    """Transition an assignment from 'assigned' to 'in_review'."""
+    cursor = await db.execute(
+        """UPDATE review_assignments
+           SET status='in_review'
+           WHERE id=? AND company_id=? AND status='assigned'""",
+        (assignment_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("STATE_TRANSITION_INVALID")
+
+    await db.commit()
+    return {
+        "id": assignment_id,
+        "status": "in_review",
+    }
+
+
 async def submit_review_report(
     db: Any,
     company_id: str,
     *,
     assignment_id: str,
     report_artifact_id: str,
+    reviewer_run_id: str,
     verdict: str,
     summary: str,
 ) -> dict[str, object]:
@@ -109,8 +134,10 @@ async def submit_review_report(
         )
         if assignment is None:
             raise ValueError("RESOURCE_NOT_FOUND")
-        if assignment["status"] != "assigned":
+        if assignment["status"] not in ("assigned", "in_review"):
             raise ValueError("STATE_TRANSITION_INVALID")
+        if reviewer_run_id is None:
+            raise ValueError("REVIEWER_RUN_ID_REQUIRED")
 
         await db.execute(
             """INSERT INTO review_reports
@@ -121,7 +148,7 @@ async def submit_review_report(
                 report_id,
                 company_id,
                 assignment_id,
-                None,
+                reviewer_run_id,
                 verdict,
                 report_artifact_id,
                 now,
@@ -160,13 +187,20 @@ async def create_review_issue(
     """Create an issue from a review report."""
     issue_id = _id()
     now = _now()
+    evidence_refs = json.dumps(
+        [{"file_path": file_path, "line_number": line_number}]
+        if file_path is not None
+        else [],
+        separators=(",", ":"),
+    )
 
     await db.execute(
         """INSERT INTO review_issues
            (id, company_id, review_report_id, severity, category,
             description, expected, actual, suggested_fix,
-            evidence_refs_json, status, created_at, updated_at, version)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            evidence_refs_json, status, assignee_employee_id,
+            verifier_employee_id, created_at, updated_at, version)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             issue_id,
             company_id,
@@ -177,8 +211,10 @@ async def create_review_issue(
             "",
             "",
             "",
-            "[]",
+            evidence_refs,
             "open",
+            None,
+            None,
             now,
             now,
             1,

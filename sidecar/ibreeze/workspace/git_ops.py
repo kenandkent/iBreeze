@@ -37,9 +37,19 @@ async def create_worktree(
     worktree_name: str,
     branch_name: str,
     base_branch: str = "main",
+    *,
+    task_id: str = "",
+    employee_id: str = "",
+    attempt: int = 1,
 ) -> dict[str, Any]:
-    """Create a git worktree for a workspace."""
+    """Create a git worktree for a workspace.
+
+    Branch naming spec: ibreeze/{task_id}/{employee_id}/{attempt}
+    """
     import os
+
+    if task_id and employee_id:
+        branch_name = f"ibreeze/{task_id}/{employee_id}/{attempt}"
 
     worktree_path = os.path.join(base_dir, "worktrees", worktree_name)
 

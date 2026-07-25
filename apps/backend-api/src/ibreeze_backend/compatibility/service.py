@@ -23,7 +23,7 @@ def _validate_version_range(value: str) -> None:
 
 
 async def create_rule(db: AsyncSession, body: RuleCreate) -> CompatibilityRule:
-    logger.info("create_rule.start", extra={"subject": body.subject, "dependency": body.dependency})
+    logger.info("create_rule.start", extra={"subject_type": body.subject_type, "dependency_key": body.dependency_key})
     item = CompatibilityRule(**body.model_dump(), status="draft", version=1)
     db.add(item)
     await db.flush()

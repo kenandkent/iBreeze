@@ -292,11 +292,12 @@ async def apply_workspace(
     await git_command("merge", "--abort", cwd=ws.repository_root)
     conflict_files = await get_merge_conflicts(ws.repository_root)
 
-    # Mark ready for manual apply (no version bump — user resolves externally)
+    # Mark ready for manual apply
     await db.execute(
         """UPDATE task_workspaces
            SET status='ready_to_apply',
-               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+               version=version+1
            WHERE id=? AND company_id=?""",
         (workspace_id, company_id),
     )

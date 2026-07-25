@@ -70,7 +70,9 @@ async def hybrid_search(
     """
     # --- BM25 results via FTS5 ---
     bm25_limit = limit * 2  # J.7: top 50 from each branch, we use 2× as budget
-    bm25_results = await search_fts(db, query, company_id, limit=bm25_limit)
+    bm25_results = await search_fts(
+        db, query, company_id, generation_id=generation_id, limit=bm25_limit,
+    )
 
     # Filter to authorized candidates
     if candidate_ids is not None:
@@ -81,7 +83,9 @@ async def hybrid_search(
     embedding_service = get_embedding_service()
     query_embedding = embedding_service.embed_single(query)
     vector_store = get_vector_store()
-    cosine_results = vector_store.search(company_id, query_embedding, limit=bm25_limit)
+    cosine_results = vector_store.search(
+        company_id, query_embedding, limit=bm25_limit, generation_id=generation_id,
+    )
 
     # Filter cosine results to authorized candidates
     if candidate_ids is not None:

@@ -67,5 +67,5 @@ class ContextEngine:
 
     @staticmethod
     def _estimate_tokens(text: str) -> int:
-        """Rough token estimation (≈ 4 chars per token)."""
-        return max(len(text) // 4, 1)
+        """Byte upper-bound token estimation (byte_upper_bound_v1)."""
+        return len(text.encode("utf-8")) // 4 + 32

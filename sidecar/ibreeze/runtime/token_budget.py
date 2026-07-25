@@ -18,25 +18,26 @@ _DEFAULT_LIMIT = 128_000
 
 
 def calculate_budget(
-    model_id: str,
-    *,
-    system_prompt_tokens: int = 0,
-    reserved_output_tokens: int = 4096,
+    context_window: int,
+    max_output_tokens: int,
 ) -> dict[str, int]:
-    """Calculate token budget for a model."""
-    total = _DEFAULT_LIMIT
-    model_lower = model_id.lower()
-    for prefix, limit in MODEL_LIMITS.items():
-        if prefix in model_lower:
-            total = limit
-            break
+    """Calculate token budget per spec.
 
-    available = total - system_prompt_tokens - reserved_output_tokens
+    output_reserve = min(max_output_tokens, floor(context_window * 0.20))
+    available = context_window - output_reserve
+    system_reserve = floor(available * 0.10)
+    user_budget = available - system_reserve
+    """
+    output_reserve = min(max_output_tokens, int(context_window * 0.20))
+    available = context_window - output_reserve
+    system_reserve = int(available * 0.10)
+    user_budget = available - system_reserve
+
     return {
-        "total_tokens": total,
-        "system_prompt_tokens": system_prompt_tokens,
-        "reserved_output_tokens": reserved_output_tokens,
-        "available_tokens": max(available, 0),
+        "context_window": context_window,
+        "output_reserve": output_reserve,
+        "system_reserve": system_reserve,
+        "user_budget": user_budget,
     }
 
 

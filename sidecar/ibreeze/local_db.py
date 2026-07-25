@@ -74,15 +74,17 @@ INSERT OR IGNORE INTO local_preferences(
 -- employee_base_profiles (H.2)
 CREATE TABLE IF NOT EXISTS employee_base_profiles (
     id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
     name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
-    normalized_name TEXT NOT NULL UNIQUE,
+    normalized_name TEXT NOT NULL,
     description TEXT NOT NULL,
     current_version_id TEXT REFERENCES employee_base_profile_versions(id)
         DEFERRABLE INITIALLY DEFERRED,
     status TEXT NOT NULL CHECK(status IN ('active', 'retired')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+    UNIQUE(company_id, normalized_name)
 );
 
 -- employee_base_profile_versions (H.2)

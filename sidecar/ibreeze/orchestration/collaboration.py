@@ -58,6 +58,11 @@ async def create_independent_subtasks(
                 order=idx,
             )
         )
+        await db.execute(
+            "INSERT INTO subtasks (id, parent_task_id, department_id, title, status) VALUES (?, ?, ?, ?, ?)",
+            (subtask_id, company_task_id, "", task_input.get("title", ""), "draft"),
+        )
+    await db.commit()
     return subtasks
 
 

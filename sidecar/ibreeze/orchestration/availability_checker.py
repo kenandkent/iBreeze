@@ -153,6 +153,14 @@ async def check_concurrency_slot(
     )
 
 
+def check_version_compatibility(adapter_version: str, required_range: str) -> bool:
+    """Check if adapter version satisfies the required version range."""
+    from packaging.specifiers import SpecifierSet
+
+    spec = SpecifierSet(required_range)
+    return adapter_version in spec
+
+
 async def check_health(
     db: Any,
     *,

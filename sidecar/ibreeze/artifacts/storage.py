@@ -21,12 +21,18 @@ class ArtifactStorage:
         prefix = sha256[:2]
         return os.path.join(self._base_path, "objects", "sha256", prefix, sha256)
 
-    def write(self, content: bytes) -> dict[str, Any]:
+    def write(self, content: bytes, *, company_id: str = "") -> dict[str, Any]:
         """Write content to CAS with atomic rename.
 
         Flow: temp file → fsync → SHA-256 → atomic rename → fsync
+        Profile-level dedup: company_id is included in the CAS key material.
         """
-        sha256 = hashlib.sha256(content).hexdigest()
+        content_hash = hashlib.sha256(content).hexdigest()
+        if company_id:
+            key_material = f"{company_id}:{content_hash}"
+            sha256 = hashlib.sha256(key_material.encode()).hexdigest()
+        else:
+            sha256 = content_hash
         cas_path = self._cas_path(sha256)
 
         if os.path.exists(cas_path):

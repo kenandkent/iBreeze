@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import zstandard as zstd
+
 
 def _now() -> str:
     return (
@@ -38,7 +40,7 @@ def create_backup_package(
     """Create a tar.zst backup package containing SQLite DB + CAS objects."""
     now = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     backup_name = f"ibreeze_backup_{backup_type}_{now}"
-    archive_path = os.path.join(output_dir, f"{backup_name}.tar")
+    archive_path = os.path.join(output_dir, f"{backup_name}.tar.zst")
 
     manifest: dict[str, Any] = {
         "backup_type": backup_type,
@@ -66,17 +68,20 @@ def create_backup_package(
 
     manifest["total_size"] = total_size
 
-    with tarfile.open(archive_path, "w") as tar:
-        if os.path.exists(db_path):
-            tar.add(db_path, arcname="data/profile.db")
+    with open(archive_path, "wb") as f:
+        cctx = zstd.ZstdCompressor()
+        with cctx.stream_writer(f) as writer:
+            with tarfile.open(fileobj=writer, mode="w") as tar:
+                if os.path.exists(db_path):
+                    tar.add(db_path, arcname="data/profile.db")
 
-        if os.path.exists(cas_path):
-            tar.add(cas_path, arcname="cas", recursive=True)
+                if os.path.exists(cas_path):
+                    tar.add(cas_path, arcname="cas", recursive=True)
 
-        manifest_bytes = json.dumps(manifest, indent=2).encode()
-        manifest_info = tarfile.TarInfo(name="manifest.json")
-        manifest_info.size = len(manifest_bytes)
-        tar.addfile(manifest_info, io.BytesIO(manifest_bytes))
+                manifest_bytes = json.dumps(manifest, indent=2).encode()
+                manifest_info = tarfile.TarInfo(name="manifest.json")
+                manifest_info.size = len(manifest_bytes)
+                tar.addfile(manifest_info, io.BytesIO(manifest_bytes))
 
     archive_hash = _sha256_file(Path(archive_path))
     archive_size = os.path.getsize(archive_path)
@@ -97,17 +102,20 @@ def verify_backup_package(archive_path: str) -> dict[str, Any]:
         return {"valid": False, "error": "Archive not found"}
 
     try:
-        with tarfile.open(archive_path, "r") as tar:
-            manifest_found = False
-            for member in tar.getmembers():
-                if member.name == "manifest.json":
-                    manifest_found = True
-                    break
+        with open(archive_path, "rb") as f:
+            dctx = zstd.ZstdDecompressor()
+            with dctx.stream_reader(f) as reader:
+                with tarfile.open(fileobj=reader, mode="r") as tar:
+                    manifest_found = False
+                    for member in tar.getmembers():
+                        if member.name == "manifest.json":
+                            manifest_found = True
+                            break
 
-            return {
-                "valid": manifest_found,
-                "member_count": len(tar.getmembers()),
-                "manifest_found": manifest_found,
-            }
+                    return {
+                        "valid": manifest_found,
+                        "member_count": len(tar.getmembers()),
+                        "manifest_found": manifest_found,
+                    }
     except Exception as e:
         return {"valid": False, "error": str(e)}

@@ -9,43 +9,83 @@ import numpy as np
 
 EMBEDDING_DIM = 384  # multilingual-e5-small
 
+_MAX_SEQ_LEN = 512
+
 
 class EmbeddingService:
     """ONNX-based embedding service using intfloat/multilingual-e5-small."""
 
     def __init__(self, model_path: str | None = None) -> None:
-        self._model: Any = None
+        self._session: Any = None
+        self._tokenizer: Any = None
         self._model_path = model_path
 
     def _load_model(self) -> None:
-        if self._model is not None:
+        if self._session is not None or self._session == "fallback":
             return
         try:
             import onnxruntime as ort
+            from transformers import AutoTokenizer
 
-            model_path = self._model_path or os.path.expanduser("~/.ibreeze/models/multilingual-e5-small.onnx")
-            self._model = ort.InferenceSession(model_path)
+            model_path = self._model_path or os.path.expanduser(
+                "~/.ibreeze/models/multilingual-e5-small.onnx"
+            )
+            self._session = ort.InferenceSession(model_path)
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                "intfloat/multilingual-e5-small"
+            )
         except Exception:
-            self._model = "fallback"
+            self._session = "fallback"
+
+    @staticmethod
+    def _mean_pooling(
+        token_embeddings: np.ndarray, attention_mask: np.ndarray
+    ) -> np.ndarray:
+        """Mean pooling over token embeddings, masked by attention_mask."""
+        mask_expanded = np.expand_dims(attention_mask, -1).astype(np.float32)
+        summed = np.sum(token_embeddings * mask_expanded, axis=1)
+        counts = np.clip(mask_expanded.sum(axis=1), 1e-9, None)
+        return summed / counts
+
+    def _onnx_embed(self, texts: list[str]) -> list[list[float]]:
+        """Run actual ONNX inference with tokenization and mean pooling."""
+        inputs = self._tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=_MAX_SEQ_LEN,
+            return_tensors="np",
+        )
+        input_ids = inputs["input_ids"].astype(np.int64)
+        attention_mask = inputs["attention_mask"].astype(np.int64)
+
+        outputs = self._session.run(
+            None,
+            {"input_ids": input_ids, "attention_mask": attention_mask},
+        )
+        token_embeddings = outputs[0]
+        pooled = self._mean_pooling(token_embeddings, attention_mask)
+
+        # L2 normalize
+        norms = np.linalg.norm(pooled, axis=1, keepdims=True)
+        pooled = pooled / np.clip(norms, 1e-9, None)
+        return pooled.tolist()
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts."""
         self._load_model()
-        if self._model == "fallback" or self._model is None:
+        if self._session == "fallback" or self._session is None:
             return self._fallback_embed(texts)
-        results: list[list[float]] = []
-        for text in texts:
-            vec = np.random.randn(EMBEDDING_DIM).astype(np.float32)
-            vec = vec / np.linalg.norm(vec)
-            results.append(vec.tolist())
-        return results
+        return self._onnx_embed(texts)
 
     def _fallback_embed(self, texts: list[str]) -> list[list[float]]:
         """Deterministic pseudo-embedding based on text hash."""
         results: list[list[float]] = []
         for text in texts:
             h = hash(text.encode()).to_bytes(8, "big")
-            vec = np.frombuffer(h * (EMBEDDING_DIM // 8 + 1), dtype=np.float32)[:EMBEDDING_DIM]
+            vec = np.frombuffer(
+                h * (EMBEDDING_DIM // 8 + 1), dtype=np.float32
+            )[:EMBEDDING_DIM]
             vec = vec / np.linalg.norm(vec)
             results.append(vec.tolist())
         return results

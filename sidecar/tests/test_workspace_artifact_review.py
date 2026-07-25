@@ -336,6 +336,7 @@ class TestReviewExtended:
             "comp-1",
             assignment_id="asgn-1",
             report_artifact_id="rep-art-1",
+            reviewer_run_id="run-1",
             verdict="approved",
             summary="Looks good",
         )
@@ -352,6 +353,7 @@ class TestReviewExtended:
                 "comp-1",
                 assignment_id="nonexistent",
                 report_artifact_id="rep-art-1",
+                reviewer_run_id="run-1",
                 verdict="approved",
                 summary="Looks good",
             )
@@ -367,6 +369,7 @@ class TestReviewExtended:
                 "comp-1",
                 assignment_id="asgn-1",
                 report_artifact_id="rep-art-1",
+                reviewer_run_id="run-1",
                 verdict="approved",
                 summary="Looks good",
             )

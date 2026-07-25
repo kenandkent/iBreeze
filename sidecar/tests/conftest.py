@@ -49,6 +49,73 @@ async def published_profile(db: aiosqlite.Connection) -> str:
     release_id = str(uuid.uuid4())
     profile_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
+
+    # Create company and its required FK dependencies
+    company_id = str(uuid.uuid4())
+    revision_id = str(uuid.uuid4())
+    dept_id = str(uuid.uuid4())
+    employee_id = str(uuid.uuid4())
+    conv_id = str(uuid.uuid4())
+    dept_conv_id = str(uuid.uuid4())
+    dept_rev_id = str(uuid.uuid4())
+
+    # Disable FKs for test setup simplicity
+    await db.execute("PRAGMA foreign_keys = OFF")
+
+    await db.execute(
+        """INSERT INTO company_revisions
+           (id, company_id, revision_number, name, introduction, content_sha256,
+            created_by_type, created_at)
+           VALUES (?, ?, 1, 'TestCo', 'Test company', ?, 'system', ?)""",
+        (revision_id, company_id, _sha256("test"), now),
+    )
+    # Create employee first (dept needs leader_employee_id)
+    await db.execute(
+        """INSERT INTO employees
+           (id, company_id, department_id, display_name, normalized_display_name,
+            base_profile_version_id, workflow_role, status, created_at, updated_at, version)
+           VALUES (?, ?, ?, 'GM', 'gm', ?, 'general_manager', 'active', ?, ?, 1)""",
+        (employee_id, company_id, dept_id, version_id, now, now),
+    )
+    await db.execute(
+        """INSERT INTO department_revisions
+           (id, department_id, company_id, revision_number, name, function_description,
+            content_sha256, created_at)
+           VALUES (?, ?, ?, 1, 'Root', 'Root dept', ?, ?)""",
+        (dept_rev_id, dept_id, company_id, _sha256("root"), now),
+    )
+    await db.execute(
+        """INSERT INTO conversations
+           (id, company_id, conversation_type, status, created_at)
+           VALUES (?, ?, 'department', 'active', ?)""",
+        (dept_conv_id, company_id, now),
+    )
+    await db.execute(
+        """INSERT INTO departments
+           (id, company_id, department_type, normalized_name, current_revision_id,
+            leader_employee_id, department_conversation_id, status, created_at, updated_at, version)
+           VALUES (?, ?, 'general_manager_office', 'root', ?, ?, ?,
+                   'active', ?, ?, 1)""",
+        (dept_id, company_id, dept_rev_id, employee_id, dept_conv_id, now, now),
+    )
+    await db.execute(
+        """INSERT INTO conversations
+           (id, company_id, conversation_type, status, created_at)
+           VALUES (?, ?, 'company', 'active', ?)""",
+        (conv_id, company_id, now),
+    )
+    await db.execute(
+        """INSERT INTO companies
+           (id, normalized_name, current_revision_id, general_manager_office_id,
+            general_manager_employee_id, company_conversation_id,
+            status, created_at, updated_at, version)
+           VALUES (?, 'testco', ?, ?, ?, ?, 'active', ?, ?, 1)""",
+        (company_id, revision_id, dept_id, employee_id, conv_id, now, now),
+    )
+
+    # Re-enable FKs
+    await db.execute("PRAGMA foreign_keys = ON")
+
     await db.execute(
         """INSERT INTO catalog_cache_releases
            (release_id, release_sequence, manifest_json, manifest_sha256,
@@ -58,11 +125,11 @@ async def published_profile(db: aiosqlite.Connection) -> str:
     )
     await db.execute(
         """INSERT INTO employee_base_profiles
-           (id, name, normalized_name, description, current_version_id,
+           (id, company_id, name, normalized_name, description, current_version_id,
             status, created_at, updated_at, version)
-           VALUES (?, 'Default', 'default', 'Default employee profile', ?,
+           VALUES (?, ?, 'Default', 'default', 'Default employee profile', ?,
                    'active', ?, ?, 1)""",
-        (profile_id, version_id, now, now),
+        (profile_id, company_id, version_id, now, now),
     )
     await db.execute(
         """INSERT INTO employee_base_profile_versions

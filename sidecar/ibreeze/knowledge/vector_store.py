@@ -6,6 +6,11 @@ import json
 from typing import Any
 
 
+def _escape_sql_literal(value: str) -> str:
+    """Escape a string value for use in LanceDB SQL-like filter expressions."""
+    return value.replace("'", "''")
+
+
 class VectorStore:
     """LanceDB-based vector storage for knowledge embeddings."""
 
@@ -52,6 +57,17 @@ class VectorStore:
         try:
             import pyarrow as pa
 
+            safe_id = _escape_sql_literal(id)
+
+            existing = (
+                table.search()
+                .where(f"id = '{safe_id}'")
+                .limit(1)
+                .to_list()
+            )
+            if existing:
+                table.delete(f"id = '{safe_id}'")
+
             data = pa.table(
                 {
                     "id": [id],
@@ -71,13 +87,22 @@ class VectorStore:
         company_id: str,
         query_embedding: list[float],
         limit: int = 12,
+        generation_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Search for similar embeddings within a company."""
         table = self._get_table()
         if table is None:
             return []
         try:
-            results = table.search(query_embedding).where(f"company_id = '{company_id}'").limit(limit).to_list()
+            safe_company_id = _escape_sql_literal(company_id)
+            query = (
+                table.search(query_embedding)
+                .where(f"company_id = '{safe_company_id}'")
+            )
+            if generation_id:
+                safe_gen_id = _escape_sql_literal(generation_id)
+                query = query.where(f"generation_id = '{safe_gen_id}'")
+            results = query.limit(limit).to_list()
             return results
         except Exception:
             return []
@@ -88,7 +113,8 @@ class VectorStore:
         if table is None:
             return False
         try:
-            table.delete(f"id = '{id}'")
+            safe_id = _escape_sql_literal(id)
+            table.delete(f"id = '{safe_id}'")
             return True
         except Exception:
             return False

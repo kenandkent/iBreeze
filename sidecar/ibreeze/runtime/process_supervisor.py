@@ -5,6 +5,9 @@ I.7 子进程监管：
 - PID/PGID/start time 写入 agent_runs 并通知 Rust
 - 超时或取消：SIGTERM 等 5s → SIGKILL 整个进程组
 - 退出时记录 exit code、signal、stdout/stderr SHA-256
+
+TODO: macOS Seatbelt sandbox integration (spec §I.8)
+- subprocess should run inside sandbox-exec for security
 """
 
 from __future__ import annotations

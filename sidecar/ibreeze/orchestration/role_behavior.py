@@ -20,9 +20,45 @@ class RoleBehavior:
         self.employee_id = employee_id
         self.company_id = company_id
 
+    async def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+        """Execute role behavior based on context."""
+        if self.role == AgentRole.GENERAL_MANAGER:
+            return await self._general_manager_behavior(context)
+        elif self.role == AgentRole.DEPARTMENT_HEAD:
+            return await self._department_head_behavior(context)
+        else:
+            return await self._employee_behavior(context)
+
+    async def _general_manager_behavior(self, context: dict[str, Any]) -> dict[str, Any]:
+        task = context.get("task", {})
+        return {
+            "action": "create_plan",
+            "task_id": task.get("id"),
+            "analysis": f"总经理分析任务: {task.get('title', '')}",
+            "requires_plan_confirmation": True,
+        }
+
+    async def _department_head_behavior(self, context: dict[str, Any]) -> dict[str, Any]:
+        task = context.get("task", {})
+        return {
+            "action": "organize_work",
+            "task_id": task.get("id"),
+            "department_id": context.get("department_id", ""),
+            "analysis": f"部门负责人组织本部门工作: {task.get('title', '')}",
+            "sub_tasks": [],
+        }
+
+    async def _employee_behavior(self, context: dict[str, Any]) -> dict[str, Any]:
+        task = context.get("task", {})
+        return {
+            "action": "execute",
+            "task_id": task.get("id"),
+            "analysis": f"员工执行任务: {task.get('title', '')}",
+        }
+
     async def analyze_task(self, task: dict[str, Any]) -> dict[str, Any]:
         """Analyze a task and determine approach."""
-        raise NotImplementedError
+        return await self.execute({"task": task})
 
 
 class GeneralManagerBehavior(RoleBehavior):

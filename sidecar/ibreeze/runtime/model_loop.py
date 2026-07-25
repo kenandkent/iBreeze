@@ -67,7 +67,7 @@ class ModelRuntime:
         transport: ModelTransport,
         tools: dict[str, Tool],
         *,
-        max_turns: int = 32,
+        max_turns: int = 50,
         permission_checker: PermissionChecker | None = None,
         verifier: Verifier | None = None,
     ) -> None:

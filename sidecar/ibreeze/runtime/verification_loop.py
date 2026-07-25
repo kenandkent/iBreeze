@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from typing import Any
 
 MAX_FIX_ATTEMPTS = 5
@@ -49,7 +51,19 @@ async def verify_and_fix(
             "output_preview": wait_result.get("stdout_preview", "")[:1000],
         })
 
-        if wait_result.get("exit_code") == 0:
+        verdict = "passed" if wait_result.get("exit_code") == 0 else "failed"
+        evidence = {
+            "attempt": attempts,
+            "exit_code": wait_result.get("exit_code"),
+            "stdout_preview": wait_result.get("stdout_preview", "")[:1000],
+        }
+        await db.execute(
+            "INSERT INTO verification_results (run_id, verdict, evidence, created_at) VALUES (?, ?, ?, ?)",
+            (run_id, verdict, json.dumps(evidence), datetime.now(UTC).isoformat()),
+        )
+        await db.commit()
+
+        if verdict == "passed":
             return {
                 "status": "passed",
                 "attempts": attempts,

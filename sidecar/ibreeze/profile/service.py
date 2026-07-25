@@ -50,10 +50,12 @@ async def create_draft(
 
         await db.execute(
             """INSERT INTO employee_base_profiles
-               (id, name, normalized_name, description, status, created_at, updated_at, version)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               (id, company_id, name, normalized_name, description, status,
+                created_at, updated_at, version)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (
                 profile_id,
+                company_id,
                 base_profile.get("name", ""),
                 normalized_name,
                 base_profile.get("description", ""),

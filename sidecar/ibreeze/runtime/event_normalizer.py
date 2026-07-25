@@ -210,6 +210,30 @@ def create_approval_event(
     )
 
 
+def create_compacted_event(run_id: str, original_events: list, compacted_data: dict) -> dict:
+    return {"type": "model.output.compacted", "run_id": run_id, "original_count": len(original_events), "data": compacted_data}
+
+
+def create_tool_approved_event(run_id: str, tool_name: str, tool_args: dict) -> dict:
+    return {"type": "tool.approved", "run_id": run_id, "tool": tool_name, "args": tool_args}
+
+
+def create_tool_rejected_event(run_id: str, tool_name: str, reason: str) -> dict:
+    return {"type": "tool.rejected", "run_id": run_id, "tool": tool_name, "reason": reason}
+
+
+def create_workspace_changed_event(run_id: str, changes: list) -> dict:
+    return {"type": "workspace.changed", "run_id": run_id, "changes": changes}
+
+
+def create_verification_started_event(run_id: str, run_id_target: str) -> dict:
+    return {"type": "verification.started", "run_id": run_id, "target_run_id": run_id_target}
+
+
+def create_verification_completed_event(run_id: str, verdict: str, issues: list) -> dict:
+    return {"type": "verification.completed", "run_id": run_id, "verdict": verdict, "issues": issues}
+
+
 async def store_event(db: Any, event: dict[str, Any]) -> str:
     """Store a normalized event in the database."""
     await db.execute(
