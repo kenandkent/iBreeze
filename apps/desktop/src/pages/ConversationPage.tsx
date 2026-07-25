@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Layout, List, Button, Input, Tag, Typography, Space, Empty, Card,
 } from 'antd';
@@ -10,6 +10,7 @@ import {
   useAddMessage,
   useArchiveConversation,
 } from '../hooks/useConversation';
+import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
 const { Sider, Content } = Layout;
@@ -23,6 +24,8 @@ const messageRoleColor: Record<string, string> = {
 };
 
 export default function ConversationPage() {
+  useEffect(() => { logger.logPageInit('ConversationPage'); }, []);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
 
@@ -43,7 +46,7 @@ export default function ConversationPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('ConversationPage', 'send_failed', { conversationId: selectedId }, msg);
+      logger.error('ConversationPage', 'send_failed', msg, { conversationId: selectedId });
     }
   };
 
@@ -55,7 +58,7 @@ export default function ConversationPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('ConversationPage', 'archive_failed', { id }, msg);
+      logger.error('ConversationPage', 'archive_failed', msg, { id });
     }
   };
 
@@ -99,7 +102,7 @@ export default function ConversationPage() {
                   }
                   description={
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(item.created_at).toLocaleString('zh-CN')}
+                      {formatTime(item.created_at)}
                     </Text>
                   }
                 />

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -59,7 +58,7 @@ async def assign_reviewer(
         await db.execute(
             """INSERT INTO review_assignments
                (id, company_id, artifact_id, reviewer_employee_id,
-                review_round, reviewed_sha256, status, created_at)
+                review_round, reviewed_sha256, status, assigned_at)
                VALUES (?,?,?,?,?,?,?,?)""",
             (
                 assignment_id,
@@ -115,23 +114,23 @@ async def submit_review_report(
 
         await db.execute(
             """INSERT INTO review_reports
-               (id, company_id, assignment_id, report_artifact_id,
-                verdict, summary, created_at)
+               (id, company_id, assignment_id, reviewer_run_id,
+                verdict, report_artifact_id, created_at)
                VALUES (?,?,?,?,?,?,?)""",
             (
                 report_id,
                 company_id,
                 assignment_id,
-                report_artifact_id,
+                None,
                 verdict,
-                summary,
+                report_artifact_id,
                 now,
             ),
         )
 
         await db.execute(
             """UPDATE review_assignments
-               SET status='completed', completed_at=?
+               SET status='submitted', submitted_at=?
                WHERE id=? AND company_id=?""",
             (now, assignment_id, company_id),
         )
@@ -164,19 +163,25 @@ async def create_review_issue(
 
     await db.execute(
         """INSERT INTO review_issues
-           (id, company_id, report_id, severity, description,
-            file_path, line_number, status, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           (id, company_id, review_report_id, severity, category,
+            description, expected, actual, suggested_fix,
+            evidence_refs_json, status, created_at, updated_at, version)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             issue_id,
             company_id,
             report_id,
             severity,
+            "",
             description,
-            file_path,
-            line_number,
+            "",
+            "",
+            "",
+            "[]",
             "open",
             now,
+            now,
+            1,
         ),
     )
     await db.commit()
@@ -201,7 +206,8 @@ async def resolve_review_issue(
 
     cursor = await db.execute(
         """UPDATE review_issues
-           SET status='resolved', resolution=?, resolved_at=?
+           SET status='resolved', rejection_reason=?,
+               updated_at=?, version=version+1
            WHERE id=? AND company_id=? AND status='open'""",
         (resolution, now, issue_id, company_id),
     )
@@ -229,7 +235,7 @@ async def list_review_issues(
     params: list[Any] = [company_id]
 
     if report_id is not None:
-        conditions.append("report_id=?")
+        conditions.append("review_report_id=?")
         params.append(report_id)
     if status is not None:
         conditions.append("status=?")

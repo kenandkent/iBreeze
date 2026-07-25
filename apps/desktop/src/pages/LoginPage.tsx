@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
@@ -10,6 +10,8 @@ import { logger } from '../utils/logger';
 const { Title } = Typography;
 
 export default function LoginPage() {
+  useEffect(() => { logger.logPageInit('LoginPage'); }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -36,7 +38,7 @@ export default function LoginPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : '登录失败');
-      logger.error('LoginPage', 'login_failed', { email: values.email }, msg);
+      logger.error('LoginPage', 'login_failed', msg, { email: values.email });
       setError(msg);
     } finally {
       setLoading(false);

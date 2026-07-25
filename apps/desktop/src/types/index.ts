@@ -220,3 +220,193 @@ export interface PaginatedResponse<T> {
   next_cursor?: string;
   total: number;
 }
+
+// Task hierarchy types
+export interface CompanyTask {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'planned' | 'in_progress' | 'review' | 'completed' | 'failed' | 'cancelled';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentTask {
+  id: string;
+  company_id: string;
+  department_id: string;
+  company_task_id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'assigned' | 'in_progress' | 'review' | 'completed' | 'failed';
+  assigned_employee_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeTask {
+  id: string;
+  company_id: string;
+  employee_id: string;
+  department_task_id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  created_at: string;
+}
+
+// Agent Run types
+export interface AgentRun {
+  id: string;
+  company_id: string;
+  task_id: string;
+  agent_id: string;
+  model_id: string;
+  purpose: string;
+  status: 'queued' | 'starting' | 'running' | 'verifying' | 'succeeded' | 'failed' | 'cancelled' | 'waiting_approval' | 'waiting_resource';
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+// Review types
+export interface ReviewAssignment {
+  id: string;
+  company_id: string;
+  artifact_id: string;
+  task_id: string;
+  reviewer_employee_id: string;
+  status: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  created_at: string;
+}
+
+export interface ReviewReport {
+  id: string;
+  assignment_id: string;
+  company_id: string;
+  artifact_id: string;
+  reviewer_employee_id: string;
+  verdict: 'approved' | 'rejected' | 'needs_changes';
+  summary: string;
+  created_at: string;
+}
+
+export interface ReviewIssue {
+  id: string;
+  company_id: string;
+  artifact_id: string;
+  review_report_id: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  description: string;
+  file_path?: string;
+  line_number?: number;
+  status: 'open' | 'resolved' | 'dismissed';
+  created_at: string;
+}
+
+// Plan types
+export interface PlanVersion {
+  id: string;
+  company_id: string;
+  version_number: number;
+  status: 'draft' | 'confirmed' | 'rejected' | 'superseded';
+  plan_content_json: string;
+  created_by: string;
+  created_at: string;
+}
+
+// Employee types
+export interface Employee {
+  id: string;
+  company_id: string;
+  department_id: string;
+  display_name: string;
+  role: string;
+  status: 'active' | 'inactive' | 'retired';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentResponsibility {
+  id: string;
+  department_id: string;
+  company_id: string;
+  title: string;
+  description: string;
+  sort_order: number;
+  created_at: string;
+}
+
+// Profile types
+export interface EmployeeBaseProfile {
+  id: string;
+  employee_id: string;
+  company_id: string;
+  agent_cli?: string;
+  api_model?: string;
+  status: 'draft' | 'published' | 'retired';
+  created_at: string;
+}
+
+export interface EmployeeBaseProfileVersion {
+  id: string;
+  profile_id: string;
+  company_id: string;
+  version_number: number;
+  agent_cli?: string;
+  api_model?: string;
+  status: 'draft' | 'published' | 'retired';
+  created_at: string;
+}
+
+// Workspace types
+export interface WorkspaceGrant {
+  id: string;
+  company_id: string;
+  employee_id: string;
+  workspace_path: string;
+  granted_at: string;
+  expires_at?: string;
+}
+
+// Event types
+export interface RunEvent {
+  id: string;
+  run_id: string;
+  event_type: string;
+  payload_json: string;
+  sequence: number;
+  created_at: string;
+}
+
+// Approval types
+export interface HumanApproval {
+  id: string;
+  company_id: string;
+  run_id: string;
+  tool_name: string;
+  parameters_json: string;
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+  requested_at: string;
+  resolved_at?: string;
+  created_at: string;
+}
+
+// Catalog types
+export interface CatalogRelease {
+  id: string;
+  version: string;
+  status: 'draft' | 'published' | 'yanked';
+  manifest_json: string;
+  created_at: string;
+}
+
+export interface EmergencyDisableRelease {
+  id: string;
+  release_id: string;
+  reason: string;
+  disabled_at: string;
+  expires_at?: string;
+}

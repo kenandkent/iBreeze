@@ -2,6 +2,7 @@
 
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::error::AppError;
@@ -34,6 +35,7 @@ impl SecureKeyring {
         profile_directory_id: &str,
         bundle: &SessionBundle,
     ) -> Result<(), AppError> {
+        info!(key = %profile_directory_id, "keychain.store.start");
         let entry = self.entry(profile_directory_id)?;
         let old_value = read_raw(&entry)?;
         if let Some(old) = old_value.as_deref() {
@@ -46,12 +48,22 @@ impl SecureKeyring {
         let write_result = entry.set_password(&serialized);
         let read_back = read_raw(&entry)?;
         match (write_result, read_back.as_deref()) {
-            (Ok(()), Some(value)) if value == serialized.as_str() => Ok(()),
-            (Err(_), Some(value)) if value == serialized.as_str() => Ok(()),
+            (Ok(()), Some(value)) if value == serialized.as_str() => {
+                info!(key = %profile_directory_id, "keychain.store.success");
+                Ok(())
+            }
+            (Err(_), Some(value)) if value == serialized.as_str() => {
+                info!(key = %profile_directory_id, "keychain.store.success");
+                Ok(())
+            }
             (Err(error), value) if value == old_value.as_deref() => {
+                warn!(key = %profile_directory_id, error = %error, "keychain.store.failed");
                 Err(AppError::Storage(format!("Keychain write failed: {error}")))
             }
-            _ => Err(AppError::Security("KEYCHAIN_BUNDLE_CORRUPT".to_owned())),
+            _ => {
+                warn!(key = %profile_directory_id, "keychain.store.corrupt");
+                Err(AppError::Security("KEYCHAIN_BUNDLE_CORRUPT".to_owned()))
+            }
         }
     }
 
@@ -59,22 +71,39 @@ impl SecureKeyring {
         &self,
         profile_directory_id: &str,
     ) -> Result<Option<SessionBundle>, AppError> {
+        info!(key = %profile_directory_id, "keychain.load.start");
         let entry = self.entry(profile_directory_id)?;
         match read_raw(&entry)? {
-            Some(serialized) => serde_json::from_str(&serialized)
-                .map(Some)
-                .map_err(|_| AppError::Security("KEYCHAIN_BUNDLE_CORRUPT".to_owned())),
-            None => Ok(None),
+            Some(serialized) => {
+                info!(key = %profile_directory_id, "keychain.load.success");
+                serde_json::from_str(&serialized)
+                    .map(Some)
+                    .map_err(|_| AppError::Security("KEYCHAIN_BUNDLE_CORRUPT".to_owned()))
+            }
+            None => {
+                info!(key = %profile_directory_id, "keychain.load.not_found");
+                Ok(None)
+            }
         }
     }
 
     pub fn delete_bundle(&self, profile_directory_id: &str) -> Result<bool, AppError> {
+        info!(key = %profile_directory_id, "keychain.delete.start");
         match self.entry(profile_directory_id)?.delete_credential() {
-            Ok(()) => Ok(true),
-            Err(keyring::Error::NoEntry) => Ok(false),
-            Err(error) => Err(AppError::Storage(format!(
-                "Keychain delete failed: {error}"
-            ))),
+            Ok(()) => {
+                info!(key = %profile_directory_id, "keychain.delete.success");
+                Ok(true)
+            }
+            Err(keyring::Error::NoEntry) => {
+                info!(key = %profile_directory_id, "keychain.delete.not_found");
+                Ok(false)
+            }
+            Err(error) => {
+                warn!(key = %profile_directory_id, error = %error, "keychain.delete.failed");
+                Err(AppError::Storage(format!(
+                    "Keychain delete failed: {error}"
+                )))
+            }
         }
     }
 

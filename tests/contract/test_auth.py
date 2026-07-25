@@ -15,7 +15,7 @@ def test_token_family_model_exists():
 
 
 def test_token_service_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "token_service.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "auth" / "service.py").exists()
 
 
 def test_dependencies_exists():
@@ -29,7 +29,7 @@ def test_user_model_is_valid():
     compile(content, str(init_path), "exec")
     assert "class User" in content
     assert "username" in content
-    assert "hashed_password" in content
+    assert "password_hash" in content
 
 
 def test_token_family_model_is_valid():
@@ -37,18 +37,18 @@ def test_token_family_model_is_valid():
     init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "models" / "token_family.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "class TokenFamily" in content
+    assert "class RefreshTokenFamily" in content
     assert "family_id" in content
-    assert "status" in content
+    assert "revoked_at" in content
 
 
 def test_token_service_is_valid():
-    """Verify token_service compiles and has required functions."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "token_service.py"
+    """Verify auth/service compiles and has required functions."""
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "auth" / "service.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "create_access_token" in content
     assert "verify_token" in content
-    assert "async def create_token_family" in content
-    assert "async def rotate_token" in content
-    assert "async def revoke_family" in content
+    assert "async def login" in content
+    assert "async def logout" in content
+    assert "async def change_password" in content

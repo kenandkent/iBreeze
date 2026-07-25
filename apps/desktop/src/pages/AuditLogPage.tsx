@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Typography, DatePicker, Select, Button, Timeline, Tag, Space, Card,
 } from 'antd';
@@ -22,6 +22,8 @@ const eventTypeColor: Record<string, string> = {
 };
 
 export default function AuditLogPage() {
+  useEffect(() => { logger.logPageInit('AuditLogPage'); }, []);
+
   const [timeRange, setTimeRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [eventType, setEventType] = useState<string | undefined>(undefined);
 
@@ -53,7 +55,7 @@ export default function AuditLogPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('AuditLogPage', 'export_failed', { event_type: eventType }, msg);
+      logger.error('AuditLogPage', 'export_failed', msg, { event_type: eventType });
     }
   };
 

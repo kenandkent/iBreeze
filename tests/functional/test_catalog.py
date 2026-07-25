@@ -18,14 +18,14 @@ class TestSkillSchemas:
     """Pydantic schema validation for skills."""
 
     def test_skill_create_valid(self):
-        from ibreeze_backend.schemas.skill import SkillCreate
+        from ibreeze_backend.skills.schemas import SkillCreate
 
         skill = SkillCreate(name="my-skill", version="1.0.0", category="productivity")
         assert skill.name == "my-skill"
         assert skill.version == "1.0.0"
 
     def test_skill_create_with_compatibility(self):
-        from ibreeze_backend.schemas.skill import SkillCreate
+        from ibreeze_backend.skills.schemas import SkillCreate
 
         skill = SkillCreate(
             name="my-skill",
@@ -36,28 +36,28 @@ class TestSkillSchemas:
         assert skill.compatibility["min_platform"] == "1.0.0"
 
     def test_skill_create_invalid_version_rejected(self):
-        from ibreeze_backend.schemas.skill import SkillCreate
+        from ibreeze_backend.skills.schemas import SkillCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             SkillCreate(name="s", version="not-semver", category="cat")
 
     def test_skill_create_empty_name_rejected(self):
-        from ibreeze_backend.schemas.skill import SkillCreate
+        from ibreeze_backend.skills.schemas import SkillCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             SkillCreate(name="", version="1.0.0", category="cat")
 
     def test_skill_create_empty_category_rejected(self):
-        from ibreeze_backend.schemas.skill import SkillCreate
+        from ibreeze_backend.skills.schemas import SkillCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             SkillCreate(name="s", version="1.0.0", category="")
 
     def test_skill_update_partial(self):
-        from ibreeze_backend.schemas.skill import SkillUpdate
+        from ibreeze_backend.skills.schemas import SkillUpdate
 
         update = SkillUpdate(description="new desc")
         assert update.description == "new desc"
@@ -65,7 +65,7 @@ class TestSkillSchemas:
         assert update.is_active is None
 
     def test_skill_response_from_attributes(self):
-        from ibreeze_backend.schemas.skill import SkillResponse
+        from ibreeze_backend.skills.schemas import SkillResponse
 
         resp = SkillResponse(
             id=str(uuid.uuid4()),
@@ -80,7 +80,7 @@ class TestSkillSchemas:
         assert resp.is_active is True
 
     def test_skill_list_response(self):
-        from ibreeze_backend.schemas.skill import SkillListResponse, SkillResponse
+        from ibreeze_backend.skills.schemas import SkillListResponse, SkillResponse
 
         skills = [SkillResponse(
             id=str(uuid.uuid4()), name="s", version="1.0.0", description=None,
@@ -99,7 +99,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_create_skill(self, mock_db_session):
-        from ibreeze_backend.services.skill_service import create_skill
+        from ibreeze_backend.skills.service import create_skill
 
         skill = await create_skill(
             mock_db_session, name="my-skill", version="1.0.0", category="dev",
@@ -112,7 +112,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_get_skill_found(self, mock_db_session, mock_scalar_result):
-        from ibreeze_backend.services.skill_service import get_skill
+        from ibreeze_backend.skills.service import get_skill
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(name="s", version="1.0.0", category="dev", is_active=True)
@@ -123,7 +123,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_get_skill_not_found(self, mock_db_session, mock_scalar_result):
-        from ibreeze_backend.services.skill_service import get_skill
+        from ibreeze_backend.skills.service import get_skill
 
         mock_db_session.execute.return_value = mock_scalar_result(None)
         result = await get_skill(mock_db_session, uuid.uuid4())
@@ -131,7 +131,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_list_skills(self, mock_db_session):
-        from ibreeze_backend.services.skill_service import list_skills
+        from ibreeze_backend.skills.service import list_skills
         from ibreeze_backend.models.skill import Skill
 
         skills = [Skill(name="s1", version="1.0.0", category="dev", is_active=True)]
@@ -148,7 +148,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_list_skills_by_category(self, mock_db_session):
-        from ibreeze_backend.services.skill_service import list_skills
+        from ibreeze_backend.skills.service import list_skills
 
         count_result = MagicMock()
         count_result.scalar.return_value = 0
@@ -162,7 +162,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_update_skill(self, mock_db_session):
-        from ibreeze_backend.services.skill_service import update_skill
+        from ibreeze_backend.skills.service import update_skill
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(name="s", version="1.0.0", category="dev", is_active=True)
@@ -172,7 +172,7 @@ class TestSkillService:
 
     @pytest.mark.asyncio
     async def test_update_skill_no_changes(self, mock_db_session):
-        from ibreeze_backend.services.skill_service import update_skill
+        from ibreeze_backend.skills.service import update_skill
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(name="s", version="1.0.0", category="dev", is_active=True)
@@ -185,7 +185,7 @@ class TestSkillCompatibility:
 
     @pytest.mark.asyncio
     async def test_compatible_with_no_constraints(self):
-        from ibreeze_backend.services.skill_service import check_compatibility
+        from ibreeze_backend.skills.service import check_compatibility
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(name="s", version="1.0.0", category="dev", is_active=True)
@@ -193,7 +193,7 @@ class TestSkillCompatibility:
 
     @pytest.mark.asyncio
     async def test_compatible_within_range(self):
-        from ibreeze_backend.services.skill_service import check_compatibility
+        from ibreeze_backend.skills.service import check_compatibility
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(
@@ -204,7 +204,7 @@ class TestSkillCompatibility:
 
     @pytest.mark.asyncio
     async def test_incompatible_below_min(self):
-        from ibreeze_backend.services.skill_service import check_compatibility
+        from ibreeze_backend.skills.service import check_compatibility
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(
@@ -215,7 +215,7 @@ class TestSkillCompatibility:
 
     @pytest.mark.asyncio
     async def test_incompatible_above_max(self):
-        from ibreeze_backend.services.skill_service import check_compatibility
+        from ibreeze_backend.skills.service import check_compatibility
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(
@@ -226,7 +226,7 @@ class TestSkillCompatibility:
 
     @pytest.mark.asyncio
     async def test_compatible_at_boundary(self):
-        from ibreeze_backend.services.skill_service import check_compatibility
+        from ibreeze_backend.skills.service import check_compatibility
         from ibreeze_backend.models.skill import Skill
 
         skill = Skill(

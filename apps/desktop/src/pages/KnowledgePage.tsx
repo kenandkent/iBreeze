@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table, Button, Input, Space, Tag, Drawer, Form, Select, Card, Row, Col, Statistic, Typography, Popconfirm,
 } from 'antd';
@@ -18,6 +18,8 @@ const { Title, Text } = Typography;
 const typeColor: Record<string, string> = { FAQ: 'blue', DOC: 'green', URL: 'orange' };
 
 export default function KnowledgePage() {
+  useEffect(() => { logger.logPageInit('KnowledgePage'); }, []);
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
@@ -60,7 +62,7 @@ export default function KnowledgePage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('KnowledgePage', editingEntry ? 'update_failed' : 'create_failed', { id: editingEntry?.id }, msg);
+      logger.error('KnowledgePage', editingEntry ? 'update_failed' : 'create_failed', msg, { id: editingEntry?.id });
     }
   };
 
@@ -103,7 +105,7 @@ export default function KnowledgePage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewEntry(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           {record.status === 'active' && (
-            <Popconfirm title="确认归档？" onConfirm={async () => { try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', { id: record.id }, msg); } }}>
+            <Popconfirm title="确认归档？" onConfirm={async () => { logger.logAction('KnowledgePage', 'archive_entry'); try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', msg, { id: record.id }); } }}>
               <Button size="small" icon={<InboxOutlined />}>归档</Button>
             </Popconfirm>
           )}
@@ -145,7 +147,7 @@ export default function KnowledgePage() {
             <Select.Option value="archived">已归档</Select.Option>
           </Select>
         </Space>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { logger.logAction('KnowledgePage', 'create_entry'); handleCreate(); }}>新建</Button>
       </div>
 
       <Table columns={columns} dataSource={entries} rowKey="id" loading={isLoading} />

@@ -18,7 +18,7 @@ class TestSkillManagement:
         from ibreeze_backend.skills.service import install_skill
 
         with (
-            patch("ibreeze_backend.skills.service.validate_zip_structure") as mock_validate,
+            patch("ibreeze_backend.skills.service.validate_skill_zip") as mock_validate,
             patch("ibreeze_backend.skills.service.validate_zip_size") as mock_size,
             patch("ibreeze_backend.skills.service.validate_uncompressed_size") as mock_uncompressed,
             patch("ibreeze_backend.skills.service.compute_zip_checksum") as mock_checksum,

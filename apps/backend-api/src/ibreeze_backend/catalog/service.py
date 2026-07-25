@@ -33,6 +33,9 @@ from ibreeze_backend.catalog.schemas import (
     ProviderModelBindingCreate,
     ProviderUpdate,
 )
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.catalog.service")
 
 _SEMVER = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -143,6 +146,7 @@ def _validate_model_values(model: ModelCatalog) -> None:
 
 
 async def create_agent(db: AsyncSession, body: AgentCreate) -> AgentCatalog:
+    logger.info("create_agent.start", extra={"key": body.key})
     exists = await db.scalar(
         select(func.count()).select_from(AgentCatalog).where(AgentCatalog.key == body.key)
     )
@@ -151,6 +155,7 @@ async def create_agent(db: AsyncSession, body: AgentCreate) -> AgentCatalog:
     resource = AgentCatalog(**body.model_dump(), catalog_revision=1, status="draft", version=1)
     db.add(resource)
     await db.flush()
+    logger.info("create_agent.completed", extra={"agent_id": str(resource.id), "key": body.key})
     return resource
 
 
@@ -182,11 +187,13 @@ async def update_agent(
 
 
 async def delete_agent(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    logger.info("delete_agent.start", extra={"agent_id": str(resource_id)})
     resource = await _locked(db, AgentCatalog, resource_id)
     _assert_mutable(resource)
     _assert_version(resource, expected_version)
     await db.delete(resource)
     await db.flush()
+    logger.info("delete_agent.completed", extra={"agent_id": str(resource_id)})
 
 
 async def validate_agent(db: AsyncSession, resource_id: uuid.UUID) -> AgentCatalog:
@@ -324,6 +331,7 @@ async def delete_agent_version(
 
 
 async def create_model(db: AsyncSession, body: ModelCreate) -> ModelCatalog:
+    logger.info("create_model.start", extra={"provider_key": body.provider_key, "model_key": body.model_key})
     exists = await db.scalar(
         select(func.count())
         .select_from(ModelCatalog)
@@ -338,6 +346,7 @@ async def create_model(db: AsyncSession, body: ModelCreate) -> ModelCatalog:
     _validate_model_values(resource)
     db.add(resource)
     await db.flush()
+    logger.info("create_model.completed", extra={"model_id": str(resource.id)})
     return resource
 
 
@@ -371,11 +380,13 @@ async def update_model(
 
 
 async def delete_model(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    logger.info("delete_model.start", extra={"model_id": str(resource_id)})
     resource = await _locked(db, ModelCatalog, resource_id)
     _assert_mutable(resource)
     _assert_version(resource, expected_version)
     await db.delete(resource)
     await db.flush()
+    logger.info("delete_model.completed", extra={"model_id": str(resource_id)})
 
 
 async def validate_model(db: AsyncSession, resource_id: uuid.UUID) -> ModelCatalog:
@@ -420,6 +431,7 @@ async def clone_model_revision(db: AsyncSession, resource_id: uuid.UUID) -> Mode
 
 
 async def create_provider(db: AsyncSession, body: ProviderCreate) -> ProviderCatalog:
+    logger.info("create_provider.start", extra={"key": body.key})
     exists = await db.scalar(
         select(func.count()).select_from(ProviderCatalog).where(ProviderCatalog.key == body.key)
     )
@@ -430,6 +442,7 @@ async def create_provider(db: AsyncSession, body: ProviderCreate) -> ProviderCat
     resource = ProviderCatalog(**values, catalog_revision=1, status="draft", version=1)
     db.add(resource)
     await db.flush()
+    logger.info("create_provider.completed", extra={"provider_id": str(resource.id)})
     return resource
 
 
@@ -467,11 +480,13 @@ async def update_provider(
 
 
 async def delete_provider(db: AsyncSession, resource_id: uuid.UUID, expected_version: int) -> None:
+    logger.info("delete_provider.start", extra={"provider_id": str(resource_id)})
     resource = await _locked(db, ProviderCatalog, resource_id)
     _assert_mutable(resource)
     _assert_version(resource, expected_version)
     await db.delete(resource)
     await db.flush()
+    logger.info("delete_provider.completed", extra={"provider_id": str(resource_id)})
 
 
 async def validate_provider(db: AsyncSession, resource_id: uuid.UUID) -> ProviderCatalog:

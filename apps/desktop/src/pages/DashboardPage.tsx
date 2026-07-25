@@ -13,6 +13,7 @@ import { useListConversations } from '../hooks/useConversation';
 import { useListKnowledgeEntries } from '../hooks/useKnowledge';
 import { useListWorkspaces } from '../hooks/useWorkspace';
 import { useListAuditLogs } from '../hooks/useAudit';
+import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
@@ -20,7 +21,7 @@ const { Title, Text } = Typography;
 export default function DashboardPage() {
   const navigate = useNavigate();
 
-  useEffect(() => { logger.info('DashboardPage', 'page_visit'); }, []);
+  useEffect(() => { logger.logPageInit('DashboardPage'); }, []);
 
   const { data: companies } = useListCompanies();
   const { data: conversations } = useListConversations();
@@ -79,7 +80,7 @@ export default function DashboardPage() {
               children: (
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {new Date(log.created_at).toLocaleString('zh-CN')}
+                    {formatTime(log.created_at)}
                   </Text>
                   <br />
                   <Text>

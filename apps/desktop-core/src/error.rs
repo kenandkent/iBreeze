@@ -27,6 +27,18 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("IO error: {0}")]
+    Io(String),
+
+    #[error("User cancelled: {0}")]
+    Cancelled(String),
+
+    #[error("External open error: {0}")]
+    ExternalOpen(String),
+
+    #[error("Not supported: {0}")]
+    NotSupported(String),
 }
 
 #[derive(Serialize)]
@@ -49,6 +61,10 @@ impl Serialize for AppError {
             AppError::Storage(msg) => ("STORAGE_ERROR", msg.clone()),
             AppError::Security(msg) => ("SECURITY_ERROR", msg.clone()),
             AppError::Internal(msg) => ("INTERNAL_ERROR", msg.clone()),
+            AppError::Io(msg) => ("IO_ERROR", msg.clone()),
+            AppError::Cancelled(msg) => ("CANCELLED", msg.clone()),
+            AppError::ExternalOpen(msg) => ("EXTERNAL_OPEN_ERROR", msg.clone()),
+            AppError::NotSupported(msg) => ("NOT_SUPPORTED", msg.clone()),
         };
         AppErrorSerializable {
             error: message,

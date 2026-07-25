@@ -46,7 +46,7 @@ async def create_artifact(
     try:
         existing = await _one(
             await db.execute(
-                "SELECT id FROM artifacts WHERE company_id=? AND content_sha256=?",
+                "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
                 (company_id, content_hash),
             )
         )
@@ -60,9 +60,10 @@ async def create_artifact(
         await db.execute(
             """INSERT INTO artifacts
                (id, company_id, company_task_id, artifact_type,
-                filename, mime_type, content_sha256, content_size,
-                supersedes_artifact_id, created_by_employee_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                logical_name, media_type, object_sha256, object_size,
+                metadata_json, supersedes_artifact_id,
+                created_by_type, created_by_run_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 artifact_id,
                 company_id,
@@ -72,17 +73,19 @@ async def create_artifact(
                 mime_type,
                 content_hash,
                 len(content),
+                "{}",
                 supersedes_artifact_id,
-                created_by_employee_id,
+                "user",
+                None,
                 now,
             ),
         )
 
         await db.execute(
             """INSERT INTO artifact_contributors
-               (artifact_id, company_id, employee_id, role, created_at)
-               VALUES (?,?,?,?,?)""",
-            (artifact_id, company_id, created_by_employee_id, "creator", now),
+               (artifact_id, company_id, employee_id)
+               VALUES (?,?,?)""",
+            (artifact_id, company_id, created_by_employee_id),
         )
 
         await db.commit()
@@ -159,3 +162,101 @@ async def get_artifact_version_chain(
         current_id = artifact.get("supersedes_artifact_id")
 
     return chain
+
+
+async def get_artifact_content(
+    db: Any,
+    artifact_id: str,
+    company_id: str,
+) -> bytes | None:
+    """Get the actual content of an artifact from CAS."""
+    from .storage import get_storage
+
+    cursor = await db.execute(
+        "SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?",
+        (artifact_id, company_id),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return None
+
+    storage = get_storage()
+    return storage.read(dict(row)["object_sha256"])
+
+
+async def create_artifact_with_manifest(
+    db: Any,
+    *,
+    company_id: str,
+    company_task_id: str,
+    artifact_type: str,
+    relative_path: str,
+    content: bytes,
+    created_by_employee_id: str,
+    manifest: Any | None = None,
+) -> dict[str, object]:
+    """Create an artifact with CAS storage and manifest."""
+    from .storage import get_storage
+
+    storage = get_storage()
+    result = storage.write(content)
+
+    artifact_id = _id()
+    now = _now()
+
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        existing = await _one(
+            await db.execute(
+                "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
+                (company_id, result["sha256"]),
+            )
+        )
+        if existing is not None:
+            await db.commit()
+            return {
+                "id": existing["id"],
+                "content_sha256": result["sha256"],
+                "deduplicated": True,
+            }
+
+        await db.execute(
+            """INSERT INTO artifacts
+               (id, company_id, company_task_id, artifact_type,
+                logical_name, media_type, object_sha256, object_size,
+                metadata_json, supersedes_artifact_id,
+                created_by_type, created_by_run_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                artifact_id,
+                company_id,
+                company_task_id,
+                artifact_type,
+                relative_path,
+                "application/octet-stream",
+                result["sha256"],
+                len(content),
+                "{}",
+                None,
+                "user",
+                None,
+                now,
+            ),
+        )
+
+        await db.execute(
+            """INSERT INTO artifact_contributors
+               (artifact_id, company_id, employee_id)
+               VALUES (?,?,?)""",
+            (artifact_id, company_id, created_by_employee_id),
+        )
+
+        await db.commit()
+        return {
+            "id": artifact_id,
+            "content_sha256": result["sha256"],
+            "deduplicated": False,
+        }
+    except Exception:
+        await db.rollback()
+        raise

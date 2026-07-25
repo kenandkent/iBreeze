@@ -62,6 +62,9 @@ from ibreeze_backend.catalog.service import (
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.catalog")
 
 router = APIRouter(prefix="/admin/api/v1", tags=["catalog"])
 def _if_match(value: str | None) -> int:
@@ -110,7 +113,10 @@ async def create_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentResponse:
-    return AgentResponse.model_validate(await _call(lambda: create_agent(db, body)))
+    logger.info("create_agent.start", extra={"key": body.key})
+    result = AgentResponse.model_validate(await _call(lambda: create_agent(db, body)))
+    logger.info("create_agent.completed", extra={"agent_id": str(result.id)})
+    return result
 
 
 @router.get("/agents")
@@ -119,7 +125,10 @@ async def list_agents_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(await list_agents(db, limit), AgentResponse)
+    logger.info("list_agents.start", extra={"limit": limit})
+    items = _page(await list_agents(db, limit), AgentResponse)
+    logger.info("list_agents.completed", extra={"count": len(items["items"])})
+    return items
 
 
 @router.get("/agents/{resource_id}", response_model=AgentResponse)
@@ -128,8 +137,10 @@ async def get_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentResponse:
+    logger.info("get_agent.start", extra={"agent_id": str(resource_id)})
     item = await get_agent(db, resource_id)
     if item is None:
+        logger.warning("get_agent.failed", extra={"agent_id": str(resource_id), "reason": "not_found"})
         raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
     return AgentResponse.model_validate(item)
 
@@ -142,7 +153,9 @@ async def update_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentResponse:
+    logger.info("update_agent.start", extra={"agent_id": str(resource_id)})
     item = await _call(lambda: update_agent(db, resource_id, body, _if_match(if_match)))
+    logger.info("update_agent.completed", extra={"agent_id": str(resource_id)})
     return AgentResponse.model_validate(item)
 
 
@@ -153,7 +166,9 @@ async def delete_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_agent.start", extra={"agent_id": str(resource_id)})
     await _call(lambda: delete_agent(db, resource_id, _if_match(if_match)))
+    logger.info("delete_agent.completed", extra={"agent_id": str(resource_id)})
     return Response(status_code=204)
 
 
@@ -163,7 +178,10 @@ async def validate_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentResponse:
-    return AgentResponse.model_validate(await _call(lambda: validate_agent(db, resource_id)))
+    logger.info("validate_agent.start", extra={"agent_id": str(resource_id)})
+    result = AgentResponse.model_validate(await _call(lambda: validate_agent(db, resource_id)))
+    logger.info("validate_agent.completed", extra={"agent_id": str(resource_id)})
+    return result
 
 
 @router.post(
@@ -176,9 +194,12 @@ async def clone_agent_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentResponse:
-    return AgentResponse.model_validate(
+    logger.info("clone_agent.start", extra={"agent_id": str(resource_id)})
+    result = AgentResponse.model_validate(
         await _call(lambda: clone_agent_revision(db, resource_id))
     )
+    logger.info("clone_agent.completed", extra={"agent_id": str(resource_id), "clone_id": str(result.id)})
+    return result
 
 
 @router.post(
@@ -192,9 +213,12 @@ async def create_agent_version_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentVersionResponse:
-    return AgentVersionResponse.model_validate(
+    logger.info("create_agent_version.start", extra={"agent_id": str(resource_id)})
+    result = AgentVersionResponse.model_validate(
         await _call(lambda: create_agent_version(db, resource_id, body))
     )
+    logger.info("create_agent_version.completed", extra={"agent_id": str(resource_id)})
+    return result
 
 
 @router.get("/agents/{resource_id}/versions")
@@ -203,7 +227,10 @@ async def list_agent_versions_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(await list_agent_versions(db, resource_id), AgentVersionResponse)
+    logger.info("list_agent_versions.start", extra={"agent_id": str(resource_id)})
+    items = _page(await list_agent_versions(db, resource_id), AgentVersionResponse)
+    logger.info("list_agent_versions.completed", extra={"agent_id": str(resource_id), "count": len(items["items"])})
+    return items
 
 
 @router.delete(
@@ -216,7 +243,9 @@ async def delete_agent_version_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_agent_version.start", extra={"agent_id": str(resource_id), "version_id": str(version_id)})
     await _call(lambda: delete_agent_version(db, resource_id, version_id))
+    logger.info("delete_agent_version.completed", extra={"agent_id": str(resource_id), "version_id": str(version_id)})
     return Response(status_code=204)
 
 
@@ -231,9 +260,12 @@ async def create_agent_binding_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> AgentModelBindingResponse:
-    return AgentModelBindingResponse.model_validate(
+    logger.info("create_agent_binding.start", extra={"agent_id": str(resource_id)})
+    result = AgentModelBindingResponse.model_validate(
         await _call(lambda: create_agent_model_binding(db, resource_id, body))
     )
+    logger.info("create_agent_binding.completed", extra={"agent_id": str(resource_id)})
+    return result
 
 
 @router.get("/agents/{resource_id}/model-bindings")
@@ -242,10 +274,13 @@ async def list_agent_bindings_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(
+    logger.info("list_agent_bindings.start", extra={"agent_id": str(resource_id)})
+    items = _page(
         await list_agent_model_bindings(db, resource_id),
         AgentModelBindingResponse,
     )
+    logger.info("list_agent_bindings.completed", extra={"agent_id": str(resource_id), "count": len(items["items"])})
+    return items
 
 
 @router.delete(
@@ -258,7 +293,9 @@ async def delete_agent_binding_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_agent_binding.start", extra={"agent_id": str(resource_id), "binding_id": str(binding_id)})
     await _call(lambda: delete_agent_model_binding(db, resource_id, binding_id))
+    logger.info("delete_agent_binding.completed", extra={"agent_id": str(resource_id), "binding_id": str(binding_id)})
     return Response(status_code=204)
 
 
@@ -268,7 +305,10 @@ async def create_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ModelResponse:
-    return ModelResponse.model_validate(await _call(lambda: create_model(db, body)))
+    logger.info("create_model.start", extra={"provider_key": body.provider_key, "model_key": body.model_key})
+    result = ModelResponse.model_validate(await _call(lambda: create_model(db, body)))
+    logger.info("create_model.completed", extra={"model_id": str(result.id)})
+    return result
 
 
 @router.get("/models")
@@ -277,7 +317,10 @@ async def list_models_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(await list_models(db, limit), ModelResponse)
+    logger.info("list_models.start", extra={"limit": limit})
+    items = _page(await list_models(db, limit), ModelResponse)
+    logger.info("list_models.completed", extra={"count": len(items["items"])})
+    return items
 
 
 @router.get("/models/{resource_id}", response_model=ModelResponse)
@@ -286,8 +329,10 @@ async def get_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ModelResponse:
+    logger.info("get_model.start", extra={"model_id": str(resource_id)})
     item = await get_model(db, resource_id)
     if item is None:
+        logger.warning("get_model.failed", extra={"model_id": str(resource_id), "reason": "not_found"})
         raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
     return ModelResponse.model_validate(item)
 
@@ -300,9 +345,12 @@ async def update_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ModelResponse:
-    return ModelResponse.model_validate(
+    logger.info("update_model.start", extra={"model_id": str(resource_id)})
+    result = ModelResponse.model_validate(
         await _call(lambda: update_model(db, resource_id, body, _if_match(if_match)))
     )
+    logger.info("update_model.completed", extra={"model_id": str(resource_id)})
+    return result
 
 
 @router.delete("/models/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -312,7 +360,9 @@ async def delete_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_model.start", extra={"model_id": str(resource_id)})
     await _call(lambda: delete_model(db, resource_id, _if_match(if_match)))
+    logger.info("delete_model.completed", extra={"model_id": str(resource_id)})
     return Response(status_code=204)
 
 
@@ -322,7 +372,10 @@ async def validate_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ModelResponse:
-    return ModelResponse.model_validate(await _call(lambda: validate_model(db, resource_id)))
+    logger.info("validate_model.start", extra={"model_id": str(resource_id)})
+    result = ModelResponse.model_validate(await _call(lambda: validate_model(db, resource_id)))
+    logger.info("validate_model.completed", extra={"model_id": str(resource_id)})
+    return result
 
 
 @router.post(
@@ -335,9 +388,12 @@ async def clone_model_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ModelResponse:
-    return ModelResponse.model_validate(
+    logger.info("clone_model.start", extra={"model_id": str(resource_id)})
+    result = ModelResponse.model_validate(
         await _call(lambda: clone_model_revision(db, resource_id))
     )
+    logger.info("clone_model.completed", extra={"model_id": str(resource_id), "clone_id": str(result.id)})
+    return result
 
 
 @router.post(
@@ -350,7 +406,10 @@ async def create_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderResponse:
-    return ProviderResponse.model_validate(await _call(lambda: create_provider(db, body)))
+    logger.info("create_provider.start", extra={"key": body.key})
+    result = ProviderResponse.model_validate(await _call(lambda: create_provider(db, body)))
+    logger.info("create_provider.completed", extra={"provider_id": str(result.id)})
+    return result
 
 
 @router.get("/providers")
@@ -359,7 +418,10 @@ async def list_providers_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(await list_providers(db, limit), ProviderResponse)
+    logger.info("list_providers.start", extra={"limit": limit})
+    items = _page(await list_providers(db, limit), ProviderResponse)
+    logger.info("list_providers.completed", extra={"count": len(items["items"])})
+    return items
 
 
 @router.get("/providers/{resource_id}", response_model=ProviderResponse)
@@ -368,8 +430,10 @@ async def get_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderResponse:
+    logger.info("get_provider.start", extra={"provider_id": str(resource_id)})
     item = await get_provider(db, resource_id)
     if item is None:
+        logger.warning("get_provider.failed", extra={"provider_id": str(resource_id), "reason": "not_found"})
         raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
     return ProviderResponse.model_validate(item)
 
@@ -382,11 +446,14 @@ async def update_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderResponse:
-    return ProviderResponse.model_validate(
+    logger.info("update_provider.start", extra={"provider_id": str(resource_id)})
+    result = ProviderResponse.model_validate(
         await _call(
             lambda: update_provider(db, resource_id, body, _if_match(if_match))
         )
     )
+    logger.info("update_provider.completed", extra={"provider_id": str(resource_id)})
+    return result
 
 
 @router.delete("/providers/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -396,7 +463,9 @@ async def delete_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_provider.start", extra={"provider_id": str(resource_id)})
     await _call(lambda: delete_provider(db, resource_id, _if_match(if_match)))
+    logger.info("delete_provider.completed", extra={"provider_id": str(resource_id)})
     return Response(status_code=204)
 
 
@@ -406,9 +475,12 @@ async def validate_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderResponse:
-    return ProviderResponse.model_validate(
+    logger.info("validate_provider.start", extra={"provider_id": str(resource_id)})
+    result = ProviderResponse.model_validate(
         await _call(lambda: validate_provider(db, resource_id))
     )
+    logger.info("validate_provider.completed", extra={"provider_id": str(resource_id)})
+    return result
 
 
 @router.post(
@@ -421,9 +493,12 @@ async def clone_provider_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderResponse:
-    return ProviderResponse.model_validate(
+    logger.info("clone_provider.start", extra={"provider_id": str(resource_id)})
+    result = ProviderResponse.model_validate(
         await _call(lambda: clone_provider_revision(db, resource_id))
     )
+    logger.info("clone_provider.completed", extra={"provider_id": str(resource_id), "clone_id": str(result.id)})
+    return result
 
 
 @router.post(
@@ -437,9 +512,12 @@ async def create_provider_binding_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> ProviderModelBindingResponse:
-    return ProviderModelBindingResponse.model_validate(
+    logger.info("create_provider_binding.start", extra={"provider_id": str(resource_id)})
+    result = ProviderModelBindingResponse.model_validate(
         await _call(lambda: create_provider_model_binding(db, resource_id, body))
     )
+    logger.info("create_provider_binding.completed", extra={"provider_id": str(resource_id)})
+    return result
 
 
 @router.get("/providers/{resource_id}/model-bindings")
@@ -448,10 +526,16 @@ async def list_provider_bindings_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return _page(
+    logger.info("list_provider_bindings.start", extra={"provider_id": str(resource_id)})
+    items = _page(
         await list_provider_model_bindings(db, resource_id),
         ProviderModelBindingResponse,
     )
+    logger.info(
+        "list_provider_bindings.completed",
+        extra={"provider_id": str(resource_id), "count": len(items["items"])},
+    )
+    return items
 
 
 @router.delete(
@@ -464,5 +548,13 @@ async def delete_provider_binding_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info(
+        "delete_provider_binding.start",
+        extra={"provider_id": str(resource_id), "binding_id": str(binding_id)},
+    )
     await _call(lambda: delete_provider_model_binding(db, resource_id, binding_id))
+    logger.info(
+        "delete_provider_binding.completed",
+        extra={"provider_id": str(resource_id), "binding_id": str(binding_id)},
+    )
     return Response(status_code=204)

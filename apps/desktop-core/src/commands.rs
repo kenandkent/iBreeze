@@ -1,5 +1,13 @@
 //! Tauri command boundary. Rust-owned methods never enter the Sidecar.
 
+pub mod external;
+pub mod updater;
+pub mod workspace;
+
+pub use external::*;
+pub use updater::*;
+pub use workspace::*;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,6 +15,7 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::Value;
 use tauri::State;
 use tokio::sync::RwLock;
+use tracing::{info, warn, error, instrument};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -71,32 +80,42 @@ impl AppState {
     }
 }
 
+#[instrument(skip(state), fields(command = "backend_validate_origin"))]
 #[tauri::command]
 pub async fn backend_validate_origin(
     state: State<'_, AppState>,
     origin: String,
 ) -> Result<BackendValidation, AppError> {
+    info!(origin = %origin, "command.backend_validate_origin.start");
+    let start = std::time::Instant::now();
     let client = Arc::new(ApiClient::new(&origin, state.development_mode)?);
     client.ready().await?;
     let canonical_origin = client.canonical_origin();
     *state.backend.write().await = Some(client);
+    let elapsed = start.elapsed().as_millis();
+    info!(origin = %origin, elapsed_ms = elapsed, "command.backend_validate_origin.completed");
     Ok(BackendValidation {
         canonical_origin,
         ready: true,
     })
 }
 
+#[instrument(skip(state), fields(command = "auth_register"))]
 #[tauri::command]
 pub async fn auth_register(
     state: State<'_, AppState>,
     email: String,
     password: String,
 ) -> Result<RegisterResult, AppError> {
+    info!(email = %email, "command.auth_register.start");
+    let start = std::time::Instant::now();
     let result = state.backend().await?.register(&email, &password).await?;
     let registered_email = result
         .user
         .email
         .ok_or_else(|| AppError::Auth("Backend omitted the registered email".to_owned()))?;
+    let elapsed = start.elapsed().as_millis();
+    info!(elapsed_ms = elapsed, "command.auth_register.completed");
     Ok(RegisterResult {
         app_user_id: result.user.id.to_string(),
         email: registered_email,
@@ -104,12 +123,15 @@ pub async fn auth_register(
     })
 }
 
+#[instrument(skip(state), fields(command = "auth_login"))]
 #[tauri::command]
 pub async fn auth_login(
     state: State<'_, AppState>,
     email: String,
     password: String,
 ) -> Result<LoginResult, AppError> {
+    info!(email = %email, "command.auth_login.start");
+    let start = std::time::Instant::now();
     let backend = state.backend().await?;
     let session = backend.login(&email, &password, state.device_id).await?;
     let masked_identifier = session.user.masked_identifier.clone();
@@ -118,6 +140,7 @@ pub async fn auth_login(
         auth.access_token = Some(Zeroizing::new(session.access_token));
         auth.masked_identifier = Some(masked_identifier.clone());
         auth.profile_directory_id = None;
+        info!(elapsed_ms = start.elapsed().as_millis(), "command.auth_login.password_change_required");
         return Ok(LoginResult {
             status: "password_change_required".to_owned(),
             profile_directory_id: None,
@@ -125,15 +148,24 @@ pub async fn auth_login(
             catalog_release_sequence: None,
         });
     }
-    open_online_session(&state, &backend, session).await
+    let result = open_online_session(&state, &backend, session).await;
+    let elapsed = start.elapsed().as_millis();
+    match &result {
+        Ok(_) => info!(elapsed_ms = elapsed, "command.auth_login.completed"),
+        Err(e) => error!(error = %e, elapsed_ms = elapsed, "command.auth_login.failed"),
+    }
+    result
 }
 
+#[instrument(skip(state), fields(command = "auth_change_password"))]
 #[tauri::command]
 pub async fn auth_change_password(
     state: State<'_, AppState>,
     current_password: String,
     new_password: String,
 ) -> Result<LoginResult, AppError> {
+    info!("command.auth_change_password.start");
+    let start = std::time::Instant::now();
     let backend = state.backend().await?;
     let access_token = state
         .auth
@@ -146,27 +178,38 @@ pub async fn auth_change_password(
     let session = backend
         .change_password(&access_token, &current_password, &new_password)
         .await?;
-    open_online_session(&state, &backend, session).await
+    let result = open_online_session(&state, &backend, session).await;
+    let elapsed = start.elapsed().as_millis();
+    match &result {
+        Ok(_) => info!(elapsed_ms = elapsed, "command.auth_change_password.completed"),
+        Err(e) => error!(error = %e, elapsed_ms = elapsed, "command.auth_change_password.failed"),
+    }
+    result
 }
 
+#[instrument(skip(state), fields(command = "auth_close_profile"))]
 #[tauri::command]
 pub async fn auth_close_profile(
     state: State<'_, AppState>,
 ) -> Result<CloseProfileResult, AppError> {
+    info!("command.auth_close_profile.start");
     let closed = state.supervisor.stop().await?;
     let mut auth = state.auth.write().await;
     auth.access_token = None;
     auth.profile_directory_id = None;
     auth.masked_identifier = None;
+    info!(closed = closed, "command.auth_close_profile.completed");
     Ok(CloseProfileResult {
         closed_profile: closed,
     })
 }
 
+#[instrument(skip(state), fields(command = "auth_list_offline_profiles"))]
 #[tauri::command]
 pub async fn auth_list_offline_profiles(
     state: State<'_, AppState>,
 ) -> Result<OfflineProfilesResult, AppError> {
+    info!("command.auth_list_offline_profiles.start");
     let mut profiles = Vec::new();
     for meta in state.store.list_profile_meta()? {
         let bundle = match state.keyring.load_bundle(&meta.profile_directory_id) {
@@ -206,14 +249,18 @@ pub async fn auth_list_offline_profiles(
             expires_at: expires_at.to_rfc3339_opts(SecondsFormat::Secs, true),
         });
     }
+    info!(count = profiles.len(), "command.auth_list_offline_profiles.completed");
     Ok(OfflineProfilesResult { profiles })
 }
 
+#[instrument(skip(state), fields(command = "auth_open_profile"))]
 #[tauri::command]
 pub async fn auth_open_profile(
     state: State<'_, AppState>,
     profile_directory_id: String,
 ) -> Result<OpenProfileResult, AppError> {
+    info!(profile_id = %profile_directory_id, "command.auth_open_profile.start");
+    let start = std::time::Instant::now();
     let meta = state
         .store
         .list_profile_meta()?
@@ -231,9 +278,12 @@ pub async fn auth_open_profile(
     )?);
     match backend.ready().await {
         Ok(_) => {
+            info!(profile_id = %profile_directory_id, mode = "online", "command.auth_open_profile.backend_ready");
             *state.backend.write().await = Some(backend.clone());
             let session = backend.refresh(&bundle.refresh_token).await?;
             let login = open_online_session(&state, &backend, session).await?;
+            let elapsed = start.elapsed().as_millis();
+            info!(elapsed_ms = elapsed, "command.auth_open_profile.completed");
             Ok(OpenProfileResult {
                 profile_directory_id: login
                     .profile_directory_id
@@ -244,13 +294,27 @@ pub async fn auth_open_profile(
                 })?,
             })
         }
-        Err(AppError::Network(_)) => open_offline_session(&state, &meta, &bundle).await,
-        Err(error) => Err(error),
+        Err(AppError::Network(_)) => {
+            warn!(profile_id = %profile_directory_id, "command.auth_open_profile.offline_fallback");
+            let result = open_offline_session(&state, &meta, &bundle).await;
+            let elapsed = start.elapsed().as_millis();
+            match &result {
+                Ok(_) => info!(elapsed_ms = elapsed, mode = "offline", "command.auth_open_profile.completed"),
+                Err(e) => error!(error = %e, elapsed_ms = elapsed, "command.auth_open_profile.failed"),
+            }
+            result
+        }
+        Err(error) => {
+            error!(error = %error, "command.auth_open_profile.backend_unreachable");
+            Err(error)
+        }
     }
 }
 
+#[instrument(skip(state), fields(command = "auth_logout"))]
 #[tauri::command]
 pub async fn auth_logout(state: State<'_, AppState>) -> Result<LogoutResult, AppError> {
+    info!("command.auth_logout.start");
     let closed_profile = state.supervisor.stop().await?;
     let (access_token, profile_id) = {
         let mut auth = state.auth.write().await;
@@ -265,15 +329,17 @@ pub async fn auth_logout(state: State<'_, AppState>) -> Result<LogoutResult, App
         (Some(access_token), Some(backend)) => backend.logout(&access_token).await.is_ok(),
         _ => false,
     };
-    if let Some(profile_id) = profile_id {
-        state.keyring.delete_bundle(&profile_id)?;
+    if let Some(ref profile_id) = profile_id {
+        state.keyring.delete_bundle(profile_id)?;
     }
+    info!(revoked = revoked_family, "command.auth_logout.completed");
     Ok(LogoutResult {
         closed_profile,
         revoked_family,
     })
 }
 
+#[instrument(skip(state), fields(command = "rpc_request"))]
 #[tauri::command]
 pub async fn rpc_request(
     state: State<'_, AppState>,
@@ -281,6 +347,8 @@ pub async fn rpc_request(
     params: Value,
     idempotency_key: Option<String>,
 ) -> Result<Value, AppError> {
+    info!(method = %method, "command.rpc_request.start");
+    let start = std::time::Instant::now();
     let is_write = sidecar_method_kind(&method)?;
     let key = match (is_write, idempotency_key) {
         (true, Some(value)) => Some(
@@ -299,12 +367,18 @@ pub async fn rpc_request(
             ))
         }
     };
-    state
+    let result = state
         .supervisor
         .client()
         .await?
         .call(&method, params, key)
-        .await
+        .await;
+    let elapsed = start.elapsed().as_millis();
+    match &result {
+        Ok(_) => info!(method = %method, elapsed_ms = elapsed, "command.rpc_request.completed"),
+        Err(e) => error!(method = %method, error = %e, elapsed_ms = elapsed, "command.rpc_request.failed"),
+    }
+    result
 }
 
 async fn open_online_session(

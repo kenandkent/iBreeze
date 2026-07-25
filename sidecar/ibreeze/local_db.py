@@ -7,11 +7,17 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
+
+logger = logging.getLogger("ibreeze.local_db")
+
+SLOW_QUERY_THRESHOLD_MS = 100
 
 DEFAULT_DB_PATH = Path.home() / ".ibreeze" / "profile.db"
 MAX_DB_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
@@ -486,7 +492,7 @@ CREATE TABLE IF NOT EXISTS department_tasks (
     status TEXT NOT NULL CHECK(status IN (
         'draft','checking_resources','ready','executing','reviewing','fixing',
         'completed','waiting_dependency','waiting_resource','waiting_permission',
-        'cancelled','failed'
+        'paused','cancelled','failed'
     )),
     resume_state TEXT CHECK(resume_state IS NULL OR resume_state IN (
         'checking_resources','ready','executing','reviewing','fixing'
@@ -500,9 +506,9 @@ CREATE TABLE IF NOT EXISTS department_tasks (
     UNIQUE(id, company_id),
     UNIQUE(id, company_task_id, company_id),
     UNIQUE(company_task_id, stage_key),
-    CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission')
+    CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NOT NULL)
-       OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission')
+       OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NULL))
 );
 
@@ -531,7 +537,7 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
     acceptance_criteria_json TEXT NOT NULL CHECK(json_valid(acceptance_criteria_json)),
     status TEXT NOT NULL CHECK(status IN (
         'assigned','ready','running','submitted','peer_reviewing',
-        'changes_requested','accepted','waiting_resource','cancelled','failed'
+        'changes_requested','accepted','waiting_resource','paused','cancelled','failed'
     )),
     resume_state TEXT CHECK(resume_state IS NULL OR resume_state IN (
         'assigned','ready','running','changes_requested'
@@ -543,8 +549,8 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
         REFERENCES department_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
     UNIQUE(id, company_id),
-    CHECK((status = 'waiting_resource' AND resume_state IS NOT NULL)
-       OR (status <> 'waiting_resource' AND resume_state IS NULL))
+    CHECK((status IN ('waiting_resource','paused') AND resume_state IS NOT NULL)
+       OR (status NOT IN ('waiting_resource','paused') AND resume_state IS NULL))
 );
 
 -- employee_availability_snapshots (H.6)
@@ -1083,6 +1089,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     detail_json TEXT NOT NULL CHECK(json_valid(detail_json)),
     trace_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    hash TEXT NOT NULL DEFAULT '',
+    prev_hash TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(company_id) REFERENCES companies(id)
 );
 CREATE INDEX IF NOT EXISTS ix_audit_company_sequence ON audit_logs(company_id, row_sequence);
@@ -1206,6 +1214,19 @@ def _content_sha256(data: str) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
+async def execute_with_logging(db: Any, sql: str, params: Any = None) -> Any:
+    """Execute SQL with slow query logging."""
+    start = time.monotonic()
+    if params:
+        cursor = await db.execute(sql, params)
+    else:
+        cursor = await db.execute(sql)
+    elapsed_ms = (time.monotonic() - start) * 1000
+    if elapsed_ms > SLOW_QUERY_THRESHOLD_MS:
+        logger.warning("db.slow_query", extra={"elapsed_ms": round(elapsed_ms, 1), "sql_preview": sql[:200]})
+    return cursor
+
+
 class LocalDB:
     """异步 SQLite 数据库：1 写连接 + N 读连接池，WAL 模式。
 
@@ -1239,6 +1260,14 @@ class LocalDB:
         await self._write_conn.execute("PRAGMA wal_autocheckpoint=1000")
         await self._write_conn.executescript(_CREATE_TABLES_SQL)
         await self._write_conn.executescript(_IMMUTABILITY_TRIGGERS)
+        # Migration: add hash chain columns to audit_logs for existing databases
+        for _col in ("hash", "prev_hash"):
+            try:
+                await self._write_conn.execute(
+                    f"ALTER TABLE audit_logs ADD COLUMN {_col} TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass  # Column already exists
         await self._write_conn.commit()
 
         # 读连接池
@@ -1366,6 +1395,20 @@ class LocalDB:
         assert self._write_conn is not None, "数据库未初始化"
         await self._write_conn.executemany(sql, params_list)
         await self._write_conn.commit()
+
+    async def execute_write_batch(self, operations: list[tuple[str, tuple[Any, ...]]]) -> list[aiosqlite.Cursor]:
+        """在单个事务中执行多条写语句。"""
+        assert self._write_conn is not None, "数据库未初始化"
+        results: list[aiosqlite.Cursor] = []
+        try:
+            for sql, params in operations:
+                cursor = await self._write_conn.execute(sql, params)
+                results.append(cursor)
+            await self._write_conn.commit()
+        except Exception:
+            await self._write_conn.rollback()
+            raise
+        return results
 
     # ── 读操作 ───────────────────────────────────────────────────────────
 

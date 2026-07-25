@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.compatibility.models import CompatibilityRule
 from ibreeze_backend.compatibility.schemas import RuleCreate, RuleUpdate
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.compatibility.service")
 
 _VERSION_RANGE = re.compile(r"^[0-9A-Za-z.*<>=~^|+\-\s]+$")
 
@@ -20,9 +23,11 @@ def _validate_version_range(value: str) -> None:
 
 
 async def create_rule(db: AsyncSession, body: RuleCreate) -> CompatibilityRule:
+    logger.info("create_rule.start", extra={"subject": body.subject, "dependency": body.dependency})
     item = CompatibilityRule(**body.model_dump(), status="draft", version=1)
     db.add(item)
     await db.flush()
+    logger.info("create_rule.completed", extra={"rule_id": str(item.id)})
     return item
 
 
@@ -64,12 +69,14 @@ async def delete_rule(
     rule_id: uuid.UUID,
     expected_version: int,
 ) -> None:
+    logger.info("delete_rule.start", extra={"rule_id": str(rule_id)})
     item = await _locked_rule(db, rule_id)
     _assert_mutable(item)
     if item.version != expected_version:
         raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
     await db.delete(item)
     await db.flush()
+    logger.info("delete_rule.completed", extra={"rule_id": str(rule_id)})
 
 
 async def validate_rule(db: AsyncSession, rule_id: uuid.UUID) -> CompatibilityRule:

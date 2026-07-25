@@ -11,11 +11,11 @@ def test_skill_model_exists():
 
 
 def test_skill_schema_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "schemas" / "skill.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "skills" / "schemas.py").exists()
 
 
 def test_skill_service_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "skill_service.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "skills" / "service.py").exists()
 
 
 def test_skill_model_is_valid():
@@ -26,24 +26,25 @@ def test_skill_model_is_valid():
     assert "class Skill" in content
     assert "name" in content
     assert "version" in content
-    assert "compatibility" in content
+    assert "display_name" in content
 
 
 def test_skill_schema_is_valid():
     """Verify skill schema compiles."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "schemas" / "skill.py"
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "skills" / "schemas.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "class SkillCreate" in content
+    assert "class SkillUpdate" in content
     assert "class SkillResponse" in content
 
 
 def test_skill_service_is_valid():
-    """Verify skill_service compiles and has required functions."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "skill_service.py"
+    """Verify skills/service compiles and has required functions."""
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "skills" / "service.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "async def create_skill" in content
     assert "async def get_skill" in content
     assert "async def list_skills" in content
-    assert "async def check_compatibility" in content
+    assert "async def update_skill" in content

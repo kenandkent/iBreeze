@@ -97,6 +97,7 @@ class DepartmentTaskStatus(StrEnum):
     WAITING_DEPENDENCY = "waiting_dependency"
     WAITING_RESOURCE = "waiting_resource"
     WAITING_PERMISSION = "waiting_permission"
+    PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
 
@@ -110,6 +111,7 @@ class EmployeeTaskStatus(StrEnum):
     CHANGES_REQUESTED = "changes_requested"
     ACCEPTED = "accepted"
     WAITING_RESOURCE = "waiting_resource"
+    PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
 
@@ -633,6 +635,16 @@ class PlanVersionResponse(StrictModel):
     confirmed_at: str | None
 
 
+class CompanyPlanContentResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    plan_version_id: str
+    company_id: str
+    sections_json: str
+    created_at: datetime
+
+
 # ── TaskContextSnapshot ───────────────────────────────────────────────────
 
 
@@ -680,6 +692,17 @@ class DepartmentTaskResponse(StrictModel):
     version: int
 
 
+class DepartmentTaskDependencyResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    depends_on_task_id: str
+    company_id: str
+    dependency_type: str
+    created_at: datetime
+
+
 # ── EmployeeTask ──────────────────────────────────────────────────────────
 
 
@@ -705,6 +728,29 @@ class EmployeeTaskResponse(StrictModel):
     created_at: datetime
     updated_at: datetime
     version: int
+
+
+class EmployeeAvailabilitySnapshotResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    employee_id: str
+    company_id: str
+    available_hours: float
+    max_concurrent_tasks: int
+    snapshot_date: str
+    created_at: datetime
+
+
+class ExecutionSnapshotResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    company_id: str
+    purpose: str
+    workspace_path: str
+    created_at: datetime
 
 
 # ── EmployeeBaseProfile ───────────────────────────────────────────────────
@@ -807,6 +853,18 @@ class AgentRunEventResponse(StrictModel):
     occurred_at: datetime
 
 
+class AgentRunSpecResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: str
+    agent_id: str
+    model_id: str
+    prompt_template: str
+    parameters_json: str
+    created_at: datetime
+
+
 # ── Runtime Queue & Lease ─────────────────────────────────────────────────
 
 
@@ -838,6 +896,16 @@ class RuntimeLeaseResponse(StrictModel):
     acquired_at: datetime
     heartbeat_at: datetime
     expires_at: datetime
+
+
+class RuntimeCompanyFairnessResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    company_id: str
+    last_run_at: str | None
+    total_runs: int
+    fairness_score: float | None
+    updated_at: datetime
 
 
 # ── Checkpoint ────────────────────────────────────────────────────────────
@@ -952,6 +1020,16 @@ class ArtifactResponse(StrictModel):
     supersedes_artifact_id: str | None
     created_by_type: CreatedByType
     created_by_run_id: str | None
+    created_at: datetime
+
+
+class ArtifactContributorResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    artifact_id: str
+    employee_id: str
+    contribution_type: str
     created_at: datetime
 
 
@@ -1117,6 +1195,16 @@ class EmbeddingGenerationResponse(StrictModel):
     status: EmbeddingStatus
     created_at: datetime
     activated_at: str | None
+
+
+class KnowledgeAccessLogResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    knowledge_item_id: str
+    employee_id: str
+    access_type: str
+    accessed_at: datetime
 
 
 # ── CatalogCache ──────────────────────────────────────────────────────────
@@ -1288,3 +1376,102 @@ class ListMessagesRequest(StrictModel):
 class DepartmentConversationRequest(StrictModel):
     company_id: str
     department_id: str
+
+
+# ── Profile/Catalog (H.2) ─────────────────────────────────────────────────
+
+
+class CatalogTrustKeyResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    key_id: str
+    public_key_hex: str
+    algorithm: str
+    created_at: datetime
+    expires_at: str | None
+
+
+class AuthVerificationKeyResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    key_id: str
+    public_key_hex: str
+    algorithm: str
+    purpose: str
+    created_at: datetime
+
+
+class CatalogCacheResourceResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    release_id: str
+    resource_type: str
+    resource_name: str
+    sha256: str
+    size_bytes: int
+    created_at: datetime
+
+
+class EmergencyDisableCacheResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    release_id: str
+    reason: str
+    disabled_at: datetime
+    expires_at: str | None
+    created_at: datetime
+
+
+class LocalProfileResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_name: str
+    created_at: datetime
+    updated_at: datetime
+    last_used_at: str | None
+
+
+class LocalPreferencesResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    value: str
+    updated_at: datetime
+
+
+# ── Event/Idempotency (H.4) ───────────────────────────────────────────────
+
+
+class OutboxEventResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    payload_json: str
+    created_at: datetime
+    published_at: str | None
+
+
+class ProjectionOffsetResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    projection_name: str
+    last_offset: int
+    updated_at: datetime
+
+
+class RpcIdempotencyResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    idempotency_key: str
+    method: str
+    result_json: str
+    created_at: datetime
+    expires_at: datetime

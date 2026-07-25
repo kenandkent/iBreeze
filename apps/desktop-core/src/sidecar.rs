@@ -11,6 +11,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, timeout};
+use tracing::{info, warn, error};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -53,10 +54,12 @@ impl SidecarSupervisor {
     ) -> Result<Arc<SidecarClient>, AppError> {
         let mut guard = self.running.lock().await;
         if guard.is_some() {
+            warn!("sidecar.process.already_running");
             return Err(AppError::Validation(
                 "A Sidecar profile is already open".to_owned(),
             ));
         }
+        info!(backend_origin = %profile.backend_origin, mode = %profile.mode, "sidecar.process.starting");
         let launch_id = Uuid::new_v4();
         let launch_dir = runtime_root.join(launch_id.to_string());
         std::fs::create_dir_all(&launch_dir)
@@ -90,6 +93,8 @@ impl SidecarSupervisor {
             .kill_on_drop(true)
             .spawn()
             .map_err(|error| AppError::Sidecar(format!("start Sidecar: {error}")))?;
+        let pid = child.id();
+        info!(pid = pid, "sidecar.process.spawned");
         let mut stdin = child
             .stdin
             .take()
@@ -113,10 +118,12 @@ impl SidecarSupervisor {
             .connect_and_handshake(token_bytes, app_version, launch_id)
             .await
         {
+            error!(error = %error, "sidecar.process.handshake_failed");
             let _ = child.kill().await;
             let _ = std::fs::remove_dir_all(&launch_dir);
             return Err(error);
         }
+        info!("sidecar.process.started");
         *guard = Some(RunningSidecar {
             child,
             client: Arc::clone(&client),
@@ -139,6 +146,7 @@ impl SidecarSupervisor {
             Some(running) => running,
             None => return Ok(false),
         };
+        info!("sidecar.process.stopping");
         let _ = running
             .client
             .call::<serde_json::Value>(
@@ -151,6 +159,7 @@ impl SidecarSupervisor {
             .await
             .is_err()
         {
+            warn!("sidecar.process.kill_timeout");
             running
                 .child
                 .kill()
@@ -162,6 +171,7 @@ impl SidecarSupervisor {
         if let Some(launch_dir) = running.socket_path.parent() {
             let _ = std::fs::remove_dir_all(launch_dir);
         }
+        info!("sidecar.process.stopped");
         Ok(true)
     }
 

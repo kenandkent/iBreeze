@@ -446,6 +446,46 @@ async def list_skills_endpoint(
     }
 
 
+@public_router.get("/catalog/releases/{release_id}/resources/{resource_type}")
+async def get_release_resources(
+    release_id: uuid.UUID,
+    resource_type: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """获取指定 catalog release 中特定类型的资源"""
+    logger.info(
+        "get_release_resources",
+        extra={"release_id": str(release_id), "resource_type": resource_type},
+    )
+    from ibreeze_backend.models.catalog_release import CatalogReleaseItem
+
+    result = await db.execute(
+        select(CatalogReleaseItem).where(
+            CatalogReleaseItem.release_id == release_id,
+            CatalogReleaseItem.resource_type == resource_type,
+        )
+    )
+    items = result.scalars().all()
+
+    logger.info(
+        "get_release_resources_success",
+        extra={"release_id": str(release_id), "resource_type": resource_type, "total": len(items)},
+    )
+    return {
+        "data": [
+            {
+                "release_id": str(item.release_id),
+                "resource_type": item.resource_type,
+                "resource_id": str(item.resource_id),
+                "resource_version_id": str(item.resource_version_id),
+                "content_sha256": item.content_sha256,
+            }
+            for item in items
+        ],
+        "meta": {"total": len(items)},
+    }
+
+
 @public_router.get("/catalog/emergency-disables/latest")
 async def get_latest_emergency_disable_public_endpoint(
     db: AsyncSession = Depends(get_db_session),

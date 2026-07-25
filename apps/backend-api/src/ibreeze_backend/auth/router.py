@@ -33,6 +33,9 @@ from ibreeze_backend.auth.service import (
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.auth")
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 admin_router = APIRouter(prefix="/admin/api/v1/auth", tags=["admin-auth"])
@@ -105,9 +108,12 @@ async def register_endpoint(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
+    logger.info("register.start")
     try:
         user = await register(db, str(body.email), body.password)
+        logger.info("register.completed", extra={"user_id": str(user.id)})
     except ValueError as exc:
+        logger.error("register.failed", extra={"error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
@@ -129,6 +135,7 @@ async def login_endpoint(
     response: Response,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
+    logger.info("login.start")
     try:
         result = await login(
             db,
@@ -137,7 +144,9 @@ async def login_endpoint(
             APP_AUDIENCE,
             body.device_id,
         )
+        logger.info("login.completed")
     except ValueError as exc:
+        logger.error("login.failed", extra={"error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -157,9 +166,12 @@ async def refresh_endpoint(
     response: Response,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
+    logger.info("refresh.start")
     try:
         result = await refresh_tokens(db, body.refresh_token, APP_AUDIENCE)
+        logger.info("refresh.completed")
     except ValueError as exc:
+        logger.error("refresh.failed", extra={"error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -174,7 +186,9 @@ async def logout_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _current_user: User = Depends(get_current_user),
 ) -> None:
+    logger.info("logout.start")
     await logout(db, _extract_access_token(request), APP_AUDIENCE)
+    logger.info("logout.completed")
 
 
 @router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
@@ -182,7 +196,9 @@ async def logout_all_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
+    logger.info("logout_all.start", extra={"user_id": str(current_user.id)})
     await logout_all(db, current_user.id)
+    logger.info("logout_all.completed", extra={"user_id": str(current_user.id)})
 
 
 @router.post(
@@ -197,6 +213,7 @@ async def change_password_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    logger.info("change_password.start", extra={"user_id": str(current_user.id)})
     try:
         result = await change_password(
             db,
@@ -206,7 +223,9 @@ async def change_password_endpoint(
             _session_id(request, APP_AUDIENCE),
             APP_AUDIENCE,
         )
+        logger.info("change_password.completed", extra={"user_id": str(current_user.id)})
     except ValueError as exc:
+        logger.error("change_password.failed", extra={"user_id": str(current_user.id), "error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -217,7 +236,10 @@ async def change_password_endpoint(
 
 @router.get("/keys", response_model=AuthKeysResponse)
 async def get_keys_endpoint(request: Request) -> dict[str, object]:
-    return success_response(get_auth_keys(), _request_id(request))
+    logger.info("get_keys.start")
+    result = success_response(get_auth_keys(), _request_id(request))
+    logger.info("get_keys.completed")
+    return result
 
 
 @admin_router.post(
@@ -231,6 +253,7 @@ async def admin_login_endpoint(
     response: Response,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
+    logger.info("admin_login.start")
     try:
         result = await admin_login(
             db,
@@ -238,7 +261,9 @@ async def admin_login_endpoint(
             body.password,
             body.device_id,
         )
+        logger.info("admin_login.completed")
     except ValueError as exc:
+        logger.error("admin_login.failed", extra={"error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -258,15 +283,19 @@ async def admin_refresh_endpoint(
     response: Response,
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
+    logger.info("admin_refresh.start")
     refresh_token = request.cookies.get(_ADMIN_REFRESH_COOKIE)
     if refresh_token is None:
+        logger.error("admin_refresh.failed", extra={"error": "missing_refresh_token"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing refresh token",
         )
     try:
         result = await refresh_tokens(db, refresh_token, ADMIN_AUDIENCE)
+        logger.info("admin_refresh.completed")
     except ValueError as exc:
+        logger.error("admin_refresh.failed", extra={"error": str(exc)})
         _clear_admin_refresh_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -284,8 +313,10 @@ async def admin_logout_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _current_user: User = Depends(get_current_user),
 ) -> None:
+    logger.info("admin_logout.start")
     await logout(db, _extract_access_token(request), ADMIN_AUDIENCE)
     _clear_admin_refresh_cookie(response)
+    logger.info("admin_logout.completed")
 
 
 @admin_router.post(
@@ -300,6 +331,7 @@ async def admin_change_password_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    logger.info("admin_change_password.start", extra={"user_id": str(current_user.id)})
     try:
         result = await change_password(
             db,
@@ -309,7 +341,9 @@ async def admin_change_password_endpoint(
             _session_id(request, ADMIN_AUDIENCE),
             ADMIN_AUDIENCE,
         )
+        logger.info("admin_change_password.completed", extra={"user_id": str(current_user.id)})
     except ValueError as exc:
+        logger.error("admin_change_password.failed", extra={"user_id": str(current_user.id), "error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),

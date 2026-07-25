@@ -7,13 +7,19 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
+import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from ibreeze.logging_config import get_logger
+
+logger = get_logger("ibreeze.rpc_server")
 
 from pydantic import BaseModel, ValidationError
 
@@ -81,6 +87,33 @@ READ_METHODS = frozenset(
         "conversation.getCompany",
         "conversation.getDepartment",
         "conversation.listMessages",
+        "profile.get",
+        "profile.list",
+        "task.get",
+        "task.list",
+        "task.getGraph",
+        "task.getEvidence",
+        "runtime.listAvailableModels",
+        "runtime.getStatus",
+        "run.get",
+        "run.list",
+        "run.listEvents",
+        "artifact.list",
+        "artifact.getSnapshot",
+        "workspace.get",
+        "review.listIssues",
+        "approval.listPending",
+        "knowledge.list",
+        "knowledge.search",
+        "backup.list",
+        "settings.get",
+        "event.replay",
+        "departmentTask.getReport",
+        "catalog.getActiveRelease",
+        "catalog.listAgents",
+        "catalog.listModels",
+        "catalog.listSkills",
+        "catalog.verifyCache",
     }
 )
 
@@ -188,7 +221,92 @@ class RPCServer:
             "conversation.getCompany": self._conversation_get_company,
             "conversation.getDepartment": self._conversation_get_department,
             "conversation.listMessages": self._conversation_list_messages,
+            # Profile
+            "profile.createDraft": self._profile_create_draft,
+            "profile.updateDraft": self._profile_update_draft,
+            "profile.get": self._profile_get,
+            "profile.list": self._profile_list,
+            "profile.bindSkill": self._profile_bind_skill,
+            "profile.unbindSkill": self._profile_unbind_skill,
+            "profile.validate": self._profile_validate,
+            "profile.publish": self._profile_publish,
+            "profile.retireVersion": self._profile_retire_version,
+            "profile.retire": self._profile_retire,
+            # Task
+            "task.confirmPlan": self._task_confirm_plan,
+            "task.requestPlanRevision": self._task_request_plan_revision,
+            "task.rejectPlan": self._task_reject_plan,
+            "task.pause": self._task_pause,
+            "task.resume": self._task_resume,
+            "task.cancel": self._task_cancel,
+            "task.get": self._task_get,
+            "task.list": self._task_list,
+            "task.getGraph": self._task_get_graph,
+            "task.getEvidence": self._task_get_evidence,
+            # Department Task
+            "departmentTask.checkResources": self._dept_task_check_resources,
+            "departmentTask.replaceEmployee": self._dept_task_replace_employee,
+            "departmentTask.getReport": self._dept_task_get_report,
+            # Runtime
+            "runtime.probeAgent": self._runtime_probe_agent,
+            "runtime.probeProvider": self._runtime_probe_provider,
+            "runtime.listAvailableModels": self._runtime_list_available_models,
+            "runtime.getStatus": self._runtime_get_status,
+            # Run
+            "run.get": self._run_get,
+            "run.list": self._run_list,
+            "run.listEvents": self._run_list_events,
+            "run.cancel": self._run_cancel,
+            "run.resume": self._run_resume,
+            # Department
+            "department.responsibility.create": self._department_responsibility_create,
+            "department.responsibility.update": self._department_responsibility_update,
+            "department.responsibility.delete": self._department_responsibility_delete,
+            "department.archive": self._department_archive,
+            # Employee
+            "employee.transfer": self._employee_transfer,
+            # Artifact
+            "artifact.list": self._artifact_list,
+            "artifact.getSnapshot": self._artifact_get_snapshot,
+            # Workspace
+            "workspace.get": self._workspace_get,
+            "workspace.apply": self._workspace_apply,
+            "workspace.abandon": self._workspace_abandon,
+            "workspace.cleanupTask": self._workspace_cleanup_task,
+            # Review
+            "review.submit": self._review_submit,
+            "review.listIssues": self._review_list_issues,
+            "review.rerun": self._review_rerun,
+            "review.resolveIssue": self._review_resolve_issue,
+            # Approval
+            "approval.listPending": self._approval_list_pending,
+            "approval.resolve": self._approval_resolve,
+            # Knowledge
+            "knowledge.import": self._knowledge_import,
+            "knowledge.remove": self._knowledge_remove,
+            "knowledge.list": self._knowledge_list,
+            "knowledge.search": self._knowledge_search,
+            # Backup
+            "backup.create": self._backup_create,
+            "backup.restore": self._backup_restore,
+            "backup.list": self._backup_list,
+            # Settings
+            "settings.get": self._settings_get,
+            "settings.update": self._settings_update,
+            # Event
+            "event.subscribe": self._event_subscribe,
+            "event.replay": self._event_replay,
+            # Catalog
+            "catalog.sync": self._catalog_sync,
+            "catalog.getActiveRelease": self._catalog_get_active_release,
+            "catalog.listAgents": self._catalog_list_agents,
+            "catalog.listModels": self._catalog_list_models,
+            "catalog.listSkills": self._catalog_list_skills,
+            "catalog.installSkill": self._catalog_install_skill,
+            "catalog.removeSkill": self._catalog_remove_skill,
+            "catalog.verifyCache": self._catalog_verify_cache,
         }
+        logger.info("rpc_server.initialized", extra={"method_count": len(self.methods)})
 
     def _load_cursor_key(self) -> bytes:
         path = self.db.db_path.with_suffix(".cursor-key")
@@ -293,13 +411,17 @@ class RPCServer:
                 meta,
                 method=method,
             )
+            _start = time.monotonic()
             if method == "system.handshake":
+                logger.info("rpc.method.start", extra={"method": method, "trace_id": trace_id})
                 result = await self._handshake(params)
             elif method == "system.health":
                 self._require_session(meta)
+                logger.info("rpc.method.start", extra={"method": method, "trace_id": trace_id})
                 result = await self._health()
             elif method == "system.shutdown":
                 self._require_session(meta)
+                logger.info("rpc.method.start", extra={"method": method, "trace_id": trace_id})
                 result = {"accepted": True}
                 asyncio.create_task(self.close())
             else:
@@ -311,6 +433,7 @@ class RPCServer:
                         -32601,
                         "Method not found.",
                     )
+                logger.info("rpc.method.start", extra={"method": method, "trace_id": trace_id})
                 if method in READ_METHODS:
                     result = await handler(params)
                 else:
@@ -321,12 +444,21 @@ class RPCServer:
                         params,
                         handler,
                     )
+            elapsed_ms = round((time.monotonic() - _start) * 1000, 1)
+            logger.info(
+                "rpc.method.completed",
+                extra={"method": method, "elapsed_ms": elapsed_ms, "status": "success", "trace_id": trace_id},
+            )
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "result": _serialize(result),
             }
         except ValidationError as exc:
+            logger.warning(
+                "rpc.method.failed",
+                extra={"method": method, "error": "VALIDATION_FAILED", "trace_id": self._safe_trace_id(meta)},
+            )
             return self._domain_error(
                 request_id,
                 "VALIDATION_FAILED",
@@ -340,6 +472,10 @@ class RPCServer:
                 ],
             )
         except DomainError as exc:
+            logger.warning(
+                "rpc.method.failed",
+                extra={"method": method, "error": exc.code, "trace_id": self._safe_trace_id(meta)},
+            )
             return self._domain_error(
                 request_id,
                 exc.code,
@@ -349,6 +485,10 @@ class RPCServer:
             )
         except ValueError as exc:
             code = str(exc) or "VALIDATION_FAILED"
+            logger.warning(
+                "rpc.method.failed",
+                extra={"method": method, "error": code, "trace_id": self._safe_trace_id(meta)},
+            )
             return self._domain_error(
                 request_id,
                 code,
@@ -356,6 +496,10 @@ class RPCServer:
             )
         except Exception:
             diagnostic_id = str(uuid.uuid4())
+            logger.error(
+                "rpc.method.failed",
+                extra={"method": method, "error": diagnostic_id, "trace_id": self._safe_trace_id(meta)},
+            )
             return self._domain_error(
                 request_id,
                 "INTERNAL_ERROR",
@@ -898,6 +1042,735 @@ class RPCServer:
             after=self._decode_cursor(data.cursor),
         )
         return self._page(items, data.limit)
+
+    # ── Profile ───────────────────────────────────────────────────────
+
+    async def _profile_create_draft(self, params: dict[str, Any]) -> object:
+        from .profile.service import create_draft
+
+        company_id = params["company_id"]
+        return await create_draft(
+            self._connection,
+            company_id,
+            params["employee_id"],
+            params.get("agent_cli"),
+            params.get("api_model"),
+            params.get("base_profile"),
+        )
+
+    async def _profile_update_draft(self, params: dict[str, Any]) -> object:
+        from .profile.service import update_draft
+
+        return await update_draft(
+            self._connection,
+            params["company_id"],
+            params["draft_id"],
+            params.get("agent_cli"),
+            params.get("api_model"),
+        )
+
+    async def _profile_get(self, params: dict[str, Any]) -> object:
+        from .profile.service import get_profile
+
+        return await get_profile(
+            self._connection,
+            params["company_id"],
+            params["profile_id"],
+        )
+
+    async def _profile_list(self, params: dict[str, Any]) -> object:
+        from .profile.service import list_profiles
+
+        return await list_profiles(
+            self._connection,
+            params["company_id"],
+            params.get("employee_id"),
+        )
+
+    async def _profile_bind_skill(self, params: dict[str, Any]) -> object:
+        from .profile.service import bind_skill
+
+        return await bind_skill(
+            self._connection,
+            params["company_id"],
+            params["profile_id"],
+            params["skill_id"],
+            params["skill_version"],
+        )
+
+    async def _profile_unbind_skill(self, params: dict[str, Any]) -> object:
+        from .profile.service import unbind_skill
+
+        return await unbind_skill(
+            self._connection,
+            params["company_id"],
+            params["profile_id"],
+            params["skill_id"],
+        )
+
+    async def _profile_validate(self, params: dict[str, Any]) -> object:
+        from .profile.service import validate_draft
+
+        return await validate_draft(
+            self._connection,
+            params["company_id"],
+            params["draft_id"],
+        )
+
+    async def _profile_publish(self, params: dict[str, Any]) -> object:
+        from .profile.service import publish_draft
+
+        return await publish_draft(
+            self._connection,
+            params["company_id"],
+            params["draft_id"],
+        )
+
+    async def _profile_retire_version(self, params: dict[str, Any]) -> object:
+        from .profile.service import retire_version
+
+        return await retire_version(
+            self._connection,
+            params["company_id"],
+            params["version_id"],
+        )
+
+    async def _profile_retire(self, params: dict[str, Any]) -> object:
+        from .profile.service import retire_profile
+
+        return await retire_profile(
+            self._connection,
+            params["company_id"],
+            params["profile_id"],
+        )
+
+    # ── Task ──────────────────────────────────────────────────────────
+
+    async def _task_confirm_plan(self, params: dict[str, Any]) -> object:
+        from .task.service import confirm_plan
+
+        return await confirm_plan(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+        )
+
+    async def _task_request_plan_revision(self, params: dict[str, Any]) -> object:
+        from .task.service import request_plan_revision
+
+        return await request_plan_revision(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+            params["reason"],
+        )
+
+    async def _task_reject_plan(self, params: dict[str, Any]) -> object:
+        from .task.service import reject_plan
+
+        return await reject_plan(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+            params["reason"],
+        )
+
+    async def _task_pause(self, params: dict[str, Any]) -> object:
+        from .task.service import pause_task
+
+        return await pause_task(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+        )
+
+    async def _task_resume(self, params: dict[str, Any]) -> object:
+        from .task.service import resume_task
+
+        return await resume_task(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+        )
+
+    async def _task_cancel(self, params: dict[str, Any]) -> object:
+        from .task.service import cancel_task
+
+        return await cancel_task(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+            params["employee_id"],
+            params.get("reason", ""),
+        )
+
+    async def _task_get(self, params: dict[str, Any]) -> object:
+        from .task.service import get_company_task
+
+        return await get_company_task(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+        )
+
+    async def _task_list(self, params: dict[str, Any]) -> object:
+        from .task.service import list_company_tasks
+
+        return await list_company_tasks(
+            self._connection,
+            params["company_id"],
+            params.get("status"),
+        )
+
+    async def _task_get_graph(self, params: dict[str, Any]) -> object:
+        from .task.service import get_task_graph
+
+        return await get_task_graph(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+        )
+
+    async def _task_get_evidence(self, params: dict[str, Any]) -> object:
+        from .task.service import get_task_evidence
+
+        return await get_task_evidence(
+            self._connection,
+            params["company_id"],
+            params["task_id"],
+        )
+
+    # ── Department Task ───────────────────────────────────────────────
+
+    async def _dept_task_check_resources(self, params: dict[str, Any]) -> object:
+        from .task.service import check_department_resources
+
+        return await check_department_resources(
+            self._connection,
+            params["company_id"],
+            params["dept_task_id"],
+        )
+
+    async def _dept_task_replace_employee(self, params: dict[str, Any]) -> object:
+        from .task.service import replace_employee
+
+        return await replace_employee(
+            self._connection,
+            params["company_id"],
+            params["dept_task_id"],
+            params["old_employee_id"],
+            params["new_employee_id"],
+        )
+
+    async def _dept_task_get_report(self, params: dict[str, Any]) -> object:
+        from .task.service import get_department_task_report
+
+        return await get_department_task_report(
+            self._connection,
+            params["company_id"],
+            params["dept_task_id"],
+        )
+
+    # ── Runtime ───────────────────────────────────────────────────────
+
+    async def _runtime_probe_agent(self, params: dict[str, Any]) -> object:
+        from .runtime.service import probe_agent
+
+        return await probe_agent(
+            self._connection,
+            params["company_id"],
+            params["agent_id"],
+        )
+
+    async def _runtime_probe_provider(self, params: dict[str, Any]) -> object:
+        from .runtime.service import probe_provider
+
+        return await probe_provider(
+            self._connection,
+            params["company_id"],
+            params["provider_id"],
+        )
+
+    async def _runtime_list_available_models(self, params: dict[str, Any]) -> object:
+        from .runtime.service import list_available_models
+
+        return await list_available_models(
+            self._connection,
+            params["company_id"],
+        )
+
+    async def _runtime_get_status(self, params: dict[str, Any]) -> object:
+        from .runtime.service import get_runtime_status
+
+        return await get_runtime_status(
+            self._connection,
+            params["company_id"],
+        )
+
+    # ── Run ───────────────────────────────────────────────────────────
+
+    async def _run_get(self, params: dict[str, Any]) -> object:
+        from .runtime.service import get_agent_run
+
+        return await get_agent_run(
+            self._connection,
+            params["company_id"],
+            params["run_id"],
+        )
+
+    async def _run_list(self, params: dict[str, Any]) -> object:
+        from .runtime.service import list_agent_runs
+
+        return await list_agent_runs(
+            self._connection,
+            params["company_id"],
+            params.get("task_id"),
+            params.get("status"),
+        )
+
+    async def _run_list_events(self, params: dict[str, Any]) -> object:
+        from .runtime.service import list_run_events
+
+        return await list_run_events(
+            self._connection,
+            params["company_id"],
+            params["run_id"],
+        )
+
+    async def _run_cancel(self, params: dict[str, Any]) -> object:
+        from .runtime.service import cancel_run
+
+        return await cancel_run(
+            self._connection,
+            params["company_id"],
+            params["run_id"],
+        )
+
+    async def _run_resume(self, params: dict[str, Any]) -> object:
+        from .runtime.service import resume_run
+
+        return await resume_run(
+            self._connection,
+            params["company_id"],
+            params["run_id"],
+        )
+
+    # ── Department (inline) ───────────────────────────────────────────
+
+    async def _department_responsibility_create(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        rid = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO department_responsibilities "
+            "(id, department_id, company_id, title, description, sort_order, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                rid,
+                params["department_id"],
+                params["company_id"],
+                params["title"],
+                params.get("description", ""),
+                params.get("sort_order", 0),
+                now,
+            ),
+        )
+        await self._connection.commit()
+        return {"id": rid, "created_at": now}
+
+    async def _department_responsibility_update(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE department_responsibilities "
+            "SET title=?, description=?, sort_order=? "
+            "WHERE id=? AND company_id=?",
+            (
+                params["title"],
+                params.get("description", ""),
+                params.get("sort_order", 0),
+                params["id"],
+                params["company_id"],
+            ),
+        )
+        await self._connection.commit()
+        return {"updated_at": now}
+
+    async def _department_responsibility_delete(self, params: dict[str, Any]) -> object:
+        await self._connection.execute(
+            "DELETE FROM department_responsibilities WHERE id=? AND company_id=?",
+            (params["id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"deleted": True}
+
+    async def _department_archive(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE departments SET status='archived', updated_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["department_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"archived_at": now}
+
+    # ── Employee ──────────────────────────────────────────────────────
+
+    async def _employee_transfer(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE employees SET department_id=?, updated_at=? "
+            "WHERE id=? AND company_id=?",
+            (params["new_department_id"], now, params["employee_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"transferred_at": now}
+
+    # ── Artifact ──────────────────────────────────────────────────────
+
+    async def _artifact_list(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM artifacts WHERE company_id=? AND task_id=? "
+            "ORDER BY created_at DESC",
+            (params["company_id"], params["task_id"]),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    async def _artifact_get_snapshot(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM artifacts WHERE id=? AND company_id=?",
+            (params["artifact_id"], params["company_id"]),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    # ── Workspace ─────────────────────────────────────────────────────
+
+    async def _workspace_get(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM task_workspaces WHERE id=? AND company_id=?",
+            (params["workspace_id"], params["company_id"]),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def _workspace_apply(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE task_workspaces SET status='applied', applied_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["workspace_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"applied_at": now}
+
+    async def _workspace_abandon(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE task_workspaces SET status='abandoned', abandoned_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["workspace_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"abandoned_at": now}
+
+    async def _workspace_cleanup_task(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE task_workspaces SET status='cleaned', cleaned_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["workspace_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"cleaned_at": now}
+
+    # ── Review ────────────────────────────────────────────────────────
+
+    async def _review_submit(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        rid = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO review_reports "
+            "(id, assignment_id, company_id, artifact_id, reviewer_employee_id, "
+            "verdict, summary, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                rid,
+                params["assignment_id"],
+                params["company_id"],
+                params["artifact_id"],
+                params["reviewer_employee_id"],
+                params["verdict"],
+                params.get("summary", ""),
+                now,
+            ),
+        )
+        await self._connection.execute(
+            "UPDATE review_assignments SET status='completed', completed_at=? "
+            "WHERE id=?",
+            (now, params["assignment_id"]),
+        )
+        await self._connection.commit()
+        return {"id": rid, "created_at": now}
+
+    async def _review_list_issues(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM review_issues WHERE company_id=? AND artifact_id=? "
+            "ORDER BY created_at DESC",
+            (params["company_id"], params["artifact_id"]),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    async def _review_rerun(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        aid = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO review_assignments "
+            "(id, company_id, artifact_id, task_id, reviewer_employee_id, "
+            "status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, 'assigned', ?)",
+            (
+                aid,
+                params["company_id"],
+                params["artifact_id"],
+                params["task_id"],
+                params["reviewer_employee_id"],
+                now,
+            ),
+        )
+        await self._connection.commit()
+        return {"id": aid, "created_at": now}
+
+    async def _review_resolve_issue(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE review_issues SET status='resolved', resolved_at=?, "
+            "resolution_note=? WHERE id=? AND company_id=?",
+            (
+                now,
+                params.get("resolution_note", ""),
+                params["issue_id"],
+                params["company_id"],
+            ),
+        )
+        await self._connection.commit()
+        return {"resolved_at": now}
+
+    # ── Approval ──────────────────────────────────────────────────────
+
+    async def _approval_list_pending(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM human_approvals WHERE company_id=? AND status='pending' "
+            "ORDER BY created_at DESC",
+            (params["company_id"],),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    async def _approval_resolve(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE human_approvals SET status=?, resolved_at=?, resolution_note=? "
+            "WHERE id=? AND company_id=?",
+            (
+                params["decision"],
+                now,
+                params.get("resolution_note", ""),
+                params["approval_id"],
+                params["company_id"],
+            ),
+        )
+        await self._connection.commit()
+        return {"resolved_at": now}
+
+    # ── Knowledge ─────────────────────────────────────────────────────
+
+    async def _knowledge_import(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        kid = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO knowledge_items "
+            "(id, company_id, title, content, source_type, visibility, "
+            "status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+            (
+                kid,
+                params["company_id"],
+                params["title"],
+                params["content"],
+                params.get("source_type", "manual"),
+                params.get("visibility", "company"),
+                now,
+                now,
+            ),
+        )
+        await self._connection.commit()
+        return {"id": kid, "created_at": now}
+
+    async def _knowledge_remove(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE knowledge_items SET status='archived', updated_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["item_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"archived_at": now}
+
+    async def _knowledge_list(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM knowledge_items WHERE company_id=? AND status='active' "
+            "ORDER BY created_at DESC",
+            (params["company_id"],),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    async def _knowledge_search(self, params: dict[str, Any]) -> object:
+        query = params["query"]
+        cursor = await self._connection.execute(
+            "SELECT ki.* FROM knowledge_items ki "
+            "JOIN knowledge_fts fts ON ki.id = fts.rowid "
+            "WHERE knowledge_fts MATCH ? AND ki.company_id=? AND ki.status='active' "
+            "LIMIT 20",
+            (query, params["company_id"]),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    # ── Backup ────────────────────────────────────────────────────────
+
+    async def _backup_create(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        bid = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO backup_records "
+            "(id, company_id, backup_type, status, file_path, sha256, created_at) "
+            "VALUES (?, ?, ?, 'creating', '', '', ?)",
+            (bid, params["company_id"], params.get("backup_type", "manual"), now),
+        )
+        await self._connection.commit()
+        return {"id": bid, "status": "creating", "created_at": now}
+
+    async def _backup_restore(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE backup_records SET status='restored', restored_at=? "
+            "WHERE id=? AND company_id=?",
+            (now, params["backup_id"], params["company_id"]),
+        )
+        await self._connection.commit()
+        return {"restored_at": now}
+
+    async def _backup_list(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM backup_records WHERE company_id=? ORDER BY created_at DESC",
+            (params["company_id"],),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    # ── Settings ──────────────────────────────────────────────────────
+
+    async def _settings_get(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM local_preferences WHERE key LIKE ?",
+            (params.get("prefix", "%"),),
+        )
+        rows = await cursor.fetchall()
+        return {r["key"]: r["value"] for r in rows} if rows else {}
+
+    async def _settings_update(self, params: dict[str, Any]) -> object:
+        now = _now()
+        for key, value in params["settings"].items():
+            await self._connection.execute(
+                "INSERT OR REPLACE INTO local_preferences (key, value, updated_at) "
+                "VALUES (?, ?, ?)",
+                (key, value, now),
+            )
+        await self._connection.commit()
+        return {"updated_at": now}
+
+    # ── Event ─────────────────────────────────────────────────────────
+
+    async def _event_subscribe(self, params: dict[str, Any]) -> object:
+        import uuid as _uuid_mod
+
+        return {
+            "subscription_id": str(_uuid_mod.uuid4()),
+            "scope": params.get("scope", "global"),
+        }
+
+    async def _event_replay(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM domain_events WHERE company_id=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (params["company_id"], params.get("limit", 100)),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    # ── Catalog ────────────────────────────────────────────────────────
+
+    async def _catalog_sync(self, params: dict[str, Any]) -> object:
+        return {"status": "synced", "synced_at": _now()}
+
+    async def _catalog_get_active_release(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM catalog_cache_releases WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def _catalog_list_agents(self, params: dict[str, Any]) -> object:
+        return []
+
+    async def _catalog_list_models(self, params: dict[str, Any]) -> object:
+        return []
+
+    async def _catalog_list_skills(self, params: dict[str, Any]) -> object:
+        return []
+
+    async def _catalog_install_skill(self, params: dict[str, Any]) -> object:
+        now = _now()
+        skill_id = str(uuid.uuid4())
+        await self._connection.execute(
+            "INSERT INTO installed_skill_versions (id, skill_id, skill_version, installed_at, status) VALUES (?, ?, ?, ?, 'active')",
+            (skill_id, params["skill_id"], params["skill_version"], now),
+        )
+        await self._connection.commit()
+        return {"installed": True, "skill_id": skill_id, "installed_at": now}
+
+    async def _catalog_remove_skill(self, params: dict[str, Any]) -> object:
+        now = _now()
+        await self._connection.execute(
+            "UPDATE installed_skill_versions SET status = 'removed', removed_at = ? WHERE skill_id = ?",
+            (now, params["skill_id"]),
+        )
+        await self._connection.commit()
+        return {"removed": True, "removed_at": now}
+
+    async def _catalog_verify_cache(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT COUNT(*) as cnt FROM catalog_cache_releases"
+        )
+        row = await cursor.fetchone()
+        return {"valid": True, "release_count": dict(row)["cnt"] if row else 0}
 
     @staticmethod
     def _safe_trace_id(meta: object) -> str:

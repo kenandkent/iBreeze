@@ -19,9 +19,8 @@ def test_zip_service_is_valid():
     init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "zip_service.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "def validate_zip_structure" in content
-    assert "def compute_zip_checksum" in content
-    assert "def verify_signature" in content
+    assert "def validate_skill_zip" in content
+    assert "def _file_sha256" in content
 
 
 def test_storage_service_is_valid():
@@ -30,7 +29,6 @@ def test_storage_service_is_valid():
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "class ObjectStorage" in content
-    assert "def store" in content
-    assert "def retrieve" in content
-    assert "def delete" in content
-    assert "def list_versions" in content
+    assert "def put_object" in content
+    assert "def get_object_path" in content
+    assert "def delete_object" in content

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table, Button, Space, Tag, Drawer, Form, Input, Typography, Popconfirm, List,
 } from 'antd';
@@ -18,6 +18,8 @@ import { logger } from '../utils/logger';
 const { Title, Text } = Typography;
 
 export default function WorkspacePage() {
+  useEffect(() => { logger.logPageInit('WorkspacePage'); }, []);
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingWs, setEditingWs] = useState<Workspace | null>(null);
   const [viewWs, setViewWs] = useState<Workspace | null>(null);
@@ -58,7 +60,7 @@ export default function WorkspacePage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('WorkspacePage', editingWs ? 'update_failed' : 'create_failed', { id: editingWs?.id }, msg);
+      logger.error('WorkspacePage', editingWs ? 'update_failed' : 'create_failed', msg, { id: editingWs?.id });
     }
   };
 
@@ -72,7 +74,7 @@ export default function WorkspacePage() {
       } catch (e) {
         const err = e as Record<string, unknown>;
         const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-        logger.error('WorkspacePage', 'add_member_failed', { workspace_id: viewWs.id }, msg);
+        logger.error('WorkspacePage', 'add_member_failed', msg, { workspace_id: viewWs.id });
       }
     }
   };
@@ -85,7 +87,7 @@ export default function WorkspacePage() {
       } catch (e) {
         const err = e as Record<string, unknown>;
         const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-        logger.error('WorkspacePage', 'remove_member_failed', { workspace_id: viewWs.id, member_id: memberId }, msg);
+        logger.error('WorkspacePage', 'remove_member_failed', msg, { workspace_id: viewWs.id, member_id: memberId });
       }
     }
   };
@@ -111,7 +113,7 @@ export default function WorkspacePage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewWs(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { try { logger.info('WorkspacePage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', { id: record.id }, msg); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('WorkspacePage', 'delete_workspace'); try { logger.info('WorkspacePage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>

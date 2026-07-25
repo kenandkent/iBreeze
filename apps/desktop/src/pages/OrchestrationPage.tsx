@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table, Button, Space, Tag, Drawer, Form, Input, Typography, Popconfirm, Modal, Table as InnerTable, List,
 } from 'antd';
@@ -13,11 +13,14 @@ import {
   useRunOrchestration,
   useListOrchestrationRuns,
 } from '../hooks/useOrchestration';
+import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
 
 export default function OrchestrationPage() {
+  useEffect(() => { logger.logPageInit('OrchestrationPage'); }, []);
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Orchestration | null>(null);
   const [viewOrch, setViewOrch] = useState<Orchestration | null>(null);
@@ -56,7 +59,7 @@ export default function OrchestrationPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('OrchestrationPage', editing ? 'update_failed' : 'create_failed', { id: editing?.id }, msg);
+      logger.error('OrchestrationPage', editing ? 'update_failed' : 'create_failed', msg, { id: editing?.id });
     }
   };
 
@@ -71,7 +74,7 @@ export default function OrchestrationPage() {
         } catch (e) {
           const err = e as Record<string, unknown>;
           const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-          logger.error('OrchestrationPage', 'run_failed', { id }, msg);
+          logger.error('OrchestrationPage', 'run_failed', msg, { id });
         }
       },
     });
@@ -95,7 +98,7 @@ export default function OrchestrationPage() {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: string) => new Date(v).toLocaleString('zh-CN'),
+      render: (v: string) => formatTime(v),
     },
     {
       title: '操作',
@@ -105,7 +108,7 @@ export default function OrchestrationPage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewOrch(record)} />
           <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleRun(record.id)}>运行</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { try { logger.info('OrchestrationPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('OrchestrationPage', 'delete_failed', { id: record.id }, msg); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('OrchestrationPage', 'delete_orchestration'); try { logger.info('OrchestrationPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('OrchestrationPage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -159,11 +162,11 @@ export default function OrchestrationPage() {
                         {run.status}
                       </Tag>
                       <Text type="secondary">
-                        {new Date(run.started_at).toLocaleString('zh-CN')}
+                        {formatTime(run.started_at)}
                       </Text>
                       {run.finished_at && (
                         <Text type="secondary">
-                          → {new Date(run.finished_at).toLocaleString('zh-CN')}
+                          → {formatTime(run.finished_at)}
                         </Text>
                       )}
                     </Space>

@@ -5,6 +5,10 @@ from __future__ import annotations
 import shutil
 from pathlib import Path, PurePosixPath
 
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.storage")
+
 
 class ObjectStorage:
     """Development adapter for the S3 object-store contract."""
@@ -14,17 +18,21 @@ class ObjectStorage:
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def put_object(self, object_key: str, source: Path) -> Path:
+        logger.info("put_object.start", extra={"object_key": object_key})
         destination = self._path(object_key)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
+        logger.info("put_object.completed", extra={"object_key": object_key})
         return destination
 
     def put_bytes(self, object_key: str, value: bytes) -> Path:
+        logger.info("put_bytes.start", extra={"object_key": object_key, "size": len(value)})
         destination = self._path(object_key)
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name(f".{destination.name}.tmp")
         temporary.write_bytes(value)
         temporary.replace(destination)
+        logger.info("put_bytes.completed", extra={"object_key": object_key})
         return destination
 
     def get_bytes(self, object_key: str) -> bytes | None:
@@ -32,17 +40,22 @@ class ObjectStorage:
         return path.read_bytes() if path is not None else None
 
     def copy_object(self, source_key: str, destination_key: str) -> Path:
-        return self.put_object(destination_key, self._path(source_key))
+        logger.info("copy_object.start", extra={"source": source_key, "destination": destination_key})
+        result = self.put_object(destination_key, self._path(source_key))
+        logger.info("copy_object.completed", extra={"source": source_key, "destination": destination_key})
+        return result
 
     def get_object_path(self, object_key: str) -> Path | None:
         path = self._path(object_key)
         return path if path.is_file() else None
 
     def delete_object(self, object_key: str) -> bool:
+        logger.info("delete_object.start", extra={"object_key": object_key})
         path = self._path(object_key)
         if not path.exists():
             return False
         path.unlink()
+        logger.info("delete_object.completed", extra={"object_key": object_key})
         return True
 
     def _path(self, object_key: str) -> Path:

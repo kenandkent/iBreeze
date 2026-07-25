@@ -7,44 +7,44 @@ BACKEND_DIR = ROOT / "apps" / "backend-api"
 
 
 def test_user_schema_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "schemas" / "user.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "schemas.py").exists()
 
 
 def test_user_service_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "user_service.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "service.py").exists()
 
 
 def test_users_router_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "routers" / "users.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "router.py").exists()
 
 
 def test_user_schema_is_valid():
     """Verify user schema compiles."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "schemas" / "user.py"
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "schemas.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "class UserCreate" in content
-    assert "class UserResponse" in content
+    assert "class UserAdminCreate" in content
+    assert "class UserAdminResponse" in content
 
 
 def test_user_service_is_valid():
     """Verify user_service compiles."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "user_service.py"
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "service.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "async def create_user" in content
-    assert "async def get_user" in content
-    assert "async def list_users" in content
-    assert "async def update_user" in content
-    assert "async def delete_user" in content
+    assert "async def create_admin_user" in content
+    assert "async def update_admin_user" in content
+    assert "async def delete_admin_user" in content
+    assert "async def reset_password" in content
+    assert "async def revoke_sessions" in content
 
 
 def test_users_router_is_valid():
     """Verify users router compiles."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "routers" / "users.py"
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "users" / "router.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "@router.post" in content
     assert "@router.get" in content
-    assert "@router.put" in content
+    assert "@router.patch" in content
     assert "@router.delete" in content

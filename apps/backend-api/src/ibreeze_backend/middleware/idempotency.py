@@ -15,6 +15,9 @@ from starlette.types import ASGIApp
 from ibreeze_backend.auth.service import verify_token
 from ibreeze_backend.db.session import async_session_factory, request_session
 from ibreeze_backend.models.idempotency_key import ApiIdempotency
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.idempotency")
 
 _IDEMPOTENCY_TTL = timedelta(days=30)
 _PROCESSING_TIMEOUT = timedelta(minutes=10)
@@ -68,6 +71,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         raw_key = request.headers.get("Idempotency-Key")
         if raw_key is None:
+            logger.warning("idempotency_key_missing", extra={"method": request.method, "path": request.url.path})
             return _problem(
                 400,
                 "IDEMPOTENCY_KEY_REQUIRED",
@@ -76,6 +80,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         try:
             idempotency_key = uuid.UUID(raw_key)
         except ValueError:
+            logger.warning("idempotency_key_invalid", extra={"raw_key": raw_key})
             return _problem(
                 400,
                 "IDEMPOTENCY_KEY_INVALID",
@@ -84,6 +89,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         principal_user_id = _principal_id(request)
         if principal_user_id is None:
+            logger.warning("idempotency_principal_required", extra={"idempotency_key": str(idempotency_key)})
             return _problem(
                 400,
                 "IDEMPOTENCY_PRINCIPAL_REQUIRED",
@@ -123,12 +129,24 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 if not is_new:
                     if entry.request_sha256 != request_hash:
+                        logger.warning(
+                            "idempotency_conflict",
+                            extra={
+                                "idempotency_key": str(idempotency_key),
+                                "method": request.method,
+                                "path": request.url.path,
+                            },
+                        )
                         return _problem(
                             409,
                             "IDEMPOTENCY_CONFLICT",
                             "Idempotency key was reused with a different request.",
                         )
                     if entry.status in {"completed", "failed"}:
+                        logger.info(
+                            "idempotency_cache_hit",
+                            extra={"idempotency_key": str(idempotency_key), "status": entry.status},
+                        )
                         return _cached_response(entry)
                     if now - entry.created_at >= _PROCESSING_TIMEOUT:
                         entry.status = "failed"
@@ -142,6 +160,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         "The request with this idempotency key is still processing.",
                     )
 
+                logger.info(
+                    "idempotency_new_request",
+                    extra={
+                        "idempotency_key": str(idempotency_key),
+                        "method": request.method,
+                        "path": request.url.path,
+                    },
+                )
                 token = request_session.set(session)
                 try:
                     response = await call_next(request)
@@ -153,6 +179,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 entry.response_status = response.status_code
                 entry.response_content_type = response.headers.get("content-type", "application/json")[:100]
                 entry.response_body = _json_value(body)
+                logger.info(
+                    "idempotency_completed",
+                    extra={
+                        "idempotency_key": str(idempotency_key),
+                        "status": entry.status,
+                        "response_status": response.status_code,
+                    },
+                )
                 return response
 
 

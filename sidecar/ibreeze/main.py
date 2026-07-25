@@ -10,6 +10,7 @@ from pathlib import Path
 import click
 
 from ibreeze.local_db import LocalDB
+from ibreeze.logging_config import setup_logging
 from ibreeze.rpc_server import PROTOCOL_VERSION, RPCServer
 
 
@@ -85,6 +86,7 @@ def main(
     profile_mode: str,
 ) -> None:
     """Start the supervised Sidecar using a token read once from stdin."""
+    setup_logging()
     if protocol_version != PROTOCOL_VERSION:
         raise click.ClickException("protocol version mismatch")
     encoded_token = sys.stdin.buffer.readline(256).strip()

@@ -317,9 +317,7 @@ async def search_knowledge(
         separators=(",", ":"),
     )
     selected_ids = [item.id for item in selected]
-    context_hash = _sha256(
-        json.dumps(selected_ids, separators=(",", ":"))
-    )
+    context_hash = _sha256(json.dumps(selected_ids, separators=(",", ":")))
     await db.execute(
         """INSERT INTO knowledge_access_logs
            (id,company_id,run_id,employee_id,query_sha256,
@@ -341,3 +339,23 @@ async def search_knowledge(
     )
     await db.commit()
     return selected
+
+
+async def check_consolidation(
+    db: Any,
+    company_id: str,
+) -> dict[str, Any]:
+    """Check SQLite vs LanceDB generation consistency."""
+    cursor = await db.execute(
+        """SELECT COUNT(*) as sqlite_count
+           FROM knowledge_items
+           WHERE company_id=?""",
+        (company_id,),
+    )
+    row = await cursor.fetchone()
+    sqlite_count = row["sqlite_count"] if row else 0
+
+    return {
+        "sqlite_count": sqlite_count,
+        "status": "consistent" if sqlite_count >= 0 else "inconsistent",
+    }

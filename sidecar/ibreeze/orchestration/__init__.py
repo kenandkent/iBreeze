@@ -16,11 +16,30 @@ from ibreeze.orchestration.department_matcher import (
     DepartmentResponsibilityProfile,
     match_departments,
 )
+from ibreeze.orchestration.execution_chain import (
+    confirm_plan,
+    modify_plan,
+    request_plan_confirmation,
+)
+from ibreeze.orchestration.plan_generator import generate_company_plan
 from ibreeze.orchestration.plan_validator import (
     CompanyPlan,
     DepartmentPlanTask,
     PlanValidationIssue,
     validate_plan,
+)
+from ibreeze.orchestration.report_generator import (
+    generate_company_review,
+    generate_department_report,
+    generate_final_report,
+)
+from ibreeze.orchestration.role_behavior import (
+    AgentRole,
+    DepartmentHeadBehavior,
+    EmployeeBehavior,
+    GeneralManagerBehavior,
+    RoleBehavior,
+    create_role_behavior,
 )
 from ibreeze.orchestration.workflow_templates import (
     WorkflowPhase,
@@ -32,24 +51,37 @@ from ibreeze.orchestration.workflow_templates import (
 )
 
 __all__ = [
+    "AgentRole",
     "AvailabilityReport",
     "CheckResult",
     "CheckStatus",
     "CollaborationStrategy",
     "CompanyPlan",
     "DepartmentCandidate",
+    "DepartmentHeadBehavior",
     "DepartmentPlanTask",
     "DepartmentResponsibilityProfile",
+    "EmployeeBehavior",
+    "GeneralManagerBehavior",
     "PlanValidationIssue",
+    "RoleBehavior",
     "SubTask",
     "WorkflowPhase",
     "WorkflowStep",
     "WorkflowTemplate",
+    "confirm_plan",
+    "create_role_behavior",
     "create_subtasks",
+    "generate_company_plan",
+    "generate_company_review",
+    "generate_department_report",
+    "generate_final_report",
     "get_next_steps",
     "get_workflow_template",
     "list_workflow_templates",
     "match_departments",
+    "modify_plan",
+    "request_plan_confirmation",
     "run_availability_checks",
     "validate_plan",
 ]

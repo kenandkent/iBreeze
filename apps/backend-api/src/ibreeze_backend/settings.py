@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     default_admin_password: str = "admin123456"
     log_level: str = "INFO"
     log_json: bool = True
+    cors_origins: list[str] = ["http://localhost:1420"]
 
     # S3 配置
     s3_endpoint_url: str = "http://localhost:51900"

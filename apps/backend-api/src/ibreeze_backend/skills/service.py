@@ -12,22 +12,27 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.models.skill import Skill, SkillVersion
+from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.security.keys import load_or_create_signing_keys
 from ibreeze_backend.services.storage_service import ObjectStorage
 from ibreeze_backend.services.zip_service import validate_skill_zip
 from ibreeze_backend.settings import settings
 from ibreeze_backend.skills.schemas import SkillCreate, SkillUpdate
 
+logger = get_logger("ibreeze.skills.service")
+
 storage = ObjectStorage()
 
 
 async def create_skill(db: AsyncSession, body: SkillCreate) -> Skill:
+    logger.info("create_skill.start", extra={"key": body.key})
     exists = await db.scalar(select(func.count()).select_from(Skill).where(Skill.key == body.key))
     if exists:
         raise ValueError("CATALOG_LOGICAL_KEY_EXISTS")
     item = Skill(**body.model_dump(), catalog_revision=1, status="draft", version=1)
     db.add(item)
     await db.flush()
+    logger.info("create_skill.completed", extra={"skill_id": str(item.id), "key": body.key})
     return item
 
 
@@ -48,6 +53,7 @@ async def update_skill(
     body: SkillUpdate,
     expected_version: int,
 ) -> Skill:
+    logger.info("update_skill.start", extra={"skill_id": str(skill_id)})
     item = await _locked_skill(db, skill_id)
     _assert_mutable(item)
     _assert_version(item, expected_version)
@@ -56,10 +62,12 @@ async def update_skill(
     item.status = "draft"
     item.version += 1
     await db.flush()
+    logger.info("update_skill.completed", extra={"skill_id": str(skill_id)})
     return item
 
 
 async def delete_skill(db: AsyncSession, skill_id: uuid.UUID, expected_version: int) -> None:
+    logger.info("delete_skill.start", extra={"skill_id": str(skill_id)})
     item = await _locked_skill(db, skill_id)
     _assert_mutable(item)
     _assert_version(item, expected_version)
@@ -68,9 +76,11 @@ async def delete_skill(db: AsyncSession, skill_id: uuid.UUID, expected_version: 
     await db.flush()
     for version in versions:
         storage.delete_object(version.object_key)
+    logger.info("delete_skill.completed", extra={"skill_id": str(skill_id)})
 
 
 async def validate_skill(db: AsyncSession, skill_id: uuid.UUID) -> Skill:
+    logger.info("validate_skill.start", extra={"skill_id": str(skill_id)})
     item = await _locked_skill(db, skill_id)
     _assert_mutable(item)
     count = await db.scalar(
@@ -80,10 +90,12 @@ async def validate_skill(db: AsyncSession, skill_id: uuid.UUID) -> Skill:
         raise ValueError("SKILL_VERSION_REQUIRED")
     item.status = "validated"
     await db.flush()
+    logger.info("validate_skill.completed", extra={"skill_id": str(skill_id)})
     return item
 
 
 async def clone_skill_revision(db: AsyncSession, skill_id: uuid.UUID) -> Skill:
+    logger.info("clone_skill_revision.start", extra={"skill_id": str(skill_id)})
     source = await _locked_skill(db, skill_id)
     if source.status != "published":
         raise ValueError("CATALOG_REVISION_SOURCE_NOT_PUBLISHED")
@@ -121,6 +133,7 @@ async def clone_skill_revision(db: AsyncSession, skill_id: uuid.UUID) -> Skill:
         _sign_version(clone_version)
         db.add(clone_version)
     await db.flush()
+    logger.info("clone_skill_revision.completed", extra={"source_id": str(skill_id), "clone_id": str(clone.id)})
     return clone
 
 
@@ -130,6 +143,7 @@ async def create_skill_version(
     version: str,
     package_path: Path,
 ) -> SkillVersion:
+    logger.info("create_skill_version.start", extra={"skill_id": str(skill_id), "version": version})
     skill = await _locked_skill(db, skill_id)
     _assert_mutable(skill)
     manifest, object_sha256, content_sha256 = validate_skill_zip(
@@ -155,6 +169,7 @@ async def create_skill_version(
     skill.status = "draft"
     skill.version += 1
     await db.flush()
+    logger.info("create_skill_version.completed", extra={"skill_id": str(skill_id), "version": version})
     return item
 
 
@@ -173,6 +188,7 @@ async def delete_skill_version(
     skill_id: uuid.UUID,
     version_id: uuid.UUID,
 ) -> None:
+    logger.info("delete_skill_version.start", extra={"skill_id": str(skill_id), "version_id": str(version_id)})
     skill = await _locked_skill(db, skill_id)
     _assert_mutable(skill)
     result = await db.execute(
@@ -189,6 +205,7 @@ async def delete_skill_version(
     skill.version += 1
     await db.flush()
     storage.delete_object(object_key)
+    logger.info("delete_skill_version.completed", extra={"skill_id": str(skill_id), "version_id": str(version_id)})
 
 
 async def get_skill_version(

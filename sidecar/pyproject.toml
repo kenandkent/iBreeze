@@ -13,6 +13,9 @@ dependencies = [
     "click>=8.0,<9",
     "uvicorn>=0.34,<1",
     "httpx>=0.28,<1",
+    "cryptography>=44.0,<45",
+    "argon2-cffi>=23.1.0",
+    "bcrypt>=4.2,<5",
 ]
 
 [project.scripts]

@@ -88,7 +88,7 @@ class TestHealthEndpoint:
 
     @pytest.mark.asyncio
     async def test_health_endpoint(self):
-        from ibreeze_backend.routers.health import health_check
+        from ibreeze_backend.routers.health import liveness_check
 
-        result = await health_check()
+        result = await liveness_check()
         assert result == {"status": "ok"}

@@ -10,7 +10,10 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import ValidationError
 
+from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.skills.schemas import SkillManifest
+
+logger = get_logger("ibreeze.zip_service")
 
 MAX_OBJECT_BYTES = 50 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
@@ -23,6 +26,10 @@ def validate_skill_zip(
     expected_key: str,
     expected_version: str,
 ) -> tuple[SkillManifest, str, str]:
+    logger.info(
+        "validate_skill_zip.start",
+        extra={"path": str(zip_path), "expected_key": expected_key, "expected_version": expected_version},
+    )
     if zip_path.stat().st_size < 1 or zip_path.stat().st_size > MAX_OBJECT_BYTES:
         raise ValueError("SKILL_PACKAGE_SIZE_INVALID")
     object_sha256 = _file_sha256(zip_path)
@@ -69,6 +76,10 @@ def validate_skill_zip(
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
+    logger.info(
+        "validate_skill_zip.completed",
+        extra={"expected_key": expected_key, "expected_version": expected_version},
+    )
     return manifest, object_sha256, hashlib.sha256(canonical).hexdigest()
 
 

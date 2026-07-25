@@ -11,8 +11,8 @@ logger = get_logger("ibreeze.health")
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
-async def health_check() -> dict:
+@router.get("/health/live")
+async def liveness_check() -> dict:
     logger.debug("health_check")
     return {"status": "ok"}
 

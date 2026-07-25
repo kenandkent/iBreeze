@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ibreeze_backend.compatibility.models import CompatibilityRule
 from ibreeze_backend.compatibility.schemas import RuleCreate, RuleResponse, RuleUpdate
 from ibreeze_backend.compatibility.service import (
     create_rule,
@@ -19,8 +20,12 @@ from ibreeze_backend.compatibility.service import (
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.compatibility")
 
 router = APIRouter(prefix="/admin/api/v1/compatibility-rules", tags=["compatibility"])
+public_router = APIRouter(prefix="/api/v1/catalog", tags=["compatibility-public"])
 
 
 def _expected_version(value: str | None) -> int:
@@ -49,7 +54,10 @@ async def create_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> RuleResponse:
-    return RuleResponse.model_validate(await create_rule(db, body))
+    logger.info("create_rule.start", extra={"subject": body.subject, "dependency": body.dependency})
+    result = RuleResponse.model_validate(await create_rule(db, body))
+    logger.info("create_rule.completed", extra={"rule_id": str(result.id)})
+    return result
 
 
 @router.get("")
@@ -58,10 +66,13 @@ async def list_rules_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return {
+    logger.info("list_rules.start", extra={"limit": limit})
+    items = {
         "items": [RuleResponse.model_validate(item) for item in await list_rules(db, limit)],
         "next_cursor": None,
     }
+    logger.info("list_rules.completed", extra={"count": len(items["items"])})
+    return items
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
@@ -70,8 +81,10 @@ async def get_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> RuleResponse:
+    logger.info("get_rule.start", extra={"rule_id": str(rule_id)})
     item = await get_rule(db, rule_id)
     if item is None:
+        logger.warning("get_rule.failed", extra={"rule_id": str(rule_id), "reason": "not_found"})
         raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
     return RuleResponse.model_validate(item)
 
@@ -84,9 +97,12 @@ async def update_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> RuleResponse:
+    logger.info("update_rule.start", extra={"rule_id": str(rule_id)})
     try:
         item = await update_rule(db, rule_id, body, _expected_version(if_match))
+        logger.info("update_rule.completed", extra={"rule_id": str(rule_id)})
     except ValueError as exc:
+        logger.error("update_rule.failed", extra={"rule_id": str(rule_id), "error": str(exc)})
         _raise(exc)
     return RuleResponse.model_validate(item)
 
@@ -98,9 +114,12 @@ async def delete_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_rule.start", extra={"rule_id": str(rule_id)})
     try:
         await delete_rule(db, rule_id, _expected_version(if_match))
+        logger.info("delete_rule.completed", extra={"rule_id": str(rule_id)})
     except ValueError as exc:
+        logger.error("delete_rule.failed", extra={"rule_id": str(rule_id), "error": str(exc)})
         _raise(exc)
     return Response(status_code=204)
 
@@ -111,8 +130,33 @@ async def validate_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> RuleResponse:
+    logger.info("validate_rule.start", extra={"rule_id": str(rule_id)})
     try:
         item = await validate_rule(db, rule_id)
+        logger.info("validate_rule.completed", extra={"rule_id": str(rule_id)})
     except ValueError as exc:
+        logger.error("validate_rule.failed", extra={"rule_id": str(rule_id), "error": str(exc)})
         _raise(exc)
     return RuleResponse.model_validate(item)
+
+
+@public_router.get("/compatibility")
+async def list_compatibility_rules_public(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, object]:
+    """列出所有已发布的兼容性规则（公开端点）"""
+    logger.info("list_compatibility_rules_public")
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(CompatibilityRule)
+        .where(CompatibilityRule.status == "published")
+        .order_by(CompatibilityRule.created_at.desc())
+    )
+    rules = result.scalars().all()
+
+    logger.info("list_compatibility_rules_public_success", extra={"total": len(rules)})
+    return {
+        "data": [RuleResponse.model_validate(rule) for rule in rules],
+        "meta": {"total": len(rules)},
+    }

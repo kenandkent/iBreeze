@@ -7,6 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.models.emergency_disable import EmergencyDisableRelease
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.releases.emergency")
 
 
 async def _next_sequence(db: AsyncSession) -> int:
@@ -27,6 +30,7 @@ async def create_emergency_disable(
     signing_key_id: str,
 ) -> EmergencyDisableRelease:
     """Create a signed emergency disable release – G.7."""
+    logger.info("create_emergency_disable.start", extra={"actor": str(actor_user_id)})
     sequence = await _next_sequence(db)
     release = EmergencyDisableRelease(
         id=uuid.uuid4(),
@@ -40,6 +44,7 @@ async def create_emergency_disable(
     )
     db.add(release)
     await db.flush()
+    logger.info("create_emergency_disable.completed", extra={"disable_id": str(release.id), "sequence": sequence})
     return release
 
 

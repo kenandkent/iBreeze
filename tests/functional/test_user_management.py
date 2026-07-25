@@ -19,7 +19,7 @@ class TestUserSchemas:
     """Pydantic schema validation for users."""
 
     def test_user_create_valid(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
 
         user = UserCreate(username="alice", email="alice@example.com", password="securepass1", role="admin")
         assert user.username == "alice"
@@ -27,41 +27,41 @@ class TestUserSchemas:
         assert user.role == "admin"
 
     def test_user_create_default_role(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
 
         user = UserCreate(username="bob", email="bob@example.com", password="securepass1")
         assert user.role == "viewer"
 
     def test_user_create_invalid_role_rejected(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             UserCreate(username="alice", email="a@b.com", password="securepass1", role="superadmin")
 
     def test_user_create_short_username_rejected(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             UserCreate(username="ab", email="a@b.com", password="securepass1")
 
     def test_user_create_short_password_rejected(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             UserCreate(username="alice", email="a@b.com", password="short")
 
     def test_user_create_invalid_email_rejected(self):
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             UserCreate(username="alice", email="not-an-email", password="securepass1")
 
     def test_user_update_partial(self):
-        from ibreeze_backend.schemas.user import UserUpdate
+        from ibreeze_backend.users.schemas import UserAdminUpdate as UserUpdate
 
         update = UserUpdate(email="new@example.com")
         assert update.email == "new@example.com"
@@ -69,14 +69,14 @@ class TestUserSchemas:
         assert update.is_active is None
 
     def test_user_update_invalid_role_rejected(self):
-        from ibreeze_backend.schemas.user import UserUpdate
+        from ibreeze_backend.users.schemas import UserAdminUpdate as UserUpdate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             UserUpdate(role="invalid_role")
 
     def test_user_response_from_attributes(self):
-        from ibreeze_backend.schemas.user import UserResponse
+        from ibreeze_backend.users.schemas import UserAdminResponse as UserResponse
 
         resp = UserResponse(
             id=str(uuid.uuid4()), username="alice", email="alice@example.com", role="admin", is_active=True
@@ -84,7 +84,7 @@ class TestUserSchemas:
         assert resp.is_active is True
 
     def test_user_list_response(self):
-        from ibreeze_backend.schemas.user import UserListResponse, UserResponse
+        from ibreeze_backend.users.schemas import UserAdminListResponse as UserListResponse, UserAdminResponse as UserResponse
 
         users = [UserResponse(id=str(uuid.uuid4()), username="a", email="a@b.com", role="viewer", is_active=True)]
         resp = UserListResponse(users=users, total=1)
@@ -101,7 +101,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_create_user(self, mock_db_session):
-        from ibreeze_backend.services.user_service import create_user
+        from ibreeze_backend.users.service import create_admin_user as create_user
 
         user = await create_user(mock_db_session, "alice", "alice@example.com", "password123", "admin")
         assert user.username == "alice"
@@ -113,14 +113,14 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_create_user_default_role(self, mock_db_session):
-        from ibreeze_backend.services.user_service import create_user
+        from ibreeze_backend.users.service import create_admin_user as create_user
 
         user = await create_user(mock_db_session, "bob", "bob@example.com", "password123")
         assert user.role == "viewer"
 
     @pytest.mark.asyncio
     async def test_create_user_password_is_argon2(self, mock_db_session):
-        from ibreeze_backend.services.user_service import create_user
+        from ibreeze_backend.users.service import create_admin_user as create_user
         from passlib.hash import argon2
 
         user = await create_user(mock_db_session, "alice", "a@b.com", "mypassword")
@@ -128,7 +128,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_get_user_found(self, mock_db_session, mock_scalar_result):
-        from ibreeze_backend.services.user_service import get_user
+        from ibreeze_backend.users.service import get_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -139,7 +139,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_get_user_not_found(self, mock_db_session, mock_scalar_result):
-        from ibreeze_backend.services.user_service import get_user
+        from ibreeze_backend.users.service import get_user
 
         mock_db_session.execute.return_value = mock_scalar_result(None)
         result = await get_user(mock_db_session, uuid.uuid4())
@@ -147,7 +147,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_get_user_by_username(self, mock_db_session, mock_scalar_result):
-        from ibreeze_backend.services.user_service import get_user_by_username
+        from ibreeze_backend.users.service import get_user_by_username
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -158,7 +158,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_list_users(self, mock_db_session):
-        from ibreeze_backend.services.user_service import list_users
+        from ibreeze_backend.users.service import list_users_admin as list_users
         from ibreeze_backend.models.user import User
 
         users = [
@@ -180,7 +180,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_list_users_empty(self, mock_db_session):
-        from ibreeze_backend.services.user_service import list_users
+        from ibreeze_backend.users.service import list_users_admin as list_users
 
         count_result = MagicMock()
         count_result.scalar.return_value = 0
@@ -194,7 +194,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_update_user_email(self, mock_db_session):
-        from ibreeze_backend.services.user_service import update_user
+        from ibreeze_backend.users.service import update_admin_user as update_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="old@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -203,7 +203,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_update_user_role(self, mock_db_session):
-        from ibreeze_backend.services.user_service import update_user
+        from ibreeze_backend.users.service import update_admin_user as update_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -212,7 +212,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_update_user_deactivate(self, mock_db_session):
-        from ibreeze_backend.services.user_service import update_user
+        from ibreeze_backend.users.service import update_admin_user as update_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -221,7 +221,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_update_user_no_changes(self, mock_db_session):
-        from ibreeze_backend.services.user_service import update_user
+        from ibreeze_backend.users.service import update_admin_user as update_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -231,7 +231,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_delete_user(self, mock_db_session):
-        from ibreeze_backend.services.user_service import delete_user
+        from ibreeze_backend.users.service import delete_admin_user as delete_user
         from ibreeze_backend.models.user import User
 
         user = User(username="alice", email="a@b.com", hashed_password="h", role="viewer", is_active=True)
@@ -526,10 +526,10 @@ class TestUserEndpoints:
 
     @pytest.mark.asyncio
     async def test_create_user_endpoint(self, mock_db_session):
-        from ibreeze_backend.routers.users import create_user_endpoint
-        from ibreeze_backend.schemas.user import UserCreate
+        from ibreeze_backend.users.router import create_user_endpoint
+        from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
 
-        with patch("ibreeze_backend.routers.users.create_user") as mock_create:
+        with patch("ibreeze_backend.users.router.create_user") as mock_create:
             mock_user = MagicMock()
             mock_user.id = uuid.uuid4()
             mock_user.username = "alice"
@@ -545,18 +545,18 @@ class TestUserEndpoints:
 
     @pytest.mark.asyncio
     async def test_list_users_endpoint(self, mock_db_session):
-        from ibreeze_backend.routers.users import list_users_endpoint
+        from ibreeze_backend.users.router import list_users_endpoint
 
-        with patch("ibreeze_backend.routers.users.list_users") as mock_list:
+        with patch("ibreeze_backend.users.router.list_users") as mock_list:
             mock_list.return_value = ([], 0)
             result = await list_users_endpoint(db=mock_db_session, _current_user=MagicMock())
             assert result == {"users": [], "total": 0}
 
     @pytest.mark.asyncio
     async def test_get_user_endpoint_found(self, mock_db_session):
-        from ibreeze_backend.routers.users import get_user_endpoint
+        from ibreeze_backend.users.router import get_user_endpoint
 
-        with patch("ibreeze_backend.routers.users.get_user") as mock_get:
+        with patch("ibreeze_backend.users.router.get_user") as mock_get:
             mock_user = MagicMock()
             mock_user.id = uuid.uuid4()
             mock_get.return_value = mock_user
@@ -565,10 +565,10 @@ class TestUserEndpoints:
 
     @pytest.mark.asyncio
     async def test_get_user_endpoint_not_found(self, mock_db_session):
-        from ibreeze_backend.routers.users import get_user_endpoint
+        from ibreeze_backend.users.router import get_user_endpoint
         from fastapi import HTTPException
 
-        with patch("ibreeze_backend.routers.users.get_user") as mock_get:
+        with patch("ibreeze_backend.users.router.get_user") as mock_get:
             mock_get.return_value = None
             with pytest.raises(HTTPException) as exc_info:
                 await get_user_endpoint(user_id=uuid.uuid4(), db=mock_db_session, _current_user=MagicMock())
@@ -576,11 +576,11 @@ class TestUserEndpoints:
 
     @pytest.mark.asyncio
     async def test_delete_user_endpoint(self, mock_db_session):
-        from ibreeze_backend.routers.users import delete_user_endpoint
+        from ibreeze_backend.users.router import delete_user_endpoint
 
         with (
             patch("ibreeze_backend.routers.users.get_user") as mock_get,
-            patch("ibreeze_backend.routers.users.delete_user") as mock_delete,
+            patch("ibreeze_backend.users.router.delete_user") as mock_delete,
         ):
             mock_get.return_value = MagicMock()
             await delete_user_endpoint(user_id=uuid.uuid4(), db=mock_db_session, _current_user=MagicMock())

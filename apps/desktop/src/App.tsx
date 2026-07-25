@@ -12,8 +12,18 @@ import WorkspacePage from './pages/WorkspacePage';
 import OrchestrationPage from './pages/OrchestrationPage';
 import AgentPage from './pages/AgentPage';
 import AuditLogPage from './pages/AuditLogPage';
+import BackupPage from './pages/BackupPage';
+import ReviewPage from './pages/ReviewPage';
+import ApprovalListPage from './pages/ApprovalListPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import SettingsPage from './pages/SettingsPage';
+import DiagnosticsPage from './pages/DiagnosticsPage';
+import DepartmentPage from './pages/DepartmentPage';
+import EmployeePage from './pages/EmployeePage';
+import TaskListPage from './pages/TaskListPage';
+import TaskDetailPage from './pages/TaskDetailPage';
+import SkillsPage from './pages/SkillsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +60,16 @@ function App() {
               <Route path="orchestrations" element={<OrchestrationPage />} />
               <Route path="agents" element={<AgentPage />} />
               <Route path="audit-logs" element={<AuditLogPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="diagnostics" element={<DiagnosticsPage />} />
+              <Route path="departments" element={<DepartmentPage />} />
+              <Route path="employees" element={<EmployeePage />} />
+              <Route path="tasks" element={<TaskListPage />} />
+              <Route path="tasks/:id" element={<TaskDetailPage />} />
+              <Route path="skills" element={<SkillsPage />} />
+              <Route path="backups" element={<BackupPage />} />
+              <Route path="reviews" element={<ReviewPage />} />
+              <Route path="approvals" element={<ApprovalListPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

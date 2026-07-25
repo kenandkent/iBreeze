@@ -7,10 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.models.skill import Skill, SkillVersion
+from ibreeze_backend.observability.logging_config import get_logger
+
+logger = get_logger("ibreeze.releases.manifest")
 
 
 async def build_manifest(db: AsyncSession, sequence: int) -> dict:
     """Generate manifest from published skills with content hashes."""
+    logger.info("build_manifest.start", extra={"sequence": sequence})
     result = await db.execute(select(Skill).where(Skill.status == "published"))
     skills = result.scalars().all()
 
@@ -39,6 +43,7 @@ async def build_manifest(db: AsyncSession, sequence: int) -> dict:
         "release_sequence": sequence,
         "resources": resources,
     }
+    logger.info("build_manifest.completed", extra={"sequence": sequence, "resource_count": len(resources)})
     return manifest
 
 

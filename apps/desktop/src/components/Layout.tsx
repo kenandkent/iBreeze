@@ -9,6 +9,10 @@ import {
   ApartmentOutlined,
   RobotOutlined,
   AuditOutlined,
+  CloudUploadOutlined,
+  CheckCircleOutlined,
+  SafetyOutlined,
+  ExperimentOutlined,
   UserOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
@@ -27,7 +31,11 @@ const menuItems = [
   { key: '/workspaces', icon: <AppstoreOutlined />, label: '工作区' },
   { key: '/orchestrations', icon: <ApartmentOutlined />, label: '编排管理' },
   { key: '/agents', icon: <RobotOutlined />, label: 'Agent 管理' },
+  { key: '/skills', icon: <ExperimentOutlined />, label: '技能管理' },
   { key: '/audit-logs', icon: <AuditOutlined />, label: '审计日志' },
+  { key: '/reviews', icon: <CheckCircleOutlined />, label: '审查问题' },
+  { key: '/approvals', icon: <SafetyOutlined />, label: '审批列表' },
+  { key: '/backups', icon: <CloudUploadOutlined />, label: '备份管理' },
 ];
 
 export default function Layout() {
@@ -37,7 +45,8 @@ export default function Layout() {
   const { user, logout } = useAuthStore();
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    logger.info('Layout', 'navigate', { from: location.pathname, to: key });
+    logger.logMenuClick(key);
+    logger.logNavigation(location.pathname, key);
     navigate(key);
   };
 

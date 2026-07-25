@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Row, Col, Tag, Typography, Button, Input, Space, Empty } from 'antd';
 import { PlayCircleOutlined, PoweroffOutlined, SendOutlined } from '@ant-design/icons';
 import type { AgentInfo } from '../types';
@@ -20,6 +20,8 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function AgentPage() {
+  useEffect(() => { logger.logPageInit('AgentPage'); }, []);
+
   const [messageInputs, setMessageInputs] = useState<Record<string, string>>({});
   const { data: agents, isLoading } = useListAgents();
   const runMutation = useRunAgent();
@@ -35,7 +37,7 @@ export default function AgentPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('AgentPage', 'run_failed', { agentId }, msg);
+      logger.error('AgentPage', 'run_failed', msg, { agentId });
     }
   };
 
@@ -73,7 +75,7 @@ export default function AgentPage() {
                       icon={<PoweroffOutlined />}
                       disabled={agent.status === 'stopped'}
                       loading={stopMutation.isPending}
-                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync(agent.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', { agentId: agent.id }, msg); } }}
+                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync(agent.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', msg, { agentId: agent.id }); } }}
                     >
                       停止
                     </Button>

@@ -27,7 +27,7 @@ def test_audit_log_model_is_valid():
     init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "models" / "audit_log.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "class AuditLog" in content
+    assert "class AdminAuditLog" in content
     assert "action" in content
     assert "resource_type" in content
 
@@ -37,7 +37,7 @@ def test_idempotency_key_model_is_valid():
     init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "models" / "idempotency_key.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "class IdempotencyKey" in content
+    assert "class ApiIdempotency" in content
     assert "key" in content
     assert "expires_at" in content
 

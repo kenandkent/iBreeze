@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table, Button, Input, Space, Tag, Drawer, Form, Popconfirm, Select, Typography,
 } from 'antd';
@@ -6,11 +6,14 @@ import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined
 import type { ColumnsType } from 'antd/es/table';
 import type { Company } from '../types';
 import { useListCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany } from '../hooks/useCompany';
+import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
 const { Title } = Typography;
 
 export default function CompanyPage() {
+  useEffect(() => { logger.logPageInit('CompanyPage'); }, []);
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -48,7 +51,7 @@ export default function CompanyPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('CompanyPage', editingCompany ? 'update_failed' : 'create_failed', { id: editingCompany?.id }, msg);
+      logger.error('CompanyPage', editingCompany ? 'update_failed' : 'create_failed', msg, { id: editingCompany?.id });
     }
   };
 
@@ -67,7 +70,7 @@ export default function CompanyPage() {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: string) => new Date(v).toLocaleString('zh-CN'),
+      render: (v: string) => formatTime(v),
     },
     {
       title: '操作',
@@ -76,7 +79,7 @@ export default function CompanyPage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => { setEditingCompany(record); setDrawerOpen(true); }} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { try { logger.info('CompanyPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('CompanyPage', 'delete_failed', { id: record.id }, msg); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('CompanyPage', 'delete_company'); try { logger.info('CompanyPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));         logger.error('CompanyPage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -101,7 +104,7 @@ export default function CompanyPage() {
             <Select.Option value="active">活跃</Select.Option>
             <Select.Option value="inactive">归档</Select.Option>
           </Select>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建企业</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { logger.logAction('CompanyPage', 'create_company'); handleCreate(); }}>新建企业</Button>
         </Space>
       </div>
 

@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 
 const { Title } = Typography;
 
 export default function RegisterPage() {
+  useEffect(() => { logger.logPageInit('RegisterPage'); }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);

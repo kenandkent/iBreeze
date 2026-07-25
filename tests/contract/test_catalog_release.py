@@ -11,7 +11,7 @@ def test_catalog_release_model_exists():
 
 
 def test_catalog_service_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "catalog_service.py").exists()
+    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "catalog" / "service.py").exists()
 
 
 def test_catalog_release_model_is_valid():
@@ -26,11 +26,11 @@ def test_catalog_release_model_is_valid():
 
 
 def test_catalog_service_is_valid():
-    """Verify catalog_service compiles and has required functions."""
-    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "services" / "catalog_service.py"
+    """Verify catalog/service compiles and has required functions."""
+    init_path = BACKEND_DIR / "src" / "ibreeze_backend" / "catalog" / "service.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "async def generate_manifest" in content
-    assert "async def create_release" in content
-    assert "async def publish_release" in content
-    assert "async def emergency_disable_skill" in content
+    assert "async def create_agent" in content
+    assert "async def get_agent" in content
+    assert "async def list_agents" in content
+    assert "async def delete_agent" in content

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from ibreeze.schemas import TaskWorkspaceResponse
@@ -113,4 +114,195 @@ async def cleanup_workspace(
         "workspace_id": workspace_id,
         "cleaned": True,
         "version": expected_version + 1,
+    }
+
+
+# ── Workspace lifecycle ─────────────────────────────────────────────────────
+
+
+def _id() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+async def create_workspace(
+    db: Any,
+    *,
+    company_id: str,
+    company_task_id: str,
+    workspace_grant_id: str,
+    repository_root: str,
+    baseline_commit_sha: str,
+    user_branch_name: str,
+    integration_branch_name: str,
+    integration_worktree_path: str,
+) -> dict[str, Any]:
+    """Create a new workspace for a task (J.1/J.2)."""
+    ws_id = _id()
+    now = _now()
+
+    await db.execute(
+        """INSERT INTO task_workspaces
+           (id, company_id, company_task_id, workspace_grant_id,
+            repository_root, baseline_commit_sha, user_branch_name,
+            integration_branch_name, integration_worktree_path,
+            status, created_at, updated_at, version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+        (
+            ws_id,
+            company_id,
+            company_task_id,
+            workspace_grant_id,
+            repository_root,
+            baseline_commit_sha,
+            user_branch_name,
+            integration_branch_name,
+            integration_worktree_path,
+            "preparing",
+            now,
+            now,
+        ),
+    )
+    await db.commit()
+    return {
+        "workspace_id": ws_id,
+        "status": "preparing",
+        "created_at": now,
+    }
+
+
+async def open_workspace(
+    db: Any,
+    company_id: str,
+    workspace_id: str,
+    *,
+    expected_version: int,
+) -> TaskWorkspaceResponse:
+    """Activate a workspace after git worktrees are ready (J.2)."""
+    cursor = await db.execute(
+        """UPDATE task_workspaces
+           SET status='active',
+               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+               version=version+1
+           WHERE id=? AND company_id=? AND version=?
+             AND status='preparing'""",
+        (workspace_id, company_id, expected_version),
+    )
+    if cursor.rowcount != 1:
+        await db.rollback()
+        raise ValueError("STATE_TRANSITION_INVALID")
+    await db.commit()
+    return await get_workspace(db, company_id, workspace_id)
+
+
+async def archive_workspace(
+    db: Any,
+    company_id: str,
+    workspace_id: str,
+    *,
+    expected_version: int,
+) -> TaskWorkspaceResponse:
+    """Move a workspace to abandoned terminal state."""
+    cursor = await db.execute(
+        """UPDATE task_workspaces
+           SET status='abandoned',
+               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+               version=version+1
+           WHERE id=? AND company_id=? AND version=?
+             AND status IN ('preparing','active','ready_to_apply')""",
+        (workspace_id, company_id, expected_version),
+    )
+    if cursor.rowcount != 1:
+        await db.rollback()
+        raise ValueError("STATE_TRANSITION_INVALID")
+    await db.commit()
+    return await get_workspace(db, company_id, workspace_id)
+
+
+async def apply_workspace(
+    db: Any,
+    company_id: str,
+    workspace_id: str,
+    *,
+    expected_version: int,
+) -> dict[str, Any]:
+    """Merge integration branch into user branch (J.3).
+
+    On success: commits merge, sets status to ``applied``.
+    On conflict: aborts merge, sets status to ``ready_to_apply`` for manual
+    resolution.  Never modifies the user worktree on conflict.
+    """
+    from ibreeze.workspace.git_ops import get_merge_conflicts, git_command
+
+    ws = await get_workspace(db, company_id, workspace_id)
+
+    integration_path = ws.integration_worktree_path
+    integration_branch = ws.integration_branch_name
+
+    # Pre-condition: integration worktree must be clean
+    status_result = await git_command("status", "--porcelain", cwd=integration_path)
+    if not status_result["success"]:
+        raise ValueError("WORKSPACE_NOT_FOUND")
+    if status_result["stdout"].strip():
+        raise ValueError("WORKSPACE_DIRTY")
+
+    # Attempt merge into integration branch (conflict means abort, not apply)
+    merge_result = await git_command(
+        "merge", "--no-ff", "--no-commit", integration_branch,
+        cwd=ws.repository_root,
+    )
+
+    now = _now()
+    if merge_result["success"]:
+        # Commit the merge
+        commit_result = await git_command(
+            "commit", "-m", f"ibreeze({ws.company_task_id[:8]}): apply completed task",
+            cwd=ws.repository_root,
+        )
+        if not commit_result["success"]:
+            await git_command("merge", "--abort", cwd=ws.repository_root)
+            raise ValueError("COMMIT_FAILED")
+
+        # Record applied commit SHA
+        head_result = await git_command("rev-parse", "HEAD", cwd=ws.repository_root)
+        applied_sha = head_result["stdout"].strip() if head_result["success"] else ""
+
+        cursor = await db.execute(
+            """UPDATE task_workspaces
+               SET status='applied', applied_commit_sha=?,
+                   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                   version=version+1
+               WHERE id=? AND company_id=? AND version=?""",
+            (applied_sha, workspace_id, company_id, expected_version),
+        )
+        if cursor.rowcount != 1:
+            await db.rollback()
+            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+        await db.commit()
+        return {
+            "workspace_id": workspace_id,
+            "status": "applied",
+            "applied_commit_sha": applied_sha,
+        }
+
+    # Conflict: abort merge, leave workspace for manual resolution
+    await git_command("merge", "--abort", cwd=ws.repository_root)
+    conflict_files = await get_merge_conflicts(ws.repository_root)
+
+    # Mark ready for manual apply (no version bump — user resolves externally)
+    await db.execute(
+        """UPDATE task_workspaces
+           SET status='ready_to_apply',
+               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id=? AND company_id=?""",
+        (workspace_id, company_id),
+    )
+    await db.commit()
+    return {
+        "workspace_id": workspace_id,
+        "status": "ready_to_apply",
+        "conflicts": conflict_files,
     }

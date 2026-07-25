@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
+from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.skills.schemas import (
     SkillCreate,
     SkillResponse,
@@ -45,6 +46,8 @@ from ibreeze_backend.skills.service import (
     update_skill,
     validate_skill,
 )
+
+logger = get_logger("ibreeze.skills")
 
 admin_router = APIRouter(prefix="/admin/api/v1/skills", tags=["skills"])
 public_router = APIRouter(prefix="/api/v1/catalog/skills", tags=["skills"])
@@ -80,9 +83,12 @@ async def create_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillResponse:
+    logger.info("create_skill.start", extra={"key": body.key})
     try:
         item = await create_skill(db, body)
+        logger.info("create_skill.completed", extra={"skill_id": str(item.id), "key": body.key})
     except ValueError as exc:
+        logger.error("create_skill.failed", extra={"key": body.key, "error": str(exc)})
         _raise(exc)
     return SkillResponse.model_validate(item)
 
@@ -93,10 +99,13 @@ async def list_skills_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return {
+    logger.info("list_skills.start", extra={"limit": limit})
+    result = {
         "items": [SkillResponse.model_validate(item) for item in await list_skills(db, limit)],
         "next_cursor": None,
     }
+    logger.info("list_skills.completed", extra={"count": len(result["items"])})
+    return result
 
 
 @admin_router.get("/{skill_id}", response_model=SkillResponse)
@@ -105,8 +114,10 @@ async def get_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillResponse:
+    logger.info("get_skill.start", extra={"skill_id": str(skill_id)})
     item = await get_skill(db, skill_id)
     if item is None:
+        logger.warning("get_skill.failed", extra={"skill_id": str(skill_id), "reason": "not_found"})
         raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
     return SkillResponse.model_validate(item)
 
@@ -119,9 +130,12 @@ async def update_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillResponse:
+    logger.info("update_skill.start", extra={"skill_id": str(skill_id)})
     try:
         item = await update_skill(db, skill_id, body, _version(if_match))
+        logger.info("update_skill.completed", extra={"skill_id": str(skill_id)})
     except ValueError as exc:
+        logger.error("update_skill.failed", extra={"skill_id": str(skill_id), "error": str(exc)})
         _raise(exc)
     return SkillResponse.model_validate(item)
 
@@ -133,9 +147,12 @@ async def delete_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_skill.start", extra={"skill_id": str(skill_id)})
     try:
         await delete_skill(db, skill_id, _version(if_match))
+        logger.info("delete_skill.completed", extra={"skill_id": str(skill_id)})
     except ValueError as exc:
+        logger.error("delete_skill.failed", extra={"skill_id": str(skill_id), "error": str(exc)})
         _raise(exc)
     return Response(status_code=204)
 
@@ -146,9 +163,12 @@ async def validate_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillResponse:
+    logger.info("validate_skill.start", extra={"skill_id": str(skill_id)})
     try:
         item = await validate_skill(db, skill_id)
+        logger.info("validate_skill.completed", extra={"skill_id": str(skill_id)})
     except ValueError as exc:
+        logger.error("validate_skill.failed", extra={"skill_id": str(skill_id), "error": str(exc)})
         _raise(exc)
     return SkillResponse.model_validate(item)
 
@@ -163,9 +183,12 @@ async def clone_skill_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillResponse:
+    logger.info("clone_skill.start", extra={"skill_id": str(skill_id)})
     try:
         item = await clone_skill_revision(db, skill_id)
+        logger.info("clone_skill.completed", extra={"skill_id": str(skill_id), "clone_id": str(item.id)})
     except ValueError as exc:
+        logger.error("clone_skill.failed", extra={"skill_id": str(skill_id), "error": str(exc)})
         _raise(exc)
     return SkillResponse.model_validate(item)
 
@@ -182,15 +205,25 @@ async def upload_skill_version_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> SkillVersionResponse:
+    logger.info("upload_skill_version.start", extra={"skill_id": str(skill_id), "version": version})
     suffix = Path(package.filename or "").suffix
     if suffix.lower() != ".zip":
+        logger.error(
+            "upload_skill_version.failed",
+            extra={"skill_id": str(skill_id), "error": "SKILL_PACKAGE_EXTENSION_INVALID"},
+        )
         raise HTTPException(status_code=422, detail="SKILL_PACKAGE_EXTENSION_INVALID")
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temporary:
         shutil.copyfileobj(package.file, temporary)
         path = Path(temporary.name)
     try:
         item = await create_skill_version(db, skill_id, version, path)
+        logger.info("upload_skill_version.completed", extra={"skill_id": str(skill_id), "version": version})
     except ValueError as exc:
+        logger.error(
+            "upload_skill_version.failed",
+            extra={"skill_id": str(skill_id), "version": version, "error": str(exc)},
+        )
         _raise(exc)
     finally:
         path.unlink(missing_ok=True)
@@ -203,13 +236,16 @@ async def list_skill_versions_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    return {
+    logger.info("list_skill_versions.start", extra={"skill_id": str(skill_id)})
+    result = {
         "items": [
             SkillVersionResponse.model_validate(item)
             for item in await list_skill_versions(db, skill_id)
         ],
         "next_cursor": None,
     }
+    logger.info("list_skill_versions.completed", extra={"skill_id": str(skill_id), "count": len(result["items"])})
+    return result
 
 
 @admin_router.delete(
@@ -222,9 +258,15 @@ async def delete_skill_version_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> Response:
+    logger.info("delete_skill_version.start", extra={"skill_id": str(skill_id), "version_id": str(version_id)})
     try:
         await delete_skill_version(db, skill_id, version_id)
+        logger.info("delete_skill_version.completed", extra={"skill_id": str(skill_id), "version_id": str(version_id)})
     except ValueError as exc:
+        logger.error(
+            "delete_skill_version.failed",
+            extra={"skill_id": str(skill_id), "version_id": str(version_id), "error": str(exc)},
+        )
         _raise(exc)
     return Response(status_code=204)
 
@@ -236,10 +278,16 @@ async def download_skill_package_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> FileResponse:
+    logger.info("download_skill_package.start", extra={"skill_id": str(skill_id), "version": version})
     item = await get_skill_version(db, skill_id, version)
     path = storage.get_object_path(item.object_key) if item is not None else None
     if path is None:
+        logger.warning(
+            "download_skill_package.failed",
+            extra={"skill_id": str(skill_id), "version": version, "reason": "not_found"},
+        )
         raise HTTPException(status_code=404, detail="SKILL_PACKAGE_NOT_FOUND")
+    logger.info("download_skill_package.completed", extra={"skill_id": str(skill_id), "version": version})
     return FileResponse(
         path,
         media_type="application/zip",
