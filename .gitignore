@@ -59,4 +59,6 @@ apps/backend-api/dev-token-secret-change-me/
 tmp/
 temp/
 *.tmp
-.github/workflows
+# CI workflow files are tracked
+tsconfig.tsbuildinfo
+tests/e2e/test-results/

@@ -108,13 +108,7 @@ bash scripts/verify-all.sh
 
 ### 测试状态
 
-| 模块 | 测试数 | 状态 |
-|------|--------|------|
-| Sidecar | 711 | ✅ |
-| Backend API | 117 | ✅ |
-| Desktop Core | 56 | ✅ |
-| Desktop UI (formatters) | 16 | ✅ |
-| Admin Web UI (formatters) | 16 | ✅ |
+测试和验证状态请参考 CI 制品与质量报告。所有门禁状态绑定 commit SHA，不手写维护具体通过数量。
 
 ### 公开目录查询
 - Agent 目录查询

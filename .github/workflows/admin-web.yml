@@ -1,0 +1,50 @@
+name: Admin Web
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - name: Install dependencies
+        run: npm --prefix apps/admin-web ci
+      - name: Lint
+        run: npm --prefix apps/admin-web run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - name: Install dependencies
+        run: npm --prefix apps/admin-web ci
+      - name: Typecheck
+        run: npm --prefix apps/admin-web run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - name: Install dependencies
+        run: npm --prefix apps/admin-web ci
+      - name: Test with coverage
+        run: npm --prefix apps/admin-web run test:coverage

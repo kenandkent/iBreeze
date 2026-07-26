@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "lint": "echo 'lint ok'",
+    "lint": "node scripts/lint-contracts.mjs",
     "check-generated": "node scripts/check-generated.mjs"
   },
   "devDependencies": {
