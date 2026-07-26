@@ -9,9 +9,9 @@ from pathlib import Path
 
 import click
 
-from ibreeze.local_db import LocalDB
+from ibreeze.application.app import SidecarApplication
 from ibreeze.logging_config import setup_logging
-from ibreeze.rpc_server import PROTOCOL_VERSION, RPCServer
+from ibreeze.rpc_server import PROTOCOL_VERSION
 
 
 async def _run(
@@ -26,28 +26,18 @@ async def _run(
     device_id: str,
     profile_mode: str,
 ) -> None:
-    database = LocalDB(profile_root / "profile.db")
-    await database.initialize()
-    await database.initialize_profile(
-        profile_id=profile_root.name,
+    app = SidecarApplication(
+        socket_path=socket_path,
+        profile_root=profile_root,
+        app_version=app_version,
+        startup_token=startup_token,
         backend_origin=backend_origin,
         app_user_id=app_user_id,
         masked_identifier=masked_identifier,
         device_id=device_id,
-        allow_create=profile_mode == "online",
+        profile_mode=profile_mode,
     )
-    server = RPCServer(
-        database,
-        socket_path,
-        startup_token=startup_token,
-        launch_id=socket_path.parent.name,
-        app_version=app_version,
-    )
-    try:
-        await server.serve_forever()
-    finally:
-        await server.close()
-        await database.close()
+    await app.start()
 
 
 @click.command()
