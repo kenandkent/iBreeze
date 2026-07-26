@@ -278,7 +278,11 @@ class TestIssueCloseGuard:
             company.id,
             report_id=report_id,
             severity="blocker",
+            category="logic",
             description="关键路径阻塞",
+            expected="流程正常",
+            actual="阻塞",
+            suggested_fix="解除阻塞",
         )
         assert issue["severity"] == "blocker"
         assert issue["status"] == "open"
@@ -308,7 +312,11 @@ class TestIssueCloseGuard:
             company.id,
             report_id=report_id,
             severity="blocker",
+            category="logic",
             description="严重问题",
+            expected="无问题",
+            actual="阻塞",
+            suggested_fix="修复",
         )
         fixing = await start_fixing_review_issue(
             db,
@@ -349,7 +357,11 @@ class TestIssueCloseGuard:
             company.id,
             report_id=report_id,
             severity="high",
+            category="security",
             description="高级别问题描述",
+            expected="安全合规",
+            actual="不合规",
+            suggested_fix="修复安全问题",
         )
         issues = await list_review_issues(
             db, company.id, report_id=report_id
@@ -382,7 +394,11 @@ class TestIssueCloseGuard:
                 company.id,
                 report_id=report_id,
                 severity=severity,
+                category="style",
                 description=f"{severity}问题",
+                expected="规范",
+                actual="不规范",
+                suggested_fix="调整",
             )
         issues = await list_review_issues(db, company.id, status="open")
         assert len(issues) == 2
@@ -443,14 +459,22 @@ class TestDepartmentReportCompanyReview:
             company.id,
             report_id=report_id,
             severity="medium",
+            category="style",
             description="问题1",
+            expected="正确",
+            actual="错误",
+            suggested_fix="修正",
         )
         await create_review_issue(
             db,
             company.id,
             report_id=report_id,
             severity="low",
+            category="typo",
             description="问题2",
+            expected="正确",
+            actual="拼写错误",
+            suggested_fix="修改拼写",
         )
         all_issues = await list_review_issues(
             db, company.id, status="open"

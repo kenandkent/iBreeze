@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
 import { logger } from '../utils/logger';
+import { formatTime } from '../utils/formatters';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useListAgents, useCreateAgent, useUpdateAgent, useDeleteAgent, useValidateAgent, usePublishAgent } from '../hooks/useAgentCatalog';
 import type { AgentCatalogItem } from '../types';
@@ -104,7 +105,7 @@ export default function AgentCatalogPage() {
         return s ? <Tag color={s.color}>{s.label}</Tag> : status;
       },
     },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: AgentCatalogItem) => (

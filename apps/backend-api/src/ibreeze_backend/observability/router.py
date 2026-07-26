@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +18,9 @@ router = APIRouter(prefix="/admin/api/v1", tags=["admin-audit"])
 
 @router.get("/audit-logs")
 async def list_audit_logs(
-    actor_id: Optional[str] = None,
-    action: Optional[str] = None,
-    resource_type: Optional[str] = None,
+    actor_id: str | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),

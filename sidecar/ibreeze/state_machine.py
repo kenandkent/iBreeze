@@ -197,6 +197,7 @@ class DepartmentTaskState(StrEnum):
     WAITING_DEPENDENCY = "waiting_dependency"
     WAITING_RESOURCE = "waiting_resource"
     WAITING_PERMISSION = "waiting_permission"
+    PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
 
@@ -213,6 +214,7 @@ _DEPARTMENT_TASK_TRANSITIONS: dict[DepartmentTaskState, frozenset[DepartmentTask
             DepartmentTaskState.READY,
             DepartmentTaskState.WAITING_RESOURCE,
             DepartmentTaskState.WAITING_PERMISSION,
+            DepartmentTaskState.PAUSED,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
@@ -223,6 +225,7 @@ _DEPARTMENT_TASK_TRANSITIONS: dict[DepartmentTaskState, frozenset[DepartmentTask
             DepartmentTaskState.WAITING_DEPENDENCY,
             DepartmentTaskState.WAITING_RESOURCE,
             DepartmentTaskState.WAITING_PERMISSION,
+            DepartmentTaskState.PAUSED,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
@@ -232,6 +235,7 @@ _DEPARTMENT_TASK_TRANSITIONS: dict[DepartmentTaskState, frozenset[DepartmentTask
             DepartmentTaskState.REVIEWING,
             DepartmentTaskState.WAITING_RESOURCE,
             DepartmentTaskState.WAITING_PERMISSION,
+            DepartmentTaskState.PAUSED,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
@@ -242,6 +246,7 @@ _DEPARTMENT_TASK_TRANSITIONS: dict[DepartmentTaskState, frozenset[DepartmentTask
             DepartmentTaskState.COMPLETED,
             DepartmentTaskState.WAITING_RESOURCE,
             DepartmentTaskState.WAITING_PERMISSION,
+            DepartmentTaskState.PAUSED,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
@@ -251,12 +256,25 @@ _DEPARTMENT_TASK_TRANSITIONS: dict[DepartmentTaskState, frozenset[DepartmentTask
             DepartmentTaskState.REVIEWING,
             DepartmentTaskState.WAITING_RESOURCE,
             DepartmentTaskState.WAITING_PERMISSION,
+            DepartmentTaskState.PAUSED,
+            DepartmentTaskState.CANCELLED,
+            DepartmentTaskState.FAILED,
+        }
+    ),
+    DepartmentTaskState.PAUSED: frozenset(
+        {
+            DepartmentTaskState.CHECKING_RESOURCES,
+            DepartmentTaskState.READY,
+            DepartmentTaskState.EXECUTING,
+            DepartmentTaskState.REVIEWING,
+            DepartmentTaskState.FIXING,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
     ),
     DepartmentTaskState.WAITING_DEPENDENCY: frozenset(
         {
+            DepartmentTaskState.PAUSED,
             DepartmentTaskState.CANCELLED,
             DepartmentTaskState.FAILED,
         }
@@ -291,6 +309,7 @@ class EmployeeTaskState(StrEnum):
     CHANGES_REQUESTED = "changes_requested"
     ACCEPTED = "accepted"
     WAITING_RESOURCE = "waiting_resource"
+    PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
 
@@ -300,6 +319,7 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
         {
             EmployeeTaskState.READY,
             EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.CANCELLED,
             EmployeeTaskState.FAILED,
         }
@@ -308,6 +328,7 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
         {
             EmployeeTaskState.RUNNING,
             EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.CANCELLED,
             EmployeeTaskState.FAILED,
         }
@@ -316,6 +337,7 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
         {
             EmployeeTaskState.SUBMITTED,
             EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.CANCELLED,
             EmployeeTaskState.FAILED,
         }
@@ -323,6 +345,7 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
     EmployeeTaskState.SUBMITTED: frozenset(
         {
             EmployeeTaskState.PEER_REVIEWING,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.FAILED,
         }
     ),
@@ -330,6 +353,7 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
         {
             EmployeeTaskState.CHANGES_REQUESTED,
             EmployeeTaskState.ACCEPTED,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.FAILED,
         }
     ),
@@ -337,12 +361,22 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
         {
             EmployeeTaskState.READY,
             EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
             EmployeeTaskState.CANCELLED,
             EmployeeTaskState.FAILED,
         }
     ),
     EmployeeTaskState.WAITING_RESOURCE: frozenset(
         {
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.CANCELLED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.PAUSED: frozenset(
+        {
+            EmployeeTaskState.READY,
+            EmployeeTaskState.RUNNING,
             EmployeeTaskState.CANCELLED,
             EmployeeTaskState.FAILED,
         }
@@ -662,14 +696,25 @@ def is_terminal(entity: str, state: str) -> bool:
     raise ValueError(f"Unknown state '{state}' for entity '{entity}'")
 
 
-def can_transition(entity: str, current: str, target: str) -> bool:
+def can_transition(entity: str, current: str, target: str, *, resume_state: str | None = None) -> bool:
     """检查是否允许从 current 迁移到 target。"""
     table = _TRANSITION_TABLES.get(entity)
     if table is None:
         raise ValueError(f"Unknown entity type: {entity}")
     for s, targets in table.items():
         if s.value == current:
-            return any(t.value == target for t in targets)
+            if any(t.value == target for t in targets):
+                return True
+            waiting_states = {
+                "waiting_dependency",
+                "waiting_resource",
+                "waiting_permission",
+                "paused",
+                "waiting_approval",
+            }
+            if current in waiting_states and target == resume_state:
+                return True
+            return False
     raise ValueError(f"Unknown state '{current}' for entity '{entity}'")
 
 
@@ -702,7 +747,7 @@ def transition(
     Raises:
         StateTransitionError: 非法迁移。
     """
-    if not can_transition(entity, current, target):
+    if not can_transition(entity, current, target, resume_state=resume_state):
         raise StateTransitionError(entity, current, target)
 
     waiting_states = {

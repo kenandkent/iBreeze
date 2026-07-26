@@ -16,16 +16,23 @@ class EventType(StrEnum):
     RUN_FAILED = "run.failed"
     RUN_CANCELLED = "run.cancelled"
     TOOL_REQUESTED = "tool.requested"
+    TOOL_APPROVED = "tool.approved"
+    TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
     TOOL_DENIED = "tool.denied"
     MODEL_THINKING = "model.thinking"
     MODEL_OUTPUT = "model.output"
+    MODEL_OUTPUT_DELTA = "model.output.delta"
+    MODEL_OUTPUT_COMPACTED = "model.output.compacted"
     CHECKPOINT_CREATED = "checkpoint.created"
     VERIFICATION_PASSED = "verification.passed"
     VERIFICATION_FAILED = "verification.failed"
     PERMISSION_GRANTED = "permission.granted"
     PERMISSION_DENIED = "permission.denied"
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_RESOLVED = "approval.resolved"
+    WORKSPACE_CHANGED = "workspace.changed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,9 +49,10 @@ class EventEnvelope:
 
 
 class EventPublisher:
-    """Publish events with sequence tracking."""
+    """Publish events with sequence tracking and optional DB persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, db: Any = None) -> None:
+        self._db = db
         self._sequences: dict[str, int] = {}
         self._subscribers: dict[EventType, list[Any]] = {}
 
@@ -79,6 +87,25 @@ class EventPublisher:
 
         return envelope
 
+    async def persist(self, envelope: EventEnvelope) -> None:
+        """Persist an event to the DB (agent_run_events table)."""
+        if self._db is None:
+            return
+        await self._db.execute(
+            """INSERT INTO agent_run_events
+               (event_id, run_id, event_type, payload_json, sequence, trace_id, occurred_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (
+                envelope.event_id,
+                envelope.run_id,
+                envelope.event_type,
+                serialize_event(envelope),
+                envelope.sequence,
+                str(uuid.uuid4()),
+                envelope.timestamp,
+            ),
+        )
+
     def subscribe(
         self,
         event_type: EventType,
@@ -109,6 +136,39 @@ class EventPublisher:
         from_sequence: int = 0,
     ) -> list[EventEnvelope]:
         return []
+
+    async def replay_from_db(
+        self,
+        run_id: str,
+        company_id: str,
+        from_sequence: int = 0,
+    ) -> list[EventEnvelope]:
+        if self._db is None:
+            return []
+        cursor = await self._db.execute(
+            """SELECT event_id, event_type, payload_json, sequence, occurred_at
+               FROM agent_run_events
+               WHERE run_id=? AND sequence>?
+               ORDER BY sequence ASC""",
+            (run_id, from_sequence),
+        )
+        rows = await cursor.fetchall()
+        result: list[EventEnvelope] = []
+        for row in rows:
+            payload_data = json.loads(row["payload_json"])
+            envelope = EventEnvelope(
+                event_id=row["event_id"],
+                event_type=EventType(row["event_type"]),
+                sequence=row["sequence"],
+                timestamp=row["occurred_at"],
+                run_id=run_id,
+                company_id=company_id,
+                employee_id="",
+                payload=payload_data if isinstance(payload_data, dict) else {},
+                metadata={},
+            )
+            result.append(envelope)
+        return result
 
 
 def serialize_event(envelope: EventEnvelope) -> str:

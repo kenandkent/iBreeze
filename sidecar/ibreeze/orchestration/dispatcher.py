@@ -51,6 +51,27 @@ async def dispatch_company_task(
         plan = json.loads(plan_row["canonical_json"])
         dept_tasks = plan.get("department_tasks", [])
 
+        # Ensure active catalog release exists
+        catalog_row = await (await db.execute(
+            """SELECT release_id FROM catalog_cache_releases
+               WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1"""
+        )).fetchone()
+        if catalog_row:
+            catalog_release_id: str = catalog_row["release_id"]
+        else:
+            catalog_release_id = _id()
+            await db.execute(
+                """INSERT INTO catalog_cache_releases (release_id, company_id, status, downloaded_at)
+                   VALUES (?,?,?,?)""",
+                (catalog_release_id, company_id, "active", now),
+            )
+
+        # Fetch current company revision
+        company_row = await (await db.execute(
+            "SELECT current_revision_id FROM companies WHERE id=?", (company_id,)
+        )).fetchone()
+        company_revision_id: str = company_row["current_revision_id"] if company_row else ""
+
         created_dept_tasks: list[str] = []
         created_emp_tasks: list[str] = []
         local_ref_to_dept_task: dict[str, str] = {}
@@ -161,6 +182,55 @@ async def dispatch_company_task(
                             spec_json = json.dumps(run_spec, sort_keys=True, separators=(",", ":"))
                             spec_sha = hashlib.sha256(spec_json.encode()).hexdigest()
 
+                            # Create real availability and execution snapshot rows
+                            avail_snap_id = _id()
+                            availability_checks = {"checks": [], "overall": "pending"}
+                            await db.execute(
+                                """INSERT INTO employee_availability_snapshots
+                                   (id, company_id, company_task_id, department_task_id,
+                                    work_item_type, work_item_id, employee_id,
+                                    base_profile_version_id, prospective_execution_sha256,
+                                    catalog_release_id, checks_json, overall_status,
+                                    checked_at, expires_at)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                (
+                                    avail_snap_id, company_id, task_id, dept_task_id,
+                                    "task_execution", emp_task_id, emp_id,
+                                    profile_version_id, spec_sha,
+                                    catalog_release_id,
+                                    json.dumps(availability_checks),
+                                    "available", now, now,
+                                ),
+                            )
+                            dept_rev_row = await (await db.execute(
+                                "SELECT current_revision_id FROM departments WHERE id=? AND company_id=?",
+                                (department_id, company_id),
+                            )).fetchone()
+                            dept_revision_id: str = dept_rev_row["current_revision_id"] if dept_rev_row else ""
+                            exec_snap_id = _id()
+                            await db.execute(
+                                """INSERT INTO execution_snapshots
+                                   (id, company_id, company_task_id, department_id,
+                                    department_task_id, employee_task_id, employee_id,
+                                    snapshot_purpose, work_item_id,
+                                    company_revision_id, department_revision_id,
+                                    base_profile_version_id, catalog_release_id,
+                                    runtime_binding_json, skill_lock_json,
+                                    tool_policy_json, workspace_policy_json,
+                                    verification_commands_json, content_sha256, created_at)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                (
+                                    exec_snap_id, company_id, task_id, department_id,
+                                    dept_task_id, emp_task_id, emp_id,
+                                    "task_execution", emp_task_id,
+                                    company_revision_id, dept_revision_id,
+                                    profile_version_id, catalog_release_id,
+                                    json.dumps(binding),
+                                    "{}", "{}", "{}", "[]",
+                                    spec_sha, now,
+                                ),
+                            )
+
                             await db.execute(
                                 """INSERT INTO agent_runs
                                    (id, company_id, company_task_id, department_task_id,
@@ -175,7 +245,7 @@ async def dispatch_company_task(
                                     run_id, company_id, task_id, dept_task_id,
                                     emp_task_id, emp_task_id, emp_id,
                                     task_row["company_conversation_id"],
-                                    "snap_" + _id(), "snap_" + _id(),
+                                    avail_snap_id, exec_snap_id,
                                     "task_execution", adapter_type,
                                     spec_json, spec_sha,
                                     "queued", 1, now, now, 1,

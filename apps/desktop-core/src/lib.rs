@@ -1,9 +1,14 @@
 //! iBreeze desktop security and operating-system boundary.
 
+pub mod auth;
 pub mod commands;
 pub mod error;
+pub mod ipc;
 pub mod keyring;
+pub mod process;
+pub mod profile;
 pub mod rpc;
+pub mod security;
 pub mod sidecar;
 pub mod store;
 pub mod trust;

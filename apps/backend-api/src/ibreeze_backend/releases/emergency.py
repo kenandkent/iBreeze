@@ -40,7 +40,7 @@ async def create_emergency_disable(
         signature=signature,
         signing_key_id=signing_key_id,
         created_by=actor_user_id,
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=datetime.now(UTC),
     )
     db.add(release)
     await db.flush()

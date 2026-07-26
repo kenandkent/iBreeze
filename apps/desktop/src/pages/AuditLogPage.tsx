@@ -6,6 +6,7 @@ import { DownloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import type { AuditLogEntry } from '../types';
 import { useListAuditLogs, useExportAuditLogs } from '../hooks/useAudit';
+import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
@@ -111,7 +112,7 @@ export default function AuditLogPage() {
                 <Space>
                   <Tag color={eventTypeColor[log.event_type] || 'default'}>{log.event_type}</Tag>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {new Date(log.created_at).toLocaleString('zh-CN')}
+                    {formatTime(log.created_at)}
                   </Text>
                 </Space>
                 <div style={{ marginTop: 4 }}>

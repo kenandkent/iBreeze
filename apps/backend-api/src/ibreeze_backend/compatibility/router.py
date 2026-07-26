@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ibreeze_backend.api.errors import raise_problem
 from ibreeze_backend.compatibility.models import CompatibilityRule
 from ibreeze_backend.compatibility.schemas import RuleCreate, RuleResponse, RuleUpdate
 from ibreeze_backend.compatibility.service import (
@@ -30,11 +31,11 @@ public_router = APIRouter(prefix="/api/v1/catalog", tags=["compatibility-public"
 
 def _expected_version(value: str | None) -> int:
     if value is None:
-        raise HTTPException(status_code=428, detail="IF_MATCH_REQUIRED")
+        raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
     try:
         return int(value.strip('"'))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID") from exc
+    except ValueError:
+        raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
 
 
 def _raise(exc: ValueError) -> None:
@@ -45,7 +46,7 @@ def _raise(exc: ValueError) -> None:
         status_code = 409
     else:
         status_code = 422
-    raise HTTPException(status_code=status_code, detail=code) from exc
+    raise_problem(status_code, code, code)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=RuleResponse)
@@ -54,7 +55,7 @@ async def create_rule_endpoint(
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(get_current_user),
 ) -> RuleResponse:
-    logger.info("create_rule.start", extra={"subject": body.subject, "dependency": body.dependency})
+    logger.info("create_rule.start", extra={"subject": body.subject_id, "dependency": body.dependency_key})
     result = RuleResponse.model_validate(await create_rule(db, body))
     logger.info("create_rule.completed", extra={"rule_id": str(result.id)})
     return result
@@ -85,7 +86,7 @@ async def get_rule_endpoint(
     item = await get_rule(db, rule_id)
     if item is None:
         logger.warning("get_rule.failed", extra={"rule_id": str(rule_id), "reason": "not_found"})
-        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+        raise_problem(404, "CATALOG_RESOURCE_NOT_FOUND", "Resource not found")
     return RuleResponse.model_validate(item)
 
 

@@ -27,11 +27,16 @@ export default function LoginPage() {
         password: values.password,
       });
       logger.info('LoginPage', 'login_success', { email: values.email });
+      if (result.pwd_change_required) {
+        navigate('/settings', { replace: true });
+        setError('首次登录需要修改密码');
+        return;
+      }
       login(result.access_token, result.refresh_token, {
-        id: 'current',
+        id: result.user_id || 'current',
         user_type: result.user_type as 'admin' | 'app_user',
         email: values.email,
-        display_name: values.email,
+        display_name: result.display_name || values.email,
         status: 'active',
       });
       navigate('/dashboard', { replace: true });

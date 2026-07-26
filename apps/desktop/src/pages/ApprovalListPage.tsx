@@ -37,6 +37,18 @@ export default function ApprovalListPage() {
     },
   });
 
+  const rejectMutation = useMutation({
+    mutationFn: (id: string) =>
+      invoke('rpc_request', {
+        method: 'approval.resolve',
+        params: { approval_id: id, decision: 'denied' },
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['approvals'] });
+    },
+  });
+
   const handleResolve = async (id: string) => {
     try {
       logger.info('ApprovalListPage', 'resolve_start', { id });
@@ -44,6 +56,16 @@ export default function ApprovalListPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error('ApprovalListPage', 'resolve_failed', msg, { id });
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      logger.info('ApprovalListPage', 'reject_start', { id });
+      await rejectMutation.mutateAsync(id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ApprovalListPage', 'reject_failed', msg, { id });
     }
   };
 
@@ -68,7 +90,7 @@ export default function ApprovalListPage() {
             <Button size="small" type="primary" onClick={() => { logger.logAction('ApprovalListPage', 'approve'); handleResolve(record.id); }}>
               批准
             </Button>
-            <Button size="small" danger onClick={() => { logger.logAction('ApprovalListPage', 'reject'); handleResolve(record.id); }}>
+            <Button size="small" danger onClick={() => { logger.logAction('ApprovalListPage', 'reject'); handleReject(record.id); }}>
               拒绝
             </Button>
           </Space>

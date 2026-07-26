@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useListSkills, useInstallSkill, useRemoveSkill } from '../hooks/useSkills';
+import { formatTime } from '../utils/formatters';
 import type { SkillCatalogItem } from '../types';
 
 export default function SkillPage() {
@@ -54,7 +55,7 @@ export default function SkillPage() {
       title: '绑定 Agent', dataIndex: 'agent_bindings', key: 'agent_bindings',
       render: (bindings: string[]) => bindings?.map((b) => <Tag key={b}>{b}</Tag>) ?? '-',
     },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: SkillCatalogItem) => (

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, Select, Input, DatePicker, Button, Tag, Space, Card } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import { useListAuditLogs } from '../hooks/useAuditLogs';
+import { formatTime } from '../utils/formatters';
 
 const EVENT_TYPES = [
   'auth.login', 'auth.logout', 'auth.refresh',
@@ -51,7 +52,7 @@ export default function AdminAuditLogPage() {
         </pre>
       ),
     },
-    { title: '时间', dataIndex: 'created_at', key: 'created_at' },
+    { title: '时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
   ];
 
   const handleExport = () => {

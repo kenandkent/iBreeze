@@ -138,3 +138,53 @@ impl Default for SecureKeyring {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_bundle() -> SessionBundle {
+        SessionBundle {
+            schema_version: 1,
+            refresh_token: "rt".to_owned(),
+            offline_session_ticket: "ost".to_owned(),
+            family_id: "fid".to_owned(),
+            issued_at: "2026-01-01T00:00:00Z".to_owned(),
+        }
+    }
+
+    #[test]
+    fn session_bundle_zeroize_on_drop() {
+        let bundle = test_bundle();
+        let serialized = serde_json::to_string(&bundle).expect("serialize");
+        assert!(serialized.contains("refresh_token"));
+        drop(bundle);
+    }
+
+    #[test]
+    fn session_bundle_roundtrip() {
+        let bundle = test_bundle();
+        let json = serde_json::to_string(&bundle).expect("serialize");
+        let deserialized: SessionBundle = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(bundle.schema_version, deserialized.schema_version);
+        assert_eq!(bundle.family_id, deserialized.family_id);
+    }
+
+    #[test]
+    fn session_bundle_rejects_extra_fields() {
+        let extra = r#"{"schema_version":1,"refresh_token":"t","offline_session_ticket":"t","family_id":"f","issued_at":"2026-01-01T00:00:00Z","extra":"bad"}"#;
+        assert!(
+            serde_json::from_str::<SessionBundle>(extra).is_err(),
+            "AUTH-010: extra fields must be rejected"
+        );
+    }
+
+    #[test]
+    fn keyring_entry_validation_rejects_invalid_ids() {
+        let keyring = SecureKeyring::new();
+        assert!(keyring.load_bundle("../escape").is_err());
+        assert!(keyring.load_bundle("UPPERCASE").is_err());
+        assert!(keyring.load_bundle("").is_err());
+        assert!(keyring.load_bundle("validid123").is_ok());
+    }
+}

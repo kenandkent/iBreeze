@@ -178,7 +178,7 @@ async def create_sequential_refinement_subtasks(
     return subtasks
 
 
-def create_subtasks(
+async def create_subtasks(
     strategy: CollaborationStrategy,
     **kwargs: Any,
 ) -> list[SubTask]:
@@ -192,6 +192,4 @@ def create_subtasks(
     creator = creators.get(strategy)
     if creator is None:
         raise ValueError(f"Unknown strategy: {strategy}")
-    import asyncio
-
-    return asyncio.get_event_loop().run_until_complete(creator(**kwargs))
+    return await creator(**kwargs)

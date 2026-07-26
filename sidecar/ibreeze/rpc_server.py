@@ -44,6 +44,7 @@ from ibreeze.employee import (
     list_departments,
     list_employees,
     set_department_leader,
+    transfer_employee,
     update_department,
     update_employee_base_profile,
     update_employee_display_name,
@@ -1440,14 +1441,18 @@ class RPCServer:
     # ── Employee ──────────────────────────────────────────────────────
 
     async def _employee_transfer(self, params: dict[str, Any]) -> object:
-        now = _now()
-        await self._connection.execute(
-            "UPDATE employees SET department_id=?, updated_at=? "
-            "WHERE id=? AND company_id=?",
-            (params["new_department_id"], now, params["employee_id"], params["company_id"]),
+        result = await transfer_employee(
+            self._connection,
+            params["company_id"],
+            params["employee_id"],
+            params["new_department_id"],
+            expected_version=params.get("expected_version", 0),
         )
-        await self._connection.commit()
-        return {"transferred_at": now}
+        return {
+            "transferred_at": result.updated_at.isoformat(),
+            "department_id": result.department_id,
+            "version": result.version,
+        }
 
     # ── Artifact ──────────────────────────────────────────────────────
 

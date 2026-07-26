@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Switch, Space, Popconfirm, Card, message } from 'antd';
+import { formatNumber } from '../utils/formatters';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { useListCompatibilityRules, useCreateCompatibilityRule, useUpdateCompatibilityRule, useDeleteCompatibilityRule, useEvaluateCompatibilityRule } from '../hooks/useCompatibility';
 import type { CompatibilityRule } from '../types';
@@ -93,7 +94,7 @@ export default function CompatibilityPage() {
         return a ? <Tag color={a.color}>{a.label}</Tag> : action;
       },
     },
-    { title: '优先级', dataIndex: 'priority', key: 'priority' },
+    { title: '优先级', dataIndex: 'priority', key: 'priority', render: (v: number) => formatNumber(v) },
     {
       title: '启用', dataIndex: 'enabled', key: 'enabled',
       render: (enabled: boolean, record: CompatibilityRule) => (

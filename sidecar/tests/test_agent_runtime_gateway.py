@@ -363,3 +363,65 @@ class TestEvents:
         assert deserialized.event_type == envelope.event_type
         assert deserialized.payload == envelope.payload
         assert deserialized.metadata == envelope.metadata
+
+    @pytest.mark.asyncio
+    async def test_event_publisher_persist(self):
+        mock_db = AsyncMock()
+        publisher = EventPublisher(db=mock_db)
+        envelope = publisher.publish(
+            EventType.RUN_STARTED,
+            run_id="run-1",
+            company_id="comp-1",
+            employee_id="emp-1",
+            payload={"key": "value"},
+        )
+        await publisher.persist(envelope)
+        mock_db.execute.assert_called_once()
+        call_args = mock_db.execute.call_args[0]
+        assert "INSERT INTO agent_run_events" in call_args[0]
+        assert call_args[1][0] == envelope.event_id
+        assert call_args[1][1] == "run-1"
+
+    @pytest.mark.asyncio
+    async def test_event_publisher_persist_no_db(self):
+        publisher = EventPublisher(db=None)
+        envelope = publisher.publish(
+            EventType.RUN_STARTED,
+            run_id="run-1",
+            company_id="comp-1",
+            employee_id="emp-1",
+            payload={},
+        )
+        await publisher.persist(envelope)
+
+    def test_event_publisher_sequence_per_run_company(self):
+        publisher = EventPublisher()
+        e1 = publisher.publish(
+            EventType.RUN_STARTED, run_id="run-1", company_id="comp-1", employee_id="emp-1", payload={},
+        )
+        e2 = publisher.publish(
+            EventType.RUN_STARTED, run_id="run-1", company_id="comp-2", employee_id="emp-1", payload={},
+        )
+        assert e1.sequence == 1
+        assert e2.sequence == 1
+        seq1 = publisher.get_sequence("run-1", "comp-1")
+        seq2 = publisher.get_sequence("run-1", "comp-2")
+        assert seq1 == 1
+        assert seq2 == 1
+
+    def test_event_type_enum_has_all_expected_values(self):
+        values = [v.value for v in EventType]
+        expected = [
+            "run.started", "run.completed", "run.failed", "run.cancelled",
+            "tool.requested", "tool.approved", "tool.started", "tool.completed",
+            "tool.failed", "tool.denied",
+            "model.thinking", "model.output", "model.output.delta", "model.output.compacted",
+            "checkpoint.created",
+            "verification.passed", "verification.failed",
+            "permission.granted", "permission.denied",
+            "approval.requested", "approval.resolved",
+            "workspace.changed",
+        ]
+        for e in expected:
+            assert e in values, f"Missing EventType: {e}"
+        assert len(values) == len(expected), f"Expected {len(expected)} event types, got {len(values)}"

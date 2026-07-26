@@ -31,6 +31,27 @@ class TestCompanyTaskStateMachine:
     def test_analyzing_to_awaiting(self):
         assert can_transition("CompanyTask", "analyzing", "awaiting_user_confirmation")
 
+    def test_executing_to_paused(self):
+        assert can_transition("CompanyTask", "executing", "paused")
+
+    def test_reviewing_to_paused(self):
+        assert can_transition("CompanyTask", "reviewing", "paused")
+
+    def test_fixing_to_paused(self):
+        assert can_transition("CompanyTask", "fixing", "paused")
+
+    def test_final_review_to_paused(self):
+        assert can_transition("CompanyTask", "final_review", "paused")
+
+    def test_paused_to_failed(self):
+        assert can_transition("CompanyTask", "paused", "failed")
+
+    def test_paused_rejects_completed(self):
+        assert not can_transition("CompanyTask", "paused", "completed")
+
+    def test_paused_rejects_executing(self):
+        assert not can_transition("CompanyTask", "paused", "executing")
+
     def test_analyzing_to_failed(self):
         assert can_transition("CompanyTask", "analyzing", "failed")
 
@@ -121,6 +142,48 @@ class TestDepartmentTaskStateMachine:
     def test_draft_rejects_executing(self):
         assert not can_transition("DepartmentTask", "draft", "executing")
 
+    def test_executing_to_paused(self):
+        assert can_transition("DepartmentTask", "executing", "paused")
+
+    def test_reviewing_to_paused(self):
+        assert can_transition("DepartmentTask", "reviewing", "paused")
+
+    def test_fixing_to_paused(self):
+        assert can_transition("DepartmentTask", "fixing", "paused")
+
+    def test_checking_resources_to_paused(self):
+        assert can_transition("DepartmentTask", "checking_resources", "paused")
+
+    def test_ready_to_paused(self):
+        assert can_transition("DepartmentTask", "ready", "paused")
+
+    def test_waiting_dependency_to_paused(self):
+        assert can_transition("DepartmentTask", "waiting_dependency", "paused")
+
+    def test_paused_to_executing(self):
+        assert can_transition("DepartmentTask", "paused", "executing")
+
+    def test_paused_to_cancelled(self):
+        assert can_transition("DepartmentTask", "paused", "cancelled")
+
+    def test_paused_to_checking_resources(self):
+        assert can_transition("DepartmentTask", "paused", "checking_resources")
+
+    def test_paused_to_ready(self):
+        assert can_transition("DepartmentTask", "paused", "ready")
+
+    def test_paused_to_reviewing(self):
+        assert can_transition("DepartmentTask", "paused", "reviewing")
+
+    def test_paused_to_fixing(self):
+        assert can_transition("DepartmentTask", "paused", "fixing")
+
+    def test_paused_to_failed(self):
+        assert can_transition("DepartmentTask", "paused", "failed")
+
+    def test_paused_rejects_completed(self):
+        assert not can_transition("DepartmentTask", "paused", "completed")
+
 
 # ── EmployeeTask ───────────────────────────────────────────────────────────
 
@@ -155,6 +218,42 @@ class TestEmployeeTaskStateMachine:
 
     def test_running_to_waiting_resource(self):
         assert can_transition("EmployeeTask", "running", "waiting_resource")
+
+    def test_employee_assigned_to_paused(self):
+        assert can_transition("EmployeeTask", "assigned", "paused")
+
+    def test_employee_ready_to_paused(self):
+        assert can_transition("EmployeeTask", "ready", "paused")
+
+    def test_employee_running_to_paused(self):
+        assert can_transition("EmployeeTask", "running", "paused")
+
+    def test_employee_submitted_to_paused(self):
+        assert can_transition("EmployeeTask", "submitted", "paused")
+
+    def test_employee_peer_reviewing_to_paused(self):
+        assert can_transition("EmployeeTask", "peer_reviewing", "paused")
+
+    def test_employee_changes_requested_to_paused(self):
+        assert can_transition("EmployeeTask", "changes_requested", "paused")
+
+    def test_employee_waiting_resource_to_paused(self):
+        assert can_transition("EmployeeTask", "waiting_resource", "paused")
+
+    def test_employee_paused_to_ready(self):
+        assert can_transition("EmployeeTask", "paused", "ready")
+
+    def test_employee_paused_to_running(self):
+        assert can_transition("EmployeeTask", "paused", "running")
+
+    def test_employee_paused_to_cancelled(self):
+        assert can_transition("EmployeeTask", "paused", "cancelled")
+
+    def test_employee_paused_to_failed(self):
+        assert can_transition("EmployeeTask", "paused", "failed")
+
+    def test_employee_paused_rejects_accepted(self):
+        assert not can_transition("EmployeeTask", "paused", "accepted")
 
 
 # ── AgentRun ───────────────────────────────────────────────────────────────

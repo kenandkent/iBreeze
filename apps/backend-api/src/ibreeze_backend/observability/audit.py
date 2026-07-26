@@ -36,6 +36,6 @@ async def write_audit_log(
             after_json=after_json,
             error_code=error_code,
             ip_address=ip_address,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=datetime.now(UTC),
         )
     )

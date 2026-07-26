@@ -1,7 +1,6 @@
 import { Card, Descriptions, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-
-const API_BASE = '/admin/api/v1';
+import { apiGet } from '../utils/apiClient';
 
 interface Settings {
   token_algorithm: string;
@@ -12,11 +11,9 @@ interface Settings {
 }
 
 async function fetchSettings(): Promise<Settings> {
-  const res = await fetch(`${API_BASE}/settings`);
-  if (!res.ok) {
-    // 后端暂未提供 settings 接口，使用 health 接口验证连接
-    const health = await fetch('/health');
-    if (!health.ok) throw new Error('后端 API 不可达');
+  try {
+    return await apiGet<Settings>('/settings');
+  } catch {
     return {
       token_algorithm: 'Ed25519',
       token_expire_minutes: 15,
@@ -25,7 +22,6 @@ async function fetchSettings(): Promise<Settings> {
       log_json: true,
     };
   }
-  return res.json();
 }
 
 export default function SettingsPage() {

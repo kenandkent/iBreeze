@@ -103,11 +103,11 @@ async def test_protected_admin_allows_only_display_name(client: AsyncClient, adm
         json={"status": "disabled"},
         headers=_auth(admin_tokens),
     )
-
     assert display_response.status_code == 200
     assert display_response.json()["display_name"] == "Platform Owner"
-    assert username_response.status_code == 400
-    assert status_response.status_code == 400
+    assert username_response.status_code == 403
+    assert status_response.status_code == 403
+
 
 
 @pytest.mark.asyncio
@@ -116,7 +116,7 @@ async def test_protected_admin_cannot_delete(client: AsyncClient, admin_tokens, 
         f"/admin/api/v1/users/{test_admin.id}",
         headers=_auth(admin_tokens),
     )
-    assert response.status_code == 400
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, message } from 'antd';
 import { logger } from '../utils/logger';
+import { formatNumber } from '../utils/formatters';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useListModels, useCreateModel, useUpdateModel, useDeleteModel, useValidateModel, usePublishModel } from '../hooks/useModelCatalog';
 import type { ModelCatalogItem } from '../types';
@@ -97,7 +98,7 @@ export default function ModelCatalogPage() {
     { title: '提供商', dataIndex: 'provider_key', key: 'provider_key' },
     { title: '模型 Key', dataIndex: 'model_key', key: 'model_key' },
     { title: '显示名称', dataIndex: 'display_name', key: 'display_name' },
-    { title: '上下文窗口', dataIndex: 'context_window', key: 'context_window', render: (v: number) => v?.toLocaleString() ?? '-' },
+    { title: '上下文窗口', dataIndex: 'context_window', key: 'context_window', render: (v: number) => formatNumber(v) ?? '-' },
     {
       title: '能力', key: 'capabilities',
       render: (_: unknown, record: ModelCatalogItem) => (

@@ -1,0 +1,9 @@
+{
+  "name": "@ibreeze/ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./formatters": "./formatters.ts"
+  }
+}

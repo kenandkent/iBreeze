@@ -1,0 +1,12 @@
+{
+  "identifier": "main-capability",
+  "description": "iBreeze main window capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-set-size",
+    "core:window:allow-set-title"
+  ]
+}

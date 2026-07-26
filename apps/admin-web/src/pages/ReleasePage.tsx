@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, Button, Modal, Drawer, Form, Input, Space, Typography, message } from 'antd';
 import { PlusOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { logger } from '../utils/logger';
+import { formatTime } from '../utils/formatters';
 import { useListReleases, useCreateRelease, useEmergencyDisable } from '../hooks/useReleases';
 import type { Release } from '../types';
 
@@ -54,7 +55,7 @@ export default function ReleasePage() {
       render: (sig: string) => sig ? <Text copyable ellipsis style={{ maxWidth: 200 }}>{sig}</Text> : '-',
     },
     { title: '签名密钥 ID', dataIndex: 'signing_key_id', key: 'signing_key_id' },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: Release) => (

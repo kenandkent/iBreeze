@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
 import { logger } from '../utils/logger';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider } from '../hooks/useProviderCatalog';
+import { formatTime } from '../utils/formatters';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
+import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider, useValidateProvider, usePublishProvider } from '../hooks/useProviderCatalog';
 import type { ProviderCatalogItem } from '../types';
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -16,6 +17,8 @@ export default function ProviderCatalogPage() {
   const createProvider = useCreateProvider();
   const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
+  const validateProvider = useValidateProvider();
+  const publishProvider = usePublishProvider();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProviderCatalogItem | null>(null);
@@ -67,6 +70,30 @@ export default function ProviderCatalogPage() {
     }
   };
 
+  const handleValidate = async (id: string) => {
+    logger.info('ProviderCatalogPage', 'validate_start', { id });
+    try {
+      await validateProvider.mutateAsync(id);
+      message.success('验证成功');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ProviderCatalogPage', 'validate_failed', { id }, msg);
+      message.error('验证失败');
+    }
+  };
+
+  const handlePublish = async (id: string) => {
+    logger.info('ProviderCatalogPage', 'publish_start', { id });
+    try {
+      await publishProvider.mutateAsync(id);
+      message.success('发布成功');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('ProviderCatalogPage', 'publish_failed', { id }, msg);
+      message.error('发布失败');
+    }
+  };
+
   const columns = [
     { title: '显示名称', dataIndex: 'display_name', key: 'display_name' },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url' },
@@ -78,6 +105,7 @@ export default function ProviderCatalogPage() {
         return s ? <Tag color={s.color}>{s.label}</Tag> : status;
       },
     },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: ProviderCatalogItem) => (
@@ -87,6 +115,16 @@ export default function ProviderCatalogPage() {
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                 编辑
               </Button>
+              {record.status === 'draft' && (
+                <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleValidate(record.id)}>
+                  验证
+                </Button>
+              )}
+              {record.status === 'validated' && (
+                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handlePublish(record.id)}>
+                  发布
+                </Button>
+              )}
               <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                   删除

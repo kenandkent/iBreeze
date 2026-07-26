@@ -126,7 +126,11 @@ class TestReviewService:
             "comp-1",
             report_id="rep-1",
             severity="high",
+            category="code_quality",
             description="Bug found",
+            expected="no bugs",
+            actual="bug found",
+            suggested_fix="fix the bug",
         )
         assert result["status"] == "open"
 

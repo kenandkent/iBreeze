@@ -651,6 +651,63 @@ async def update_employee_status(
     return await get_employee(db, company_id, employee_id)
 
 
+async def transfer_employee(
+    db: Any,
+    company_id: str,
+    employee_id: str,
+    new_department_id: str,
+    *,
+    expected_version: int,
+) -> EmployeeResponse:
+    """Transfer an employee to a new department (ORG-007).
+
+    Raises:
+        ValueError: if employee has active assignments, new department is invalid,
+                    or optimistic lock fails.
+    """
+    await _active_company(db, company_id)
+    employee = await get_employee(db, company_id, employee_id)
+    if employee.workflow_role == WorkflowRole.GENERAL_MANAGER:
+        raise ValueError("STATE_TRANSITION_INVALID")
+    if await _has_active_assignment(db, employee_id):
+        raise ValueError("EMPLOYEE_HAS_ACTIVE_ASSIGNMENT")
+    cursor = await db.execute(
+        """SELECT 1 FROM departments
+           WHERE id=? AND company_id=? AND status='active'""",
+        (new_department_id, company_id),
+    )
+    if await _one(cursor) is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cursor = await db.execute(
+            """UPDATE employees SET department_id=?, updated_at=?,
+               version=version+1
+               WHERE id=? AND company_id=? AND version=?""",
+            (new_department_id, _now(), employee_id, company_id, expected_version),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+        await _append_event(
+            db,
+            company_id=company_id,
+            aggregate_type="employee",
+            aggregate_id=employee_id,
+            aggregate_version=expected_version + 1,
+            event_type="employee.transferred",
+            extra={
+                "from_department_id": employee.department_id,
+                "to_department_id": new_department_id,
+            },
+        )
+        await db.commit()
+        return await get_employee(db, company_id, employee_id)
+    except Exception:
+        await db.rollback()
+        raise
+
+
 async def set_department_leader(
     db: Any,
     company_id: str,

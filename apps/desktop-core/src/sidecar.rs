@@ -1,23 +1,32 @@
-//! Sidecar process supervision. Secrets are delivered once through stdin.
-
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use rand::RngCore;
+use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use tokio::time::{sleep, timeout};
-use tracing::{info, warn, error};
+use tokio::time::sleep;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::AppError;
 use crate::rpc::protocol::PROTOCOL_VERSION;
 use crate::rpc::sidecar::SidecarClient;
+
+pub const HEALTH_INTERVAL: Duration = Duration::from_secs(5);
+pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
+pub const MAX_LOST_HEARTBEATS: u32 = 3;
+pub const RESTART_WINDOW: Duration = Duration::from_secs(60);
+pub const MAX_RESTARTS: u32 = 3;
+pub const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(10);
+pub const SIGTERM_TIMEOUT: Duration = Duration::from_secs(5);
+pub const SOCKET_WAIT_ATTEMPTS: u32 = 100;
+pub const SOCKET_WAIT_INTERVAL: Duration = Duration::from_millis(100);
 
 struct RunningSidecar {
     child: Child,
@@ -33,14 +42,39 @@ pub struct SidecarProfile<'a> {
     pub mode: &'a str,
 }
 
+#[derive(Default)]
+pub struct RestartTracker {
+    timestamps: Vec<Instant>,
+}
+
+impl RestartTracker {
+    pub fn new() -> Self {
+        Self {
+            timestamps: Vec::new(),
+        }
+    }
+
+    pub fn is_throttled(&mut self) -> bool {
+        let now = Instant::now();
+        self.timestamps.retain(|t| now.duration_since(*t) < RESTART_WINDOW);
+        self.timestamps.len() >= MAX_RESTARTS as usize
+    }
+
+    pub fn record_restart(&mut self) {
+        self.timestamps.push(Instant::now());
+    }
+}
+
 pub struct SidecarSupervisor {
     running: Mutex<Option<RunningSidecar>>,
+    restart_tracker: Mutex<RestartTracker>,
 }
 
 impl SidecarSupervisor {
     pub fn new() -> Self {
         Self {
             running: Mutex::new(None),
+            restart_tracker: Mutex::new(RestartTracker::new()),
         }
     }
 
@@ -59,7 +93,22 @@ impl SidecarSupervisor {
                 "A Sidecar profile is already open".to_owned(),
             ));
         }
-        info!(backend_origin = %profile.backend_origin, mode = %profile.mode, "sidecar.process.starting");
+
+        {
+            let mut tracker = self.restart_tracker.lock().await;
+            if tracker.is_throttled() {
+                error!("sidecar.process.restart_throttled");
+                return Err(AppError::Sidecar(
+                    "Sidecar entered diagnostics: too many consecutive restarts".to_owned(),
+                ));
+            }
+        }
+
+        info!(
+            backend_origin = %profile.backend_origin,
+            mode = %profile.mode,
+            "sidecar.process.starting",
+        );
         let launch_id = Uuid::new_v4();
         let launch_dir = runtime_root.join(launch_id.to_string());
         std::fs::create_dir_all(&launch_dir)
@@ -124,6 +173,7 @@ impl SidecarSupervisor {
             return Err(error);
         }
         info!("sidecar.process.started");
+        self.restart_tracker.lock().await.record_restart();
         *guard = Some(RunningSidecar {
             child,
             client: Arc::clone(&client),
@@ -149,17 +199,23 @@ impl SidecarSupervisor {
         info!("sidecar.process.stopping");
         let _ = running
             .client
-            .call::<serde_json::Value>(
-                "system.shutdown",
-                serde_json::json!({}),
-                Some(Uuid::new_v4()),
-            )
+            .call::<Value>("system.shutdown", serde_json::json!({}), Some(Uuid::new_v4()))
             .await;
-        if timeout(Duration::from_secs(5), running.child.wait())
+        if tokio::time::timeout(SHUTDOWN_GRACE_PERIOD, running.child.wait())
             .await
             .is_err()
         {
             warn!("sidecar.process.kill_timeout");
+            #[cfg(unix)]
+            {
+                if let Some(pid) = running.child.id() {
+                    let _ = send_signal(
+                        nix::unistd::Pid::from_raw(pid as i32),
+                        nix::sys::signal::SIGTERM,
+                    );
+                }
+                let _ = tokio::time::timeout(SIGTERM_TIMEOUT, running.child.wait()).await;
+            }
             running
                 .child
                 .kill()
@@ -175,8 +231,32 @@ impl SidecarSupervisor {
         Ok(true)
     }
 
+    pub async fn check_health(&self) -> Result<(), AppError> {
+        let client = self.client().await?;
+        tokio::time::timeout(HEALTH_TIMEOUT, client.call::<Value>(
+            "system.health",
+            serde_json::json!({}),
+            None,
+        ))
+        .await
+        .map_err(|_| AppError::Sidecar("Sidecar health check timed out".to_owned()))?
+        .map(|_: Value| ())
+    }
+
+    pub async fn is_throttled(&self) -> bool {
+        self.restart_tracker.lock().await.is_throttled()
+    }
+
+    pub async fn record_restart(&self) {
+        self.restart_tracker.lock().await.record_restart();
+    }
+
     pub async fn is_running(&self) -> bool {
         self.running.lock().await.is_some()
+    }
+
+    pub async fn restart_count(&self) -> usize {
+        self.restart_tracker.lock().await.timestamps.len()
     }
 }
 
@@ -187,7 +267,7 @@ impl Default for SidecarSupervisor {
 }
 
 async fn wait_for_socket(child: &mut Child, socket_path: &Path) -> Result<(), AppError> {
-    for _ in 0..100 {
+    for _ in 0..SOCKET_WAIT_ATTEMPTS {
         if socket_path.exists() {
             return Ok(());
         }
@@ -199,7 +279,7 @@ async fn wait_for_socket(child: &mut Child, socket_path: &Path) -> Result<(), Ap
                 "Sidecar exited before handshake: {status}"
             )));
         }
-        sleep(Duration::from_millis(100)).await;
+        sleep(SOCKET_WAIT_INTERVAL).await;
     }
     let _ = child.kill().await;
     Err(AppError::Sidecar(
@@ -210,7 +290,6 @@ async fn wait_for_socket(child: &mut Child, socket_path: &Path) -> Result<(), Ap
 #[cfg(unix)]
 fn set_directory_permissions(path: &Path) -> Result<(), AppError> {
     use std::os::unix::fs::PermissionsExt;
-
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
         .map_err(|error| AppError::Storage(error.to_string()))
 }
@@ -218,6 +297,12 @@ fn set_directory_permissions(path: &Path) -> Result<(), AppError> {
 #[cfg(not(unix))]
 fn set_directory_permissions(_: &Path) -> Result<(), AppError> {
     Ok(())
+}
+
+#[cfg(unix)]
+fn send_signal(pid: nix::unistd::Pid, signal: nix::sys::signal::Signal) -> Result<(), AppError> {
+    nix::sys::signal::kill(pid, signal)
+        .map_err(|error| AppError::Sidecar(format!("signal {signal:?}: {error}")))
 }
 
 #[cfg(test)]
@@ -229,5 +314,41 @@ mod tests {
         let supervisor = SidecarSupervisor::new();
         assert!(!supervisor.is_running().await);
         assert!(!supervisor.stop().await.expect("stop empty supervisor"));
+    }
+
+    #[tokio::test]
+    async fn restart_tracker_throttles_after_max() {
+        let mut tracker = RestartTracker::new();
+        for _ in 0..MAX_RESTARTS {
+            assert!(!tracker.is_throttled());
+            tracker.record_restart();
+        }
+        assert!(tracker.is_throttled());
+    }
+
+    #[tokio::test]
+    async fn start_rejects_when_throttled() {
+        let supervisor = SidecarSupervisor::new();
+        for _ in 0..MAX_RESTARTS {
+            supervisor.record_restart().await;
+        }
+        let temp = tempfile::tempdir().expect("temp dir");
+        let result = supervisor
+            .start(
+                Path::new("/nonexistent/sidecar"),
+                temp.path(),
+                temp.path(),
+                "0.1.0",
+                SidecarProfile {
+                    backend_origin: "https://example.com:443",
+                    app_user_id: Uuid::new_v4(),
+                    masked_identifier: "u***@example.com",
+                    device_id: Uuid::new_v4(),
+                    mode: "online",
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("diagnostics"));
     }
 }

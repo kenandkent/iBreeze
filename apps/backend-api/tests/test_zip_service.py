@@ -1,28 +1,78 @@
 """ZIP validation service tests."""
 
-import base64
+import hashlib
 import io
+import json
 import zipfile
 from pathlib import Path
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from ibreeze_backend.services.zip_service import (
-    compute_zip_checksum,
-    validate_uncompressed_size,
-    validate_zip_size,
-    validate_zip_structure,
-    verify_signature,
-)
+from ibreeze_backend.services.zip_service import validate_skill_zip
 
 
-def _make_zip(files: dict[str, str]) -> bytes:
+def _make_manifest(
+    key: str = "test-skill",
+    version: str = "1.0.0",
+    files: list[dict] | None = None,
+    **overrides,
+) -> dict:
+    """Build a valid SkillManifest dict."""
+    manifest = {
+        "schema_version": 1,
+        "key": key,
+        "version": version,
+        "display_name": "Test Skill",
+        "description": "A test skill",
+        "entrypoint": "main.py",
+        "capability_tags": ["test"],
+        "supported_runtime_types": ["agent_cli"],
+        "supported_agent_keys": ["test-agent"],
+        "model_requirements": {
+            "supports_tools": True,
+            "supports_vision": False,
+            "minimum_context_window": 8192,
+        },
+        "supported_platforms": ["linux"],
+        "required_tools": [],
+        "network_domains": [],
+        "file_policy": "workspace_rw_external_ro",
+        "risk_level": "low",
+        "dependencies": [],
+        "conflicts": [],
+        "files": files or [
+            {"path": "main.py", "sha256": "", "executable": False, "interpreter": None},
+            {"path": "instructions.md", "sha256": "", "executable": False, "interpreter": None},
+        ],
+    }
+    manifest.update(overrides)
+    return manifest
+
+
+def _make_zip_with_manifest(
+    manifest: dict,
+    extra_files: dict[str, str] | None = None,
+) -> bytes:
+    """Create a ZIP with skill.json and extra files, computing correct SHA256."""
+    files_content = {}
+    if extra_files:
+        files_content.update(extra_files)
+
+    for f in manifest.get("files", []):
+        path = f["path"]
+        if path not in files_content:
+            files_content[path] = f"content of {path}"
+
+    for f in manifest["files"]:
+        path = f["path"]
+        content = files_content[path]
+        f["sha256"] = hashlib.sha256(content.encode()).hexdigest()
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        for name, content in files.items():
-            zf.writestr(name, content)
+        zf.writestr("skill.json", json.dumps(manifest, separators=(",", ":")))
+        for path, content in files_content.items():
+            zf.writestr(path, content)
     return buf.getvalue()
 
 
@@ -33,181 +83,204 @@ def _write_zip(tmp_path: Path, name: str, data: bytes) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# validate_zip_structure
+# validate_skill_zip - success cases
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_validate_zip_structure_valid(tmp_path: Path):
-    """Test that a valid skill ZIP passes validation."""
-    data = _make_zip({"manifest.json": "{}", "main.py": "print('ok')"})
+async def test_valid_skill_zip(tmp_path: Path):
+    manifest = _make_manifest()
+    data = _make_zip_with_manifest(manifest, {"instructions.md": "# Instructions"})
     path = _write_zip(tmp_path, "valid.zip", data)
+    result_manifest, object_sha256, content_sha256 = validate_skill_zip(
+        path, expected_key="test-skill", expected_version="1.0.0"
+    )
+    assert result_manifest.key == "test-skill"
+    assert result_manifest.version == "1.0.0"
+    assert len(object_sha256) == 64
+    assert len(content_sha256) == 64
 
-    ok, errors = validate_zip_structure(path)
-    assert ok is True
-    assert errors == []
 
-
-@pytest.mark.asyncio
-async def test_validate_zip_structure_missing_manifest(tmp_path: Path):
-    """Test that a ZIP without manifest.json fails."""
-    data = _make_zip({"main.py": "print('ok')"})
-    path = _write_zip(tmp_path, "no_manifest.zip", data)
-
-    ok, errors = validate_zip_structure(path)
-    assert ok is False
-    assert "Missing manifest.json" in errors
+# ---------------------------------------------------------------------------
+# Size validation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_validate_zip_structure_missing_py(tmp_path: Path):
-    """Test that a ZIP without .py files fails."""
-    data = _make_zip({"manifest.json": "{}"})
-    path = _write_zip(tmp_path, "no_py.zip", data)
-
-    ok, errors = validate_zip_structure(path)
-    assert ok is False
-    assert "No Python skill files found" in errors
+async def test_empty_zip_rejected(tmp_path: Path):
+    path = _write_zip(tmp_path, "empty.zip", b"")
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_SIZE_INVALID"):
+        validate_skill_zip(path, expected_key="k", expected_version="1")
 
 
 @pytest.mark.asyncio
-async def test_validate_zip_structure_path_traversal(tmp_path: Path):
-    """Test that a ZIP with path traversal entries is rejected."""
+async def test_oversized_zip_rejected(tmp_path: Path):
+    size = 51 * 1024 * 1024
+    path = _write_zip(tmp_path, "huge.zip", b"x" * size)
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_SIZE_INVALID"):
+        validate_skill_zip(path, expected_key="k", expected_version="1")
+
+
+# ---------------------------------------------------------------------------
+# ZIP structure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bad_zip_format_rejected(tmp_path: Path):
+    path = _write_zip(tmp_path, "bad.zip", b"not a zip file")
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_INVALID_ZIP"):
+        validate_skill_zip(path, expected_key="k", expected_version="1")
+
+
+@pytest.mark.asyncio
+async def test_too_many_entries_rejected(tmp_path: Path):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("manifest.json", "{}")
-        zf.writestr("main.py", "print('ok')")
+        zf.writestr("skill.json", json.dumps(_make_manifest(), separators=(",", ":")))
+        for i in range(1001):
+            zf.writestr(f"file_{i}.txt", "x")
+    path = _write_zip(tmp_path, "many.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_ENTRY_LIMIT"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
+
+
+@pytest.mark.asyncio
+async def test_path_traversal_rejected(tmp_path: Path):
+    manifest = _make_manifest()
+    data = _make_zip_with_manifest(manifest)
+    buf = io.BytesIO(data)
+    # We need to add a traversal entry manually, recreate with malicious path
+    buf2 = io.BytesIO()
+    with zipfile.ZipFile(buf2, "w") as zf:
+        zf.writestr("skill.json", json.dumps(manifest, separators=(",", ":")))
+        zf.writestr("main.py", "x")
+        zf.writestr("instructions.md", "x")
         zf.writestr("../evil.py", "evil")
-    path = _write_zip(tmp_path, "traversal.zip", buf.getvalue())
-
-    ok, errors = validate_zip_structure(path)
-    assert ok is False
-    assert any("Suspicious path" in e for e in errors)
+    path = _write_zip(tmp_path, "traversal.zip", buf2.getvalue())
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_PATH_INVALID"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
 
 @pytest.mark.asyncio
-async def test_validate_zip_bad_zip(tmp_path: Path):
-    """Test that a non-ZIP file fails validation."""
-    path = _write_zip(tmp_path, "bad.zip", b"not a zip file")
-
-    ok, errors = validate_zip_structure(path)
-    assert ok is False
-    assert "Invalid ZIP file" in errors
-
-
-# ---------------------------------------------------------------------------
-# compute_zip_checksum
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_compute_zip_checksum(tmp_path: Path):
-    """Test computing SHA256 checksum of a ZIP file."""
-    data = _make_zip({"manifest.json": "{}", "main.py": "x"})
-    path = _write_zip(tmp_path, "checksum.zip", data)
-
-    checksum = compute_zip_checksum(path)
-    assert isinstance(checksum, str)
-    assert len(checksum) == 64  # SHA256 hex length
-
-    checksum2 = compute_zip_checksum(path)
-    assert checksum == checksum2  # deterministic
+async def test_duplicate_path_rejected(tmp_path: Path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("skill.json", json.dumps(_make_manifest(), separators=(",", ":")))
+        zf.writestr("main.py", "x")
+        zf.writestr("main.py", "y")  # duplicate
+        zf.writestr("instructions.md", "z")
+    path = _write_zip(tmp_path, "dup.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_PACKAGE_DUPLICATE_PATH"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
 
 # ---------------------------------------------------------------------------
-# validate_zip_size
+# Manifest file validation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_validate_zip_size(tmp_path: Path):
-    """Test ZIP upload size validation."""
-    data = _make_zip({"manifest.json": "{}", "main.py": "print('ok')"})
-    path = _write_zip(tmp_path, "size.zip", data)
+async def test_missing_skill_json_rejected(tmp_path: Path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("main.py", "x")
+    path = _write_zip(tmp_path, "no_manifest.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_MISSING"):
+        validate_skill_zip(path, expected_key="k", expected_version="1")
 
-    assert validate_zip_size(path) is True
 
-    huge_size = 60 * 1024 * 1024
-    huge_data = b"x" * huge_size
-    huge_path = _write_zip(tmp_path, "huge.zip", huge_data)
+@pytest.mark.asyncio
+async def test_missing_instructions_md_rejected(tmp_path: Path):
+    manifest = _make_manifest()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("skill.json", json.dumps(manifest, separators=(",", ":")))
+        zf.writestr("main.py", "x")
+    path = _write_zip(tmp_path, "no_instr.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_INSTRUCTIONS_MISSING"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
-    assert validate_zip_size(huge_path) is False
+
+@pytest.mark.asyncio
+async def test_invalid_manifest_json_rejected(tmp_path: Path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("skill.json", b"not json")
+        zf.writestr("instructions.md", "x")
+    path = _write_zip(tmp_path, "bad_json.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_INVALID"):
+        validate_skill_zip(path, expected_key="k", expected_version="1")
+
+
+@pytest.mark.asyncio
+async def test_manifest_identity_mismatch_rejected(tmp_path: Path):
+    manifest = _make_manifest(key="wrong-key")
+    data = _make_zip_with_manifest(manifest, {"instructions.md": "# Instructions"})
+    path = _write_zip(tmp_path, "bad_id.zip", data)
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_IDENTITY_MISMATCH"):
+        validate_skill_zip(path, expected_key="expected-key", expected_version="1.0.0")
 
 
 # ---------------------------------------------------------------------------
-# validate_uncompressed_size
+# File hash validation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_validate_uncompressed_size(tmp_path: Path):
-    """Test uncompressed size validation."""
-    data = _make_zip({"manifest.json": "{}", "main.py": "print('ok')"})
-    path = _write_zip(tmp_path, "uncomp.zip", data)
+async def test_file_hash_mismatch_rejected(tmp_path: Path):
+    main_content = "content of main.py"
+    instr_content = "# Instructions"
+    real_main_hash = hashlib.sha256(main_content.encode()).hexdigest()
+    real_instr_hash = hashlib.sha256(instr_content.encode()).hexdigest()
+    manifest = _make_manifest()
+    manifest["files"][0]["sha256"] = "a" * 64  # wrong hash for main.py
+    manifest["files"][1]["sha256"] = real_instr_hash  # correct for instructions.md
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("skill.json", json.dumps(manifest, separators=(",", ":")))
+        zf.writestr("main.py", main_content)
+        zf.writestr("instructions.md", instr_content)
+    path = _write_zip(tmp_path, "bad_hash.zip", buf.getvalue())
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_FILE_HASH_MISMATCH"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
-    assert validate_uncompressed_size(path) is True
+
+@pytest.mark.asyncio
+async def test_missing_declared_file_rejected(tmp_path: Path):
+    manifest = _make_manifest(files=[
+        {"path": "missing.py", "sha256": "a" * 64, "executable": False, "interpreter": None},
+        {"path": "instructions.md", "sha256": "", "executable": False, "interpreter": None},
+    ])
+    data = _make_zip_with_manifest(manifest, {"instructions.md": "# Instructions"})
+    path = _write_zip(tmp_path, "missing_file.zip", data)
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_FILE_SET_INVALID"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
 
 # ---------------------------------------------------------------------------
-# verify_signature
+# Entrypoint validation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_verify_signature_valid(tmp_path: Path):
-    """Test verifying a valid Ed25519 signature."""
-    private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key()
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+async def test_entrypoint_not_in_declared_files_rejected(tmp_path: Path):
+    manifest = _make_manifest(entrypoint="nonexistent.py")
+    data = _make_zip_with_manifest(manifest, {"instructions.md": "# Instructions"})
+    path = _write_zip(tmp_path, "bad_entry.zip", data)
+    with pytest.raises(ValueError, match="SKILL_MANIFEST_FILE_SET_INVALID"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")
 
-    data = b"hello world"
-    path = _write_zip(tmp_path, "signed.zip", data)
 
-    signature = private_key.sign(data)
-    sig_b64 = base64.b64encode(signature).decode()
-
-    assert verify_signature(path, sig_b64, public_pem) is True
+# ---------------------------------------------------------------------------
+# Network domains validation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_verify_signature_invalid(tmp_path: Path):
-    """Test that an invalid signature is rejected."""
-    private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key()
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
-
-    data = b"hello world"
-    path = _write_zip(tmp_path, "bad_sig.zip", data)
-
-    fake_sig = base64.b64encode(b"\x00" * 64).decode()
-
-    assert verify_signature(path, fake_sig, public_pem) is False
-
-
-@pytest.mark.asyncio
-async def test_verify_signature_wrong_key(tmp_path: Path):
-    """Test that a signature from a different key is rejected."""
-    key1 = Ed25519PrivateKey.generate()
-    key2 = Ed25519PrivateKey.generate()
-    pub2_pem = (
-        key2.public_key()
-        .public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        .decode()
-    )
-
-    data = b"hello world"
-    path = _write_zip(tmp_path, "wrong_key.zip", data)
-
-    sig = key1.sign(data)
-    sig_b64 = base64.b64encode(sig).decode()
-
-    assert verify_signature(path, sig_b64, pub2_pem) is False
+async def test_invalid_network_domain_rejected(tmp_path: Path):
+    manifest = _make_manifest(network_domains=["http://evil.com"])
+    data = _make_zip_with_manifest(manifest, {"instructions.md": "# Instructions"})
+    path = _write_zip(tmp_path, "bad_domain.zip", data)
+    with pytest.raises(ValueError, match="SKILL_NETWORK_DOMAIN_INVALID"):
+        validate_skill_zip(path, expected_key="test-skill", expected_version="1.0.0")

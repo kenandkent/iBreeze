@@ -564,6 +564,22 @@ async def create_agent_model_binding(
     return item
 
 
+async def list_all_agent_model_bindings(db: AsyncSession, limit: int = 50) -> list[AgentModelBinding]:
+    return list(
+        await db.scalars(
+            select(AgentModelBinding).order_by(AgentModelBinding.created_at.desc()).limit(limit)
+        )
+    )
+
+
+async def list_all_provider_model_bindings(db: AsyncSession, limit: int = 50) -> list[ProviderModelBinding]:
+    return list(
+        await db.scalars(
+            select(ProviderModelBinding).order_by(ProviderModelBinding.created_at.desc()).limit(limit)
+        )
+    )
+
+
 async def list_agent_model_bindings(
     db: AsyncSession,
     agent_id: uuid.UUID,

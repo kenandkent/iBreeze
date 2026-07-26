@@ -6,6 +6,7 @@ import { PlusOutlined, EyeOutlined, InboxOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../utils/logger';
+import { formatTime } from '../utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -79,7 +80,7 @@ export default function SkillsPage() {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: string) => new Date(v).toLocaleString('zh-CN'),
+      render: (v: string) => formatTime(v),
     },
     {
       title: '操作',

@@ -128,6 +128,10 @@ class AgentModelBindingCreate(StrictModel):
     max_agent_version_exclusive: str = Field(min_length=1, max_length=64)
 
 
+class AgentModelBindingCreateTopLevel(AgentModelBindingCreate):
+    agent_id: uuid.UUID
+
+
 class AgentModelBindingResponse(AgentModelBindingCreate):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: uuid.UUID
@@ -139,6 +143,10 @@ class ProviderModelBindingCreate(StrictModel):
     model_id: uuid.UUID
     provider_model_name: str = Field(min_length=1, max_length=200)
     request_defaults: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProviderModelBindingCreateTopLevel(ProviderModelBindingCreate):
+    provider_id: uuid.UUID
 
 
 class ProviderModelBindingResponse(ProviderModelBindingCreate):

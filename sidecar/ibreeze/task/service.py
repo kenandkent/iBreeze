@@ -20,6 +20,71 @@ async def _one(cursor: Any) -> Any | None:
     return await cursor.fetchone()
 
 
+async def submit_plan_for_review(
+    db: Any,
+    company_id: str,
+    task_id: str,
+    employee_id: str,
+) -> dict[str, object]:
+    """Submit generated plan for user review (analyzing/draft → awaiting_user_confirmation)."""
+    now = _now()
+
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        task = await _one(
+            await db.execute(
+                """SELECT * FROM company_tasks
+                   WHERE id=? AND company_id=?""",
+                (task_id, company_id),
+            )
+        )
+        if task is None:
+            raise ValueError("RESOURCE_NOT_FOUND")
+        if task["status"] not in ("analyzing", "draft"):
+            raise ValueError("STATE_TRANSITION_INVALID")
+
+        plan = await _one(
+            await db.execute(
+                """SELECT id FROM company_plan_versions
+                   WHERE company_task_id=? AND company_id=?
+                   AND status='draft'
+                   ORDER BY version_number DESC LIMIT 1""",
+                (task_id, company_id),
+            )
+        )
+        if plan is None:
+            raise ValueError("NO_DRAFT_PLAN")
+
+        cursor = await db.execute(
+            """UPDATE company_plan_versions
+               SET status='awaiting_user_confirmation'
+               WHERE id=? AND company_id=? AND status='draft'""",
+            (plan["id"], company_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+        cursor = await db.execute(
+            """UPDATE company_tasks
+               SET status='awaiting_user_confirmation', updated_at=?, version=version+1
+               WHERE id=? AND company_id=?
+               AND status IN ('analyzing','draft')""",
+            (now, task_id, company_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+        await db.commit()
+        return {
+            "task_id": task_id,
+            "plan_version_id": plan["id"],
+            "status": "awaiting_user_confirmation",
+        }
+    except Exception:
+        await db.rollback()
+        raise
+
+
 async def confirm_plan(
     db: Any,
     company_id: str,

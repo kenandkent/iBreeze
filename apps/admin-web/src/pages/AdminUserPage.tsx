@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, Popconfirm, Tooltip, message } from 'antd';
 import { logger } from '../utils/logger';
+import { formatTime } from '../utils/formatters';
 import { PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, KeyOutlined, StopOutlined } from '@ant-design/icons';
 import { useListAdminUsers, useCreateAdminUser, useUpdateAdminUser, useDeleteAdminUser, useResetPassword, useRevokeSessions } from '../hooks/useAdminUsers';
 import type { AdminUser } from '../types';
@@ -109,7 +110,7 @@ export default function AdminUserPage() {
       title: '受保护', dataIndex: 'protected', key: 'protected',
       render: (p: boolean) => p ? <Tooltip title="受保护管理员"><LockOutlined style={{ color: '#faad14' }} /></Tooltip> : null,
     },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: AdminUser) => (

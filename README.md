@@ -58,7 +58,6 @@ ibreeze/
 │  ├─ rpc-schema/       # 本地 RPC Schema
 │  └─ ui/               # 共享 UI 组件
 ├─ tests/               # 集成、E2E、安全、性能测试
-├─ tests/               # 集成、E2E、安全、性能测试
 ├─ scripts/             # 构建和验证脚本
 └─ docs/                # 文档
 ```
@@ -106,6 +105,16 @@ bash scripts/verify-all.sh
 - 目录管理（Agent、Model、Provider、Skill）
 - 安全管理（角色控制、紧急禁用）
 - 审计日志
+
+### 测试状态
+
+| 模块 | 测试数 | 状态 |
+|------|--------|------|
+| Sidecar | 711 | ✅ |
+| Backend API | 117 | ✅ |
+| Desktop Core | 56 | ✅ |
+| Desktop UI (formatters) | 16 | ✅ |
+| Admin Web UI (formatters) | 16 | ✅ |
 
 ### 公开目录查询
 - Agent 目录查询

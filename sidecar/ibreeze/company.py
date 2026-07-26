@@ -620,6 +620,24 @@ async def archive_company(
         assert row is not None
         if row[0] != 0:
             raise ValueError("STATE_TRANSITION_INVALID")
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM review_assignments
+               WHERE company_id = ? AND status NOT IN ('submitted','stale','cancelled')""",
+            (company_id,),
+        )
+        row = await _fetchone(cursor)
+        assert row is not None
+        if row[0] != 0:
+            raise ValueError("STATE_TRANSITION_INVALID")
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM task_workspaces
+               WHERE company_id = ? AND status NOT IN ('applied','abandoned')""",
+            (company_id,),
+        )
+        row = await _fetchone(cursor)
+        assert row is not None
+        if row[0] != 0:
+            raise ValueError("STATE_TRANSITION_INVALID")
 
         now = _now_iso()
         new_version = expected_version + 1

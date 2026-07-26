@@ -10,6 +10,9 @@ pub enum AppError {
     #[error("Authentication error: {0}")]
     Auth(String),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -55,6 +58,7 @@ impl Serialize for AppError {
         let (code, message) = match self {
             AppError::Sidecar(msg) => ("SIDECAR_ERROR", msg.clone()),
             AppError::Auth(msg) => ("AUTH_ERROR", msg.clone()),
+            AppError::Unauthorized(msg) => ("UNAUTHORIZED", msg.clone()),
             AppError::Validation(msg) => ("VALIDATION_ERROR", msg.clone()),
             AppError::NotFound(msg) => ("NOT_FOUND", msg.clone()),
             AppError::Network(msg) => ("NETWORK_ERROR", msg.clone()),

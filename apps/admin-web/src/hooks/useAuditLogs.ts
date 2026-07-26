@@ -1,15 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { apiGet } from '../utils/apiClient';
 import type { AuditLogEntry } from '../types';
-
-const API_BASE = '/admin/api/v1';
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
 
 export function useListAuditLogs(params?: {
   event_type?: string;
@@ -26,10 +17,10 @@ export function useListAuditLogs(params?: {
   if (params?.end_date) searchParams.set('end_date', params.end_date);
 
   const qs = searchParams.toString();
-  const url = `${API_BASE}/audit-logs${qs ? `?${qs}` : ''}`;
+  const url = `/audit-logs${qs ? `?${qs}` : ''}`;
 
   return useQuery({
     queryKey: ['audit-logs', params],
-    queryFn: () => fetchJson<{ data: AuditLogEntry[] }>(url),
+    queryFn: () => apiGet<{ data: AuditLogEntry[] }>(url),
   });
 }

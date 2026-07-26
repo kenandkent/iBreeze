@@ -1,8 +1,9 @@
 """Admin audit log model – aligned with design doc G.7."""
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import CheckConstraint, String
+from sqlalchemy import CheckConstraint, DateTime, String
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,4 +32,4 @@ class AdminAuditLog(UUIDPrimaryKeyMixin, Base):
     after_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
-    created_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

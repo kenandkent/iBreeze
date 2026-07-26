@@ -1,6 +1,7 @@
 -- iBreeze Sidecar 本地 Profile 数据库 - 完整 DDL 迁移
 -- 对齐设计文档 H.1-H.14
 -- 所有 id 由应用生成 UUID v4，所有时间以 UTC RFC 3339 文本保存
+-- 此文件与 local_db.py DDL 保持严格同步
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
@@ -52,14 +53,17 @@ INSERT OR IGNORE INTO local_preferences(
 
 CREATE TABLE IF NOT EXISTS employee_base_profiles (
     id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
     name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
-    normalized_name TEXT NOT NULL UNIQUE,
+    normalized_name TEXT NOT NULL,
     description TEXT NOT NULL,
-    current_version_id TEXT,
+    current_version_id TEXT REFERENCES employee_base_profile_versions(id)
+        DEFERRABLE INITIALLY DEFERRED,
     status TEXT NOT NULL CHECK(status IN ('active', 'retired')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+    UNIQUE(company_id, normalized_name)
 );
 
 CREATE TABLE IF NOT EXISTS employee_base_profile_versions (
@@ -76,7 +80,7 @@ CREATE TABLE IF NOT EXISTS employee_base_profile_versions (
     timeout_seconds INTEGER NOT NULL CHECK(timeout_seconds BETWEEN 1 AND 86400),
     max_retries INTEGER NOT NULL CHECK(max_retries BETWEEN 0 AND 5),
     workspace_policy TEXT NOT NULL CHECK(workspace_policy = 'workspace_rw_external_ro'),
-    catalog_release_id TEXT NOT NULL,
+    catalog_release_id TEXT NOT NULL REFERENCES catalog_cache_releases(release_id),
     content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
     status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'retired')),
     created_at TEXT NOT NULL,
@@ -178,7 +182,15 @@ CREATE TABLE IF NOT EXISTS companies (
     status TEXT NOT NULL CHECK(status IN ('active', 'archived')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0)
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+    FOREIGN KEY(current_revision_id, id) REFERENCES company_revisions(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(general_manager_office_id, id) REFERENCES departments(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(general_manager_employee_id, id) REFERENCES employees(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(company_conversation_id, id) REFERENCES conversations(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE IF NOT EXISTS company_revisions (
@@ -207,7 +219,15 @@ CREATE TABLE IF NOT EXISTS departments (
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
     UNIQUE(id, company_id),
-    UNIQUE(company_id, normalized_name)
+    UNIQUE(company_id, normalized_name),
+    FOREIGN KEY(current_revision_id, id, company_id)
+        REFERENCES department_revisions(id, department_id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(leader_employee_id, company_id) REFERENCES employees(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(department_conversation_id, company_id)
+        REFERENCES conversations(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_company_gm_office
@@ -335,6 +355,7 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
     UNIQUE(id, company_id),
     FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
     FOREIGN KEY(source_event_id, company_id) REFERENCES domain_events(event_id, company_id),
+    FOREIGN KEY(task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(sender_employee_id, company_id) REFERENCES employees(id, company_id)
 );
 
@@ -382,11 +403,18 @@ CREATE TABLE IF NOT EXISTS company_tasks (
     UNIQUE(id, company_id),
     FOREIGN KEY(company_conversation_id, company_id)
         REFERENCES conversations(id, company_id),
-    CHECK(supersedes_task_id IS NULL OR supersedes_task_id <> id),
+    FOREIGN KEY(user_message_event_id, company_id)
+        REFERENCES domain_events(event_id, company_id),
+    FOREIGN KEY(supersedes_task_id, company_id)
+        REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(active_plan_id, id, company_id)
+        REFERENCES company_plan_versions(id, company_task_id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
     CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NOT NULL)
        OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
-           AND resume_state IS NULL))
+           AND resume_state IS NULL)),
+    CHECK(supersedes_task_id IS NULL OR supersedes_task_id <> id)
 );
 
 CREATE TABLE IF NOT EXISTS company_plan_versions (
@@ -403,6 +431,8 @@ CREATE TABLE IF NOT EXISTS company_plan_versions (
     created_at TEXT NOT NULL,
     confirmed_at TEXT,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(generated_by_run_id, company_id) REFERENCES agent_runs(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
     UNIQUE(id, company_task_id, company_id),
     UNIQUE(company_task_id, version_number)
 );
@@ -418,6 +448,10 @@ CREATE TABLE IF NOT EXISTS task_context_snapshots (
     content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
     created_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(company_revision_id, company_id)
+        REFERENCES company_revisions(id, company_id),
+    FOREIGN KEY(plan_version_id, company_task_id, company_id)
+        REFERENCES company_plan_versions(id, company_task_id, company_id),
     UNIQUE(company_task_id)
 );
 
@@ -446,9 +480,9 @@ CREATE TABLE IF NOT EXISTS department_tasks (
     FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
     UNIQUE(id, company_id),
     UNIQUE(company_task_id, stage_key),
-    CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission')
+    CHECK((status IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NOT NULL)
-       OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission')
+       OR (status NOT IN ('waiting_dependency','waiting_resource','waiting_permission','paused')
            AND resume_state IS NULL))
 );
 
@@ -475,7 +509,7 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
     acceptance_criteria_json TEXT NOT NULL CHECK(json_valid(acceptance_criteria_json)),
     status TEXT NOT NULL CHECK(status IN (
         'assigned','ready','running','submitted','peer_reviewing',
-        'changes_requested','accepted','waiting_resource','cancelled','failed'
+        'changes_requested','accepted','waiting_resource','paused','cancelled','failed'
     )),
     resume_state TEXT CHECK(resume_state IS NULL OR resume_state IN (
         'assigned','ready','running','changes_requested'
@@ -487,8 +521,8 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
         REFERENCES department_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
     UNIQUE(id, company_id),
-    CHECK((status = 'waiting_resource' AND resume_state IS NOT NULL)
-       OR (status <> 'waiting_resource' AND resume_state IS NULL))
+    CHECK((status IN ('waiting_resource','paused') AND resume_state IS NOT NULL)
+       OR (status NOT IN ('waiting_resource','paused') AND resume_state IS NULL))
 );
 
 CREATE TABLE IF NOT EXISTS employee_availability_snapshots (
@@ -511,6 +545,8 @@ CREATE TABLE IF NOT EXISTS employee_availability_snapshots (
     expires_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id)
         REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(department_task_id, company_id)
+        REFERENCES department_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
     UNIQUE(id, company_id)
 );
@@ -542,7 +578,15 @@ CREATE TABLE IF NOT EXISTS execution_snapshots (
     created_at TEXT NOT NULL,
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
     FOREIGN KEY(department_id, company_id) REFERENCES departments(id, company_id),
+    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
+    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
     FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
+    FOREIGN KEY(task_workspace_id, company_task_id, company_id)
+        REFERENCES task_workspaces(id, company_task_id, company_id),
+    FOREIGN KEY(company_revision_id, company_id)
+        REFERENCES company_revisions(id, company_id),
+    FOREIGN KEY(department_revision_id, department_id, company_id)
+        REFERENCES department_revisions(id, department_id, company_id),
     UNIQUE(id, company_id),
     UNIQUE(snapshot_purpose, work_item_id, employee_id, content_sha256),
     CHECK((snapshot_purpose = 'task_execution' AND employee_task_id IS NOT NULL)
@@ -567,6 +611,10 @@ CREATE TABLE IF NOT EXISTS runtime_queue (
     status TEXT NOT NULL CHECK(status IN ('ready', 'leased', 'completed', 'cancelled')),
     queued_at TEXT NOT NULL,
     leased_at TEXT,
+    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    CHECK((work_item_type = 'knowledge_index' AND run_id IS NULL)
+       OR (work_item_type <> 'knowledge_index' AND run_id IS NOT NULL)),
     UNIQUE(id, job_id, company_id)
 );
 
@@ -590,6 +638,10 @@ CREATE TABLE IF NOT EXISTS runtime_leases (
     acquired_at TEXT NOT NULL,
     heartbeat_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
+    FOREIGN KEY(queue_id, job_id, company_id) REFERENCES runtime_queue(id, job_id, company_id),
+    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
+    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
+    FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
     CHECK((run_id IS NULL AND employee_id IS NULL AND conversation_id IS NULL)
        OR (run_id IS NOT NULL AND employee_id IS NOT NULL AND conversation_id IS NOT NULL))
 );
@@ -635,7 +687,34 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
+    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
+    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id),
+    FOREIGN KEY(conversation_id, company_id) REFERENCES conversations(id, company_id),
+    FOREIGN KEY(availability_snapshot_id, company_id)
+        REFERENCES employee_availability_snapshots(id, company_id),
+    FOREIGN KEY(execution_snapshot_id, company_id)
+        REFERENCES execution_snapshots(id, company_id),
     UNIQUE(id, company_id),
+    CHECK(
+        (run_purpose IN ('task_execution','merge')
+            AND department_task_id IS NOT NULL
+            AND employee_task_id IS NOT NULL
+            AND work_item_id = employee_task_id)
+        OR
+        (run_purpose IN ('company_plan','summary')
+            AND department_task_id IS NULL
+            AND employee_task_id IS NULL
+            AND work_item_id = company_task_id)
+        OR
+        (run_purpose = 'interactive_turn'
+            AND department_task_id IS NULL
+            AND employee_task_id IS NULL
+            AND work_item_id = conversation_id)
+        OR
+        (run_purpose IN ('review','verification','repair'))
+    ),
     CHECK((status IN ('waiting_approval','waiting_resource') AND resume_state IS NOT NULL)
        OR (status NOT IN ('waiting_approval','waiting_resource') AND resume_state IS NULL)),
     CHECK((process_pid IS NULL AND process_group_id IS NULL AND process_started_at IS NULL)
@@ -686,7 +765,8 @@ CREATE TABLE IF NOT EXISTS tool_executions (
     approval_id TEXT,
     started_at TEXT,
     completed_at TEXT,
-    UNIQUE(run_id, tool_call_id)
+    UNIQUE(run_id, tool_call_id),
+    FOREIGN KEY(approval_id, run_id) REFERENCES human_approvals(id, run_id)
 );
 
 CREATE TABLE IF NOT EXISTS human_approvals (
@@ -702,6 +782,7 @@ CREATE TABLE IF NOT EXISTS human_approvals (
     resolved_at TEXT,
     consumed_at TEXT,
     version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
     UNIQUE(id, run_id),
     CHECK(
         (status = 'pending' AND resolved_at IS NULL AND consumed_at IS NULL)
@@ -724,7 +805,10 @@ CREATE TABLE IF NOT EXISTS verification_results (
     status TEXT NOT NULL CHECK(status IN ('passed', 'failed', 'timed_out')),
     started_at TEXT NOT NULL,
     completed_at TEXT NOT NULL,
-    UNIQUE(run_id, round_number, command_argv_json)
+    UNIQUE(run_id, round_number, command_argv_json),
+    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
+    FOREIGN KEY(stdout_artifact_id, company_id) REFERENCES artifacts(id, company_id),
+    FOREIGN KEY(stderr_artifact_id, company_id) REFERENCES artifacts(id, company_id)
 );
 
 CREATE TABLE IF NOT EXISTS workspace_grants (
@@ -792,6 +876,10 @@ CREATE TABLE IF NOT EXISTS artifacts (
     created_at TEXT NOT NULL,
     UNIQUE(id, company_id),
     FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(department_task_id, company_id) REFERENCES department_tasks(id, company_id),
+    FOREIGN KEY(employee_task_id, company_id) REFERENCES employee_tasks(id, company_id),
+    FOREIGN KEY(supersedes_artifact_id, company_id) REFERENCES artifacts(id, company_id),
+    FOREIGN KEY(created_by_run_id, company_id) REFERENCES agent_runs(id, company_id),
     CHECK((created_by_type = 'agent' AND created_by_run_id IS NOT NULL)
        OR (created_by_type <> 'agent' AND created_by_run_id IS NULL))
 );
@@ -857,7 +945,10 @@ CREATE TABLE IF NOT EXISTS review_issues (
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
     UNIQUE(id, company_id),
-    CHECK(status <> 'rejected' OR (severity IN ('medium','low') AND rejection_reason IS NOT NULL))
+    CHECK(status <> 'rejected' OR (severity IN ('medium','low') AND rejection_reason IS NOT NULL)),
+    FOREIGN KEY(review_report_id, company_id) REFERENCES review_reports(id, company_id),
+    FOREIGN KEY(assignee_employee_id, company_id) REFERENCES employees(id, company_id),
+    FOREIGN KEY(verifier_employee_id, company_id) REFERENCES employees(id, company_id)
 );
 
 -- ============================================================
@@ -933,7 +1024,9 @@ CREATE TABLE IF NOT EXISTS knowledge_access_logs (
     candidate_ids_json TEXT NOT NULL CHECK(json_valid(candidate_ids_json)),
     selected_ids_json TEXT NOT NULL CHECK(json_valid(selected_ids_json)),
     context_pack_sha256 TEXT NOT NULL CHECK(length(context_pack_sha256) = 64),
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
+    FOREIGN KEY(employee_id, company_id) REFERENCES employees(id, company_id)
 );
 
 CREATE INDEX IF NOT EXISTS ix_knowledge_access_run
@@ -972,7 +1065,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     outcome TEXT NOT NULL CHECK(outcome IN ('success', 'denied', 'failed')),
     detail_json TEXT NOT NULL CHECK(json_valid(detail_json)),
     trace_id TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    hash TEXT NOT NULL DEFAULT '',
+    prev_hash TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY(company_id) REFERENCES companies(id)
 );
 
 CREATE INDEX IF NOT EXISTS ix_audit_company_sequence ON audit_logs(company_id, row_sequence);
@@ -1109,3 +1205,11 @@ CREATE TRIGGER IF NOT EXISTS profile_skill_bindings_delete_guard
 BEFORE DELETE ON profile_skill_bindings
 WHEN (SELECT status FROM employee_base_profile_versions WHERE id=OLD.profile_version_id) <> 'draft'
 BEGIN SELECT RAISE(ABORT, 'only draft profile version skills are mutable'); END;
+
+-- ============================================================
+-- 迁移记录
+-- ============================================================
+
+INSERT OR REPLACE INTO schema_migrations
+    (version, script_sha256, started_at, completed_at, status)
+VALUES ('001', '', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'completed');

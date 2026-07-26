@@ -32,6 +32,7 @@ struct HandshakeResponse {
     migration_version: String,
 }
 
+#[derive(Debug)]
 pub struct SidecarClient {
     socket_path: PathBuf,
     stream: Mutex<Option<UnixStream>>,

@@ -2,6 +2,7 @@ export interface Company {
   id: string;
   name: string;
   industry?: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -11,6 +12,8 @@ export interface Department {
   company_id: string;
   name: string;
   parent_id?: string;
+  status: string;
+  description?: string;
   created_at: string;
   updated_at: string;
 }
@@ -108,6 +111,8 @@ export interface AuthResult {
   refresh_token: string;
   token_type: string;
   user_type: string;
+  user_id: string;
+  display_name?: string;
   pwd_change_required: boolean;
 }
 

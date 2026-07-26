@@ -73,6 +73,8 @@ def validate_plan(
     candidate_department_ids: frozenset[str],
     active_leader_department_ids: frozenset[str],
     allowed_employee_ids: frozenset[str],
+    emergency_disabled_capability_tags: frozenset[str] = frozenset(),
+    product_permission_limits: frozenset[str] = frozenset(),
 ) -> tuple[PlanValidationIssue, ...]:
     issues: list[PlanValidationIssue] = []
     if (
@@ -160,6 +162,25 @@ def validate_plan(
                         "A contributor cannot review the same artifact.",
                     )
                 )
+            if not deliverable.review_strategy or not deliverable.review_rounds:
+                issues.append(
+                    PlanValidationIssue(
+                        "PV-007",
+                        f"department_tasks.{task.local_ref}.deliverables.{index}",
+                        "Review strategy and review rounds are required.",
+                    )
+                )
+        if emergency_disabled_capability_tags and any(
+            tag in emergency_disabled_capability_tags
+            for tag in task.required_capability_tags
+        ):
+            issues.append(
+                PlanValidationIssue(
+                    "PV-010",
+                    f"department_tasks.{task.local_ref}.required_capability_tags",
+                    "Task uses emergency-disabled capabilities.",
+                )
+            )
         for index, write in enumerate(task.required_external_writes):
             if not write.target.startswith("/") or not write.expected_effect.strip():
                 issues.append(
@@ -167,6 +188,14 @@ def validate_plan(
                         "PV-006",
                         f"department_tasks.{task.local_ref}.required_external_writes.{index}",
                         "External writes require an absolute target and effect summary.",
+                    )
+                )
+            if product_permission_limits and write.action in product_permission_limits:
+                issues.append(
+                    PlanValidationIssue(
+                        "PV-011",
+                        f"department_tasks.{task.local_ref}.required_external_writes.{index}",
+                        "External write action exceeds product permission limits.",
                     )
                 )
 

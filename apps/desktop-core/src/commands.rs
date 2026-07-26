@@ -1,9 +1,11 @@
 //! Tauri command boundary. Rust-owned methods never enter the Sidecar.
 
+pub mod diagnostics;
 pub mod external;
 pub mod updater;
 pub mod workspace;
 
+pub use diagnostics::*;
 pub use external::*;
 pub use updater::*;
 pub use workspace::*;
@@ -22,6 +24,7 @@ use zeroize::Zeroizing;
 use crate::error::AppError;
 use crate::keyring::{SecureKeyring, SessionBundle};
 use crate::rpc::api_client::ApiClient;
+use crate::security::grant_store::GrantStore;
 use crate::sidecar::{SidecarProfile, SidecarSupervisor};
 use crate::store::{profile_directory_id, LocalStore, ProfileMeta};
 use crate::trust::{verify_auth_keyset, verify_catalog_keyset, verify_offline_ticket};
@@ -43,6 +46,7 @@ pub struct AppState {
     pub supervisor: SidecarSupervisor,
     pub store: LocalStore,
     pub keyring: SecureKeyring,
+    pub grant_store: GrantStore,
     pub device_id: Uuid,
     pub sidecar_executable: PathBuf,
     pub app_version: String,
@@ -63,6 +67,7 @@ impl AppState {
             supervisor: SidecarSupervisor::new(),
             store,
             keyring: SecureKeyring::new(),
+            grant_store: GrantStore::new(),
             device_id,
             sidecar_executable,
             app_version,

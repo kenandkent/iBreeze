@@ -196,6 +196,143 @@ POST /catalog/releases/{release_id}/publish
 Authorization: Bearer <token>
 ```
 
+### 模型管理
+
+```http
+GET /admin/api/v1/models
+Authorization: Bearer <token>
+```
+
+响应：
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "provider_key": "openai",
+      "model_key": "gpt-4",
+      "display_name": "GPT-4",
+      "context_window": 8192,
+      "supports_tools": true,
+      "supports_streaming": true,
+      "supports_vision": false,
+      "status": "published"
+    }
+  ]
+}
+```
+
+```http
+POST /admin/api/v1/models
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "provider_key": "openai",
+  "model_key": "gpt-4",
+  "display_name": "GPT-4",
+  "context_window": 8192,
+  "supports_tools": true,
+  "supports_streaming": true,
+  "supports_vision": false
+}
+```
+
+```http
+PATCH /admin/api/v1/models/{model_id}
+Authorization: Bearer <token>
+If-Match: "<version>"
+```
+
+```http
+DELETE /admin/api/v1/models/{model_id}
+Authorization: Bearer <token>
+If-Match: "<version>"
+```
+
+### Provider 管理
+
+```http
+GET /admin/api/v1/providers
+Authorization: Bearer <token>
+```
+
+```http
+POST /admin/api/v1/providers
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "key": "openai",
+  "display_name": "OpenAI",
+  "protocol": "openai",
+  "base_url": "https://api.openai.com/v1",
+  "status": "draft"
+}
+```
+
+```http
+PATCH /admin/api/v1/providers/{provider_id}
+Authorization: Bearer <token>
+If-Match: "<version>"
+```
+
+### Agent-Model 绑定
+
+```http
+GET /admin/api/v1/agent-model-bindings
+Authorization: Bearer <token>
+```
+
+```http
+POST /admin/api/v1/agent-model-bindings
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "agent_id": "uuid",
+  "model_id": "uuid",
+  "min_version": "1.0.0",
+  "max_version": "2.0.0"
+}
+```
+
+### Provider-Model 绑定
+
+```http
+GET /admin/api/v1/provider-model-bindings
+Authorization: Bearer <token>
+```
+
+```http
+POST /admin/api/v1/provider-model-bindings
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "provider_id": "uuid",
+  "model_id": "uuid",
+  "protocol": "openai"
+}
+```
+
+### 目录验证
+
+```http
+POST /admin/api/v1/catalog/validate
+Authorization: Bearer <token>
+```
+
+响应：
+```json
+{
+  "data": {
+    "passed": true,
+    "issues": []
+  }
+}
+```
+
 ### 获取 Manifest
 
 ```http
@@ -399,22 +536,56 @@ GET /health/ready
 
 ### 错误响应格式
 
+所有错误遵循 RFC 9457 Problem Details 格式：
+
 ```json
 {
-  "detail": "Error message"
+  "type": "about:blank",
+  "title": "错误标题",
+  "status": 400,
+  "code": "ERROR_CODE",
+  "detail": "错误详情描述",
+  "request_id": "请求跟踪ID",
+  "field_errors": {
+    "field_name": ["错误1", "错误2"]
+  }
 }
 ```
 
+字段说明：
+- `type`: 错误类型 URI（当前固定为 `about:blank`）
+- `title`: 错误标题
+- `status`: HTTP 状态码
+- `code`: 稳定错误码（用于客户端逻辑判断）
+- `detail`: 错误详情
+- `request_id`: 请求跟踪 ID（用于问题排查）
+- `field_errors`: 字段级别的错误（仅 422 响应中包含）
+
 ### 常见错误码
 
-| 状态码 | 说明 |
-|--------|------|
-| 400 | 请求参数错误 |
-| 401 | 未认证 |
-| 403 | 无权限 |
-| 404 | 资源不存在 |
-| 422 | 请求体验证失败 |
-| 500 | 服务器内部错误 |
+| 状态码 | 错误码 | 说明 |
+|--------|--------|------|
+| 400 | IF_MATCH_INVALID | If-Match 头无效 |
+| 401 | AUTH_INVALID_CREDENTIALS | 认证凭证无效 |
+| 401 | AUTH_TOKEN_EXPIRED | Token 已过期 |
+| 401 | AUTH_TOKEN_INVALID | Token 无效 |
+| 401 | AUTH_MISSING_TOKEN | 缺少认证 Token |
+| 401 | AUTH_TOKEN_REPLAY | Token 重放攻击 |
+| 401 | AUTH_SESSION_REVOKED | Session 已被撤销 |
+| 401 | AUTH_USER_DISABLED | 用户已被禁用 |
+| 403 | AUTH_PASSWORD_CHANGE_REQUIRED | 需要修改密码 |
+| 403 | PROTECTED_USER_OPERATION_DENIED | 受保护用户操作被拒绝 |
+| 404 | USER_NOT_FOUND | 用户不存在 |
+| 404 | CATALOG_RESOURCE_NOT_FOUND | 目录资源不存在 |
+| 404 | RELEASE_NOT_FOUND | 发布记录不存在 |
+| 404 | SKILL_PACKAGE_NOT_FOUND | Skill 包不存在 |
+| 404 | EMERGENCY_DISABLE_NOT_FOUND | 紧急禁用记录不存在 |
+| 409 | AUTH_EMAIL_EXISTS | 邮箱已注册 |
+| 409 | CATALOG_LOGICAL_KEY_EXISTS | 逻辑键已存在 |
+| 409 | CATALOG_REVISION_IMMUTABLE | 修订版本不可变 |
+| 409 | OPTIMISTIC_LOCK_CONFLICT | 乐观锁冲突 |
+| 422 | SKILL_PACKAGE_EXTENSION_INVALID | Skill 包扩展名无效 |
+| 428 | IF_MATCH_REQUIRED | 需要 If-Match 头 |
 
 ## 限流
 

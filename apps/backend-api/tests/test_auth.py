@@ -293,7 +293,7 @@ async def test_password_change_gate_allows_only_change_or_logout(
         headers={"Authorization": f"Bearer {user_tokens['access_token']}"},
     )
     assert denied.status_code == 403
-    assert denied.json()["detail"] == "AUTH_PASSWORD_CHANGE_REQUIRED"
+    assert denied.json()["code"] == "AUTH_PASSWORD_CHANGE_REQUIRED"
 
     changed = await client.post(
         "/api/v1/auth/change-password",

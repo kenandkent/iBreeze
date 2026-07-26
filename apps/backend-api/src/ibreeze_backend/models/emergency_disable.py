@@ -1,8 +1,9 @@
 """Emergency disable release model – aligned with design doc G.7."""
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,5 +22,9 @@ class EmergencyDisableRelease(UUIDPrimaryKeyMixin, Base):
     payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     signing_key_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    created_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

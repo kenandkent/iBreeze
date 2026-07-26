@@ -13,7 +13,6 @@ from fastapi import (
     File,
     Form,
     Header,
-    HTTPException,
     Query,
     Response,
     UploadFile,
@@ -22,6 +21,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ibreeze_backend.api.errors import raise_problem
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.user import User
@@ -55,11 +55,11 @@ public_router = APIRouter(prefix="/api/v1/catalog/skills", tags=["skills"])
 
 def _version(value: str | None) -> int:
     if value is None:
-        raise HTTPException(status_code=428, detail="IF_MATCH_REQUIRED")
+        raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
     try:
         return int(value.strip('"'))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID") from exc
+    except ValueError:
+        raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
 
 
 def _raise(exc: ValueError) -> None:
@@ -74,7 +74,7 @@ def _raise(exc: ValueError) -> None:
         http_status = 409
     else:
         http_status = 422
-    raise HTTPException(status_code=http_status, detail=code) from exc
+    raise_problem(http_status, code, code)
 
 
 @admin_router.post("", status_code=status.HTTP_201_CREATED, response_model=SkillResponse)
@@ -118,7 +118,7 @@ async def get_skill_endpoint(
     item = await get_skill(db, skill_id)
     if item is None:
         logger.warning("get_skill.failed", extra={"skill_id": str(skill_id), "reason": "not_found"})
-        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+        raise_problem(404, "CATALOG_RESOURCE_NOT_FOUND", "Resource not found")
     return SkillResponse.model_validate(item)
 
 
@@ -212,7 +212,7 @@ async def upload_skill_version_endpoint(
             "upload_skill_version.failed",
             extra={"skill_id": str(skill_id), "error": "SKILL_PACKAGE_EXTENSION_INVALID"},
         )
-        raise HTTPException(status_code=422, detail="SKILL_PACKAGE_EXTENSION_INVALID")
+        raise_problem(422, "SKILL_PACKAGE_EXTENSION_INVALID", "Package must have a .zip extension")
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temporary:
         shutil.copyfileobj(package.file, temporary)
         path = Path(temporary.name)
@@ -286,7 +286,7 @@ async def download_skill_package_endpoint(
             "download_skill_package.failed",
             extra={"skill_id": str(skill_id), "version": version, "reason": "not_found"},
         )
-        raise HTTPException(status_code=404, detail="SKILL_PACKAGE_NOT_FOUND")
+        raise_problem(404, "SKILL_PACKAGE_NOT_FOUND", "Skill package not found")
     logger.info("download_skill_package.completed", extra={"skill_id": str(skill_id), "version": version})
     return FileResponse(
         path,

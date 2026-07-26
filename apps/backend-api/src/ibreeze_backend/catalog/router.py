@@ -6,13 +6,17 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ibreeze_backend.api.errors import raise_problem
+from ibreeze_backend.catalog.models import AgentCatalog, ModelCatalog, ProviderCatalog
 from ibreeze_backend.catalog.schemas import (
     AgentCreate,
     AgentModelBindingCreate,
+    AgentModelBindingCreateTopLevel,
     AgentModelBindingResponse,
     AgentResponse,
     AgentUpdate,
@@ -23,6 +27,7 @@ from ibreeze_backend.catalog.schemas import (
     ModelUpdate,
     ProviderCreate,
     ProviderModelBindingCreate,
+    ProviderModelBindingCreateTopLevel,
     ProviderModelBindingResponse,
     ProviderResponse,
     ProviderUpdate,
@@ -49,6 +54,8 @@ from ibreeze_backend.catalog.service import (
     list_agent_model_bindings,
     list_agent_versions,
     list_agents,
+    list_all_agent_model_bindings,
+    list_all_provider_model_bindings,
     list_models,
     list_provider_model_bindings,
     list_providers,
@@ -69,13 +76,13 @@ logger = get_logger("ibreeze.catalog")
 router = APIRouter(prefix="/admin/api/v1", tags=["catalog"])
 def _if_match(value: str | None) -> int:
     if value is None:
-        raise HTTPException(status_code=428, detail="IF_MATCH_REQUIRED")
+        raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
     try:
         parsed = int(value.strip('"'))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID") from exc
+    except ValueError:
+        raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
     if parsed < 1:
-        raise HTTPException(status_code=400, detail="IF_MATCH_INVALID")
+        raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
     return parsed
 
 
@@ -94,7 +101,7 @@ async def _call(operation: Callable[[], Awaitable[Any]]) -> Any:
             http_status = 409
         else:
             http_status = 422
-        raise HTTPException(status_code=http_status, detail=code) from exc
+        raise_problem(http_status, code, code)
 
 
 def _page[ResponseModel: BaseModel](
@@ -141,7 +148,7 @@ async def get_agent_endpoint(
     item = await get_agent(db, resource_id)
     if item is None:
         logger.warning("get_agent.failed", extra={"agent_id": str(resource_id), "reason": "not_found"})
-        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+        raise_problem(404, "CATALOG_RESOURCE_NOT_FOUND", "Resource not found")
     return AgentResponse.model_validate(item)
 
 
@@ -333,7 +340,7 @@ async def get_model_endpoint(
     item = await get_model(db, resource_id)
     if item is None:
         logger.warning("get_model.failed", extra={"model_id": str(resource_id), "reason": "not_found"})
-        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+        raise_problem(404, "CATALOG_RESOURCE_NOT_FOUND", "Resource not found")
     return ModelResponse.model_validate(item)
 
 
@@ -434,7 +441,7 @@ async def get_provider_endpoint(
     item = await get_provider(db, resource_id)
     if item is None:
         logger.warning("get_provider.failed", extra={"provider_id": str(resource_id), "reason": "not_found"})
-        raise HTTPException(status_code=404, detail="CATALOG_RESOURCE_NOT_FOUND")
+        raise_problem(404, "CATALOG_RESOURCE_NOT_FOUND", "Resource not found")
     return ProviderResponse.model_validate(item)
 
 
@@ -558,3 +565,133 @@ async def delete_provider_binding_endpoint(
         extra={"provider_id": str(resource_id), "binding_id": str(binding_id)},
     )
     return Response(status_code=204)
+
+
+@router.get("/agent-model-bindings")
+async def list_all_agent_bindings_endpoint(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    logger.info("list_all_agent_bindings.start", extra={"limit": limit})
+    items = _page(await list_all_agent_model_bindings(db, limit), AgentModelBindingResponse)
+    logger.info("list_all_agent_bindings.completed", extra={"count": len(items["items"])})
+    return items
+
+
+@router.post(
+    "/agent-model-bindings",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AgentModelBindingResponse,
+)
+async def create_agent_binding_top_level_endpoint(
+    body: AgentModelBindingCreateTopLevel,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> AgentModelBindingResponse:
+    logger.info("create_agent_binding_top.start", extra={"agent_id": str(body.agent_id)})
+    result = AgentModelBindingResponse.model_validate(
+        await _call(lambda: create_agent_model_binding(db, body.agent_id, body))
+    )
+    logger.info("create_agent_binding_top.completed", extra={"agent_id": str(body.agent_id)})
+    return result
+
+
+@router.get("/provider-model-bindings")
+async def list_all_provider_bindings_endpoint(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    logger.info("list_all_provider_bindings.start", extra={"limit": limit})
+    items = _page(await list_all_provider_model_bindings(db, limit), ProviderModelBindingResponse)
+    logger.info("list_all_provider_bindings.completed", extra={"count": len(items["items"])})
+    return items
+
+
+@router.post(
+    "/provider-model-bindings",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProviderModelBindingResponse,
+)
+async def create_provider_binding_top_level_endpoint(
+    body: ProviderModelBindingCreateTopLevel,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> ProviderModelBindingResponse:
+    logger.info("create_provider_binding_top.start", extra={"provider_id": str(body.provider_id)})
+    result = ProviderModelBindingResponse.model_validate(
+        await _call(lambda: create_provider_model_binding(db, body.provider_id, body))
+    )
+    logger.info("create_provider_binding_top.completed", extra={"provider_id": str(body.provider_id)})
+    return result
+
+
+@router.post("/catalog/validate")
+async def validate_catalog_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    """Validate all resources in the catalog (design §19.3).
+
+    Read-only: all validations run inside a savepoint that is rolled back
+    so resource statuses are never mutated by this endpoint.
+    """
+    logger.info("validate_catalog.start")
+
+    results: dict[str, list[dict[str, object]]] = {
+        "agents": [],
+        "models": [],
+        "providers": [],
+    }
+
+    savepoint = await db.begin_nested()
+    try:
+        agent_result = await db.execute(select(AgentCatalog))
+        for agent in agent_result.scalars().all():
+            try:
+                await validate_agent(db, agent.id)
+                results["agents"].append({
+                    "id": str(agent.id), "key": agent.key, "valid": True, "errors": [],
+                })
+            except ValueError as exc:
+                results["agents"].append({
+                    "id": str(agent.id), "key": agent.key, "valid": False,
+                    "errors": [str(exc)],
+                })
+
+        model_result = await db.execute(select(ModelCatalog))
+        for model in model_result.scalars().all():
+            try:
+                await validate_model(db, model.id)
+                results["models"].append({
+                    "id": str(model.id), "key": model.model_key, "valid": True, "errors": [],
+                })
+            except ValueError as exc:
+                results["models"].append({
+                    "id": str(model.id), "key": model.model_key, "valid": False,
+                    "errors": [str(exc)],
+                })
+
+        provider_result = await db.execute(select(ProviderCatalog))
+        for provider in provider_result.scalars().all():
+            try:
+                await validate_provider(db, provider.id)
+                results["providers"].append({
+                    "id": str(provider.id), "key": provider.key, "valid": True, "errors": [],
+                })
+            except ValueError as exc:
+                results["providers"].append({
+                    "id": str(provider.id), "key": provider.key, "valid": False,
+                    "errors": [str(exc)],
+                })
+    finally:
+        await savepoint.rollback()
+
+    total = sum(len(v) for v in results.values())
+    valid = sum(1 for items in results.values() for item in items if item["valid"])
+    logger.info("validate_catalog.completed", extra={"total": total, "valid": valid})
+    return {
+        "results": results,
+        "summary": {"total": total, "valid": valid, "invalid": total - valid},
+    }

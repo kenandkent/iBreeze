@@ -2,9 +2,10 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ibreeze_backend.api.errors import raise_problem
 from ibreeze_backend.api.schemas import success_response
 from ibreeze_backend.auth.schemas import (
     AuthKeysResponse,
@@ -55,20 +56,14 @@ def _set_no_store(response: Response) -> None:
 def _extract_access_token(request: Request) -> str:
     authorization = request.headers.get("authorization", "")
     if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authorization token",
-        )
+        raise_problem(401, "AUTH_MISSING_TOKEN", "Missing authorization token")
     return authorization[7:]
 
 
 def _session_id(request: Request, audience: str) -> uuid.UUID:
     payload = verify_access_token(_extract_access_token(request), audience)
     if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
+        raise_problem(401, "AUTH_TOKEN_EXPIRED", "Invalid or expired token")
     return uuid.UUID(payload["sid"])
 
 
@@ -114,10 +109,7 @@ async def register_endpoint(
         logger.info("register.completed", extra={"user_id": str(user.id)})
     except ValueError as exc:
         logger.error("register.failed", extra={"error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+        raise_problem(409, "AUTH_EMAIL_EXISTS", str(exc))
     return success_response(
         {"user": user_payload(user)},
         _request_id(request),
@@ -147,10 +139,7 @@ async def login_endpoint(
         logger.info("login.completed")
     except ValueError as exc:
         logger.error("login.failed", extra={"error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+        raise_problem(401, "AUTH_INVALID_CREDENTIALS", str(exc))
     _set_no_store(response)
     return success_response(result, _request_id(request))
 
@@ -172,10 +161,8 @@ async def refresh_endpoint(
         logger.info("refresh.completed")
     except ValueError as exc:
         logger.error("refresh.failed", extra={"error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+        code = "AUTH_TOKEN_REPLAY" if "replay" in str(exc) else "AUTH_TOKEN_INVALID"
+        raise_problem(401, code, str(exc))
     _set_no_store(response)
     return success_response(result, _request_id(request))
 
@@ -226,10 +213,8 @@ async def change_password_endpoint(
         logger.info("change_password.completed", extra={"user_id": str(current_user.id)})
     except ValueError as exc:
         logger.error("change_password.failed", extra={"user_id": str(current_user.id), "error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
+        code = "AUTH_INVALID_SESSION" if "session" in str(exc) else "AUTH_INVALID_CREDENTIALS"
+        raise_problem(400, code, str(exc))
     _set_no_store(response)
     return success_response(result, _request_id(request))
 
@@ -264,10 +249,7 @@ async def admin_login_endpoint(
         logger.info("admin_login.completed")
     except ValueError as exc:
         logger.error("admin_login.failed", extra={"error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+        raise_problem(401, "AUTH_INVALID_CREDENTIALS", str(exc))
     _set_admin_refresh_cookie(response, str(result["refresh_token"]))
     _set_no_store(response)
     return success_response(_admin_public_session(result), _request_id(request))
@@ -287,20 +269,15 @@ async def admin_refresh_endpoint(
     refresh_token = request.cookies.get(_ADMIN_REFRESH_COOKIE)
     if refresh_token is None:
         logger.error("admin_refresh.failed", extra={"error": "missing_refresh_token"})
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing refresh token",
-        )
+        raise_problem(401, "AUTH_MISSING_TOKEN", "Missing refresh token")
     try:
         result = await refresh_tokens(db, refresh_token, ADMIN_AUDIENCE)
         logger.info("admin_refresh.completed")
     except ValueError as exc:
         logger.error("admin_refresh.failed", extra={"error": str(exc)})
         _clear_admin_refresh_cookie(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+        code = "AUTH_TOKEN_REPLAY" if "replay" in str(exc) else "AUTH_TOKEN_INVALID"
+        raise_problem(401, code, str(exc))
     _set_admin_refresh_cookie(response, str(result["refresh_token"]))
     _set_no_store(response)
     return success_response(_admin_public_session(result), _request_id(request))
@@ -344,10 +321,8 @@ async def admin_change_password_endpoint(
         logger.info("admin_change_password.completed", extra={"user_id": str(current_user.id)})
     except ValueError as exc:
         logger.error("admin_change_password.failed", extra={"user_id": str(current_user.id), "error": str(exc)})
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
+        code = "AUTH_INVALID_SESSION" if "session" in str(exc) else "AUTH_INVALID_CREDENTIALS"
+        raise_problem(400, code, str(exc))
     _set_admin_refresh_cookie(response, str(result["refresh_token"]))
     _set_no_store(response)
     return success_response(_admin_public_session(result), _request_id(request))

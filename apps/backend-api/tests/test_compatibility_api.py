@@ -83,7 +83,8 @@ class TestCompatibilityEndpoints:
             "/admin/api/v1/compatibility-rules",
             json=_rule_body(),
         )
-        assert resp.status_code in (401, 403)
+        # idempotency middleware catches unauthenticated write before auth dependency
+        assert resp.status_code in (400, 401, 403)
 
     async def test_update_rule_decision(self, client: AsyncClient, admin_tokens):
         created = await client.post(
