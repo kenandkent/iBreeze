@@ -1,19 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
 import type { PlanVersion } from '../types';
+import { createRpcRequest } from '../shared/rpcClient';
+import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
 export function useListPlanVersions(companyId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['planVersions', companyId],
+    queryKey: queryKeys.planVersionList(ctx, companyId),
     queryFn: async (): Promise<PlanVersion[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<PlanVersion[]>('rpc_request', { method: 'task.list', params: { company_id: companyId } });
-        logger.logHookSuccess('usePlan', 'task.list', performance.now() - start);
+        const result = await createRpcRequest<PlanVersion[]>('planVersion.list', { company_id: companyId });
+        logger.logHookSuccess('usePlan', 'planVersion.list', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('usePlan', 'task.list', e as Error, performance.now() - start);
+        logger.logHookError('usePlan', 'planVersion.list', e as Error, performance.now() - start);
         throw e;
       }
     },
@@ -23,11 +25,12 @@ export function useListPlanVersions(companyId: string) {
 
 export function useConfirmPlanVersion() {
   const qc = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (params: { company_id: string; approval_id: string; employee_id: string; decision: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke('rpc_request', { method: 'approval.resolve', params });
+        const result = await createRpcRequest('approval.resolve', params);
         logger.logHookSuccess('usePlan', 'approval.resolve', performance.now() - start);
         return result;
       } catch (e) {
@@ -35,6 +38,6 @@ export function useConfirmPlanVersion() {
         throw e;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['planVersions'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: queryKeys.all(ctx) }); },
   });
 }

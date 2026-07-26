@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useListCompanies } from '../hooks/useCompany';
 import { useListConversations } from '../hooks/useConversation';
 import { useListKnowledgeEntries } from '../hooks/useKnowledge';
-import { useListWorkspaces } from '../hooks/useWorkspace';
+import { useGetWorkspace } from '../hooks/useWorkspace';
 import { useListAuditLogs } from '../hooks/useAudit';
 import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const companies = companyData?.items ?? [];
   const { data: conversations } = useListConversations(companyId);
   const { data: knowledge } = useListKnowledgeEntries(companyId);
-  const { data: workspaces } = useListWorkspaces(companyId);
+  const { data: workspace } = useGetWorkspace(companyId);
   const { data: auditLogs } = useListAuditLogs({ limit: 10 });
 
   return (
@@ -54,7 +54,7 @@ export default function DashboardPage() {
         </Col>
         <Col xs={12} sm={6}>
           <Card>
-            <Statistic title="工作区" value={workspaces?.length ?? 0} prefix={<AppstoreOutlined />} />
+            <Statistic title="工作区" value={workspace ? 1 : 0} prefix={<AppstoreOutlined />} />
           </Card>
         </Col>
       </Row>

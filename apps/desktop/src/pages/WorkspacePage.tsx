@@ -6,7 +6,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UserDeleteOutl
 import type { ColumnsType } from 'antd/es/table';
 import type { Workspace, WorkspaceMember } from '../types';
 import {
-  useListWorkspaces,
+  useGetWorkspace,
   useAbandonWorkspace,
 } from '../hooks/useWorkspace';
 import { logger } from '../utils/logger';
@@ -24,7 +24,7 @@ export default function WorkspacePage() {
   const [memberForm] = Form.useForm();
 
   const companyId = 'default';
-  const { data: workspaces, isLoading } = useListWorkspaces(companyId);
+  const { data: workspace, isLoading } = useGetWorkspace(companyId);
   const abandonMutation = useAbandonWorkspace();
 
   const handleCreate = () => {
@@ -87,7 +87,7 @@ export default function WorkspacePage() {
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建工作区</Button>
       </div>
 
-      <Table columns={columns} dataSource={workspaces ?? []} rowKey="id" loading={isLoading} />
+      <Table columns={columns} dataSource={workspace ? [workspace] : []} rowKey="id" loading={isLoading} />
 
       {/* 详情 Drawer */}
       <Drawer title="工作区详情" open={!!viewWs} onClose={() => setViewWs(null)} width={520}>

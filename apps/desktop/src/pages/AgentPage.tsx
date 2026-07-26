@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Card, Row, Col, Tag, Typography, Button, Input, Space, Empty } from 'antd';
-import { PlayCircleOutlined, PoweroffOutlined, SendOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, PoweroffOutlined } from '@ant-design/icons';
 import type { AgentInfo } from '../types';
-import { useListAgents, useRunAgent, useStopAgent } from '../hooks/useAgent';
+import { useListAgents } from '../hooks/useAgent';
 import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
@@ -25,22 +25,6 @@ export default function AgentPage() {
   const companyId = 'default';
   const [messageInputs, setMessageInputs] = useState<Record<string, string>>({});
   const { data: agents, isLoading } = useListAgents(companyId);
-  const runMutation = useRunAgent();
-  const stopMutation = useStopAgent();
-
-  const handleRun = async (agentId: string) => {
-    const msg = messageInputs[agentId];
-    if (!msg?.trim()) return;
-    try {
-      logger.info('AgentPage', 'run_start', { agentId });
-      await runMutation.mutateAsync({ company_id: companyId, agent_id: agentId, message: msg });
-      setMessageInputs((prev) => ({ ...prev, [agentId]: '' }));
-    } catch (e) {
-      const err = e as Record<string, unknown>;
-      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('AgentPage', 'run_failed', msg, { agentId });
-    }
-  };
 
   return (
     <div>
@@ -66,7 +50,6 @@ export default function AgentPage() {
                       size="small"
                       icon={<PlayCircleOutlined />}
                       disabled={agent.status === 'running'}
-                      onClick={() => handleRun(agent.id)}
                     >
                       运行
                     </Button>
@@ -75,8 +58,6 @@ export default function AgentPage() {
                       size="small"
                       icon={<PoweroffOutlined />}
                       disabled={agent.status === 'stopped'}
-                      loading={stopMutation.isPending}
-                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync({ company_id: companyId, agent_id: agent.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', msg, { agentId: agent.id }); } }}
                     >
                       停止
                     </Button>
@@ -90,17 +71,13 @@ export default function AgentPage() {
                   </div>
                 )}
                 <div style={{ marginTop: 12 }}>
-                  <Space.Compact style={{ width: '100%' }}>
-                    <Input
-                      placeholder="输入消息..."
-                      value={messageInputs[agent.id] || ''}
-                      onChange={(e) =>
-                        setMessageInputs((prev) => ({ ...prev, [agent.id]: e.target.value }))
-                      }
-                      onPressEnter={() => handleRun(agent.id)}
-                    />
-                    <Button icon={<SendOutlined />} onClick={() => handleRun(agent.id)} />
-                  </Space.Compact>
+                  <Input
+                    placeholder="输入消息..."
+                    value={messageInputs[agent.id] || ''}
+                    onChange={(e) =>
+                      setMessageInputs((prev) => ({ ...prev, [agent.id]: e.target.value }))
+                    }
+                  />
                 </div>
               </Card>
             </Col>

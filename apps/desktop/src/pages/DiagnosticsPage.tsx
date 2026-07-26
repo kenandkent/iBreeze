@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Typography, Table, Tag, Space, Button } from 'antd';
-import { invoke } from '@tauri-apps/api/core';
+import { systemHealth } from '../shared/rpcClient';
 import { logger } from '../utils/logger';
 
 const { Title } = Typography;
@@ -18,7 +18,7 @@ export default function DiagnosticsPage() {
   const runDiagnostics = async () => {
     setLoading(true);
     try {
-      const health = await invoke<{ status: string }>('rpc_request', { method: 'system.health', params: {} });
+      const health = await systemHealth();
       setDiagnostics([
         { name: 'Sidecar 连接', status: health.status === 'ok' ? 'ok' : 'error', message: health.status },
         { name: '数据库', status: 'ok', message: 'SQLite 正常' },

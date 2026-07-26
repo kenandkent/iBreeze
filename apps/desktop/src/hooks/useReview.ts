@@ -1,15 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
 import type { ReviewIssue } from '../types';
+import { createRpcRequest } from '../shared/rpcClient';
+import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
 export function useListReviewIssues(companyId: string, artifactId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['reviewIssues', companyId, artifactId],
+    queryKey: queryKeys.reviewIssueList(ctx, companyId, artifactId),
     queryFn: async (): Promise<ReviewIssue[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<ReviewIssue[]>('rpc_request', { method: 'review.listIssues', params: { company_id: companyId, artifact_id: artifactId } });
+        const result = await createRpcRequest<ReviewIssue[]>('review.listIssues', { company_id: companyId, artifact_id: artifactId });
         logger.logHookSuccess('useReview', 'review.listIssues', performance.now() - start);
         return result;
       } catch (e) {
@@ -23,11 +25,12 @@ export function useListReviewIssues(companyId: string, artifactId: string) {
 
 export function useResolveReviewIssue() {
   const qc = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (params: { company_id: string; issue_id: string; resolution_note?: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke('rpc_request', { method: 'review.resolveIssue', params });
+        const result = await createRpcRequest('review.resolveIssue', params);
         logger.logHookSuccess('useReview', 'review.resolveIssue', performance.now() - start);
         return result;
       } catch (e) {
@@ -35,6 +38,6 @@ export function useResolveReviewIssue() {
         throw e;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reviewIssues'] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: queryKeys.all(ctx) }); },
   });
 }

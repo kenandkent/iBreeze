@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Form, Input, Button, Card, Typography, Alert } from "antd";
 import { CloudServerOutlined } from "@ant-design/icons";
 import { validateOrigin } from "../shared/tauriClient";
+import { useAuthStore } from "../stores/authStore";
 import { logger } from "../utils/logger";
 
 const { Title } = Typography;
@@ -11,6 +12,8 @@ export default function ServerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const setBackendOrigin = useAuthStore((s) => s.setBackendOrigin);
+  const setAppUserId = useAuthStore((s) => s.setAppUserId);
 
   const handleSubmit = async (values: { origin: string }) => {
     setLoading(true);
@@ -18,6 +21,8 @@ export default function ServerPage() {
     try {
       const result = await validateOrigin(values.origin);
       if (result.valid) {
+        setBackendOrigin(result.canonical_origin);
+        setAppUserId(result.app_user_id);
         logger.info("ServerPage", "origin_valid", { origin: result.canonical_origin });
         navigate("/login", { state: { canonicalOrigin: result.canonical_origin, appUserId: result.app_user_id } });
       } else {

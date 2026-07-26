@@ -1,15 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
 import type { Conversation, Message } from '../types';
+import { createRpcRequest } from '../shared/rpcClient';
+import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
 export function useListConversations(companyId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['conversations', companyId],
+    queryKey: queryKeys.conversationList(ctx, companyId),
     queryFn: async (): Promise<Conversation[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation[]>('rpc_request', { method: 'conversation.list', params: { company_id: companyId } });
+        const result = await createRpcRequest<Conversation[]>('conversation.list', { company_id: companyId });
         logger.logHookSuccess('useConversation', 'conversation.list', performance.now() - start);
         return result;
       } catch (e) {
@@ -22,12 +24,13 @@ export function useListConversations(companyId: string) {
 }
 
 export function useGetConversation(companyId: string, conversationId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['conversations', conversationId],
+    queryKey: queryKeys.conversation(ctx, companyId, conversationId),
     queryFn: async (): Promise<Conversation> => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.getCompany', params: { company_id: companyId } });
+        const result = await createRpcRequest<Conversation>('conversation.getCompany', { company_id: companyId });
         logger.logHookSuccess('useConversation', 'conversation.get', performance.now() - start);
         return result;
       } catch (e) {
@@ -40,14 +43,15 @@ export function useGetConversation(companyId: string, conversationId: string) {
 }
 
 export function useListMessages(companyId: string, conversationId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['messages', conversationId],
+    queryKey: queryKeys.messageList(ctx, companyId, conversationId),
     queryFn: async (): Promise<{ items: Message[]; next_cursor: string | null; has_more: boolean }> => {
       const start = performance.now();
       try {
-        const result = await invoke<{ items: Message[]; next_cursor: string | null; has_more: boolean }>(
-          'rpc_request',
-          { method: 'conversation.listMessages', params: { company_id: companyId, conversation_id: conversationId, cursor: null, limit: 50 } },
+        const result = await createRpcRequest<{ items: Message[]; next_cursor: string | null; has_more: boolean }>(
+          'conversation.listMessages',
+          { company_id: companyId, conversation_id: conversationId, cursor: null, limit: 50 },
         );
         logger.logHookSuccess('useConversation', 'conversation.listMessages', performance.now() - start);
         return result;
@@ -62,11 +66,12 @@ export function useListMessages(companyId: string, conversationId: string) {
 
 export function useCreateConversation() {
   const queryClient = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (data: { company_id: string; title: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.create', params: { company_id: data.company_id, title: data.title } });
+        const result = await createRpcRequest<Conversation>('conversation.create', { company_id: data.company_id, title: data.title });
         logger.logHookSuccess('useConversation', 'conversation.create', performance.now() - start);
         return result;
       } catch (e) {
@@ -75,18 +80,19 @@ export function useCreateConversation() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.all(ctx) });
     },
   });
 }
 
 export function useArchiveConversation() {
   const queryClient = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (params: { company_id: string; conversation_id: string }) => {
       const start = performance.now();
       try {
-        await invoke('rpc_request', { method: 'conversation.archive', params: { company_id: params.company_id, conversation_id: params.conversation_id } });
+        await createRpcRequest('conversation.archive', { company_id: params.company_id, conversation_id: params.conversation_id });
         logger.logHookSuccess('useConversation', 'conversation.archive', performance.now() - start);
       } catch (e) {
         logger.logHookError('useConversation', 'conversation.archive', e as Error, performance.now() - start);
@@ -94,24 +100,22 @@ export function useArchiveConversation() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.all(ctx) });
     },
   });
 }
 
 export function useAddMessage() {
   const queryClient = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (data: { company_id: string; conversationId: string; content: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke<Message>('rpc_request', {
-          method: 'conversation.submitUserMessage',
-          params: {
-            company_id: data.company_id,
-            conversation_id: data.conversationId,
-            content: data.content,
-          },
+        const result = await createRpcRequest<Message>('conversation.submitUserMessage', {
+          company_id: data.company_id,
+          conversation_id: data.conversationId,
+          content: data.content,
         });
         logger.logHookSuccess('useConversation', 'conversation.submitUserMessage', performance.now() - start);
         return result;
@@ -120,8 +124,8 @@ export function useAddMessage() {
         throw e;
       }
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.all(ctx) });
     },
   });
 }

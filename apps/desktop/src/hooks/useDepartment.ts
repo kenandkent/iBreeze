@@ -1,17 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
 import type { Department } from '../types';
+import { createRpcRequest } from '../shared/rpcClient';
+import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
 export function useListDepartments(companyId: string) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['departments', companyId],
+    queryKey: queryKeys.departmentList(ctx, companyId),
     queryFn: async (): Promise<{ items: Department[]; next_cursor: string | null; has_more: boolean }> => {
       const start = performance.now();
       try {
-        const result = await invoke<{ items: Department[]; next_cursor: string | null; has_more: boolean }>(
-          'rpc_request',
-          { method: 'department.list', params: { company_id: companyId, filter: {}, cursor: null, limit: 50 } },
+        const result = await createRpcRequest<{ items: Department[]; next_cursor: string | null; has_more: boolean }>(
+          'department.list',
+          { company_id: companyId, filter: {}, cursor: null, limit: 50 },
         );
         logger.logHookSuccess('useDepartment', 'department.list', performance.now() - start);
         return result;
@@ -26,6 +28,7 @@ export function useListDepartments(companyId: string) {
 
 export function useCreateDepartment() {
   const qc = useQueryClient();
+  const ctx = useQueryCtx();
   return useMutation({
     mutationFn: async (params: {
       company_id: string;
@@ -36,7 +39,7 @@ export function useCreateDepartment() {
     }) => {
       const start = performance.now();
       try {
-        const result = await invoke('rpc_request', { method: 'department.create', params });
+        const result = await createRpcRequest('department.create', params);
         logger.logHookSuccess('useDepartment', 'department.create', performance.now() - start);
         return result;
       } catch (e) {
@@ -44,8 +47,8 @@ export function useCreateDepartment() {
         throw e;
       }
     },
-    onSuccess: (_: unknown, vars: { company_id: string; name: string; function_description: string; leader_name: string; base_profile_version_id: string }) => {
-      qc.invalidateQueries({ queryKey: ['departments', vars.company_id] });
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.departmentList(ctx, (vars as { company_id: string }).company_id) });
     },
   });
 }

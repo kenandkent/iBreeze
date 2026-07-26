@@ -8,7 +8,6 @@ import type { Orchestration, OrchestrationNode, OrchestrationEdge, Orchestration
 import {
   useListOrchestrations,
   useCreateOrchestration,
-  useUpdateOrchestration,
   useDeleteOrchestration,
   useRunOrchestration,
   useListOrchestrationRuns,
@@ -28,7 +27,6 @@ export default function OrchestrationPage() {
 
   const { data: orchestrations, isLoading } = useListOrchestrations();
   const createMutation = useCreateOrchestration();
-  const updateMutation = useUpdateOrchestration();
   const deleteMutation = useDeleteOrchestration();
   const runMutation = useRunOrchestration();
   const { data: runs } = useListOrchestrationRuns(viewOrch?.id ?? '');
@@ -48,10 +46,7 @@ export default function OrchestrationPage() {
   const handleSave = async () => {
     const values = await form.validateFields();
     try {
-      if (editing) {
-        logger.info('OrchestrationPage', 'update_start', { id: editing.id });
-        await updateMutation.mutateAsync({ id: editing.id, ...values });
-      } else {
+      if (!editing) {
         logger.info('OrchestrationPage', 'create_start');
         await createMutation.mutateAsync(values);
       }
@@ -59,7 +54,7 @@ export default function OrchestrationPage() {
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('OrchestrationPage', editing ? 'update_failed' : 'create_failed', msg, { id: editing?.id });
+      logger.error('OrchestrationPage', 'create_failed', msg);
     }
   };
 
@@ -187,7 +182,7 @@ export default function OrchestrationPage() {
         onClose={() => setDrawerOpen(false)}
         width={420}
         extra={
-          <Button type="primary" onClick={handleSave} loading={createMutation.isPending || updateMutation.isPending}>
+          <Button type="primary" onClick={handleSave} loading={createMutation.isPending}>
             {editing ? '更新' : '保存'}
           </Button>
         }

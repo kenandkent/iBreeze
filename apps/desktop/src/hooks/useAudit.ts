@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
 import type { AuditLogEntry } from '../types';
+import { createRpcRequest } from '../shared/rpcClient';
+import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
 interface AuditLogListParams {
@@ -12,12 +13,13 @@ interface AuditLogListParams {
 }
 
 export function useListAuditLogs(_params: AuditLogListParams = {}) {
+  const ctx = useQueryCtx();
   return useQuery({
-    queryKey: ['audit-logs'],
+    queryKey: queryKeys.auditLogList(ctx),
     queryFn: async (): Promise<AuditLogEntry[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<AuditLogEntry[]>('rpc_request', { method: 'event.replay', params: { limit: 50 } });
+        const result = await createRpcRequest<AuditLogEntry[]>('event.replay', { limit: 50 });
         logger.logHookSuccess('useAudit', 'event.replay', performance.now() - start);
         return result;
       } catch (e) {
@@ -31,7 +33,7 @@ export function useListAuditLogs(_params: AuditLogListParams = {}) {
 export function useExportAuditLogs() {
   return {
     mutateAsync: async (_params: AuditLogListParams) => {
-      return invoke<AuditLogEntry[]>('rpc_request', { method: 'event.replay', params: { limit: 1000 } });
+      return createRpcRequest<AuditLogEntry[]>('event.replay', { limit: 1000 });
     },
     isPending: false,
   };
