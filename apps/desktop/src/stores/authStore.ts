@@ -1,28 +1,43 @@
-import { create } from 'zustand';
-import type { User } from '../types';
+import { create } from "zustand";
 
-interface AuthState {
-  token: string | null;
-  refreshToken: string | null;
-  isAuthenticated: boolean;
-  user: User | null;
-  login: (token: string, refreshToken: string, user: User) => void;
-  logout: () => void;
-  setTokens: (token: string, refreshToken: string) => void;
-  clearAuth: () => void;
+export interface AuthViewState {
+  profileOpened: boolean;
+  profileDirectoryId: string | null;
+  maskedIdentifier: string | null;
+  mode: "online" | "offline" | null;
+  catalogReleaseSequence: number | null;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
-  token: null,
-  refreshToken: null,
-  isAuthenticated: false,
-  user: null,
-  login: (token, refreshToken, user) =>
-    set({ token, refreshToken, user, isAuthenticated: true }),
-  logout: () =>
-    set({ token: null, refreshToken: null, user: null, isAuthenticated: false }),
-  setTokens: (token, refreshToken) =>
-    set({ token, refreshToken }),
-  clearAuth: () =>
-    set({ token: null, refreshToken: null, user: null, isAuthenticated: false }),
+interface AuthActions {
+  openProfile: (state: {
+    profileDirectoryId: string;
+    maskedIdentifier: string;
+    mode: "online" | "offline";
+    catalogReleaseSequence: number;
+  }) => void;
+  closeProfile: () => void;
+}
+
+export const useAuthStore = create<AuthViewState & AuthActions>()((set) => ({
+  profileOpened: false,
+  profileDirectoryId: null,
+  maskedIdentifier: null,
+  mode: null,
+  catalogReleaseSequence: null,
+  openProfile: (state) =>
+    set({
+      profileOpened: true,
+      profileDirectoryId: state.profileDirectoryId,
+      maskedIdentifier: state.maskedIdentifier,
+      mode: state.mode,
+      catalogReleaseSequence: state.catalogReleaseSequence,
+    }),
+  closeProfile: () =>
+    set({
+      profileOpened: false,
+      profileDirectoryId: null,
+      maskedIdentifier: null,
+      mode: null,
+      catalogReleaseSequence: null,
+    }),
 }));

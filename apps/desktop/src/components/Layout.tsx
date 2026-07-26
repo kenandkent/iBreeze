@@ -42,7 +42,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useAppStore();
-  const { user, logout } = useAuthStore();
+  const { maskedIdentifier, closeProfile } = useAuthStore();
 
   const handleMenuClick = ({ key }: { key: string }) => {
     logger.logMenuClick(key);
@@ -57,7 +57,7 @@ export default function Layout() {
 
   const handleLogout = () => {
     logger.info('Layout', 'logout');
-    logout();
+    closeProfile();
     navigate('/login', { replace: true });
   };
 
@@ -105,7 +105,7 @@ export default function Layout() {
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: 'pointer' }}>
                 <Avatar icon={<UserOutlined />} size="small" />
-                <Text>{user?.display_name || user?.email || '用户'}</Text>
+                <Text>{maskedIdentifier || '用户'}</Text>
               </Space>
             </Dropdown>
           </Space>

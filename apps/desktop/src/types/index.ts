@@ -106,16 +106,6 @@ export interface User {
   status: 'active' | 'disabled';
 }
 
-export interface AuthResult {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  user_type: string;
-  user_id: string;
-  display_name?: string;
-  pwd_change_required: boolean;
-}
-
 export interface Profile {
   id: string;
   name: string;
