@@ -132,8 +132,7 @@ async function apiFetch<T>(path: string, options?: RequestInit, version?: number
       let problem: ProblemDetails | undefined;
       try {
         problem = await res.json();
-      } catch {
-      }
+      } catch { /* ignore parse error, problem stays undefined */ }
       throw new ApiError(res.status, problem);
     }
 
