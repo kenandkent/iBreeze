@@ -498,3 +498,243 @@ class TestDepartmentReportCompanyReview:
                 issue_id="00000000-0000-4000-8000-000000000000",
                 resolution="无效修复",
             )
+
+
+@pytest.mark.asyncio
+class TestReviewSubmitValidation:
+    """New review submission validation rules (R07)."""
+
+    async def test_submit_report_sha_mismatch_fails(self, db, published_profile):
+        company, _, reviewer, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        assignment = await assign_reviewer(
+            db,
+            company.id,
+            artifact_id=artifact_id,
+            reviewer_employee_id=reviewer.id,
+            review_round=1,
+            reviewed_sha256="a" * 64,
+        )
+        from ibreeze.review.service import submit_review_report
+        with pytest.raises(ValueError, match="ARTIFACT_SHA_MISMATCH"):
+            await submit_review_report(
+                db,
+                company.id,
+                assignment_id=assignment["id"],
+                artifact_id=artifact_id,
+                artifact_sha256="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                report_artifact_id="report-sha-test",
+                reviewer_run_id="run-review-test",
+                verdict="needs_changes",
+                summary="SHA mismatch test",
+            )
+
+    async def test_submit_report_artifact_not_found_fails(self, db, published_profile):
+        company, _, reviewer, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        assignment = await assign_reviewer(
+            db,
+            company.id,
+            artifact_id=artifact_id,
+            reviewer_employee_id=reviewer.id,
+            review_round=1,
+            reviewed_sha256="a" * 64,
+        )
+        from ibreeze.review.service import submit_review_report
+        with pytest.raises(ValueError, match="ARTIFACT_NOT_FOUND"):
+            await submit_review_report(
+                db,
+                company.id,
+                assignment_id=assignment["id"],
+                artifact_id="nonexistent-artifact",
+                artifact_sha256="a" * 64,
+                report_artifact_id="report-notfound",
+                reviewer_run_id="run-review-test",
+                verdict="needs_changes",
+                summary="Artifact not found test",
+            )
+
+    async def test_submit_report_with_issues(self, db, published_profile):
+        company, _, reviewer, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        artifact_row = await (
+            await db.execute(
+                "SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?",
+                (artifact_id, company.id),
+            )
+        ).fetchone()
+        sha = artifact_row["object_sha256"]
+        assignment = await assign_reviewer(
+            db,
+            company.id,
+            artifact_id=artifact_id,
+            reviewer_employee_id=reviewer.id,
+            review_round=1,
+            reviewed_sha256=sha,
+        )
+        from ibreeze.review.service import submit_review_report
+        await db.execute("PRAGMA foreign_keys = OFF")
+        try:
+            result = await submit_review_report(
+                db,
+                company.id,
+                assignment_id=assignment["id"],
+                artifact_id=artifact_id,
+                artifact_sha256=sha,
+                report_artifact_id="report-issues-test",
+                reviewer_run_id="run-review-issues",
+                verdict="needs_changes",
+                summary="Issues test",
+                issues=[
+                    {
+                        "severity": "blocker",
+                        "category": "logic",
+                        "description": "阻塞问题",
+                        "expected": "正常",
+                        "actual": "阻塞",
+                        "suggested_fix": "修复阻塞",
+                    },
+                    {
+                        "severity": "low",
+                        "category": "style",
+                        "description": "格式问题",
+                        "expected": "规范",
+                        "actual": "不规范",
+                        "suggested_fix": "调整格式",
+                    },
+                ],
+            )
+        finally:
+            await db.execute("PRAGMA foreign_keys = ON")
+        assert result["status"] == "submitted"
+        issues = await (
+            await db.execute(
+                """SELECT COUNT(*) as cnt FROM review_issues
+                   WHERE company_id=?""",
+                (company.id,),
+            )
+        ).fetchone()
+        assert issues["cnt"] == 2
+
+    async def test_new_artifact_version_invalidates_old_reviews(self, db, published_profile):
+        company, _, reviewer, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        artifact_row = await (
+            await db.execute(
+                "SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?",
+                (artifact_id, company.id),
+            )
+        ).fetchone()
+        sha = artifact_row["object_sha256"]
+        assignment = await assign_reviewer(
+            db,
+            company.id,
+            artifact_id=artifact_id,
+            reviewer_employee_id=reviewer.id,
+            review_round=1,
+            reviewed_sha256=sha,
+        )
+        await db.execute("PRAGMA foreign_keys = OFF")
+        try:
+            await db.execute(
+                """INSERT INTO artifacts
+                   (id, company_id, company_task_id, artifact_type, logical_name,
+                    object_sha256, object_size, media_type, metadata_json,
+                    supersedes_artifact_id, created_by_type, created_by_run_id,
+                    created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (str(uuid.uuid4()), company.id, "task-001", "source_code_patch",
+                 "main-v2.py", "z" * 64, 200, "text/plain", "{}",
+                 artifact_id, "agent", "run-rework", "2026-06-01T00:00:00Z"),
+            )
+            await db.commit()
+        finally:
+            await db.execute("PRAGMA foreign_keys = ON")
+        from ibreeze.review.service import submit_review_report
+        await db.execute("PRAGMA foreign_keys = OFF")
+        try:
+            result = await submit_review_report(
+                db,
+                company.id,
+                assignment_id=assignment["id"],
+                artifact_id=artifact_id,
+                artifact_sha256=sha,
+                report_artifact_id="report-stale-test",
+                reviewer_run_id="run-stale-test",
+                verdict="needs_changes",
+                summary="Stale test",
+            )
+        finally:
+            await db.execute("PRAGMA foreign_keys = ON")
+        assert result["status"] == "stale"
+        stale_check = await (
+            await db.execute(
+                "SELECT status FROM review_assignments WHERE id=?",
+                (assignment["id"],),
+            )
+        ).fetchone()
+        assert stale_check["status"] == "stale"
+
+
+@pytest.mark.asyncio
+class TestResolveIssueEvidence:
+    """Issue resolution with evidence binding (artifacts/service.py resolve_issue)."""
+
+    async def test_resolve_issue_with_evidence(self, db, published_profile):
+        company, _, _, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        from ibreeze.artifacts.service import resolve_issue
+
+        with pytest.raises(ValueError, match="ISSUE_NOT_FOUND"):
+            await resolve_issue(
+                db,
+                company.id,
+                issue_id="00000000-0000-4000-8000-000000000000",
+                resolution_artifact_sha256="a" * 64,
+                fix_run_id="run-fix-test",
+                retest_result_id="retest-art",
+                resolution_summary="Test resolution",
+            )
+
+    async def test_resolve_issue_not_in_fixing(self, db, published_profile):
+        company, _, reviewer, artifact_id = await _company_with_artifact(
+            db, published_profile
+        )
+        assignment = await assign_reviewer(
+            db,
+            company.id,
+            artifact_id=artifact_id,
+            reviewer_employee_id=reviewer.id,
+            review_round=1,
+            reviewed_sha256="a" * 64,
+        )
+        report_id = await _create_report_direct(
+            db, company.id, assignment_id=assignment["id"],
+            verdict="needs_changes",
+        )
+        issue = await create_review_issue(
+            db, company.id,
+            report_id=report_id,
+            severity="high",
+            category="logic",
+            description="问题",
+            expected="正确",
+            actual="错误",
+            suggested_fix="修正",
+        )
+        from ibreeze.artifacts.service import resolve_issue
+        with pytest.raises(ValueError, match="ISSUE_NOT_IN_FIXING_STATE"):
+            await resolve_issue(
+                db,
+                company.id,
+                issue_id=issue["id"],
+                resolution_artifact_sha256="a" * 64,
+                fix_run_id="run-fix",
+                retest_result_id="retest-art",
+                resolution_summary="修复完成",
+            )

@@ -260,3 +260,94 @@ async def create_artifact_with_manifest(
     except Exception:
         await db.rollback()
         raise
+
+
+async def resolve_issue(
+    db: Any,
+    company_id: str,
+    *,
+    issue_id: str,
+    resolution_artifact_sha256: str,
+    fix_run_id: str,
+    retest_result_id: str,
+    resolution_summary: str,
+) -> dict[str, object]:
+    """Resolve a review issue with evidence binding.
+
+    Issues can only be closed via review.resolveIssue RPC.
+    Binds to resolution artifact SHA, fix run, and retest result.
+    Does NOT directly modify the issue status field — the review
+    service's transition function handles that separately.
+    """
+    now = _now()
+
+    cursor = await db.execute(
+        """SELECT ri.id, ri.status, ri.severity, ri.review_report_id
+           FROM review_issues ri
+           WHERE ri.id=? AND ri.company_id=?""",
+        (issue_id, company_id),
+    )
+    issue = await cursor.fetchone()
+    if issue is None:
+        raise ValueError("ISSUE_NOT_FOUND")
+    issue_row = dict(issue)
+    if issue_row["status"] != "fixing":
+        raise ValueError("ISSUE_NOT_IN_FIXING_STATE")
+
+    artifact = await (await db.execute(
+        """SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?""",
+        (company_id, resolution_artifact_sha256),
+    )).fetchone()
+    if artifact is None:
+        raise ValueError("RESOLUTION_ARTIFACT_NOT_FOUND")
+
+    run = await (await db.execute(
+        """SELECT id FROM agent_runs WHERE id=? AND company_id=?""",
+        (fix_run_id, company_id),
+    )).fetchone()
+    if run is None:
+        raise ValueError("FIX_RUN_NOT_FOUND")
+
+    retest = await (await db.execute(
+        """SELECT id FROM artifacts WHERE id=? AND company_id=?
+           AND artifact_type='test_result'""",
+        (retest_result_id, company_id),
+    )).fetchone()
+    if retest is None:
+        raise ValueError("RETEST_RESULT_NOT_FOUND")
+
+    evidence = {
+        "issue_id": issue_id,
+        "resolution_artifact_sha256": resolution_artifact_sha256,
+        "fix_run_id": fix_run_id,
+        "retest_result_id": retest_result_id,
+        "resolution_summary": resolution_summary,
+        "resolved_at": now,
+    }
+
+    resolution_id = _id()
+    await db.execute(
+        """INSERT INTO resolution_evidence
+           (id, company_id, issue_id, evidence_json, created_at)
+           VALUES (?,?,?,?,?)""",
+        (resolution_id, company_id, issue_id, json.dumps(evidence, separators=(",", ":")), now),
+    )
+
+    await db.execute(
+        """UPDATE review_issues
+           SET status='resolved', rejection_reason=?,
+               updated_at=?, version=version+1
+           WHERE id=? AND company_id=? AND status='fixing'""",
+        (resolution_summary, now, issue_id, company_id),
+    )
+
+    await db.commit()
+
+    return {
+        "resolution_id": resolution_id,
+        "issue_id": issue_id,
+        "status": "resolved",
+        "resolution_artifact_sha256": resolution_artifact_sha256,
+        "fix_run_id": fix_run_id,
+        "retest_result_id": retest_result_id,
+    }

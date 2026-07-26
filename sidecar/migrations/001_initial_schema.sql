@@ -509,7 +509,8 @@ CREATE TABLE IF NOT EXISTS employee_tasks (
     acceptance_criteria_json TEXT NOT NULL CHECK(json_valid(acceptance_criteria_json)),
     status TEXT NOT NULL CHECK(status IN (
         'assigned','ready','running','submitted','peer_reviewing',
-        'changes_requested','accepted','waiting_resource','paused','cancelled','failed'
+        'changes_requested','accepted','needs_review','needs_rework',
+        'waiting_resource','paused','cancelled','failed'
     )),
     resume_state TEXT CHECK(resume_state IS NULL OR resume_state IN (
         'assigned','ready','running','changes_requested'

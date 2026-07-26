@@ -114,12 +114,21 @@ async def submit_review_report(
     company_id: str,
     *,
     assignment_id: str,
+    artifact_id: str,
+    artifact_sha256: str,
     report_artifact_id: str,
     reviewer_run_id: str,
     verdict: str,
     summary: str,
+    issues: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
-    """Submit a review report for an assignment."""
+    """Submit a review report for an assignment.
+
+    Validates:
+    - The artifact SHA matches the database record.
+    - The reviewer is not a contributor of the artifact.
+    - New artifact version auto-invalidates old reviews (marks them stale).
+    """
     report_id = _id()
     now = _now()
 
@@ -139,6 +148,45 @@ async def submit_review_report(
         if reviewer_run_id is None:
             raise ValueError("REVIEWER_RUN_ID_REQUIRED")
 
+        artifact = await _one(
+            await db.execute(
+                """SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?""",
+                (artifact_id, company_id),
+            )
+        )
+        if artifact is None:
+            raise ValueError("ARTIFACT_NOT_FOUND")
+        if dict(artifact)["object_sha256"] != artifact_sha256:
+            raise ValueError("ARTIFACT_SHA_MISMATCH")
+
+        contributor = await _one(
+            await db.execute(
+                """SELECT 1 FROM artifact_contributors
+                   WHERE artifact_id=? AND company_id=?
+                   AND employee_id IN (
+                       SELECT reviewer_employee_id FROM review_assignments WHERE id=?
+                   )
+                   LIMIT 1""",
+                (artifact_id, company_id, assignment_id),
+            )
+        )
+        if contributor is not None:
+            raise ValueError("REVIEWER_CANNOT_BE_CONTRIBUTOR")
+
+        superseding = await _one(
+            await db.execute(
+                """SELECT id FROM artifacts
+                   WHERE supersedes_artifact_id=? AND company_id=?
+                   LIMIT 1""",
+                (artifact_id, company_id),
+            )
+        )
+
+        if superseding is not None:
+            new_status = "stale"
+        else:
+            new_status = "submitted"
+
         await db.execute(
             """INSERT INTO review_reports
                (id, company_id, assignment_id, reviewer_run_id,
@@ -155,19 +203,58 @@ async def submit_review_report(
             ),
         )
 
+        if issues:
+            for iss in issues:
+                await db.execute(
+                    """INSERT INTO review_issues
+                       (id, company_id, review_report_id, severity, category,
+                        description, expected, actual, suggested_fix,
+                        evidence_refs_json, status, assignee_employee_id,
+                        verifier_employee_id, created_at, updated_at, version)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        _id(),
+                        company_id,
+                        report_id,
+                        iss.get("severity", "medium"),
+                        iss.get("category", "general"),
+                        iss.get("description", ""),
+                        iss.get("expected", ""),
+                        iss.get("actual", ""),
+                        iss.get("suggested_fix", ""),
+                        "[]",
+                        "open",
+                        None,
+                        None,
+                        now,
+                        now,
+                        1,
+                    ),
+                )
+
+        if superseding is not None:
+            await db.execute(
+                """UPDATE review_assignments
+                   SET status='stale'
+                   WHERE artifact_id=? AND company_id=?
+                   AND status IN ('assigned','in_review','submitted')""",
+                (artifact_id, company_id),
+            )
+
         await db.execute(
             """UPDATE review_assignments
-               SET status='submitted', submitted_at=?
+               SET status=?, submitted_at=?
                WHERE id=? AND company_id=?""",
-            (now, assignment_id, company_id),
+            (new_status, now, assignment_id, company_id),
         )
 
         await db.commit()
         return {
             "id": report_id,
             "assignment_id": assignment_id,
+            "artifact_id": artifact_id,
             "verdict": verdict,
-            "status": "completed",
+            "status": new_status,
         }
     except Exception:
         await db.rollback()

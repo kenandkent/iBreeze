@@ -238,7 +238,13 @@ async def _fail_run(
 async def _feedback_to_tasks(
     db: Any, run_id: str, company_id: str, success: bool,
 ) -> None:
-    """Propagate run completion back to employee_task → department_task → company_task."""
+    """Propagate run completion back to employee_task → department_task → company_task.
+
+    Run exit codes only end runs, not business tasks.
+    Task completion is gated by actual evidence through CompletionGate.
+    """
+    from ibreeze.orchestration.completion_gate import CompletionGate
+
     now = _now()
 
     run_row = await (await db.execute(
@@ -250,9 +256,17 @@ async def _feedback_to_tasks(
         return
     run = dict(run_row)
 
-    # Update employee_task
     if run.get("employee_task_id"):
-        new_emp_status = "submitted" if success else "failed"
+        gate = CompletionGate()
+        result = await gate.evaluate_employee_task(db, run["employee_task_id"], company_id)
+        if result.allowed:
+            new_emp_status = "submitted"
+        else:
+            codes = {b.code for b in result.blockers}
+            if "MISSING_ARTIFACT" in codes or "MISSING_CONTRIBUTORS" in codes:
+                new_emp_status = "needs_rework"
+            else:
+                new_emp_status = "needs_review"
         await db.execute(
             """UPDATE employee_tasks
                SET status=?, updated_at=?, version=version+1
@@ -265,7 +279,7 @@ async def _feedback_to_tasks(
         pending = await (await db.execute(
             """SELECT COUNT(*) as cnt FROM employee_tasks
                WHERE department_task_id=? AND company_id=?
-               AND status NOT IN ('submitted','accepted','cancelled','failed')""",
+               AND status NOT IN ('submitted','accepted','cancelled','failed','needs_review','needs_rework')""",
             (run["department_task_id"], company_id),
         )).fetchone()
         if pending and pending["cnt"] == 0:

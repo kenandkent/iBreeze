@@ -312,6 +312,8 @@ class EmployeeTaskState(StrEnum):
     PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+    NEEDS_REWORK = "needs_rework"
 
 
 _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]] = {
@@ -336,6 +338,50 @@ _EMPLOYEE_TASK_TRANSITIONS: dict[EmployeeTaskState, frozenset[EmployeeTaskState]
     EmployeeTaskState.RUNNING: frozenset(
         {
             EmployeeTaskState.SUBMITTED,
+            EmployeeTaskState.NEEDS_REVIEW,
+            EmployeeTaskState.NEEDS_REWORK,
+            EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.CANCELLED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.SUBMITTED: frozenset(
+        {
+            EmployeeTaskState.PEER_REVIEWING,
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.PEER_REVIEWING: frozenset(
+        {
+            EmployeeTaskState.CHANGES_REQUESTED,
+            EmployeeTaskState.ACCEPTED,
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.CHANGES_REQUESTED: frozenset(
+        {
+            EmployeeTaskState.READY,
+            EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.CANCELLED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.NEEDS_REVIEW: frozenset(
+        {
+            EmployeeTaskState.READY,
+            EmployeeTaskState.WAITING_RESOURCE,
+            EmployeeTaskState.PAUSED,
+            EmployeeTaskState.CANCELLED,
+            EmployeeTaskState.FAILED,
+        }
+    ),
+    EmployeeTaskState.NEEDS_REWORK: frozenset(
+        {
+            EmployeeTaskState.READY,
             EmployeeTaskState.WAITING_RESOURCE,
             EmployeeTaskState.PAUSED,
             EmployeeTaskState.CANCELLED,

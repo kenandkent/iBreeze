@@ -114,6 +114,8 @@ class EmployeeTaskStatus(StrEnum):
     PAUSED = "paused"
     CANCELLED = "cancelled"
     FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+    NEEDS_REWORK = "needs_rework"
 
 
 class TaskKind(StrEnum):
