@@ -56,7 +56,8 @@ impl RestartTracker {
 
     pub fn is_throttled(&mut self) -> bool {
         let now = Instant::now();
-        self.timestamps.retain(|t| now.duration_since(*t) < RESTART_WINDOW);
+        self.timestamps
+            .retain(|t| now.duration_since(*t) < RESTART_WINDOW);
         self.timestamps.len() >= MAX_RESTARTS as usize
     }
 
@@ -199,7 +200,11 @@ impl SidecarSupervisor {
         info!("sidecar.process.stopping");
         let _ = running
             .client
-            .call::<Value>("system.shutdown", serde_json::json!({}), Some(Uuid::new_v4()))
+            .call::<Value>(
+                "system.shutdown",
+                serde_json::json!({}),
+                Some(Uuid::new_v4()),
+            )
             .await;
         if tokio::time::timeout(SHUTDOWN_GRACE_PERIOD, running.child.wait())
             .await
@@ -233,11 +238,10 @@ impl SidecarSupervisor {
 
     pub async fn check_health(&self) -> Result<(), AppError> {
         let client = self.client().await?;
-        tokio::time::timeout(HEALTH_TIMEOUT, client.call::<Value>(
-            "system.health",
-            serde_json::json!({}),
-            None,
-        ))
+        tokio::time::timeout(
+            HEALTH_TIMEOUT,
+            client.call::<Value>("system.health", serde_json::json!({}), None),
+        )
         .await
         .map_err(|_| AppError::Sidecar("Sidecar health check timed out".to_owned()))?
         .map(|_: Value| ())

@@ -81,9 +81,9 @@ pub async fn handle_external_write_execute(
     request: ExternalWriteRequest,
 ) -> Result<ExternalWriteResponse, AppError> {
     let target = PathBuf::from(&request.target_realpath);
-    let canonical = target
-        .canonicalize()
-        .map_err(|e| AppError::Security(format!("host.externalWrite: target not accessible: {e}")))?;
+    let canonical = target.canonicalize().map_err(|e| {
+        AppError::Security(format!("host.externalWrite: target not accessible: {e}"))
+    })?;
     let old_hash = compute_path_state_hash(&canonical)?;
     if old_hash != request.expected_old_sha256.as_deref().unwrap_or("") {
         return Err(AppError::Security("APPROVAL_TARGET_CHANGED".to_owned()));
@@ -114,16 +114,17 @@ pub const ALLOWED_REVERSE_METHODS: &[&str] = &[
 ];
 
 /// Reverse notification methods (no id, no response)
-pub const ALLOWED_REVERSE_NOTIFICATIONS: &[&str] = &[
-    "runtime.processRegistered",
-    "runtime.processExited",
-];
+pub const ALLOWED_REVERSE_NOTIFICATIONS: &[&str] =
+    &["runtime.processRegistered", "runtime.processExited"];
 
 pub fn validate_reverse_method(method: &str) -> Result<(), AppError> {
-    if ALLOWED_REVERSE_METHODS.contains(&method) || ALLOWED_REVERSE_NOTIFICATIONS.contains(&method) {
+    if ALLOWED_REVERSE_METHODS.contains(&method) || ALLOWED_REVERSE_NOTIFICATIONS.contains(&method)
+    {
         Ok(())
     } else {
-        Err(AppError::Validation(format!("METHOD_NOT_ALLOWED: {method}")))
+        Err(AppError::Validation(format!(
+            "METHOD_NOT_ALLOWED: {method}"
+        )))
     }
 }
 

@@ -11,8 +11,8 @@ pub async fn workspace_select(
     title: Option<String>,
 ) -> Result<String, AppError> {
     info!(title = ?title, "command.workspace_select.opening");
-    let dialog = rfd::FileDialog::new()
-        .set_title(title.unwrap_or_else(|| "选择工作区目录".to_string()));
+    let dialog =
+        rfd::FileDialog::new().set_title(title.unwrap_or_else(|| "选择工作区目录".to_string()));
 
     if let Some(path) = dialog.pick_folder() {
         let grant = state
@@ -34,8 +34,7 @@ pub async fn readonly_file_select(
     title: Option<String>,
 ) -> Result<String, AppError> {
     info!(title = ?title, "command.readonly_file_select.opening");
-    let dialog = rfd::FileDialog::new()
-        .set_title(title.unwrap_or_else(|| "选择文件".to_string()));
+    let dialog = rfd::FileDialog::new().set_title(title.unwrap_or_else(|| "选择文件".to_string()));
 
     if let Some(path) = dialog.pick_file() {
         let grant = state

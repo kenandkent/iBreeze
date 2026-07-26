@@ -39,22 +39,32 @@ mod tests {
 
     #[test]
     fn test_rpc_error_codes() {
-        let err = RpcError::MethodNotFound { method: "test".to_string() };
+        let err = RpcError::MethodNotFound {
+            method: "test".to_string(),
+        };
         assert_eq!(err.code(), -32601);
 
-        let err = RpcError::InvalidParams { detail: "bad".to_string() };
+        let err = RpcError::InvalidParams {
+            detail: "bad".to_string(),
+        };
         assert_eq!(err.code(), -32602);
 
-        let err = RpcError::Internal { detail: "oops".to_string() };
+        let err = RpcError::Internal {
+            detail: "oops".to_string(),
+        };
         assert_eq!(err.code(), -32603);
 
-        let err = RpcError::Unauthorized { detail: "no".to_string() };
+        let err = RpcError::Unauthorized {
+            detail: "no".to_string(),
+        };
         assert_eq!(err.code(), -32001);
     }
 
     #[test]
     fn test_rpc_error_display() {
-        let err = RpcError::MethodNotFound { method: "test".to_string() };
+        let err = RpcError::MethodNotFound {
+            method: "test".to_string(),
+        };
         assert!(err.to_string().contains("test"));
     }
 }

@@ -103,9 +103,9 @@ impl GrantStore {
 
     pub async fn consume_grant(&self, grant_id: Uuid) -> Result<PathBuf, AppError> {
         let mut grants = self.grants.write().await;
-        let grant = grants.get_mut(&grant_id).ok_or_else(|| {
-            AppError::NotFound(format!("Grant {grant_id} not found"))
-        })?;
+        let grant = grants
+            .get_mut(&grant_id)
+            .ok_or_else(|| AppError::NotFound(format!("Grant {grant_id} not found")))?;
         if grant.consumed {
             return Err(AppError::Security(format!(
                 "Grant {grant_id} has already been consumed"
@@ -141,15 +141,7 @@ fn validate_path_safety(path: &Path) -> Result<(), AppError> {
         "/cores",
     ];
     #[cfg(not(target_os = "macos"))]
-    let protected_dirs = [
-        "/etc",
-        "/var",
-        "/tmp",
-        "/root",
-        "/sys",
-        "/proc",
-        "/dev",
-    ];
+    let protected_dirs = ["/etc", "/var", "/tmp", "/root", "/sys", "/proc", "/dev"];
 
     for dir in &protected_dirs {
         if path_str == *dir || path_str.starts_with(&format!("{dir}/")) {
@@ -212,7 +204,10 @@ mod tests {
             .await
             .expect("create grant");
         assert_eq!(grant.kind, GrantKind::Workspace);
-        let resolved = store.resolve_and_verify(grant.grant_id).await.expect("resolve");
+        let resolved = store
+            .resolve_and_verify(grant.grant_id)
+            .await
+            .expect("resolve");
         assert_eq!(resolved, dir.path().canonicalize().unwrap());
     }
 
@@ -224,7 +219,10 @@ mod tests {
             .create_grant(dir.path(), GrantKind::ReadonlyFile)
             .await
             .expect("create grant");
-        store.consume_grant(grant.grant_id).await.expect("first consume");
+        store
+            .consume_grant(grant.grant_id)
+            .await
+            .expect("first consume");
         assert!(store.consume_grant(grant.grant_id).await.is_err());
     }
 

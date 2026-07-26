@@ -15,10 +15,15 @@ fn profile_id_is_stable_and_path_safe() {
         "https://example.com:443",
         Uuid::parse_str("00000000-0000-4000-8000-000000000002").expect("valid UUID"),
     );
-    assert_ne!(first, third, "different user_id must produce different directory id");
+    assert_ne!(
+        first, third,
+        "different user_id must produce different directory id"
+    );
 
     assert!(
-        first.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()),
+        first
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()),
         "profile directory id must be lowercase alphanumeric"
     );
 }
@@ -52,8 +57,7 @@ fn session_bundle_serialization() {
     };
 
     let json = serde_json::to_string(&bundle).expect("serialize bundle");
-    let deserialized: SessionBundle =
-        serde_json::from_str(&json).expect("deserialize bundle");
+    let deserialized: SessionBundle = serde_json::from_str(&json).expect("deserialize bundle");
     assert_eq!(bundle.schema_version, deserialized.schema_version);
     assert_eq!(bundle.family_id, deserialized.family_id);
 

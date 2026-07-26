@@ -14,8 +14,7 @@ fn close_vs_logout_contract() {
         "closed_profile": true,
         "revoked_family": false
     });
-    let logout_result: LogoutResult =
-        serde_json::from_value(logout).expect("logout result schema");
+    let logout_result: LogoutResult = serde_json::from_value(logout).expect("logout result schema");
     assert!(logout_result.closed_profile);
     assert!(!logout_result.revoked_family);
 }
@@ -63,8 +62,7 @@ fn corrupt_bundle_is_detected() {
         "corrupt bundle with missing fields must be rejected"
     );
 
-    let extra_fields =
-        r#"{"schema_version":1,"refresh_token":"t","offline_session_ticket":"t","family_id":"f","issued_at":"2026-01-01T00:00:00Z","extra":"bad"}"#;
+    let extra_fields = r#"{"schema_version":1,"refresh_token":"t","offline_session_ticket":"t","family_id":"f","issued_at":"2026-01-01T00:00:00Z","extra":"bad"}"#;
     assert!(
         serde_json::from_str::<SessionBundle>(extra_fields).is_err(),
         "extra fields must be rejected"
@@ -74,8 +72,8 @@ fn corrupt_bundle_is_detected() {
 /// AUTH-013: Offline ticket validation rejects invalid structure
 #[test]
 fn invalid_offline_ticket_format() {
-    use ibreeze_desktop_core::trust::verify_offline_ticket;
     use ibreeze_desktop_core::rpc::api_client::AuthKeyset;
+    use ibreeze_desktop_core::trust::verify_offline_ticket;
     use uuid::Uuid;
 
     let keyset = AuthKeyset {

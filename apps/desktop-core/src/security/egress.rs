@@ -31,7 +31,9 @@ impl EgressBroker {
     ) -> Result<EgressLease, AppError> {
         let leases = self.leases.read().await;
         if leases.iter().any(|l| l.run_id == run_id && !l.cancelled) {
-            return Err(AppError::Validation("Run already has an active egress lease".to_owned()));
+            return Err(AppError::Validation(
+                "Run already has an active egress lease".to_owned(),
+            ));
         }
         let token = uuid::Uuid::new_v4().to_string().into_bytes();
         let lease = EgressLease {
@@ -49,11 +51,16 @@ impl EgressBroker {
 
     pub async fn cancel_lease(&self, run_id: Uuid) -> Result<(), AppError> {
         let mut leases = self.leases.write().await;
-        if let Some(lease) = leases.iter_mut().find(|l| l.run_id == run_id && !l.cancelled) {
+        if let Some(lease) = leases
+            .iter_mut()
+            .find(|l| l.run_id == run_id && !l.cancelled)
+        {
             lease.cancelled = true;
             Ok(())
         } else {
-            Err(AppError::NotFound("No active egress lease for this run".to_owned()))
+            Err(AppError::NotFound(
+                "No active egress lease for this run".to_owned(),
+            ))
         }
     }
 
@@ -90,10 +97,7 @@ impl CredentialBroker {
         Self
     }
 
-    pub async fn resolve_credential(
-        &self,
-        _credential_ref: &str,
-    ) -> Result<String, AppError> {
+    pub async fn resolve_credential(&self, _credential_ref: &str) -> Result<String, AppError> {
         Err(AppError::NotSupported("Credential broker stub".to_owned()))
     }
 }
@@ -136,9 +140,6 @@ mod tests {
             .await
             .expect("create lease");
         assert!(broker.validate_token(run_id, &lease.token).await.is_ok());
-        assert!(broker
-            .validate_token(run_id, b"wrong-token")
-            .await
-            .is_err());
+        assert!(broker.validate_token(run_id, b"wrong-token").await.is_err());
     }
 }
