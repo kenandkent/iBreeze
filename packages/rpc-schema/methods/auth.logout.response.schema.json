@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.logout.response.v1",
+  "title": "AuthLogoutResponse",
+  "type": "object",
+  "properties": {
+    "closed_profile": {
+      "type": "boolean"
+    },
+    "revoked_family": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "closed_profile",
+    "revoked_family"
+  ],
+  "additionalProperties": false
+}

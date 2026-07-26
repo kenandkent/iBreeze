@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/company.create.response.v1",
+  "title": "CompanyCreateResponse",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "company_id",
+    "version"
+  ],
+  "additionalProperties": false
+}

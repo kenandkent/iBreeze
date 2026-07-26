@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/conversation.submitUserMessage.response.v1",
+  "title": "ConversationSubmitUserMessageResponse",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "company_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "task_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "revision_requested"
+      ]
+    },
+    "intake_mode": {
+      "type": "string",
+      "enum": [
+        "new_task",
+        "plan_revision",
+        "superseding_task"
+      ]
+    },
+    "analysis_queued": {
+      "type": "boolean",
+      "const": true
+    }
+  },
+  "required": [
+    "message_id",
+    "company_task_id",
+    "task_status",
+    "intake_mode",
+    "analysis_queued"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/task.confirmPlan.request.v1",
+  "title": "TaskConfirmPlanRequest",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "company_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "plan_artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "expected_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "workspace_grant_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "company_task_id",
+    "plan_artifact_id",
+    "plan_sha256",
+    "expected_version"
+  ],
+  "additionalProperties": false
+}

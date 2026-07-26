@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.register.request.v1",
+  "title": "AuthRegisterRequest",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "password": {
+      "type": "string",
+      "minLength": 8
+    }
+  },
+  "required": [
+    "email",
+    "password"
+  ],
+  "additionalProperties": false
+}

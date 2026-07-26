@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.register.response.v1",
+  "title": "AuthRegisterResponse",
+  "type": "object",
+  "properties": {
+    "app_user_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "masked_identifier": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "app_user_id",
+    "email",
+    "masked_identifier"
+  ],
+  "additionalProperties": false
+}

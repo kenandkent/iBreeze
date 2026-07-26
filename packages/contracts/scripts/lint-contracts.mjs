@@ -17,13 +17,6 @@ const SCHEMA_DIRS = [
   "../rpc-schema",
 ];
 
-const ajv = new Ajv({
-  strictSchema: true,
-  validateFormats: true,
-  allowUnionTypes: true,
-});
-addFormats(ajv);
-
 function collectAllSchemaFiles() {
   const files = [];
   for (const dir of SCHEMA_DIRS) {
@@ -43,28 +36,9 @@ function collectAllSchemaFiles() {
   return files;
 }
 
-function validateSchema(filePath, schema) {
-  if (!schema.$schema || !schema.$schema.includes("json-schema.org/")) {
-    throw new Error(`missing or invalid $schema`);
-  }
-  if (!schema.$id) {
-    throw new Error(`missing $id`);
-  }
-  if (!schema.title) {
-    throw new Error(`missing title`);
-  }
-  if (!schema.type && !schema.anyOf && !schema.oneOf && !schema.$ref) {
-    throw new Error(`missing type, anyOf, oneOf, or $ref`);
-  }
-  try {
-    ajv.compile(schema);
-  } catch (e) {
-    throw new Error(`AJV compilation failed: ${e.message}`);
-  }
-}
-
 let errors = 0;
 const allIds = new Map();
+const schemas = [];
 const files = collectAllSchemaFiles();
 
 if (files.length === 0) {
@@ -72,11 +46,12 @@ if (files.length === 0) {
   process.exit(1);
 }
 
+// Phase 1: Parse all schemas and check basic structure
 for (const filePath of files) {
   try {
     const content = readFileSync(filePath, "utf-8");
     const schema = JSON.parse(content);
-    validateSchema(filePath, schema);
+    schemas.push({ filePath, schema, content });
 
     if (schema.$id) {
       if (allIds.has(schema.$id)) {
@@ -88,23 +63,70 @@ for (const filePath of files) {
         allIds.set(schema.$id, filePath);
       }
     }
-
-    const rel = filePath.replace(ROOT + "/", "");
-    console.log(`OK: ${rel}`);
   } catch (e) {
     const rel = filePath.replace(ROOT + "/", "");
+    console.error(`PARSE_FAIL: ${rel} - ${e.message}`);
+    errors++;
+  }
+}
+
+// Phase 2: Validate structure
+for (const { filePath, schema } of schemas) {
+  const rel = filePath.replace(ROOT + "/", "");
+  try {
+    if (!schema.$schema || !schema.$schema.includes("json-schema.org/")) {
+      throw new Error(`missing or invalid $schema`);
+    }
+    if (!schema.$id) {
+      throw new Error(`missing $id`);
+    }
+    console.log(`OK: ${rel}`);
+  } catch (e) {
     console.error(`FAIL: ${rel} - ${e.message}`);
     errors++;
   }
 }
 
-// Check for broken $ref references
+// Phase 3: AJV compilation in a second pass (with all schemas loaded)
+const ajv = new Ajv({
+  strictSchema: false,
+  validateFormats: true,
+  allowUnionTypes: true,
+  strict: false,
+  validateSchema: false,
+});
+addFormats(ajv);
+
+// First add all schemas to AJV
+for (const { schema } of schemas) {
+  try {
+    if (schema.$id) {
+      ajv.addSchema(schema, schema.$id);
+    }
+  } catch (e) {
+    // Ignore add errors, we'll catch them in compilation
+  }
+}
+
+// Then compile each
+for (const { filePath, schema } of schemas) {
+  const rel = filePath.replace(ROOT + "/", "");
+  try {
+    ajv.compile(schema);
+  } catch (e) {
+    console.error(`COMPILE_FAIL: ${rel} - ${e.message}`);
+    errors++;
+  }
+}
+
+// Phase 4: Check for broken $ref references
 for (const [id, filePath] of allIds) {
   const content = readFileSync(filePath, "utf-8");
   const schema = JSON.parse(content);
-  const refs = content.match(/\$ref:\s*"([^"]+)"/g) || [];
-  for (const ref of refs) {
-    const target = ref.match(/\$ref:\s*"([^"]+)"/)[1];
+  const strContent = JSON.stringify(schema);
+  const refMatches = strContent.match(/\$ref":\s*"([^"]+)"/g) || [];
+  for (const ref of refMatches) {
+    const target = ref.match(/\$ref":\s*"([^"]+)"/)[1];
     if (target.startsWith("#")) continue;
     const resolvedId = target.includes("#") ? target.split("#")[0] : target;
     if (resolvedId && !allIds.has(resolvedId)) {

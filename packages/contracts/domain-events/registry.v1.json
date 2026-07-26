@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ibreeze.io/schemas/domain-events/registry.v1.json",
+  "$id": "https://ibreeze.ai/schemas/domain-events/registry.v1",
   "title": "Domain Event Registry",
   "type": "object",
   "required": ["version", "events"],
@@ -18,6 +18,9 @@
           "description": { "type": "string" },
           "requires_company_id": { "type": "boolean", "default": true }
         }
+      },
+      "propertyNames": {
+        "pattern": "^[a-z]+(\\.[a-z]+)+$"
       }
     }
   }

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/backend.validateOrigin.response.v1",
+  "title": "BackendValidateOriginResponse",
+  "type": "object",
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "canonical_origin": {
+      "type": "string"
+    },
+    "app_user_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "valid",
+    "canonical_origin",
+    "app_user_id"
+  ],
+  "additionalProperties": false
+}

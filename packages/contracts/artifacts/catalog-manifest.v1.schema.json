@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/catalog-manifest.v1",
+  "title": "CatalogManifest",
+  "type": "object",
+  "properties": {
+    "release_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "release_sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "minimum_client_version": {
+      "type": "string"
+    },
+    "signature_algorithm": {
+      "type": "string",
+      "const": "Ed25519"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "resource_type": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resource_version": {
+            "type": "string"
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "object_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "resource_version",
+          "object_key",
+          "object_sha256",
+          "size"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "signature": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "release_id",
+    "release_sequence",
+    "created_at",
+    "minimum_client_version",
+    "signature_algorithm",
+    "resources",
+    "signature"
+  ],
+  "additionalProperties": false
+}

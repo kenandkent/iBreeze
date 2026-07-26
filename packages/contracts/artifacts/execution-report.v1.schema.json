@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/execution-report.v1",
+  "title": "ExecutionReport",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "employee_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifact_type": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "artifact_type",
+          "sha256"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "run_id",
+    "employee_task_id",
+    "status",
+    "exit_code",
+    "artifacts"
+  ],
+  "additionalProperties": false
+}

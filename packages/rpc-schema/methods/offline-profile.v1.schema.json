@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/offline-profile.v1",
+  "title": "OfflineProfile",
+  "type": "object",
+  "properties": {
+    "profile_directory_id": {
+      "type": "string"
+    },
+    "backend_origin": {
+      "type": "string",
+      "format": "uri"
+    },
+    "masked_identifier": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "profile_directory_id",
+    "backend_origin",
+    "masked_identifier",
+    "expires_at"
+  ],
+  "additionalProperties": false
+}

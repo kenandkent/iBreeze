@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.listOfflineProfiles.response.v1",
+  "title": "AuthListOfflineProfilesResponse",
+  "type": "object",
+  "properties": {
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "https://ibreeze.ai/schemas/offline-profile.v1"
+      }
+    }
+  },
+  "required": [
+    "profiles"
+  ],
+  "additionalProperties": false
+}

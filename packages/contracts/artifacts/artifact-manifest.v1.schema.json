@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/artifact-manifest.v1",
+  "title": "ArtifactManifest",
+  "type": "object",
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "artifact_type": {
+      "type": "string"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created_by_run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "version",
+    "artifact_type",
+    "filename",
+    "sha256",
+    "size",
+    "created_by_run_id",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

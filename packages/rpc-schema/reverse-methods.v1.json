@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/reverse-methods.v1",
+  "title": "Reverse RPC Methods",
+  "description": "Sidecar-to-Rust reverse RPC allowlist",
+  "type": "array",
+  "items": {
+    "type": "string"
+  },
+  "uniqueItems": true,
+  "default": [
+    "credential.resolve",
+    "egress.connect",
+    "process.execute",
+    "process.registered",
+    "process.exited",
+    "platform.dialog",
+    "platform.open",
+    "file.read",
+    "file.write",
+    "notification.show"
+  ]
+}

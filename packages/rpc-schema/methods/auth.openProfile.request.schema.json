@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.openProfile.request.v1",
+  "title": "AuthOpenProfileRequest",
+  "type": "object",
+  "properties": {
+    "profile_directory_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_directory_id"
+  ],
+  "additionalProperties": false
+}

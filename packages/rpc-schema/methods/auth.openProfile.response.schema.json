@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/auth.openProfile.response.v1",
+  "title": "AuthOpenProfileResponse",
+  "type": "object",
+  "properties": {
+    "profile_directory_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "online",
+        "offline"
+      ]
+    },
+    "catalog_release_sequence": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "profile_directory_id",
+    "mode",
+    "catalog_release_sequence"
+  ],
+  "additionalProperties": false
+}

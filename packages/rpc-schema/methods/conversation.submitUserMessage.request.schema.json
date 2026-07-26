@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/conversation.submitUserMessage.request.v1",
+  "title": "ConversationSubmitUserMessageRequest",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "content": {
+      "type": "string",
+      "maxLength": 10000
+    },
+    "target_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "supersedes_task_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "company_id",
+    "conversation_id",
+    "content"
+  ],
+  "additionalProperties": false
+}

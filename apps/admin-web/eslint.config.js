@@ -11,7 +11,7 @@ export default tseslint.config(
       "react-hooks": reactHooks,
     },
     rules: {
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-console": ["warn", { allow: ["warn", "error", "info", "debug"] }],
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },

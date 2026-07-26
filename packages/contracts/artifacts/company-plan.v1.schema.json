@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/company-plan.v1",
+  "title": "CompanyPlan",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "company_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "plan_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "goal": {
+      "type": "string"
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "department_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "department_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "department_id",
+          "department_name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "department_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "department_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "assigned_employee_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "description",
+                "assigned_employee_ids"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "department_id",
+          "tasks"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "company_id",
+    "company_task_id",
+    "plan_version",
+    "goal",
+    "department_tasks",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/company.create.request.v1",
+  "title": "CompanyCreateRequest",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}

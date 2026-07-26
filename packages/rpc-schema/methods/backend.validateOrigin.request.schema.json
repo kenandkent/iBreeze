@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/backend.validateOrigin.request.v1",
+  "title": "BackendValidateOriginRequest",
+  "type": "object",
+  "properties": {
+    "origin": {
+      "type": "string",
+      "format": "uri",
+      "description": "Backend origin URL to validate"
+    }
+  },
+  "required": [
+    "origin"
+  ],
+  "additionalProperties": false
+}

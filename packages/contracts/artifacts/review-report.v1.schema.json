@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/review-report.v1",
+  "title": "ReviewReport",
+  "type": "object",
+  "properties": {
+    "assignment_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reviewer_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "review",
+        "re_review"
+      ]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocker",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "resolution_evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "report_artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "conclusion": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "changes_requested"
+      ]
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "assignment_id",
+    "run_id",
+    "artifact_id",
+    "artifact_sha256",
+    "reviewer_employee_id",
+    "purpose",
+    "issues",
+    "report_artifact_id",
+    "conclusion",
+    "submitted_at"
+  ],
+  "additionalProperties": false
+}

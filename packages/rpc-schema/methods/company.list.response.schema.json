@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/company.list.response.v1",
+  "title": "CompanyListResponse",
+  "type": "object",
+  "properties": {
+    "companies": {
+      "type": "array",
+      "items": {
+        "$ref": "https://ibreeze.ai/schemas/company.get.response.v1"
+      }
+    }
+  },
+  "required": [
+    "companies"
+  ],
+  "additionalProperties": false
+}
