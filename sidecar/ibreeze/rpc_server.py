@@ -1185,22 +1185,21 @@ class RPCServer:
     # ── Task ──────────────────────────────────────────────────────────
 
     async def _task_confirm_plan(self, params: dict[str, Any]) -> object:
-        from .task.service import confirm_plan
-        from .orchestration.dispatcher import dispatch_company_task
+        from .orchestration.confirm_plan import ConfirmPlanCommand, confirm_and_dispatch
 
-        result = await confirm_plan(
-            self._connection,
-            params["company_id"],
-            params["task_id"],
-            params["employee_id"],
+        command = ConfirmPlanCommand(
+            company_id=params["company_id"],
+            company_task_id=params["company_task_id"],
+            plan_artifact_id=params["plan_artifact_id"],
+            plan_sha256=params["plan_sha256"],
+            expected_version=params["expected_version"],
+            workspace_grant_ids=params.get("workspace_grant_ids", []),
         )
-        # Trigger dispatch: parse plan → create dept/emp tasks → enqueue runs
-        dispatch_result = await dispatch_company_task(
-            self._connection,
-            params["company_id"],
-            params["task_id"],
-        )
-        return {**result, "dispatch": dispatch_result}
+        result = await confirm_and_dispatch(self._connection, command)
+        return {
+            "status": result["status"],
+            "company_task_version": result["company_task_version"],
+        }
 
     async def _task_request_plan_revision(self, params: dict[str, Any]) -> object:
         from .task.service import request_plan_revision
