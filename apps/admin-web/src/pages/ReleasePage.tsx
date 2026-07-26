@@ -1,23 +1,28 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Drawer, Form, Input, Space, Typography, message } from 'antd';
-import { PlusOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Drawer, Form, Input, Space, Tag, Typography, message } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { logger } from '../utils/logger';
 import { formatTime } from '../utils/formatters';
-import { useListReleases, useCreateRelease, useEmergencyDisable } from '../hooks/useReleases';
+import { useListReleases, useCreateRelease, usePublishRelease, useReconcileRelease } from '../hooks/useReleases';
 import type { Release } from '../types';
 
 const { Text } = Typography;
 
+const STATUS_MAP: Record<string, { color: string; label: string }> = {
+  publishing: { color: 'default', label: '草稿' },
+  reconciled: { color: 'processing', label: '已验证' },
+  published: { color: 'success', label: '已发布' },
+};
+
 export default function ReleasePage() {
   const { data, isLoading } = useListReleases();
   const createRelease = useCreateRelease();
-  const emergencyDisable = useEmergencyDisable();
+  const publishRelease = usePublishRelease();
+  const reconcileRelease = useReconcileRelease();
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [drawerRelease, setDrawerRelease] = useState<Release | null>(null);
-  const [emergencyModal, setEmergencyModal] = useState(false);
   const [form] = Form.useForm();
-  const [emergencyForm] = Form.useForm();
 
   const releases = data?.data ?? [];
 
@@ -25,25 +30,32 @@ export default function ReleasePage() {
     const values = await form.validateFields();
     try {
       await createRelease.mutateAsync(values);
-      message.success('发布创建成功');
+      message.success('发布草稿创建成功');
       setCreateModalOpen(false);
       form.resetFields();
     } catch (error) {
       logger.error('ReleasePage', 'create_release_failed', undefined, error);
-      message.error('发布创建失败');
+      message.error('创建失败');
     }
   };
 
-  const handleEmergencyDisable = async () => {
-    const values = await emergencyForm.validateFields();
+  const handleReconcile = async (id: string) => {
     try {
-      await emergencyDisable.mutateAsync(values);
-      message.success('紧急禁用已执行');
-      setEmergencyModal(false);
-      emergencyForm.resetFields();
+      await reconcileRelease.mutateAsync(id);
+      message.success('验证通过，当前为已验证状态');
     } catch (error) {
-      logger.error('ReleasePage', 'emergency_disable_failed', undefined, error);
-      message.error('紧急禁用失败');
+      logger.error('ReleasePage', 'reconcile_failed', { id }, error);
+      message.error('验证失败');
+    }
+  };
+
+  const handlePublish = async (id: string) => {
+    try {
+      await publishRelease.mutateAsync(id);
+      message.success('发布成功');
+    } catch (error) {
+      logger.error('ReleasePage', 'publish_failed', { id }, error);
+      message.error('发布失败');
     }
   };
 
@@ -55,6 +67,13 @@ export default function ReleasePage() {
       render: (sig: string) => sig ? <Text copyable ellipsis style={{ maxWidth: 200 }}>{sig}</Text> : '-',
     },
     { title: '签名密钥 ID', dataIndex: 'signing_key_id', key: 'signing_key_id' },
+    {
+      title: '状态', dataIndex: 'status', key: 'status',
+      render: (status: string) => {
+        const s = STATUS_MAP[status];
+        return s ? <Tag color={s.color}>{s.label}</Tag> : status;
+      },
+    },
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatTime(v) },
     {
       title: '操作', key: 'actions',
@@ -63,6 +82,16 @@ export default function ReleasePage() {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDrawerRelease(record)}>
             查看 Manifest
           </Button>
+          {record.status === 'publishing' && (
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleReconcile(record.id)}>
+              验证
+            </Button>
+          )}
+          {record.status === 'reconciled' && (
+            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handlePublish(record.id)}>
+              发布
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -72,14 +101,9 @@ export default function ReleasePage() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
         <h2>发布管理</h2>
-        <Space>
-          <Button danger icon={<ExclamationCircleOutlined />} onClick={() => { emergencyForm.resetFields(); setEmergencyModal(true); }}>
-            紧急禁用
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateModalOpen(true); }}>
-            新建发布
-          </Button>
-        </Space>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateModalOpen(true); }}>
+          新建发布
+        </Button>
       </div>
       <Table dataSource={releases} columns={columns} rowKey="id" loading={isLoading} />
 
@@ -96,30 +120,6 @@ export default function ReleasePage() {
           </Form.Item>
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="紧急禁用"
-        open={emergencyModal}
-        onOk={handleEmergencyDisable}
-        onCancel={() => setEmergencyModal(false)}
-        okButtonProps={{ danger: true }}
-        confirmLoading={emergencyDisable.isPending}
-      >
-        <Form form={emergencyForm} layout="vertical">
-          <Form.Item name="resource_type" label="资源类型" rules={[{ required: true, message: '请输入资源类型' }]}>
-            <Input placeholder="agents / models / providers / skills" />
-          </Form.Item>
-          <Form.Item name="resource_id" label="资源 ID" rules={[{ required: true, message: '请输入资源 ID' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="reason" label="原因" rules={[{ required: true, message: '请输入禁用原因' }]}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="emergency_code" label="紧急代码" rules={[{ required: true, message: '请输入紧急代码确认' }]}>
-            <Input placeholder="输入 EMERGENCY 确认" />
           </Form.Item>
         </Form>
       </Modal>

@@ -44,12 +44,3 @@ export function useValidateProvider() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['providers'] }),
   });
 }
-
-export function usePublishProvider() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      apiPost<ProviderCatalogItem>(`/providers/${id}/publish`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['providers'] }),
-  });
-}

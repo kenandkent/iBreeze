@@ -1,17 +1,23 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useListSkills, useInstallSkill, useRemoveSkill } from '../hooks/useSkills';
+import { Table, Button, Modal, Form, Input, Upload, Tag, Space, Popconfirm, message } from 'antd';
+import { PlusOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { useListSkills, useInstallSkill, useRemoveSkill, useUploadSkillVersion } from '../hooks/useSkills';
 import { formatTime } from '../utils/formatters';
 import type { SkillCatalogItem } from '../types';
+import type { UploadFile } from 'antd';
 
 export default function SkillPage() {
   const { data, isLoading } = useListSkills();
   const installSkill = useInstallSkill();
   const removeSkill = useRemoveSkill();
+  const uploadSkillVersion = useUploadSkillVersion();
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadingSkillId, setUploadingSkillId] = useState<string | null>(null);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [form] = Form.useForm();
+  const [uploadForm] = Form.useForm();
 
   const skills = data?.data ?? [];
 
@@ -33,6 +39,30 @@ export default function SkillPage() {
       message.success('移除成功');
     } catch {
       message.error('移除失败');
+    }
+  };
+
+  const openUpload = (record: SkillCatalogItem) => {
+    setUploadingSkillId(record.id);
+    uploadForm.resetFields();
+    setFileList([]);
+    setUploadModalOpen(true);
+  };
+
+  const handleUpload = async () => {
+    if (!uploadingSkillId || fileList.length === 0) return;
+    const values = await uploadForm.validateFields();
+    const file = fileList[0]?.originFileObj;
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('version', values.version);
+    formData.append('package', file as Blob);
+    try {
+      await uploadSkillVersion.mutateAsync({ skillId: uploadingSkillId, formData });
+      message.success('版本上传成功');
+      setUploadModalOpen(false);
+    } catch {
+      message.error('版本上传失败');
     }
   };
 
@@ -60,6 +90,11 @@ export default function SkillPage() {
       title: '操作', key: 'actions',
       render: (_: unknown, record: SkillCatalogItem) => (
         <Space>
+          {record.status !== 'published' && (
+            <Button type="link" size="small" icon={<UploadOutlined />} onClick={() => openUpload(record)}>
+              上传版本
+            </Button>
+          )}
           <Popconfirm title="确认移除？需要确保绑定的 Agent 未在运行。" onConfirm={() => handleRemove(record.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               移除
@@ -93,6 +128,38 @@ export default function SkillPage() {
           </Form.Item>
           <Form.Item name="version" label="版本" rules={[{ required: true, message: '请输入版本号' }]}>
             <Input placeholder="1.0.0" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="上传 Skill 版本"
+        open={uploadModalOpen}
+        onOk={handleUpload}
+        onCancel={() => setUploadModalOpen(false)}
+        confirmLoading={uploadSkillVersion.isPending}
+      >
+        <Form form={uploadForm} layout="vertical">
+          <Form.Item name="version" label="版本号" rules={[{ required: true, message: '请输入版本号' }]}>
+            <Input placeholder="1.0.0" />
+          </Form.Item>
+          <Form.Item label="ZIP 包" required>
+            <Upload
+              fileList={fileList}
+              beforeUpload={(file) => {
+                const isZip = file.type === 'application/zip' || file.name.endsWith('.zip');
+                if (!isZip) {
+                  message.error('只支持 .zip 格式');
+                  return Upload.LIST_IGNORE;
+                }
+                setFileList([file as UploadFile]);
+                return false;
+              }}
+              maxCount={1}
+              onRemove={() => setFileList([])}
+            >
+              <Button icon={<UploadOutlined />}>选择 ZIP 文件</Button>
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>

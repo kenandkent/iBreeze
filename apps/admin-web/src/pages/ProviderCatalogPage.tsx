@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Tag, Space, Popconfirm, message } from 'antd';
 import { logger } from '../utils/logger';
 import { formatTime } from '../utils/formatters';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
-import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider, useValidateProvider, usePublishProvider } from '../hooks/useProviderCatalog';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { useListProviders, useCreateProvider, useUpdateProvider, useDeleteProvider, useValidateProvider } from '../hooks/useProviderCatalog';
 import type { ProviderCatalogItem } from '../types';
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -18,7 +18,6 @@ export default function ProviderCatalogPage() {
   const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
   const validateProvider = useValidateProvider();
-  const publishProvider = usePublishProvider();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProviderCatalogItem | null>(null);
@@ -82,22 +81,13 @@ export default function ProviderCatalogPage() {
     }
   };
 
-  const handlePublish = async (id: string) => {
-    logger.info('ProviderCatalogPage', 'publish_start', { id });
-    try {
-      await publishProvider.mutateAsync(id);
-      message.success('发布成功');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      logger.error('ProviderCatalogPage', 'publish_failed', { id }, msg);
-      message.error('发布失败');
-    }
-  };
 
   const columns = [
+    { title: 'Key', dataIndex: 'key', key: 'key' },
     { title: '显示名称', dataIndex: 'display_name', key: 'display_name' },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url' },
-    { title: 'API 协议', dataIndex: 'api_protocol', key: 'api_protocol' },
+    { title: 'API 协议', dataIndex: 'protocol', key: 'protocol' },
+    { title: '认证方式', dataIndex: 'auth_scheme', key: 'auth_scheme' },
     {
       title: '状态', dataIndex: 'status', key: 'status',
       render: (status: string) => {
@@ -121,9 +111,7 @@ export default function ProviderCatalogPage() {
                 </Button>
               )}
               {record.status === 'validated' && (
-                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handlePublish(record.id)}>
-                  发布
-                </Button>
+                <Tag color="processing">已验证（通过发布流程发布）</Tag>
               )}
               <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
@@ -153,14 +141,20 @@ export default function ProviderCatalogPage() {
         confirmLoading={createProvider.isPending || updateProvider.isPending}
       >
         <Form form={form} layout="vertical">
+          <Form.Item name="key" label="Key" rules={[{ required: !editing, message: '请输入 Key' }]}>
+            <Input disabled={!!editing} placeholder="provider-key" />
+          </Form.Item>
           <Form.Item name="display_name" label="显示名称" rules={[{ required: true, message: '请输入显示名称' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="base_url" label="Base URL">
+          <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入 Base URL' }]}>
             <Input placeholder="https://api.example.com" />
           </Form.Item>
-          <Form.Item name="api_protocol" label="API 协议" rules={[{ required: true, message: '请输入 API 协议' }]}>
-            <Input placeholder="openai / anthropic / custom" />
+          <Form.Item name="protocol" label="API 协议" rules={[{ required: true, message: '请选择 API 协议' }]} initialValue="openai_chat_completions">
+            <Input placeholder="openai_responses / anthropic_messages / openai_chat_completions" />
+          </Form.Item>
+          <Form.Item name="auth_scheme" label="认证方式" rules={[{ required: true, message: '请选择认证方式' }]} initialValue="bearer">
+            <Input placeholder="bearer / x-api-key" />
           </Form.Item>
         </Form>
       </Modal>

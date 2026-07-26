@@ -28,11 +28,8 @@ def _problem(status: int, code: str, detail: str) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         content={
-            "type": "about:blank",
-            "title": "Conflict" if status == 409 else "Bad Request",
-            "status": status,
             "code": code,
-            "detail": detail,
+            "message": detail,
         },
     )
 

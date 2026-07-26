@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, message } from 'antd';
 import { logger } from '../utils/logger';
 import { formatNumber } from '../utils/formatters';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined } from '@ant-design/icons';
-import { useListModels, useCreateModel, useUpdateModel, useDeleteModel, useValidateModel, usePublishModel } from '../hooks/useModelCatalog';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { useListModels, useCreateModel, useUpdateModel, useDeleteModel, useValidateModel } from '../hooks/useModelCatalog';
 import type { ModelCatalogItem } from '../types';
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -18,7 +18,6 @@ export default function ModelCatalogPage() {
   const updateModel = useUpdateModel();
   const deleteModel = useDeleteModel();
   const validateModel = useValidateModel();
-  const publishModel = usePublishModel();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ModelCatalogItem | null>(null);
@@ -82,17 +81,6 @@ export default function ModelCatalogPage() {
     }
   };
 
-  const handlePublish = async (id: string) => {
-    logger.info('ModelCatalogPage', 'publish_start', { id });
-    try {
-      await publishModel.mutateAsync(id);
-      message.success('发布成功');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      logger.error('ModelCatalogPage', 'publish_failed', { id }, msg);
-      message.error('发布失败');
-    }
-  };
 
   const columns = [
     { title: '提供商', dataIndex: 'provider_key', key: 'provider_key' },
@@ -131,9 +119,7 @@ export default function ModelCatalogPage() {
                 </Button>
               )}
               {record.status === 'validated' && (
-                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handlePublish(record.id)}>
-                  发布
-                </Button>
+                <Tag color="processing">已验证（通过发布流程发布）</Tag>
               )}
               <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>

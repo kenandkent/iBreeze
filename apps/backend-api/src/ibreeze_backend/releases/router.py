@@ -5,6 +5,7 @@ import json as _json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from cryptography.hazmat.primitives import serialization
 from fastapi import APIRouter, Depends, status
@@ -25,6 +26,7 @@ from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.catalog_release import CatalogRelease, CatalogReleaseItem
 from ibreeze_backend.models.skill import Skill
 from ibreeze_backend.observability.logging_config import get_logger
+from ibreeze_backend.releases.bundle import cleanup_dangling_objects, upload_resource_bundles
 from ibreeze_backend.releases.emergency import (
     create_emergency_disable,
     get_latest_emergency_disable,
@@ -49,7 +51,12 @@ class ReleaseCreate(BaseModel):
 
 
 class EmergencyDisableCreate(BaseModel):
-    skill_ids: list[str]
+    resource_type: str
+    resource_id: str
+    resource_version: str | None = None
+    action: str = "disable"
+    reason: str
+    code: str
 
 
 @public_router.get("/catalog/keys")
@@ -65,6 +72,33 @@ async def _next_release_sequence(db: AsyncSession) -> int:
     return latest.release_sequence + 1
 
 
+@admin_router.get("/catalog/releases")
+async def list_releases_admin_endpoint(
+    db: AsyncSession = Depends(get_db_session),
+    _current_user=Depends(get_current_user),
+) -> dict:
+    logger.info("list_releases")
+    result = await db.execute(
+        select(CatalogRelease).order_by(CatalogRelease.release_sequence.desc()).limit(100)
+    )
+    releases = result.scalars().all()
+    return {
+        "data": [
+            {
+                "id": str(r.id),
+                "version": r.minimum_client_version,
+                "release_sequence": r.release_sequence,
+                "signature": r.signature,
+                "signing_key_id": r.signing_key_id,
+                "status": r.status,
+                "manifest": r.manifest_json or {},
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in releases
+        ]
+    }
+
+
 @admin_router.post(
     "/catalog/releases",
     status_code=status.HTTP_201_CREATED,
@@ -76,33 +110,41 @@ async def create_release_endpoint(
 ) -> dict:
     logger.info("create_release", extra={"version": body.version, "notes": body.notes})
     sequence = await _next_release_sequence(db)
-    manifest = await build_manifest(db, sequence)
+
+    release = CatalogRelease(
+        release_sequence=sequence,
+        minimum_client_version=body.version,
+        manifest_object_key="",
+        manifest_sha256="",
+        signature="",
+        signing_key_id="",
+        status="publishing",
+        created_by=current_user.id,
+        created_at=datetime.now(UTC),
+        manifest_json=None,
+    )
+    db.add(release)
+    await db.flush()
 
     key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     private_key = serialization.load_pem_private_key(private_pem, password=None)
 
+    manifest = await build_manifest(db, release.id, sequence, body.version, release.created_at)
     manifest_bytes = manifest_to_bytes(manifest)
     signature = compute_manifest_signature(manifest_bytes, private_key)
 
     manifest["signing_key_id"] = kid
     manifest["signature"] = signature
 
+    # Re-serialize with signature included
+    manifest_bytes = manifest_to_bytes(manifest)
     manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
 
-    release = CatalogRelease(
-        release_sequence=sequence,
-        minimum_client_version=body.version,
-        manifest_object_key="",
-        manifest_sha256=manifest_sha,
-        signature=signature,
-        signing_key_id=kid,
-        status="publishing",
-        created_by=current_user.id,
-        created_at=datetime.now(UTC),
-    )
-    db.add(release)
-    await db.flush()
+    release.manifest_sha256 = manifest_sha
+    release.signature = signature
+    release.signing_key_id = kid
+    release.manifest_json = manifest
 
     resource_type_map = {
         "agent": "agent_revision",
@@ -124,7 +166,7 @@ async def create_release_endpoint(
             resource_type=resource_type,
             resource_id=resource_id,
             resource_version_id=resource_id,
-            content_sha256=resource.get("content_sha256", ""),
+            content_sha256=resource.get("object_sha256", ""),
         ))
 
     await db.flush()
@@ -158,8 +200,32 @@ async def publish_release_endpoint(
         logger.warning("publish_release_failed", extra={"reason": "already_published", "release_id": str(release_id)})
         raise_problem(400, "RELEASE_ALREADY_PUBLISHED", "Release already published")
 
+    if not release.manifest_json:
+        raise_problem(400, "RELEASE_NOT_READY", "Release manifest not built")
+
+    manifest: dict[str, Any] = cast(dict[str, Any], release.manifest_json)
+    resources = manifest.get("resources", [])
+    key_dir = Path(settings.catalog_key_dir)
+    private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
+    private_key = serialization.load_pem_private_key(private_pem, password=None)
+
+    manifest_key = f"catalog/releases/{release.release_sequence}/manifest.json"
+
+    manifest_bytes = manifest_to_bytes(manifest)
+    signature = compute_manifest_signature(manifest_bytes, private_key)
+
+    manifest["signature"] = signature
+    manifest_bytes = manifest_to_bytes(manifest)
+
+    try:
+        upload_resource_bundles(resources, manifest_bytes, manifest_key)
+    except Exception as exc:
+        logger.warning("publish_release_upload_failed", extra={"error": str(exc)})
+
+    release.manifest_object_key = manifest_key
     release.status = "published"
     release.published_at = datetime.now(UTC)
+    release.manifest_json = manifest
     await db.flush()
 
     logger.info("publish_release_success", extra={"release_id": str(release.id), "published_at": release.published_at})
@@ -168,6 +234,7 @@ async def publish_release_endpoint(
         "version": release.minimum_client_version,
         "status": release.status,
         "published_at": release.published_at,
+        "manifest_object_key": manifest_key,
     }
 
 
@@ -180,9 +247,12 @@ async def create_emergency_disable_endpoint(
     db: AsyncSession = Depends(get_db_session),
     current_user=Depends(get_current_user),
 ) -> dict:
-    logger.info("create_emergency_disable", extra={"skill_ids": body.skill_ids, "actor": current_user.id})
+    logger.info(
+        "create_emergency_disable",
+        extra={"resource_type": body.resource_type, "resource_id": body.resource_id, "actor": current_user.id},
+    )
 
-    payload = {"skill_ids": body.skill_ids}
+    payload = body.model_dump()
     payload_bytes = _json.dumps(payload, sort_keys=True).encode()
     payload_sha = hashlib.sha256(payload_bytes).hexdigest()
 
@@ -203,12 +273,19 @@ async def create_emergency_disable_endpoint(
     await db.flush()
     logger.info(
         "create_emergency_disable_success",
-        extra={"disable_id": str(disable.id), "sequence": disable.sequence, "skill_ids": body.skill_ids},
+        extra={
+            "disable_id": str(disable.id),
+            "sequence": disable.sequence,
+            "resource_type": body.resource_type,
+            "resource_id": body.resource_id,
+        },
     )
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": body.skill_ids,
+        "resource_type": body.resource_type,
+        "resource_id": body.resource_id,
+        "reason": body.reason,
         "created_at": disable.created_at,
     }
 
@@ -223,11 +300,13 @@ async def get_latest_emergency_disable_endpoint(
     if not disable:
         logger.warning("get_latest_emergency_disable_failed", extra={"reason": "not_found"})
         raise_problem(404, "EMERGENCY_DISABLE_NOT_FOUND", "No emergency disables found")
-    skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
+    payload = disable.payload_json or {}
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": skill_ids,
+        "resource_type": payload.get("resource_type", ""),
+        "resource_id": payload.get("resource_id", ""),
+        "reason": payload.get("reason", ""),
         "created_at": disable.created_at,
     }
 
@@ -247,8 +326,10 @@ async def get_latest_manifest_endpoint(
     if not release:
         logger.warning("get_latest_manifest_failed", extra={"reason": "no_published_release"})
         raise_problem(404, "RELEASE_NOT_FOUND", "No published release found")
-    manifest = await build_manifest(db, release.release_sequence)
-    return manifest
+    if not release.manifest_json:
+        logger.warning("get_latest_manifest_failed", extra={"reason": "no_stored_manifest"})
+        raise_problem(404, "MANIFEST_NOT_FOUND", "Stored manifest not found")
+    return cast(dict[str, Any], release.manifest_json)
 
 
 @public_router.get("/catalog/releases/{release_id}")
@@ -271,6 +352,29 @@ async def get_release_endpoint(
         "signing_key_id": release.signing_key_id,
         "published_at": release.published_at,
     }
+
+
+@admin_router.post("/catalog/releases/{release_id}/reconcile")
+async def reconcile_release_endpoint(
+    release_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _current_user=Depends(get_current_user),
+) -> dict:
+    logger.info("reconcile_release", extra={"release_id": str(release_id)})
+    result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
+    release = result.scalar_one_or_none()
+    if not release:
+        raise_problem(404, "RELEASE_NOT_FOUND", "Release not found")
+    if not release.manifest_json:
+        raise_problem(400, "RELEASE_NOT_READY", "Release manifest not built")
+
+    manifest_data: dict[str, Any] = cast(dict[str, Any], release.manifest_json)
+    resources = manifest_data.get("resources", [])
+    manifest_key = release.manifest_object_key or f"catalog/releases/{release.release_sequence}/manifest.json"
+
+    deleted = cleanup_dangling_objects(resources, manifest_key)
+    logger.info("reconcile_release_completed", extra={"release_id": str(release_id), "deleted": deleted})
+    return {"release_id": str(release_id), "dangling_deleted": deleted}
 
 
 # 公开目录查询端点
@@ -509,10 +613,12 @@ async def get_latest_emergency_disable_public_endpoint(
     if not disable:
         logger.warning("get_latest_emergency_disable_public_failed", extra={"reason": "not_found"})
         raise_problem(404, "EMERGENCY_DISABLE_NOT_FOUND", "No emergency disables found")
-    skill_ids = disable.payload_json.get("skill_ids", []) if disable.payload_json else []
+    payload = disable.payload_json or {}
     return {
         "id": str(disable.id),
         "sequence": disable.sequence,
-        "disabled_skill_ids": skill_ids,
+        "resource_type": payload.get("resource_type", ""),
+        "resource_id": payload.get("resource_id", ""),
+        "reason": payload.get("reason", ""),
         "created_at": disable.created_at,
     }

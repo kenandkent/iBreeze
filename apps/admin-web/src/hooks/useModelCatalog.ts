@@ -44,12 +44,3 @@ export function useValidateModel() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['models'] }),
   });
 }
-
-export function usePublishModel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      apiPost<ModelCatalogItem>(`/models/${id}/revisions`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['models'] }),
-  });
-}

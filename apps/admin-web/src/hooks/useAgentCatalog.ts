@@ -44,12 +44,3 @@ export function useValidateAgent() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   });
 }
-
-export function usePublishAgent() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      apiPost<AgentCatalogItem>(`/agents/${id}/publish`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
-  });
-}

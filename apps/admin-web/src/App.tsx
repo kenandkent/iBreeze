@@ -10,6 +10,7 @@ import ProviderCatalogPage from './pages/ProviderCatalogPage';
 import AdminUserPage from './pages/AdminUserPage';
 import ReleasePage from './pages/ReleasePage';
 import SkillPage from './pages/SkillPage';
+import EmergencyPage from './pages/EmergencyPage';
 import CompatibilityPage from './pages/CompatibilityPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminAuditLogPage from './pages/AdminAuditLogPage';
@@ -31,6 +32,7 @@ function App() {
               <Route path="providers" element={<ProviderCatalogPage />} />
               <Route path="users" element={<AdminUserPage />} />
               <Route path="releases" element={<ReleasePage />} />
+              <Route path="emergency" element={<EmergencyPage />} />
               <Route path="skills" element={<SkillPage />} />
               <Route path="compatibility" element={<CompatibilityPage />} />
               <Route path="settings" element={<SettingsPage />} />

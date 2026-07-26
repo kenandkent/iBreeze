@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost, apiDelete } from '../utils/apiClient';
+import { apiGet, apiPost, apiDelete, apiUpload } from '../utils/apiClient';
 import type { SkillCatalogItem } from '../types';
 
 export function useListSkills() {
@@ -27,11 +27,11 @@ export function useRemoveSkill() {
   });
 }
 
-export function useEmergencyDisableSkill() {
+export function useUploadSkillVersion() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiPost<void>(`/skills/${id}/validate`),
+    mutationFn: ({ skillId, formData }: { skillId: string; formData: FormData }) =>
+      apiUpload(`/skills/${skillId}/versions`, formData),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills'] }),
   });
 }

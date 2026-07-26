@@ -68,9 +68,11 @@ export interface ModelCatalogItem {
 
 export interface ProviderCatalogItem {
   id: string;
+  key: string;
   display_name: string;
-  base_url?: string;
-  api_protocol: string;
+  base_url: string;
+  protocol: string;
+  auth_scheme: string;
   status: 'draft' | 'validated' | 'published';
   created_at: string;
   updated_at: string;
@@ -96,6 +98,7 @@ export interface Release {
   signature: string;
   signing_key_id: string;
   release_sequence: number;
+  status: string;
   created_at: string;
 }
 
