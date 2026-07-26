@@ -106,26 +106,27 @@ class TestRestoreValidation:
                 tmp_dir / "backups", "nonexistent", tmp_dir / "target.db"
             )
 
-    async def test_restore_manifest_not_found(self, tmp_dir):
+    async def test_restore_archive_not_found(self, tmp_dir):
         backup_dir = tmp_dir / "backups"
         backup_dir.mkdir()
-        (backup_dir / "no-manifest").mkdir()
-        with pytest.raises(ValueError, match="MANIFEST_NOT_FOUND"):
+        (backup_dir / "no-archive").mkdir()
+        with pytest.raises(ValueError, match="ARCHIVE_NOT_FOUND"):
             await restore_backup(
-                backup_dir, "no-manifest", tmp_dir / "target.db"
+                backup_dir, "no-archive", tmp_dir / "target.db"
             )
 
     async def test_restore_hash_mismatch(self, db_path, tmp_dir):
         """BACK-003: Restore rejects tampered backup."""
         backup_dir = tmp_dir / "backups"
         result = await create_backup(db_path, backup_dir, backup_id="tamper")
-        manifest_path = backup_dir / "tamper" / "manifest.json"
+        manifest_path = next((backup_dir / "tamper").glob("*.manifest.json"))
         with open(manifest_path) as f:
             manifest = json.load(f)
-        manifest["database_hash"] = "0" * 64
+        old_hash = manifest.get("archive_sha256") or manifest.get("database_hash", "")
+        manifest["archive_sha256"] = "0" * 64
         with open(manifest_path, "w") as f:
             json.dump(manifest, f)
-        with pytest.raises(ValueError, match="MANIFEST_HASH_MISMATCH"):
+        with pytest.raises(ValueError, match="ARCHIVE_HASH_MISMATCH"):
             await restore_backup(
                 backup_dir,
                 "tamper",

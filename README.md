@@ -101,9 +101,9 @@ cd apps/desktop-core && cargo tauri dev
 ### 桌面客户端
 - 多 Agent 协作任务管理
 - 对话式交互界面
-- 本地知识库管理
+- 本地知识库管理（SQLite + LanceDB 向量索引，ACL 预授权）
 - 工作区配置
-- 自动更新与回滚恢复
+- 自动更新与回滚恢复（SQLite Online Backup 一致性快照 + tar.zst 打包）
 - 本地离线认证
 
 ### 管理后台

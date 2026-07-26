@@ -4,24 +4,6 @@
  */
 
 export interface paths {
-    "/admin/api/v1/agent-model-bindings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List All Agent Bindings Endpoint */
-        get: operations["list_all_agent_bindings_endpoint_admin_api_v1_agent_model_bindings_get"];
-        put?: never;
-        /** Create Agent Binding Top Level Endpoint */
-        post: operations["create_agent_binding_top_level_endpoint_admin_api_v1_agent_model_bindings_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/api/v1/agents": {
         parameters: {
             query?: never;
@@ -163,26 +145,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/api/v1/audit-logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Audit Logs
-         * @description 列出审计日志（带过滤条件）
-         */
-        get: operations["list_audit_logs_admin_api_v1_audit_logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -279,46 +241,6 @@ export interface paths {
         put?: never;
         /** Publish Release Endpoint */
         post: operations["publish_release_endpoint_admin_api_v1_catalog_releases__release_id__publish_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/api/v1/catalog/releases/{release_id}/reconcile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reconcile Release Endpoint */
-        post: operations["reconcile_release_endpoint_admin_api_v1_catalog_releases__release_id__reconcile_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/api/v1/catalog/validate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Validate Catalog Endpoint
-         * @description Validate all resources in the catalog (design §19.3).
-         *
-         *     Read-only: all validations run inside a savepoint that is rolled back
-         *     so resource statuses are never mutated by this endpoint.
-         */
-        post: operations["validate_catalog_endpoint_admin_api_v1_catalog_validate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -478,24 +400,6 @@ export interface paths {
         put?: never;
         /** Validate Model Endpoint */
         post: operations["validate_model_endpoint_admin_api_v1_models__resource_id__validate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/api/v1/provider-model-bindings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List All Provider Bindings Endpoint */
-        get: operations["list_all_provider_bindings_endpoint_admin_api_v1_provider_model_bindings_get"];
-        put?: never;
-        /** Create Provider Binding Top Level Endpoint */
-        post: operations["create_provider_binding_top_level_endpoint_admin_api_v1_provider_model_bindings_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -944,26 +848,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/catalog/compatibility": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Compatibility Rules Public
-         * @description 列出所有已发布的兼容性规则（公开端点）
-         */
-        get: operations["list_compatibility_rules_public_api_v1_catalog_compatibility_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/catalog/emergency-disables/latest": {
         parameters: {
             query?: never;
@@ -1075,26 +959,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/catalog/releases/{release_id}/resources/{resource_type}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Release Resources
-         * @description 获取指定 catalog release 中特定类型的资源
-         */
-        get: operations["get_release_resources_api_v1_catalog_releases__release_id__resources__resource_type__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/catalog/skills": {
         parameters: {
             query?: never;
@@ -1132,15 +996,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/health/live": {
+    "/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Liveness Check */
-        get: operations["liveness_check_health_live_get"];
+        /** Health Check */
+        get: operations["health_check_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1181,23 +1045,6 @@ export interface components {
         };
         /** AgentModelBindingCreate */
         AgentModelBindingCreate: {
-            /** Max Agent Version Exclusive */
-            max_agent_version_exclusive: string;
-            /** Min Agent Version */
-            min_agent_version: string;
-            /**
-             * Model Id
-             * Format: uuid
-             */
-            model_id: string;
-        };
-        /** AgentModelBindingCreateTopLevel */
-        AgentModelBindingCreateTopLevel: {
-            /**
-             * Agent Id
-             * Format: uuid
-             */
-            agent_id: string;
             /** Max Agent Version Exclusive */
             max_agent_version_exclusive: string;
             /** Min Agent Version */
@@ -1539,25 +1386,6 @@ export interface components {
              * Format: uuid
              */
             model_id: string;
-            /** Provider Model Name */
-            provider_model_name: string;
-            /** Request Defaults */
-            request_defaults?: {
-                [key: string]: unknown;
-            };
-        };
-        /** ProviderModelBindingCreateTopLevel */
-        ProviderModelBindingCreateTopLevel: {
-            /**
-             * Model Id
-             * Format: uuid
-             */
-            model_id: string;
-            /**
-             * Provider Id
-             * Format: uuid
-             */
-            provider_id: string;
             /** Provider Model Name */
             provider_model_name: string;
             /** Request Defaults */
@@ -2031,72 +1859,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_all_agent_bindings_endpoint_admin_api_v1_agent_model_bindings_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_agent_binding_top_level_endpoint_admin_api_v1_agent_model_bindings_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentModelBindingCreateTopLevel"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModelBindingResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_agents_endpoint_admin_api_v1_agents_get: {
         parameters: {
             query?: {
@@ -2520,43 +2282,6 @@ export interface operations {
             };
         };
     };
-    list_audit_logs_admin_api_v1_audit_logs_get: {
-        parameters: {
-            query?: {
-                actor_id?: string | null;
-                action?: string | null;
-                resource_type?: string | null;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     admin_change_password_endpoint_admin_api_v1_auth_change_password_post: {
         parameters: {
             query?: never;
@@ -2725,61 +2450,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reconcile_release_endpoint_admin_api_v1_catalog_releases__release_id__reconcile_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                release_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    validate_catalog_endpoint_admin_api_v1_catalog_validate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
         };
@@ -3251,72 +2921,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_all_provider_bindings_endpoint_admin_api_v1_provider_model_bindings_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_provider_binding_top_level_endpoint_admin_api_v1_provider_model_bindings_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderModelBindingCreateTopLevel"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderModelBindingResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4452,28 +4056,6 @@ export interface operations {
             };
         };
     };
-    list_compatibility_rules_public_api_v1_catalog_compatibility_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     get_latest_emergency_disable_public_endpoint_api_v1_catalog_emergency_disables_latest_get: {
         parameters: {
             query?: never;
@@ -4628,40 +4210,6 @@ export interface operations {
             };
         };
     };
-    get_release_resources_api_v1_catalog_releases__release_id__resources__resource_type__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                release_id: string;
-                resource_type: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_skills_endpoint_api_v1_catalog_skills_get: {
         parameters: {
             query?: never;
@@ -4716,7 +4264,7 @@ export interface operations {
             };
         };
     };
-    liveness_check_health_live_get: {
+    health_check_health_get: {
         parameters: {
             query?: never;
             header?: never;

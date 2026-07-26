@@ -8,6 +8,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from ibreeze.knowledge.generation import (
+    count_items_for_generation,
+    count_lancedb_items,
+    get_active_generation,
+)
 from ibreeze.schemas import KnowledgeItemCreate, KnowledgeItemResponse
 
 
@@ -395,15 +400,30 @@ async def check_consolidation(
     row = await cursor.fetchone()
     sqlite_count = row["sqlite_count"] if row else 0
 
-    lance_count = sqlite_count  # TODO: count LanceDB items when index is built
-    if sqlite_count != lance_count:  # pragma: no cover
+    lance_count = await count_lancedb_items(company_id)
+
+    active_gen = await get_active_generation(db, company_id)
+    gen_detail: dict[str, Any] | None = None
+    if active_gen:
+        sqlite_gen_count = await count_items_for_generation(db, active_gen["id"])
+        gen_detail = {
+            "generation_id": active_gen["id"],
+            "model_key": active_gen["model_key"],
+            "vector_dimension": active_gen["vector_dimension"],
+            "source_event_sequence": active_gen["source_event_sequence"],
+            "sqlite_item_count": sqlite_gen_count,
+        }
+
+    if sqlite_count != lance_count:
         return {
             "sqlite_count": sqlite_count,
             "lance_count": lance_count,
             "status": "inconsistent",
+            "active_generation": gen_detail,
         }
     return {
         "sqlite_count": sqlite_count,
         "lance_count": lance_count,
         "status": "consistent",
+        "active_generation": gen_detail,
     }

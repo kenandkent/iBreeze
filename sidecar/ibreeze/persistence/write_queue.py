@@ -33,6 +33,17 @@ class WriteQueue:
         await self._queue.put((command, future))
         return await future
 
+    async def barrier(self) -> None:
+        """Wait until all previously enqueued writes have completed.
+
+        If the worker is not started, this is a no-op.
+        """
+        if self._worker_task is None:
+            return None
+        async def _noop(_conn: aiosqlite.Connection) -> None:
+            return None
+        await self.execute(_noop)
+
     async def _run(self) -> None:
         assert self._db is not None
         while True:

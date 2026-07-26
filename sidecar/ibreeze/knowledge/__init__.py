@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from .generation import (
+    count_items_for_generation,
+    count_lancedb_items,
+    get_active_generation,
+    list_generations,
+)
 from .chunker import chunk_code, chunk_markdown, chunk_text
 from .embeddings import EmbeddingService, get_embedding_service
 from .hybrid_search import hybrid_search, reciprocal_rank_fusion
@@ -22,12 +28,16 @@ __all__ = [
     "chunk_markdown",
     "chunk_text",
     "check_consolidation",
+    "count_items_for_generation",
+    "count_lancedb_items",
     "EmbeddingService",
+    "get_active_generation",
     "get_embedding_service",
     "get_knowledge",
     "get_vector_store",
     "hybrid_search",
     "import_knowledge",
+    "list_generations",
     "list_knowledge",
     "permitted_knowledge_ids",
     "reciprocal_rank_fusion",
