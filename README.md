@@ -53,6 +53,7 @@ ibreeze/
 │  ├─ admin-web/        # 管理后台 React UI
 │  └─ backend-api/      # 管理后台 FastAPI
 ├─ sidecar/             # Python Sidecar
+├─ deploy/              # Docker Compose + Nginx + Dockerfile
 ├─ packages/
 │  ├─ contracts/        # JSON Schema 契约
 │  ├─ rpc-schema/       # 本地 RPC Schema
@@ -90,6 +91,9 @@ cd apps/desktop && npm install && cd ../..
 
 # 3. 运行验证
 bash scripts/verify-all.sh
+
+# 4. 桌面开发模式
+cd apps/desktop-core && cargo tauri dev
 ```
 
 ## 功能特性
@@ -99,12 +103,15 @@ bash scripts/verify-all.sh
 - 对话式交互界面
 - 本地知识库管理
 - 工作区配置
+- 自动更新与回滚恢复
+- 本地离线认证
 
 ### 管理后台
 - 用户管理（应用用户、管理员）
 - 目录管理（Agent、Model、Provider、Skill）
-- 安全管理（角色控制、紧急禁用）
+- 安全管理（角色控制、紧急禁用、紧急发布）
 - 审计日志
+- 目录发布管理（Draft → Validated → Published）
 
 ### 测试状态
 
