@@ -105,6 +105,28 @@ fn compute_path_state_hash(_path: &std::path::Path) -> Result<String, AppError> 
     Ok(String::new())
 }
 
+pub async fn handle_credential_http_start(
+    _request: CredentialHttpStart,
+) -> Result<(), AppError> {
+    Err(AppError::NotSupported(
+        "credential.http.start: not yet implemented".to_owned(),
+    ))
+}
+
+pub async fn handle_credential_http_cancel(
+    _request: CredentialHttpCancel,
+) -> Result<(), AppError> {
+    Err(AppError::NotSupported(
+        "credential.http.cancel: not yet implemented".to_owned(),
+    ))
+}
+
+pub async fn handle_credential_probe(_request: CredentialProbe) -> Result<bool, AppError> {
+    Err(AppError::NotSupported(
+        "credential.probe: not yet implemented".to_owned(),
+    ))
+}
+
 /// Allowed reverse methods from Sidecar to Rust
 pub const ALLOWED_REVERSE_METHODS: &[&str] = &[
     "credential.http.start",

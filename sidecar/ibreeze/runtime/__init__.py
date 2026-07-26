@@ -51,9 +51,8 @@ from ibreeze.runtime.scheduler import (
     update_fairness,
 )
 from ibreeze.runtime.transport import (
-    AnthropicTransport,
     ModelTransport,
-    OpenAITransport,
+    ReverseRpcTransport,
     UsageStats,
     create_transport,
 )
@@ -61,7 +60,6 @@ from ibreeze.runtime.transport import (
 __all__ = [
     "AgentLoopResult",
     "AgentProbe",
-    "AnthropicTransport",
     "Checkpoint",
     "ClaudeCodeAdapter",
     "CliAdapter",
@@ -70,10 +68,10 @@ __all__ = [
     "ModelRuntime",
     "ModelTransport",
     "ModelTurn",
-    "OpenAITransport",
     "OpenCodeAdapter",
     "ProcessResult",
     "ProcessSupervisor",
+    "ReverseRpcTransport",
     "RunNotFoundError",
     "RunValidationError",
     "ToolCall",

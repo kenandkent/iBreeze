@@ -10,15 +10,11 @@ import json
 import logging
 from typing import Any
 
-from ibreeze.runtime.cli import create_adapter
+from ibreeze.runtime.adapters.claude_code import ClaudeCodeAdapter
+from ibreeze.runtime.adapters.codex import CodexAdapter
+from ibreeze.runtime.adapters.opencode import OpenCodeAdapter
 from ibreeze.runtime.process_supervisor import get_supervisor
-from ibreeze.runtime.scheduler import (
-    acquire_lease,
-    dequeue_next,
-    heartbeat_lease,
-    release_lease,
-    update_fairness,
-)
+from ibreeze.runtime.scheduler import acquire_lease, dequeue_next, release_lease, update_fairness
 
 logger = logging.getLogger("ibreeze.run_executor")
 
@@ -52,7 +48,6 @@ async def execute_single_run(
 ) -> dict[str, Any]:
     """Execute a single dequeued run. Called by the consumer loop."""
     now = _now()
-    supervisor = get_supervisor()
 
     # Fetch run details
     run_row = await (await db.execute(
@@ -70,7 +65,6 @@ async def execute_single_run(
     run = dict(run_row)
     spec = json.loads(run["run_spec_json"])
     adapter_type = run["adapter_type"]
-    prompt = spec.get("prompt", "")
 
     # Transition: queued → probing → starting → running
     await db.execute(
@@ -135,7 +129,7 @@ async def execute_single_run(
 
 async def _probe_adapter(adapter_type: str) -> bool:
     """Check if the CLI adapter is available on this machine."""
-    from ibreeze.runtime.cli import probe_agent, AdapterName
+    from ibreeze.runtime.cli import probe_agent
     mapping = {"codex_cli": "codex_cli", "claude_code": "claude_code",
                "opencode": "opencode", "agent_cli": "codex_cli"}
     name = mapping.get(adapter_type)
@@ -151,23 +145,32 @@ async def _probe_adapter(adapter_type: str) -> bool:
 async def _execute_cli(
     run_id: str, spec: dict, adapter_type: str,
 ) -> dict[str, Any]:
-    """Execute a CLI adapter run."""
-    from ibreeze.runtime.process_supervisor import get_supervisor
+    """Execute a CLI adapter run using the structured adapter classes."""
+    import tempfile
+
     supervisor = get_supervisor()
 
-    mapping = {
-        "codex_cli": ("codex", ["--quiet"]),
-        "claude_code": ("claude", ["--print"]),
-        "opencode": ("opencode", ["--non-interactive"]),
-        "agent_cli": ("codex", ["--quiet"]),
-    }
-    executable, base_args = mapping.get(adapter_type, ("codex", ["--quiet"]))
+    adapter = _get_adapter(adapter_type)
+    if adapter is None:
+        return {"exit_code": -1, "stdout": "", "stderr": "UNKNOWN_ADAPTER_TYPE"}
+
     prompt = spec.get("prompt", "")
     timeout = spec.get("timeout_seconds", 300)
 
-    cmd = [executable, *base_args, prompt]
-    info = await supervisor.start(run_id, cmd, timeout=timeout)
-    result = await supervisor.wait(run_id, timeout=timeout)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        f.write(prompt)
+        prompt_file = f.name
+
+    try:
+        cmd = adapter.build_invocation(spec, prompt_file)
+        await supervisor.start(run_id, cmd, timeout=timeout)
+        result = await supervisor.wait(run_id, timeout=timeout)
+    finally:
+        import os
+        try:
+            os.unlink(prompt_file)
+        except OSError:
+            pass
 
     return {
         "exit_code": result.get("exit_code", -1),
@@ -176,17 +179,32 @@ async def _execute_cli(
     }
 
 
+def _get_adapter(adapter_type: str):
+    mapping = {
+        "codex_cli": CodexAdapter,
+        "claude_code": ClaudeCodeAdapter,
+        "opencode": OpenCodeAdapter,
+        "agent_cli": CodexAdapter,
+    }
+    cls = mapping.get(adapter_type)
+    if cls is None:
+        return None
+    return cls()
+
+
 async def _execute_model(run_id: str, spec: dict) -> dict[str, Any]:
-    """Execute an API Model run via ModelRuntime."""
+    """Execute an API Model run via ModelRuntime.
+
+    Uses credential_ref instead of api_key - the Rust side
+    resolves the credential_ref into actual credentials.
+    """
     from ibreeze.runtime.model_loop import ModelRuntime
     from ibreeze.runtime.transport import create_transport
 
-    binding = spec.get("model_binding", {})
-    provider = binding.get("provider", "openai")
-    model = binding.get("model", "gpt-4o")
-    api_key = binding.get("api_key", "")
+    credential_ref = spec.get("credential_ref", "")
+    model = spec.get("model", "gpt-4o")
 
-    transport = create_transport(provider, api_key=api_key, model=model)
+    transport = create_transport(credential_ref=credential_ref, model=model)
     runtime = ModelRuntime(transport, tools={}, max_turns=50)
 
     result = await runtime.run(

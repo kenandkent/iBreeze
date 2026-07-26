@@ -76,29 +76,22 @@ impl EgressBroker {
             Err(AppError::Unauthorized("Invalid egress token".to_owned()))
         }
     }
+
+    pub async fn validate_url(&self, url: &str, run_id: Uuid) -> Result<(), AppError> {
+        let leases = self.leases.read().await;
+        let lease = leases
+            .iter()
+            .find(|l| l.run_id == run_id && !l.cancelled)
+            .ok_or_else(|| {
+                AppError::NotFound("No active egress lease for this run".to_owned())
+            })?;
+        super::ssrf_guard::validate_outbound_url(url, &lease.allowed_domains).await
+    }
 }
 
 impl Default for EgressBroker {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub struct CredentialBroker;
-
-impl Default for CredentialBroker {
-    fn default() -> Self {
-        Self
-    }
-}
-
-impl CredentialBroker {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub async fn resolve_credential(&self, _credential_ref: &str) -> Result<String, AppError> {
-        Err(AppError::NotSupported("Credential broker stub".to_owned()))
     }
 }
 

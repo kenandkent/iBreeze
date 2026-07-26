@@ -8,21 +8,6 @@ import uuid
 import aiosqlite
 import pytest
 
-from ibreeze.runtime.gateway import (
-    RunNotFoundError,
-    RunValidationError,
-    cancel,
-    get_status,
-    resume,
-    start,
-)
-from ibreeze.runtime.transport import (
-    AnthropicTransport,
-    OpenAITransport,
-    UsageStats,
-    _parse_json,
-    create_transport,
-)
 from ibreeze.runtime.event_normalizer import (
     EVENT_TYPES,
     create_approval_event,
@@ -42,6 +27,20 @@ from ibreeze.runtime.event_normalizer import (
     create_workspace_changed_event,
     normalize_event,
     store_event,
+)
+from ibreeze.runtime.gateway import (
+    RunNotFoundError,
+    RunValidationError,
+    cancel,
+    get_status,
+    resume,
+    start,
+)
+from ibreeze.runtime.transport import (
+    ReverseRpcClient,
+    ReverseRpcTransport,
+    UsageStats,
+    create_transport,
 )
 
 
@@ -64,7 +63,9 @@ async def _setup_gateway_env(db: aiosqlite.Connection, company_id: str) -> None:
     await db.execute("PRAGMA foreign_keys = OFF")
     try:
         await db.execute(
-            """INSERT INTO company_revisions (id, company_id, revision_number, name, introduction, content_sha256, created_by_type, created_at)
+            """INSERT INTO company_revisions
+               (id, company_id, revision_number, name, introduction, content_sha256,
+                created_by_type, created_at)
                VALUES (?, ?, 1, 'Co', 'Intro', ?, 'system', ?)""",
             (rev_id, company_id, _sha256("co"), now),
         )
@@ -74,7 +75,9 @@ async def _setup_gateway_env(db: aiosqlite.Connection, company_id: str) -> None:
             (dept_conv_id, company_id, now),
         )
         await db.execute(
-            """INSERT INTO department_revisions (id, department_id, company_id, revision_number, name, function_description, content_sha256, created_at)
+            """INSERT INTO department_revisions
+               (id, department_id, company_id, revision_number, name,
+                function_description, content_sha256, created_at)
                VALUES (?, ?, ?, 1, 'Root', 'Root', ?, ?)""",
             (dept_rev_id, dept_id, company_id, _sha256("root"), now),
         )
@@ -308,48 +311,48 @@ class TestGatewayGetStatus:
 
 # ── transport ────────────────────────────────────────────────────────
 class TestTransport:
-    def test_parse_json_valid(self):
-        assert _parse_json('{"key": "value"}') == {"key": "value"}
-
-    def test_parse_json_invalid(self):
-        assert _parse_json("not json") == {}
-
-    def test_parse_json_non_dict(self):
-        assert _parse_json('"string"') == {}
-
-    def test_openai_transport_init(self):
-        t = OpenAITransport(api_key="test-key", model="gpt-4o")
-        assert t._api_key == "test-key"
+    def test_reverse_rpc_transport_init(self):
+        t = ReverseRpcTransport(credential_ref="cred-abc", model="gpt-4o")
+        assert t._credential_ref == "cred-abc"
         assert t._model == "gpt-4o"
 
-    def test_anthropic_transport_init(self):
-        t = AnthropicTransport(api_key="test-key")
-        assert t._api_key == "test-key"
-
-    def test_openai_normalize_usage(self):
-        t = OpenAITransport(api_key="k")
+    def test_reverse_rpc_transport_normalize_usage(self):
+        t = ReverseRpcTransport(credential_ref="c", model="m")
         stats = t.normalize_usage({"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30})
         assert isinstance(stats, UsageStats)
         assert stats.prompt_tokens == 10
         assert stats.total_tokens == 30
 
-    def test_anthropic_normalize_usage(self):
-        t = AnthropicTransport(api_key="k")
-        stats = t.normalize_usage({"input_tokens": 10, "output_tokens": 20})
-        assert stats.prompt_tokens == 10
-        assert stats.total_tokens == 30
+    def test_create_transport_returns_reverse_rpc(self):
+        t = create_transport(credential_ref="cred-1", model="gpt-4o")
+        assert isinstance(t, ReverseRpcTransport)
+        assert t._credential_ref == "cred-1"
 
-    def test_create_transport_openai(self):
-        t = create_transport("openai", api_key="k")
-        assert isinstance(t, OpenAITransport)
+    @pytest.mark.asyncio
+    async def test_reverse_rpc_transport_complete_uses_credential_http_start(self):
+        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+        result = await t.complete(
+            messages=({"role": "user", "content": "hello"},),
+            tool_names=("bash",),
+        )
+        assert result.content == ""
+        assert list(result.tool_calls) == []
+        # Verify the reverse RPC call was made with the right method
+        assert t._rpc.last_method == "credential.http.start"
 
-    def test_create_transport_anthropic(self):
-        t = create_transport("anthropic", api_key="k")
-        assert isinstance(t, AnthropicTransport)
+    @pytest.mark.asyncio
+    async def test_reverse_rpc_transport_probe_uses_credential_probe(self):
+        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+        ok = await t.probe()
+        assert ok is True
+        assert t._rpc.last_method == "credential.probe"
 
-    def test_create_transport_unsupported(self):
-        with pytest.raises(ValueError, match="Unsupported provider"):
-            create_transport("unknown", api_key="k")
+    @pytest.mark.asyncio
+    async def test_reverse_rpc_client_stores_last_call(self):
+        client = ReverseRpcClient()
+        await client.call("test.method", {"key": "val"})
+        assert client.last_method == "test.method"
+        assert client.last_params == {"key": "val"}
 
 
 # ── event_normalizer ─────────────────────────────────────────────────
@@ -446,7 +449,10 @@ class TestEventNormalizer:
         await _setup_gateway_env(db, company_id)
         await _create_task(db, company_id, task_id)
         emp_row = await (await db.execute("SELECT id FROM employees WHERE company_id=?", (company_id,))).fetchone()
-        conv_row = await (await db.execute("SELECT id FROM conversations WHERE company_id=? AND conversation_type='company'", (company_id,))).fetchone()
+        conv_row = await (await db.execute(
+            "SELECT id FROM conversations WHERE company_id=? AND conversation_type='company'",
+            (company_id,),
+        )).fetchone()
         await _create_run(db, company_id, run_id, task_id, emp_row["id"], conv_row["id"])
         ev = create_run_started(run_id, 1, employee_id=emp_row["id"], model_id="gpt-4o")
         eid = await store_event(db, ev)

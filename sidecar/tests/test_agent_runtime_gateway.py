@@ -1,38 +1,36 @@
 """Tests for Agent Runtime Gateway modules."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from ibreeze.events import (
+    EventEnvelope,
+    EventPublisher,
+    EventType,
+    deserialize_event,
+    serialize_event,
+)
 from ibreeze.runtime.cli import (
+    AgentProbe,
+    ClaudeCodeAdapter,
     CliAdapter,
     CodexCliAdapter,
-    ClaudeCodeAdapter,
     OpenCodeAdapter,
-    AgentProbe,
-    ProcessResult,
     create_adapter,
     probe_agent,
 )
 from ibreeze.runtime.model_loop import (
     AgentLoopResult,
-    Checkpoint,
     ModelRuntime,
     ModelTurn,
     ToolCall,
     ToolPermission,
 )
 from ibreeze.runtime.transport import (
-    AnthropicTransport,
-    OpenAITransport,
+    ReverseRpcTransport,
     UsageStats,
     create_transport,
-)
-from ibreeze.events import (
-    EventEnvelope,
-    EventPublisher,
-    EventType,
-    serialize_event,
-    deserialize_event,
 )
 
 
@@ -201,20 +199,13 @@ class TestTransport:
         assert stats.completion_tokens == 20
         assert stats.total_tokens == 30
 
-    def test_create_transport_openai(self):
-        transport = create_transport("openai", api_key="test-key")
-        assert isinstance(transport, OpenAITransport)
+    def test_create_transport(self):
+        transport = create_transport(credential_ref="cred-1", model="gpt-4o")
+        assert isinstance(transport, ReverseRpcTransport)
+        assert transport._credential_ref == "cred-1"
 
-    def test_create_transport_anthropic(self):
-        transport = create_transport("anthropic", api_key="test-key")
-        assert isinstance(transport, AnthropicTransport)
-
-    def test_create_transport_unsupported(self):
-        with pytest.raises(ValueError, match="Unsupported provider"):
-            create_transport("unsupported", api_key="test-key")
-
-    def test_openai_normalize_usage(self):
-        transport = OpenAITransport(api_key="test")
+    def test_reverse_rpc_normalize_usage(self):
+        transport = ReverseRpcTransport(credential_ref="c", model="m")
         stats = transport.normalize_usage({
             "prompt_tokens": 100,
             "completion_tokens": 50,
@@ -224,42 +215,11 @@ class TestTransport:
         assert stats.completion_tokens == 50
         assert stats.total_tokens == 150
 
-    def test_anthropic_normalize_usage(self):
-        transport = AnthropicTransport(api_key="test")
-        stats = transport.normalize_usage({
-            "input_tokens": 100,
-            "output_tokens": 50,
-        })
-        assert stats.prompt_tokens == 100
-        assert stats.completion_tokens == 50
-        assert stats.total_tokens == 150
-
-    def test_openai_transport_init(self):
-        transport = OpenAITransport(api_key="test", model="gpt-4", base_url="https://api.openai.com/v1")
-        assert transport._api_key == "test"
-        assert transport._model == "gpt-4"
-        assert transport._base_url == "https://api.openai.com/v1"
-
-    def test_anthropic_transport_init(self):
-        transport = AnthropicTransport(api_key="test", model="claude-3", base_url="https://api.anthropic.com")
-        assert transport._api_key == "test"
-        assert transport._model == "claude-3"
-        assert transport._base_url == "https://api.anthropic.com"
-
-    def test_parse_json_valid(self):
-        from ibreeze.runtime.transport import _parse_json
-        result = _parse_json('{"key": "value"}')
-        assert result == {"key": "value"}
-
-    def test_parse_json_invalid(self):
-        from ibreeze.runtime.transport import _parse_json
-        result = _parse_json("invalid json")
-        assert result == {}
-
-    def test_parse_json_non_dict(self):
-        from ibreeze.runtime.transport import _parse_json
-        result = _parse_json('[1, 2, 3]')
-        assert result == {}
+    def test_reverse_rpc_transport_init(self):
+        transport = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+        assert transport._credential_ref == "cred-1"
+        assert transport._model == "gpt-4o"
+        assert not hasattr(transport, "_base_url")
 
 
 class TestEvents:
