@@ -8,7 +8,6 @@ import type { KnowledgeEntry } from '../types';
 import {
   useListKnowledgeEntries,
   useCreateKnowledgeEntry,
-  useUpdateKnowledgeEntry,
   useArchiveKnowledgeEntry,
 } from '../hooks/useKnowledge';
 import { logger } from '../utils/logger';
@@ -29,9 +28,9 @@ export default function KnowledgePage() {
   const [viewEntry, setViewEntry] = useState<KnowledgeEntry | null>(null);
   const [form] = Form.useForm();
 
-  const { data, isLoading } = useListKnowledgeEntries();
+  const companyId = 'default';
+  const { data, isLoading } = useListKnowledgeEntries(companyId);
   const createMutation = useCreateKnowledgeEntry();
-  const updateMutation = useUpdateKnowledgeEntry();
   const archiveMutation = useArchiveKnowledgeEntry();
 
   const entries = data ?? [];
@@ -52,18 +51,18 @@ export default function KnowledgePage() {
   const handleSave = async () => {
     const values = await form.validateFields();
     try {
-      if (editingEntry) {
-        logger.info('KnowledgePage', 'update_start', { id: editingEntry.id });
-        await updateMutation.mutateAsync({ id: editingEntry.id, ...values });
-      } else {
-        logger.info('KnowledgePage', 'create_start');
-        await createMutation.mutateAsync(values);
-      }
+      logger.info('KnowledgePage', 'create_start');
+      await createMutation.mutateAsync({
+        company_id: companyId,
+        title: values.title,
+        content: values.content,
+        visibility: 'company',
+      });
       setDrawerOpen(false);
     } catch (e) {
       const err = e as Record<string, unknown>;
       const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('KnowledgePage', editingEntry ? 'update_failed' : 'create_failed', msg, { id: editingEntry?.id });
+      logger.error('KnowledgePage', 'create_failed', msg);
     }
   };
 
@@ -106,7 +105,7 @@ export default function KnowledgePage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewEntry(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           {record.status === 'active' && (
-            <Popconfirm title="确认归档？" onConfirm={async () => { logger.logAction('KnowledgePage', 'archive_entry'); try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', msg, { id: record.id }); } }}>
+            <Popconfirm title="确认归档？" onConfirm={async () => { logger.logAction('KnowledgePage', 'archive_entry'); try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync({ company_id: companyId, item_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', msg, { id: record.id }); } }}>
               <Button size="small" icon={<InboxOutlined />}>归档</Button>
             </Popconfirm>
           )}
@@ -182,7 +181,7 @@ export default function KnowledgePage() {
         onClose={() => setDrawerOpen(false)}
         width={480}
         extra={
-          <Button type="primary" onClick={handleSave} loading={createMutation.isPending || updateMutation.isPending}>
+          <Button type="primary" onClick={handleSave} loading={createMutation.isPending}>
             {editingEntry ? '更新' : '保存'}
           </Button>
         }

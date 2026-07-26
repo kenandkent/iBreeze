@@ -3,13 +3,13 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Workspace } from '../types';
 import { logger } from '../utils/logger';
 
-export function useListWorkspaces() {
+export function useListWorkspaces(companyId: string) {
   return useQuery({
-    queryKey: ['workspaces'],
+    queryKey: ['workspaces', companyId],
     queryFn: async (): Promise<Workspace[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<Workspace[]>('rpc_request', { method: 'workspace.list', params: {} });
+        const result = await invoke<Workspace[]>('rpc_request', { method: 'workspace.list', params: { company_id: companyId } });
         logger.logHookSuccess('useWorkspace', 'workspace.list', performance.now() - start);
         return result;
       } catch (e) {
@@ -17,16 +17,17 @@ export function useListWorkspaces() {
         throw e;
       }
     },
+    enabled: !!companyId,
   });
 }
 
-export function useGetWorkspace(id: string) {
+export function useGetWorkspace(companyId: string, workspaceId: string) {
   return useQuery({
-    queryKey: ['workspaces', id],
+    queryKey: ['workspaces', workspaceId],
     queryFn: async (): Promise<Workspace> => {
       const start = performance.now();
       try {
-        const result = await invoke<Workspace>('rpc_request', { method: 'workspace.get', params: { id } });
+        const result = await invoke<Workspace>('rpc_request', { method: 'workspace.get', params: { company_id: companyId, workspace_id: workspaceId } });
         logger.logHookSuccess('useWorkspace', 'workspace.get', performance.now() - start);
         return result;
       } catch (e) {
@@ -34,21 +35,21 @@ export function useGetWorkspace(id: string) {
         throw e;
       }
     },
-    enabled: !!id,
+    enabled: !!companyId && !!workspaceId,
   });
 }
 
-export function useCreateWorkspace() {
+export function useApplyWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string }) => {
+    mutationFn: async (params: { company_id: string; workspace_id: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke<Workspace>('rpc_request', { method: 'workspace.get', params: { name: data.name } });
-        logger.logHookSuccess('useWorkspace', 'workspace.create', performance.now() - start);
+        const result = await invoke('rpc_request', { method: 'workspace.apply', params: { company_id: params.company_id, workspace_id: params.workspace_id } });
+        logger.logHookSuccess('useWorkspace', 'workspace.apply', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('useWorkspace', 'workspace.create', e as Error, performance.now() - start);
+        logger.logHookError('useWorkspace', 'workspace.apply', e as Error, performance.now() - start);
         throw e;
       }
     },
@@ -58,75 +59,16 @@ export function useCreateWorkspace() {
   });
 }
 
-export function useUpdateWorkspace() {
+export function useAbandonWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { id: string; name?: string }) => {
+    mutationFn: async (params: { company_id: string; workspace_id: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke<Workspace>('rpc_request', { method: 'workspace.apply', params: { name: data.name || '' } });
-        logger.logHookSuccess('useWorkspace', 'workspace.update', performance.now() - start);
-        return result;
+        await invoke('rpc_request', { method: 'workspace.abandon', params: { company_id: params.company_id, workspace_id: params.workspace_id } });
+        logger.logHookSuccess('useWorkspace', 'workspace.abandon', performance.now() - start);
       } catch (e) {
-        logger.logHookError('useWorkspace', 'workspace.update', e as Error, performance.now() - start);
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    },
-  });
-}
-
-export function useDeleteWorkspace() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (_id: string) => {
-      const start = performance.now();
-      try {
-        await invoke('rpc_request', { method: 'workspace.abandon', params: { id: _id } });
-        logger.logHookSuccess('useWorkspace', 'workspace.delete', performance.now() - start);
-      } catch (e) {
-        logger.logHookError('useWorkspace', 'workspace.delete', e as Error, performance.now() - start);
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    },
-  });
-}
-
-export function useAddWorkspaceMember() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (_data: { workspace_id: string; user_id: string }) => {
-      const start = performance.now();
-      try {
-        const result = await invoke('rpc_request', { method: 'workspace.get', params: { workspace_id: _data.workspace_id, user_id: _data.user_id } });
-        logger.logHookSuccess('useWorkspace', 'workspace.addMember', performance.now() - start);
-        return result;
-      } catch (e) {
-        logger.logHookError('useWorkspace', 'workspace.addMember', e as Error, performance.now() - start);
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    },
-  });
-}
-
-export function useRemoveWorkspaceMember() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (_data: { workspace_id: string; member_id: string }) => {
-      const start = performance.now();
-      try {
-        await invoke('rpc_request', { method: 'workspace.abandon', params: { workspace_id: _data.workspace_id, member_id: _data.member_id } });
-        logger.logHookSuccess('useWorkspace', 'workspace.removeMember', performance.now() - start);
-      } catch (e) {
-        logger.logHookError('useWorkspace', 'workspace.removeMember', e as Error, performance.now() - start);
+        logger.logHookError('useWorkspace', 'workspace.abandon', e as Error, performance.now() - start);
         throw e;
       }
     },

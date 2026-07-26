@@ -12,7 +12,8 @@ export default function DepartmentPage() {
   useEffect(() => { logger.logPageInit('DepartmentPage'); }, []);
 
   const companyId = 'default';
-  const { data: departments = [], isLoading } = useListDepartments(companyId);
+  const { data: deptData, isLoading } = useListDepartments(companyId);
+  const departments = deptData?.items ?? [];
   const createDept = useCreateDepartment();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,7 +38,13 @@ export default function DepartmentPage() {
   const handleSubmit = async () => {
     logger.logAction('DepartmentPage', editingId ? 'edit_department' : 'create_department');
     const values = await form.validateFields();
-    await createDept.mutateAsync({ company_id: companyId, ...values });
+    await createDept.mutateAsync({
+      company_id: companyId,
+      name: values.name,
+      function_description: values.description || values.name,
+      leader_name: '部门负责人',
+      base_profile_version_id: '',
+    });
     message.success(editingId ? '更新成功' : '创建成功');
     setModalOpen(false);
     form.resetFields();

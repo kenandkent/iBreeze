@@ -13,8 +13,10 @@ export default function EmployeePage() {
   useEffect(() => { logger.logPageInit('EmployeePage'); }, []);
 
   const companyId = 'default';
-  const { data: employees = [], isLoading } = useListEmployees(companyId);
-  const { data: departments = [] } = useListDepartments(companyId);
+  const { data: empData, isLoading } = useListEmployees(companyId);
+  const employees = empData?.items ?? [];
+  const { data: deptData } = useListDepartments(companyId);
+  const departments = deptData?.items ?? [];
   const createEmp = useCreateEmployee();
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
@@ -40,7 +42,13 @@ export default function EmployeePage() {
   const handleSubmit = async () => {
     logger.logAction('EmployeePage', 'create_employee');
     const values = await form.validateFields();
-    await createEmp.mutateAsync({ company_id: companyId, ...values });
+    await createEmp.mutateAsync({
+      company_id: companyId,
+      department_id: values.department_id,
+      display_name: values.display_name,
+      base_profile_version_id: '',
+      workflow_role: values.role === 'general_manager' ? 'general_manager' : values.role === 'department_head' ? 'department_leader' : 'member',
+    });
     message.success('创建成功');
     setModalOpen(false);
     form.resetFields();

@@ -22,8 +22,9 @@ const statusLabel: Record<string, string> = {
 export default function AgentPage() {
   useEffect(() => { logger.logPageInit('AgentPage'); }, []);
 
+  const companyId = 'default';
   const [messageInputs, setMessageInputs] = useState<Record<string, string>>({});
-  const { data: agents, isLoading } = useListAgents();
+  const { data: agents, isLoading } = useListAgents(companyId);
   const runMutation = useRunAgent();
   const stopMutation = useStopAgent();
 
@@ -32,7 +33,7 @@ export default function AgentPage() {
     if (!msg?.trim()) return;
     try {
       logger.info('AgentPage', 'run_start', { agentId });
-      await runMutation.mutateAsync({ agent_id: agentId, message: msg });
+      await runMutation.mutateAsync({ company_id: companyId, agent_id: agentId, message: msg });
       setMessageInputs((prev) => ({ ...prev, [agentId]: '' }));
     } catch (e) {
       const err = e as Record<string, unknown>;
@@ -75,7 +76,7 @@ export default function AgentPage() {
                       icon={<PoweroffOutlined />}
                       disabled={agent.status === 'stopped'}
                       loading={stopMutation.isPending}
-                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync(agent.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', msg, { agentId: agent.id }); } }}
+                      onClick={async () => { try { logger.info('AgentPage', 'stop_start', { agentId: agent.id }); await stopMutation.mutateAsync({ company_id: companyId, agent_id: agent.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('AgentPage', 'stop_failed', msg, { agentId: agent.id }); } }}
                     >
                       停止
                     </Button>

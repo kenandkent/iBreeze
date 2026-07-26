@@ -592,6 +592,8 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
             | "profile.publish"
             | "profile.retireVersion"
             | "profile.retire"
+            | "conversation.create"
+            | "conversation.archive"
             | "conversation.submitUserMessage"
             | "task.confirmPlan"
             | "task.requestPlanRevision"
@@ -603,6 +605,8 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
             | "departmentTask.replaceEmployee"
             | "runtime.probeAgent"
             | "runtime.probeProvider"
+            | "runtime.run"
+            | "runtime.stop"
             | "run.cancel"
             | "run.resume"
             | "approval.resolve"
@@ -632,6 +636,7 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
             | "employee.list"
             | "profile.get"
             | "profile.list"
+            | "conversation.list"
             | "conversation.getCompany"
             | "conversation.getDepartment"
             | "conversation.listMessages"
@@ -648,6 +653,7 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
             | "approval.listPending"
             | "artifact.list"
             | "artifact.getSnapshot"
+            | "workspace.list"
             | "workspace.get"
             | "review.listIssues"
             | "catalog.getActiveRelease"
@@ -693,5 +699,7 @@ mod tests {
         }
         assert!(!sidecar_method_kind("company.list").expect("read"));
         assert!(sidecar_method_kind("company.create").expect("write"));
+        assert!(!sidecar_method_kind("conversation.list").expect("read"));
+        assert!(sidecar_method_kind("conversation.create").expect("write"));
     }
 }

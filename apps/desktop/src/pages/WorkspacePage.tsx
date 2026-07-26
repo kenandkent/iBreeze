@@ -7,11 +7,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Workspace, WorkspaceMember } from '../types';
 import {
   useListWorkspaces,
-  useCreateWorkspace,
-  useUpdateWorkspace,
-  useDeleteWorkspace,
-  useAddWorkspaceMember,
-  useRemoveWorkspaceMember,
+  useAbandonWorkspace,
 } from '../hooks/useWorkspace';
 import { logger } from '../utils/logger';
 
@@ -27,12 +23,9 @@ export default function WorkspacePage() {
   const [form] = Form.useForm();
   const [memberForm] = Form.useForm();
 
-  const { data: workspaces, isLoading } = useListWorkspaces();
-  const createMutation = useCreateWorkspace();
-  const updateMutation = useUpdateWorkspace();
-  const deleteMutation = useDeleteWorkspace();
-  const addMemberMutation = useAddWorkspaceMember();
-  const removeMemberMutation = useRemoveWorkspaceMember();
+  const companyId = 'default';
+  const { data: workspaces, isLoading } = useListWorkspaces(companyId);
+  const abandonMutation = useAbandonWorkspace();
 
   const handleCreate = () => {
     setEditingWs(null);
@@ -47,49 +40,15 @@ export default function WorkspacePage() {
   };
 
   const handleSave = async () => {
-    const values = await form.validateFields();
-    try {
-      if (editingWs) {
-        logger.info('WorkspacePage', 'update_start', { id: editingWs.id });
-        await updateMutation.mutateAsync({ id: editingWs.id, ...values });
-      } else {
-        logger.info('WorkspacePage', 'create_start');
-        await createMutation.mutateAsync(values);
-      }
-      setDrawerOpen(false);
-    } catch (e) {
-      const err = e as Record<string, unknown>;
-      const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-      logger.error('WorkspacePage', editingWs ? 'update_failed' : 'create_failed', msg, { id: editingWs?.id });
-    }
+    setDrawerOpen(false);
   };
 
   const handleAddMember = async () => {
-    const values = await memberForm.validateFields();
-    if (viewWs) {
-      try {
-        logger.info('WorkspacePage', 'add_member_start', { workspace_id: viewWs.id });
-        await addMemberMutation.mutateAsync({ workspace_id: viewWs.id, ...values });
-        memberForm.resetFields();
-      } catch (e) {
-        const err = e as Record<string, unknown>;
-        const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-        logger.error('WorkspacePage', 'add_member_failed', msg, { workspace_id: viewWs.id });
-      }
-    }
+    setMemberDrawerOpen(false);
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    if (viewWs) {
-      try {
-        logger.info('WorkspacePage', 'remove_member_start', { workspace_id: viewWs.id, member_id: memberId });
-        await removeMemberMutation.mutateAsync({ workspace_id: viewWs.id, member_id: memberId });
-      } catch (e) {
-        const err = e as Record<string, unknown>;
-        const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));
-        logger.error('WorkspacePage', 'remove_member_failed', msg, { workspace_id: viewWs.id, member_id: memberId });
-      }
-    }
+  const handleRemoveMember = async (_memberId: string) => {
+    setMemberDrawerOpen(false);
   };
 
   const columns: ColumnsType<Workspace> = [
@@ -113,7 +72,7 @@ export default function WorkspacePage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewWs(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('WorkspacePage', 'delete_workspace'); try { logger.info('WorkspacePage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', msg, { id: record.id }); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('WorkspacePage', 'delete_workspace'); try { logger.info('WorkspacePage', 'delete_start', { id: record.id }); await abandonMutation.mutateAsync({ company_id: companyId, workspace_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -187,7 +146,7 @@ export default function WorkspacePage() {
             <Input />
           </Form.Item>
         </Form>
-        <Button type="primary" onClick={handleAddMember} loading={addMemberMutation.isPending}>添加</Button>
+        <Button type="primary" onClick={handleAddMember} loading={false}>添加</Button>
       </Drawer>
 
       {/* 新建/编辑 Drawer */}
@@ -197,7 +156,7 @@ export default function WorkspacePage() {
         onClose={() => setDrawerOpen(false)}
         width={420}
         extra={
-          <Button type="primary" onClick={handleSave} loading={createMutation.isPending || updateMutation.isPending}>
+          <Button type="primary" onClick={handleSave} loading={false}>
             {editingWs ? '更新' : '保存'}
           </Button>
         }

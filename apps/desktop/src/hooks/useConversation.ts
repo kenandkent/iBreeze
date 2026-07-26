@@ -3,13 +3,13 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Conversation, Message } from '../types';
 import { logger } from '../utils/logger';
 
-export function useListConversations() {
+export function useListConversations(companyId: string) {
   return useQuery({
-    queryKey: ['conversations'],
+    queryKey: ['conversations', companyId],
     queryFn: async (): Promise<Conversation[]> => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation[]>('rpc_request', { method: 'conversation.list', params: {} });
+        const result = await invoke<Conversation[]>('rpc_request', { method: 'conversation.list', params: { company_id: companyId } });
         logger.logHookSuccess('useConversation', 'conversation.list', performance.now() - start);
         return result;
       } catch (e) {
@@ -17,16 +17,17 @@ export function useListConversations() {
         throw e;
       }
     },
+    enabled: !!companyId,
   });
 }
 
-export function useGetConversation(id: string) {
+export function useGetConversation(companyId: string, conversationId: string) {
   return useQuery({
-    queryKey: ['conversations', id],
+    queryKey: ['conversations', conversationId],
     queryFn: async (): Promise<Conversation> => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.get', params: { id } });
+        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.getCompany', params: { company_id: companyId } });
         logger.logHookSuccess('useConversation', 'conversation.get', performance.now() - start);
         return result;
       } catch (e) {
@@ -34,17 +35,20 @@ export function useGetConversation(id: string) {
         throw e;
       }
     },
-    enabled: !!id,
+    enabled: !!companyId && !!conversationId,
   });
 }
 
-export function useListMessages(conversationId: string) {
+export function useListMessages(companyId: string, conversationId: string) {
   return useQuery({
     queryKey: ['messages', conversationId],
-    queryFn: async (): Promise<Message[]> => {
+    queryFn: async (): Promise<{ items: Message[]; next_cursor: string | null; has_more: boolean }> => {
       const start = performance.now();
       try {
-        const result = await invoke<Message[]>('rpc_request', { method: 'conversation.listMessages', params: { conversationId } });
+        const result = await invoke<{ items: Message[]; next_cursor: string | null; has_more: boolean }>(
+          'rpc_request',
+          { method: 'conversation.listMessages', params: { company_id: companyId, conversation_id: conversationId, cursor: null, limit: 50 } },
+        );
         logger.logHookSuccess('useConversation', 'conversation.listMessages', performance.now() - start);
         return result;
       } catch (e) {
@@ -52,17 +56,17 @@ export function useListMessages(conversationId: string) {
         throw e;
       }
     },
-    enabled: !!conversationId,
+    enabled: !!companyId && !!conversationId,
   });
 }
 
 export function useCreateConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { title: string }) => {
+    mutationFn: async (data: { company_id: string; title: string }) => {
       const start = performance.now();
       try {
-        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.create', params: { title: data.title } });
+        const result = await invoke<Conversation>('rpc_request', { method: 'conversation.create', params: { company_id: data.company_id, title: data.title } });
         logger.logHookSuccess('useConversation', 'conversation.create', performance.now() - start);
         return result;
       } catch (e) {
@@ -79,10 +83,10 @@ export function useCreateConversation() {
 export function useArchiveConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (params: { company_id: string; conversation_id: string }) => {
       const start = performance.now();
       try {
-        await invoke('rpc_request', { method: 'conversation.archive', params: { id } });
+        await invoke('rpc_request', { method: 'conversation.archive', params: { company_id: params.company_id, conversation_id: params.conversation_id } });
         logger.logHookSuccess('useConversation', 'conversation.archive', performance.now() - start);
       } catch (e) {
         logger.logHookError('useConversation', 'conversation.archive', e as Error, performance.now() - start);
@@ -98,15 +102,15 @@ export function useArchiveConversation() {
 export function useAddMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { conversationId: string; content: string; role: string }) => {
+    mutationFn: async (data: { company_id: string; conversationId: string; content: string }) => {
       const start = performance.now();
       try {
         const result = await invoke<Message>('rpc_request', {
           method: 'conversation.submitUserMessage',
           params: {
-            conversationId: data.conversationId,
+            company_id: data.company_id,
+            conversation_id: data.conversationId,
             content: data.content,
-            role: data.role,
           },
         });
         logger.logHookSuccess('useConversation', 'conversation.submitUserMessage', performance.now() - start);

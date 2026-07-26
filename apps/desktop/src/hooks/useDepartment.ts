@@ -6,10 +6,13 @@ import { logger } from '../utils/logger';
 export function useListDepartments(companyId: string) {
   return useQuery({
     queryKey: ['departments', companyId],
-    queryFn: async (): Promise<Department[]> => {
+    queryFn: async (): Promise<{ items: Department[]; next_cursor: string | null; has_more: boolean }> => {
       const start = performance.now();
       try {
-        const result = await invoke<Department[]>('rpc_request', { method: 'department.list', params: { company_id: companyId } });
+        const result = await invoke<{ items: Department[]; next_cursor: string | null; has_more: boolean }>(
+          'rpc_request',
+          { method: 'department.list', params: { company_id: companyId, filter: {}, cursor: null, limit: 50 } },
+        );
         logger.logHookSuccess('useDepartment', 'department.list', performance.now() - start);
         return result;
       } catch (e) {
@@ -24,7 +27,13 @@ export function useListDepartments(companyId: string) {
 export function useCreateDepartment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { company_id: string; name: string; description?: string }) => {
+    mutationFn: async (params: {
+      company_id: string;
+      name: string;
+      function_description: string;
+      leader_name: string;
+      base_profile_version_id: string;
+    }) => {
       const start = performance.now();
       try {
         const result = await invoke('rpc_request', { method: 'department.create', params });
@@ -35,6 +44,8 @@ export function useCreateDepartment() {
         throw e;
       }
     },
-    onSuccess: (_: unknown, vars: { company_id: string; name: string; description?: string }) => { qc.invalidateQueries({ queryKey: ['departments', vars.company_id] }); },
+    onSuccess: (_: unknown, vars: { company_id: string; name: string; function_description: string; leader_name: string; base_profile_version_id: string }) => {
+      qc.invalidateQueries({ queryKey: ['departments', vars.company_id] });
+    },
   });
 }

@@ -20,7 +20,8 @@ export default function CompanyPage() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [form] = Form.useForm();
 
-  const { data, isLoading } = useListCompanies({ search, status: statusFilter === 'all' ? undefined : statusFilter });
+  const { data: companyData, isLoading } = useListCompanies({ filter: search ? { search } : undefined });
+  const companies = companyData?.items ?? [];
   const createMutation = useCreateCompany();
   const updateMutation = useUpdateCompany();
   const deleteMutation = useDeleteCompany();
@@ -42,10 +43,10 @@ export default function CompanyPage() {
     try {
       if (editingCompany) {
         logger.info('CompanyPage', 'update_start', { id: editingCompany.id });
-        await updateMutation.mutateAsync({ id: editingCompany.id, ...values });
+        await updateMutation.mutateAsync({ company_id: editingCompany.id, name: values.name, introduction: values.industry || '', expected_version: (editingCompany as unknown as { version: number }).version ?? 1 });
       } else {
         logger.info('CompanyPage', 'create_start');
-        await createMutation.mutateAsync(values);
+        await createMutation.mutateAsync({ name: values.name, introduction: values.industry || '', general_manager_name: '总经理', base_profile_version_id: '' });
       }
       setDrawerOpen(false);
     } catch (e) {
@@ -79,7 +80,7 @@ export default function CompanyPage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => { setEditingCompany(record); setDrawerOpen(true); }} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('CompanyPage', 'delete_company'); try { logger.info('CompanyPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync(record.id); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));         logger.error('CompanyPage', 'delete_failed', msg, { id: record.id }); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('CompanyPage', 'delete_company'); try { logger.info('CompanyPage', 'delete_start', { id: record.id }); await deleteMutation.mutateAsync({ company_id: record.id, expected_version: (record as unknown as { version: number }).version ?? 1 }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e));         logger.error('CompanyPage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -108,7 +109,7 @@ export default function CompanyPage() {
         </Space>
       </div>
 
-      <Table columns={columns} dataSource={data ?? []} rowKey="id" loading={isLoading} />
+      <Table columns={columns} dataSource={companies} rowKey="id" loading={isLoading} />
 
       <Drawer
         title={editingCompany ? '编辑企业' : '新建企业'}

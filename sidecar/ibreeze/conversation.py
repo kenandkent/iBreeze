@@ -124,6 +124,69 @@ async def list_messages(
     return [_message(row) for row in await cursor.fetchall()]
 
 
+async def list_conversations(
+    db: Any,
+    company_id: str,
+) -> list[ConversationResponse]:
+    cursor = await db.execute(
+        "SELECT * FROM conversations WHERE company_id=? ORDER BY created_at DESC",
+        (company_id,),
+    )
+    rows = await cursor.fetchall()
+    return [_conversation(row) for row in rows]
+
+
+async def create_conversation(
+    db: Any,
+    company_id: str,
+    title: str,
+) -> ConversationResponse:
+    cursor = await db.execute(
+        "SELECT status FROM companies WHERE id=?", (company_id,)
+    )
+    company = await _one(cursor)
+    if company is None or company["status"] != "active":
+        raise ValueError("RESOURCE_NOT_FOUND")
+    conv_id = _id()
+    now = _now()
+    await db.execute(
+        """INSERT INTO conversations
+           (id, company_id, conversation_type, status, created_at)
+           VALUES (?, ?, 'company', 'active', ?)""",
+        (conv_id, company_id, now),
+    )
+    await db.commit()
+    return ConversationResponse(
+        id=conv_id,
+        company_id=company_id,
+        conversation_type="company",
+        department_id=None,
+        status="active",
+        created_at=_dt(now),
+    )
+
+
+async def archive_conversation(
+    db: Any,
+    company_id: str,
+    conversation_id: str,
+) -> dict[str, str]:
+    cursor = await db.execute(
+        "SELECT id FROM conversations WHERE id=? AND company_id=?",
+        (conversation_id, company_id),
+    )
+    row = await _one(cursor)
+    if row is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    now = _now()
+    await db.execute(
+        "UPDATE conversations SET status='archived' WHERE id=? AND company_id=?",
+        (conversation_id, company_id),
+    )
+    await db.commit()
+    return {"archived_at": now}
+
+
 async def submit_user_message(
     db: Any,
     data: SubmitUserMessageRequest,

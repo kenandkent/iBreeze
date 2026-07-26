@@ -13,9 +13,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ibreeze_backend.api.errors import raise_problem
+from ibreeze_backend.catalog.models import (
+    AgentCatalog,
+    AgentModelBinding,
+    ModelCatalog,
+    ProviderCatalog,
+    ProviderModelBinding,
+)
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
-from ibreeze_backend.models.catalog_release import CatalogRelease
+from ibreeze_backend.models.catalog_release import CatalogRelease, CatalogReleaseItem
+from ibreeze_backend.models.skill import Skill
 from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.releases.emergency import (
     create_emergency_disable,
@@ -80,11 +88,13 @@ async def create_release_endpoint(
     manifest["signing_key_id"] = kid
     manifest["signature"] = signature
 
+    manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
+
     release = CatalogRelease(
         release_sequence=sequence,
         minimum_client_version=body.version,
         manifest_object_key="",
-        manifest_sha256="",
+        manifest_sha256=manifest_sha,
         signature=signature,
         signing_key_id=kid,
         status="publishing",
@@ -92,6 +102,31 @@ async def create_release_endpoint(
         created_at=datetime.now(UTC),
     )
     db.add(release)
+    await db.flush()
+
+    resource_type_map = {
+        "agent": "agent_revision",
+        "model": "model",
+        "provider": "provider",
+        "skill": "skill_revision",
+    }
+
+    for resource in manifest.get("resources", []):
+        resource_type = resource_type_map.get(resource.get("type", ""))
+        if resource_type is None:
+            continue
+        try:
+            resource_id = uuid.UUID(resource["id"])
+        except (KeyError, ValueError):
+            continue
+        db.add(CatalogReleaseItem(
+            release_id=release.id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            resource_version_id=resource_id,
+            content_sha256=resource.get("content_sha256", ""),
+        ))
+
     await db.flush()
 
     logger.info(
@@ -247,7 +282,6 @@ async def list_agents_endpoint(
 ) -> dict:
     """列出所有已发布的 Agent"""
     logger.info("list_agents")
-    from ibreeze_backend.catalog.models import AgentCatalog
 
     result = await db.execute(select(AgentCatalog).where(AgentCatalog.status == "published"))
     agents = result.scalars().all()
@@ -275,7 +309,6 @@ async def list_agent_models_endpoint(
 ) -> dict:
     """列出指定 Agent 可用的模型"""
     logger.info("list_agent_models", extra={"agent_id": str(agent_id)})
-    from ibreeze_backend.catalog.models import AgentCatalog, AgentModelBinding, ModelCatalog
 
     # 验证 Agent 存在且已发布
     agent_result = await db.execute(
@@ -324,7 +357,6 @@ async def list_providers_endpoint(
 ) -> dict:
     """列出所有已发布的 Provider"""
     logger.info("list_providers")
-    from ibreeze_backend.catalog.models import ProviderCatalog
 
     result = await db.execute(select(ProviderCatalog).where(ProviderCatalog.status == "published"))
     providers = result.scalars().all()
@@ -355,7 +387,6 @@ async def list_provider_models_endpoint(
 ) -> dict:
     """列出指定 Provider 可用的模型"""
     logger.info("list_provider_models", extra={"provider_id": str(provider_id)})
-    from ibreeze_backend.catalog.models import ModelCatalog, ProviderCatalog, ProviderModelBinding
 
     # 验证 Provider 存在且已发布
     provider_result = await db.execute(
@@ -408,7 +439,6 @@ async def list_skills_endpoint(
 ) -> dict:
     """列出所有已发布的 Skill"""
     logger.info("list_skills")
-    from ibreeze_backend.models.skill import Skill
 
     result = await db.execute(select(Skill).where(Skill.status == "published"))
     skills = result.scalars().all()
@@ -441,7 +471,6 @@ async def get_release_resources(
         "get_release_resources",
         extra={"release_id": str(release_id), "resource_type": resource_type},
     )
-    from ibreeze_backend.models.catalog_release import CatalogReleaseItem
 
     result = await db.execute(
         select(CatalogReleaseItem).where(

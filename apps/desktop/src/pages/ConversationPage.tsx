@@ -28,9 +28,11 @@ export default function ConversationPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const companyId = 'default';
 
-  const { data: conversations } = useListConversations();
-  const { data: messages } = useListMessages(selectedId ?? '');
+  const { data: conversations } = useListConversations(companyId);
+  const { data: msgData } = useListMessages(companyId, selectedId ?? '');
+  const messages = msgData?.items ?? [];
   const addMessage = useAddMessage();
   const archiveMutation = useArchiveConversation();
 
@@ -41,7 +43,7 @@ export default function ConversationPage() {
     if (!inputValue.trim() || !selectedId) return;
     try {
       logger.info('ConversationPage', 'send_start', { conversationId: selectedId });
-      await addMessage.mutateAsync({ conversationId: selectedId, content: inputValue, role: 'user' });
+      await addMessage.mutateAsync({ company_id: companyId, conversationId: selectedId, content: inputValue });
       setInputValue('');
     } catch (e) {
       const err = e as Record<string, unknown>;
@@ -53,7 +55,7 @@ export default function ConversationPage() {
   const handleArchive = async (id: string) => {
     try {
       logger.info('ConversationPage', 'archive_start', { id });
-      await archiveMutation.mutateAsync(id);
+      await archiveMutation.mutateAsync({ company_id: companyId, conversation_id: id });
       if (selectedId === id) setSelectedId(null);
     } catch (e) {
       const err = e as Record<string, unknown>;

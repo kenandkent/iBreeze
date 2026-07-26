@@ -23,10 +23,12 @@ export default function DashboardPage() {
 
   useEffect(() => { logger.logPageInit('DashboardPage'); }, []);
 
-  const { data: companies } = useListCompanies();
-  const { data: conversations } = useListConversations();
-  const { data: knowledge } = useListKnowledgeEntries();
-  const { data: workspaces } = useListWorkspaces();
+  const companyId = 'default';
+  const { data: companyData } = useListCompanies();
+  const companies = companyData?.items ?? [];
+  const { data: conversations } = useListConversations(companyId);
+  const { data: knowledge } = useListKnowledgeEntries(companyId);
+  const { data: workspaces } = useListWorkspaces(companyId);
   const { data: auditLogs } = useListAuditLogs({ limit: 10 });
 
   return (

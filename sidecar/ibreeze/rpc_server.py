@@ -31,8 +31,11 @@ from ibreeze.company import (
     rename_company,
 )
 from ibreeze.conversation import (
+    archive_conversation,
+    create_conversation,
     get_company_conversation,
     get_department_conversation,
+    list_conversations,
     list_messages,
     submit_user_message,
 )
@@ -87,6 +90,7 @@ READ_METHODS = frozenset(
         "employee.list",
         "conversation.getCompany",
         "conversation.getDepartment",
+        "conversation.list",
         "conversation.listMessages",
         "profile.get",
         "profile.list",
@@ -101,6 +105,7 @@ READ_METHODS = frozenset(
         "run.listEvents",
         "artifact.list",
         "artifact.getSnapshot",
+        "workspace.list",
         "workspace.get",
         "review.listIssues",
         "approval.listPending",
@@ -218,6 +223,9 @@ class RPCServer:
             "employee.updateDisplayName": self._employee_update_display_name,
             "employee.updateBaseProfile": self._employee_update_base_profile,
             "employee.updateStatus": self._employee_update_status,
+            "conversation.create": self._conversation_create,
+            "conversation.archive": self._conversation_archive,
+            "conversation.list": self._conversation_list,
             "conversation.submitUserMessage": self._submit_user_message,
             "conversation.getCompany": self._conversation_get_company,
             "conversation.getDepartment": self._conversation_get_department,
@@ -253,6 +261,8 @@ class RPCServer:
             "runtime.probeProvider": self._runtime_probe_provider,
             "runtime.listAvailableModels": self._runtime_list_available_models,
             "runtime.getStatus": self._runtime_get_status,
+            "runtime.run": self._runtime_run,
+            "runtime.stop": self._runtime_stop,
             # Run
             "run.get": self._run_get,
             "run.list": self._run_list,
@@ -270,6 +280,7 @@ class RPCServer:
             "artifact.list": self._artifact_list,
             "artifact.getSnapshot": self._artifact_get_snapshot,
             # Workspace
+            "workspace.list": self._workspace_list,
             "workspace.get": self._workspace_get,
             "workspace.apply": self._workspace_apply,
             "workspace.abandon": self._workspace_abandon,
@@ -1004,6 +1015,32 @@ class RPCServer:
             expected_version=data.expected_version,
         )
 
+    async def _conversation_create(self, params: dict[str, Any]) -> object:
+        if set(params) != {"company_id", "title"}:
+            raise DomainError("VALIDATION_FAILED")
+        return await create_conversation(
+            self._connection,
+            _uuid(params["company_id"]),
+            params["title"],
+        )
+
+    async def _conversation_archive(self, params: dict[str, Any]) -> object:
+        if set(params) != {"company_id", "conversation_id"}:
+            raise DomainError("VALIDATION_FAILED")
+        return await archive_conversation(
+            self._connection,
+            _uuid(params["company_id"]),
+            _uuid(params["conversation_id"]),
+        )
+
+    async def _conversation_list(self, params: dict[str, Any]) -> object:
+        if "company_id" not in params:
+            raise DomainError("VALIDATION_FAILED")
+        return await list_conversations(
+            self._connection,
+            _uuid(params["company_id"]),
+        )
+
     async def _submit_user_message(self, params: dict[str, Any]) -> object:
         data = SubmitUserMessageRequest.model_validate(params)
         return await submit_user_message(self._connection, data)
@@ -1085,7 +1122,7 @@ class RPCServer:
         return await list_profiles(
             self._connection,
             params["company_id"],
-            params.get("employee_id"),
+            employee_id=params.get("employee_id"),
         )
 
     async def _profile_bind_skill(self, params: dict[str, Any]) -> object:
@@ -1321,6 +1358,44 @@ class RPCServer:
             params["company_id"],
         )
 
+    async def _runtime_run(self, params: dict[str, Any]) -> object:
+        company_id = params.get("company_id")
+        agent_id = params.get("agent_id") or params.get("agentId")
+        message = params.get("message", "")
+        if not company_id or not agent_id:
+            raise DomainError("VALIDATION_FAILED")
+        import uuid as _uuid_mod
+
+        run_id = str(_uuid_mod.uuid4())
+        now = _now()
+        await self._connection.execute(
+            "INSERT INTO agent_runs "
+            "(id, company_id, employee_id, work_item_id, work_item_type, "
+            "run_purpose, adapter_type, status, run_spec_json, run_spec_sha256, "
+            "attempt, created_at, updated_at, version) "
+            "VALUES (?, ?, ?, ?, 'interactive_turn', 'interactive_turn', "
+            "'codex_cli', 'queued', ?, '', 1, ?, ?, 1)",
+            (run_id, company_id, agent_id, run_id, message, now, now),
+        )
+        await self._connection.commit()
+        return {"run_id": run_id, "status": "queued", "created_at": now}
+
+    async def _runtime_stop(self, params: dict[str, Any]) -> object:
+        from .runtime.service import cancel_run
+
+        company_id = params.get("company_id")
+        agent_id = params.get("agent_id") or params.get("agentId")
+        if not company_id or not agent_id:
+            raise DomainError("VALIDATION_FAILED")
+        now = _now()
+        await self._connection.execute(
+            "UPDATE agent_runs SET status='cancelled', updated_at=? "
+            "WHERE employee_id=? AND company_id=? AND status IN ('queued','running')",
+            (now, agent_id, company_id),
+        )
+        await self._connection.commit()
+        return {"stopped": True, "stopped_at": now}
+
     # ── Run ───────────────────────────────────────────────────────────
 
     async def _run_get(self, params: dict[str, Any]) -> object:
@@ -1474,6 +1549,14 @@ class RPCServer:
         return dict(row) if row else None
 
     # ── Workspace ─────────────────────────────────────────────────────
+
+    async def _workspace_list(self, params: dict[str, Any]) -> object:
+        cursor = await self._connection.execute(
+            "SELECT * FROM task_workspaces WHERE company_id=? ORDER BY created_at DESC",
+            (params["company_id"],),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
 
     async def _workspace_get(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(

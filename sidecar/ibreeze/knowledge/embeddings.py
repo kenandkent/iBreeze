@@ -80,13 +80,15 @@ class EmbeddingService:
 
     def _fallback_embed(self, texts: list[str]) -> list[list[float]]:
         """Deterministic pseudo-embedding based on text hash."""
+        import hashlib
         results: list[list[float]] = []
         for text in texts:
-            h = hash(text.encode()).to_bytes(8, "big")
-            vec = np.frombuffer(
-                h * (EMBEDDING_DIM // 8 + 1), dtype=np.float32
-            )[:EMBEDDING_DIM]
-            vec = vec / np.linalg.norm(vec)
+            seed = int.from_bytes(hashlib.sha256(text.encode()).digest()[:8], "little")
+            rng = np.random.default_rng(seed)
+            vec = rng.normal(size=EMBEDDING_DIM).astype(np.float32)
+            norms = np.linalg.norm(vec)
+            if norms > 0:
+                vec = vec / norms
             results.append(vec.tolist())
         return results
 
