@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ibreeze_backend.db.session import Base
@@ -27,6 +28,7 @@ class CatalogRelease(UUIDPrimaryKeyMixin, Base):
     minimum_client_version: Mapped[str] = mapped_column(String(64), nullable=False)
     manifest_object_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     signing_key_id: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
