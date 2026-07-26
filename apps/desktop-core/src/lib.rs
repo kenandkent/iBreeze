@@ -13,6 +13,7 @@ pub mod sidecar;
 pub mod store;
 pub mod trust;
 pub mod types;
+pub mod update;
 
 use std::path::PathBuf;
 
@@ -21,9 +22,9 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 use crate::commands::{
     auth_change_password, auth_close_profile, auth_list_offline_profiles, auth_login, auth_logout,
-    auth_open_profile, auth_register, backend_validate_origin,
-    diagnostics_export, external_open, readonly_file_select, rpc_request,
-    updater_check, updater_install, workspace_select, AppState,
+    auth_open_profile, auth_register, backend_validate_origin, diagnostics_export, external_open,
+    readonly_file_select, rpc_request, updater_check, updater_install, updater_restore_stable,
+    updater_verify_launch, workspace_select, AppState,
 };
 use crate::store::LocalStore;
 
@@ -54,8 +55,7 @@ fn init_logging() {
         .with_writer(std::io::stderr)
         .with_ansi(true);
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(filter)
@@ -111,6 +111,8 @@ pub fn run() {
             diagnostics_export,
             updater_check,
             updater_install,
+            updater_verify_launch,
+            updater_restore_stable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running iBreeze");

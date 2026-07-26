@@ -61,3 +61,19 @@ pub struct OpenProfileResult {
     pub mode: String,
     pub catalog_release_sequence: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdaterCheckResult {
+    pub available: bool,
+    pub current_version: String,
+    pub latest_version: String,
+    pub published_at: Option<String>,
+    pub package_url: Option<String>,
+    pub package_sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdaterInstallResult {
+    pub success: bool,
+    pub new_version: String,
+}

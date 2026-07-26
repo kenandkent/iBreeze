@@ -7,7 +7,7 @@ pub mod workspace;
 
 pub use diagnostics::*;
 pub use external::*;
-pub use updater::*;
+pub use updater::{updater_check, updater_install, updater_restore_stable, updater_verify_launch};
 pub use workspace::*;
 
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::Value;
 use tauri::State;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, instrument};
+use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -145,7 +145,10 @@ pub async fn auth_login(
         auth.access_token = Some(Zeroizing::new(session.access_token));
         auth.masked_identifier = Some(masked_identifier.clone());
         auth.profile_directory_id = None;
-        info!(elapsed_ms = start.elapsed().as_millis(), "command.auth_login.password_change_required");
+        info!(
+            elapsed_ms = start.elapsed().as_millis(),
+            "command.auth_login.password_change_required"
+        );
         return Ok(LoginResult {
             status: "password_change_required".to_owned(),
             profile_directory_id: None,
@@ -186,7 +189,10 @@ pub async fn auth_change_password(
     let result = open_online_session(&state, &backend, session).await;
     let elapsed = start.elapsed().as_millis();
     match &result {
-        Ok(_) => info!(elapsed_ms = elapsed, "command.auth_change_password.completed"),
+        Ok(_) => info!(
+            elapsed_ms = elapsed,
+            "command.auth_change_password.completed"
+        ),
         Err(e) => error!(error = %e, elapsed_ms = elapsed, "command.auth_change_password.failed"),
     }
     result
@@ -254,7 +260,10 @@ pub async fn auth_list_offline_profiles(
             expires_at: expires_at.to_rfc3339_opts(SecondsFormat::Secs, true),
         });
     }
-    info!(count = profiles.len(), "command.auth_list_offline_profiles.completed");
+    info!(
+        count = profiles.len(),
+        "command.auth_list_offline_profiles.completed"
+    );
     Ok(OfflineProfilesResult { profiles })
 }
 
@@ -304,8 +313,14 @@ pub async fn auth_open_profile(
             let result = open_offline_session(&state, &meta, &bundle).await;
             let elapsed = start.elapsed().as_millis();
             match &result {
-                Ok(_) => info!(elapsed_ms = elapsed, mode = "offline", "command.auth_open_profile.completed"),
-                Err(e) => error!(error = %e, elapsed_ms = elapsed, "command.auth_open_profile.failed"),
+                Ok(_) => info!(
+                    elapsed_ms = elapsed,
+                    mode = "offline",
+                    "command.auth_open_profile.completed"
+                ),
+                Err(e) => {
+                    error!(error = %e, elapsed_ms = elapsed, "command.auth_open_profile.failed")
+                }
             }
             result
         }
@@ -381,7 +396,9 @@ pub async fn rpc_request(
     let elapsed = start.elapsed().as_millis();
     match &result {
         Ok(_) => info!(method = %method, elapsed_ms = elapsed, "command.rpc_request.completed"),
-        Err(e) => error!(method = %method, error = %e, elapsed_ms = elapsed, "command.rpc_request.failed"),
+        Err(e) => {
+            error!(method = %method, error = %e, elapsed_ms = elapsed, "command.rpc_request.failed")
+        }
     }
     result
 }

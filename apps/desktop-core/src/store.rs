@@ -36,6 +36,10 @@ impl LocalStore {
         Self { base_path }
     }
 
+    pub fn base_path(&self) -> &PathBuf {
+        &self.base_path
+    }
+
     pub fn profiles_path(&self) -> PathBuf {
         self.base_path.join("profiles")
     }

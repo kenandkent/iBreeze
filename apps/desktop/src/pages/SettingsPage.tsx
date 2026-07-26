@@ -5,6 +5,82 @@ import { logger } from '../utils/logger';
 
 const { Title } = Typography;
 
+function AboutTab() {
+  const [checking, setChecking] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{
+    available: boolean;
+    current: string;
+    latest: string;
+  } | null>(null);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    try {
+      logger.info('SettingsPage', 'update_check');
+      const result = await invoke<{
+        available: boolean;
+        current_version: string;
+        latest_version: string;
+      }>('updater_check');
+      setUpdateInfo({
+        available: result.available,
+        current: result.current_version,
+        latest: result.latest_version,
+      });
+      if (!result.available) {
+        message.info('已是最新版本');
+      }
+    } catch (e) {
+      message.error('检查更新失败');
+      logger.error('SettingsPage', 'update_check_failed', String(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleInstall = async () => {
+    if (!updateInfo?.available) return;
+    setInstalling(true);
+    try {
+      logger.info('SettingsPage', 'update_install');
+      const result = await invoke<{ success: boolean; new_version: string }>('updater_install');
+      if (result.success) {
+        message.success(`更新 ${result.new_version} 已安装，请重启应用`);
+        setUpdateInfo(prev => prev ? { ...prev, available: false, latest: result.new_version } : null);
+      }
+    } catch (e) {
+      message.error('安装更新失败');
+      logger.error('SettingsPage', 'update_install_failed', String(e));
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  useEffect(() => { handleCheck(); }, []);
+
+  return (
+    <Space direction="vertical" size="middle">
+      <Title level={4}>iBreeze</Title>
+      <p>AI 公司桌面应用</p>
+      {updateInfo && (
+        <>
+          <p>当前版本: {updateInfo.current}</p>
+          {updateInfo.available && <p>最新版本: {updateInfo.latest}</p>}
+        </>
+      )}
+      <Space>
+        <Button onClick={handleCheck} loading={checking}>检查更新</Button>
+        {updateInfo?.available && (
+          <Button type="primary" onClick={handleInstall} loading={installing}>
+            安装更新 ({updateInfo.latest})
+          </Button>
+        )}
+      </Space>
+    </Space>
+  );
+}
+
 export default function SettingsPage() {
   useEffect(() => { logger.logPageInit('SettingsPage'); }, []);
 
@@ -93,13 +169,7 @@ export default function SettingsPage() {
     {
       key: 'about',
       label: '关于',
-      children: (
-        <Space direction="vertical">
-          <Title level={4}>iBreeze</Title>
-          <p>AI 公司桌面应用</p>
-          <p>版本: 1.0.0</p>
-        </Space>
-      ),
+      children: <AboutTab />,
     },
   ];
 
