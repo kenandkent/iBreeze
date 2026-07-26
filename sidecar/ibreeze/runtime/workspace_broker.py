@@ -99,3 +99,36 @@ async def get_workspace_path(db: Any, workspace_id: str) -> str | None:
     )
     row = await cursor.fetchone()
     return row["integration_worktree_path"] if row else None
+
+
+async def execute_external_write(
+    rpc: Any,
+    *,
+    approval_id: str,
+    run_id: str,
+    operation: str,
+    target_realpath: str,
+    expected_old_sha256: str | None = None,
+    source_relative_path: str | None = None,
+    source_sha256: str | None = None,
+    source_size: int | None = None,
+    expires_at: str,
+) -> dict[str, object]:
+    """Execute an external write via reverse RPC to the Rust side.
+
+    Creates an ``ExternalWriteRequest``, sends it via reverse RPC, waits for
+    the response, and returns the result (which includes the receipt).
+    """
+    request = {
+        "approval_id": approval_id,
+        "run_id": run_id,
+        "operation": operation,
+        "target_realpath": target_realpath,
+        "expected_old_sha256": expected_old_sha256,
+        "source_relative_path": source_relative_path,
+        "source_sha256": source_sha256,
+        "source_size": source_size,
+        "expires_at": expires_at,
+    }
+    response = await rpc.call("host.externalWrite.execute", request)
+    return response

@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::security::external_write::ReceiptStore;
+use crate::security::grant_store::GrantStore;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -79,18 +79,15 @@ pub struct ProcessEvent {
 
 pub async fn handle_external_write_execute(
     request: ExternalWriteRequest,
+    grant_store: &GrantStore,
+    receipt_store: &ReceiptStore,
 ) -> Result<ExternalWriteResponse, AppError> {
-    let target = PathBuf::from(&request.target_realpath);
-    let canonical = target.canonicalize().map_err(|e| {
-        AppError::Security(format!("host.externalWrite: target not accessible: {e}"))
-    })?;
-    let old_hash = compute_path_state_hash(&canonical)?;
-    if old_hash != request.expected_old_sha256.as_deref().unwrap_or("") {
-        return Err(AppError::Security("APPROVAL_TARGET_CHANGED".to_owned()));
-    }
-    Err(AppError::NotSupported(
-        "host.externalWrite.execute stub: file system write not yet implemented".to_owned(),
-    ))
+    crate::security::external_write::handle_external_write_execute(
+        request,
+        grant_store,
+        receipt_store,
+    )
+    .await
 }
 
 pub async fn handle_process_registered(_event: ProcessEvent) -> Result<(), AppError> {
@@ -101,21 +98,13 @@ pub async fn handle_process_exited(_event: ProcessEvent) -> Result<(), AppError>
     Ok(())
 }
 
-fn compute_path_state_hash(_path: &std::path::Path) -> Result<String, AppError> {
-    Ok(String::new())
-}
-
-pub async fn handle_credential_http_start(
-    _request: CredentialHttpStart,
-) -> Result<(), AppError> {
+pub async fn handle_credential_http_start(_request: CredentialHttpStart) -> Result<(), AppError> {
     Err(AppError::NotSupported(
         "credential.http.start: not yet implemented".to_owned(),
     ))
 }
 
-pub async fn handle_credential_http_cancel(
-    _request: CredentialHttpCancel,
-) -> Result<(), AppError> {
+pub async fn handle_credential_http_cancel(_request: CredentialHttpCancel) -> Result<(), AppError> {
     Err(AppError::NotSupported(
         "credential.http.cancel: not yet implemented".to_owned(),
     ))

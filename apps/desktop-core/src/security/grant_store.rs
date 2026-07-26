@@ -29,12 +29,14 @@ pub struct FileGrant {
 
 pub struct GrantStore {
     grants: RwLock<HashMap<Uuid, FileGrant>>,
+    bookmarks: RwLock<HashMap<Uuid, PathBuf>>,
 }
 
 impl GrantStore {
     pub fn new() -> Self {
         Self {
             grants: RwLock::new(HashMap::new()),
+            bookmarks: RwLock::new(HashMap::new()),
         }
     }
 
@@ -122,7 +124,33 @@ impl GrantStore {
 
     pub async fn clear(&self) {
         self.grants.write().await.clear();
+        self.bookmarks.write().await.clear();
         warn!("grants.all_cleared");
+    }
+
+    // -- Bookmark methods (Security Scoped Bookmarks for external writes) --
+
+    pub async fn store_bookmark(&self, bookmark_id: Uuid, path: &Path) -> Result<(), AppError> {
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| AppError::Validation(format!("Cannot resolve bookmark path: {e}")))?;
+        self.bookmarks.write().await.insert(bookmark_id, canonical);
+        info!(bookmark_id = %bookmark_id, "bookmark.stored");
+        Ok(())
+    }
+
+    pub async fn resolve_bookmark(&self, bookmark_id: Uuid) -> Result<PathBuf, AppError> {
+        let guard = self.bookmarks.read().await;
+        guard
+            .get(&bookmark_id)
+            .cloned()
+            .ok_or_else(|| AppError::NotFound(format!("Bookmark {bookmark_id} not found")))
+    }
+
+    pub async fn remove_bookmark(&self, bookmark_id: Uuid) -> Result<(), AppError> {
+        self.bookmarks.write().await.remove(&bookmark_id);
+        info!(bookmark_id = %bookmark_id, "bookmark.removed");
+        Ok(())
     }
 }
 
