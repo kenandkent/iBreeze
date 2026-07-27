@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
-use schemars::schema::{RootSchema, Schema, SchemaObject, InstanceType, Metadata, NumberValidation, StringValidation, ArrayValidation, ObjectValidation, SubschemaValidation, SingleOrVec};
+use schemars::schema::{RootSchema, Schema, SchemaObject, InstanceType, SingleOrVec};
 use walkdir::WalkDir;
 use heck::{ToPascalCase, ToSnakeCase};
 use quote::{format_ident, quote};
 use proc_macro2::TokenStream;
-use syn::parse_quote;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Generate Rust types from JSON Schema", long_about = None)]
@@ -38,13 +37,29 @@ fn main() -> Result<()> {
     
     // Collect all schemas from input directories
     for input_dir in &args.input {
-        for entry in WalkDir::new(input_dir).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(input_dir)
+            .into_iter()
+            .filter_entry(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|s| s != "node_modules" && s != "target" && s != ".git")
+                    .unwrap_or(false)
+            })
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.extension().map(|e| e == "json").unwrap_or(false) {
-                let content = fs::read_to_string(path)
-                    .with_context(|| format!("Failed to read {}", path.display()))?;
-                let schema: RootSchema = serde_json::from_str(&content)
-                    .with_context(|| format!("Failed to parse JSON schema from {}", path.display()))?;
+                let content = match fs::read_to_string(path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                if !content.contains("\"$schema\"") && !content.contains("\"$id\"") {
+                    continue;
+                }
+                let schema: RootSchema = match serde_json::from_str(&content) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
                 
                 let id = schema.schema.metadata.as_ref()
                     .and_then(|m| m.id.as_ref())
@@ -88,7 +103,7 @@ fn main() -> Result<()> {
 
 fn generate_type_from_schema(
     schema_id: &str,
-    schema: &Schema,
+    schema: &SchemaObject,
     all_schemas: &HashMap<String, RootSchema>,
     processed: &mut HashMap<String, TypeDef>,
 ) -> Result<TypeDef> {
@@ -97,20 +112,7 @@ fn generate_type_from_schema(
         return Ok(existing.clone());
     }
     
-    match schema {
-        Schema::Bool(_) => {
-            // Any type
-            let tokens = quote! { serde_json::Value };
-            let def = TypeDef {
-                name: "Any".to_string(),
-                tokens,
-                is_enum: false,
-            };
-            processed.insert(schema_id.to_string(), def.clone());
-            Ok(def)
-        }
-        Schema::Object(obj) => generate_from_schema_object(schema_id, obj, all_schemas, processed),
-    }
+    generate_from_schema_object(schema_id, schema, all_schemas, processed)
 }
 
 fn generate_from_schema_object(
@@ -128,17 +130,17 @@ fn generate_from_schema_object(
     
     // Handle enums
     if let Some(enum_values) = &obj.enum_values {
-        return generate_enum(&type_name, enum_values, obj, processed);
+        return generate_enum_values(&type_name, enum_values, processed);
     }
     
     // Handle object types
-    if obj.instance_type.as_ref().map(|t| matches!(t, SingleOrVec::Single(InstanceType::Object))).unwrap_or(false)
+    if matches!(obj.instance_type.as_ref(), Some(SingleOrVec::Single(t)) if **t == InstanceType::Object)
         || obj.object.as_ref().is_some() {
         return generate_struct(&type_name, obj, all_schemas, processed);
     }
     
     // Handle array types
-    if obj.instance_type.as_ref().map(|t| matches!(t, SingleOrVec::Single(InstanceType::Array))).unwrap_or(false)
+    if matches!(obj.instance_type.as_ref(), Some(SingleOrVec::Single(t)) if **t == InstanceType::Array)
         || obj.array.as_ref().is_some() {
         return generate_array(&type_name, obj, all_schemas, processed);
     }
@@ -191,10 +193,9 @@ fn resolve_reference(
     })
 }
 
-fn generate_enum(
+fn generate_enum_values(
     type_name: &str,
     enum_values: &[serde_json::Value],
-    obj: &SchemaObject,
     processed: &mut HashMap<String, TypeDef>,
 ) -> Result<TypeDef> {
     let variants: Vec<TokenStream> = enum_values.iter().map(|v| {
@@ -237,11 +238,10 @@ fn generate_struct(
     let mut required_fields: Vec<String> = Vec::new();
     
     if let Some(object_val) = &obj.object {
-        if let Some(props) = &object_val.properties {
-            for (prop_name, prop_schema) in props {
-                let is_required = obj.required.as_ref()
-                    .map(|r| r.contains(prop_name))
-                    .unwrap_or(false);
+        for (prop_name, prop_schema) in &object_val.properties {
+            let is_required = obj.object.as_ref()
+                .map(|o| o.required.contains(prop_name.as_str()))
+                .unwrap_or(false);
                 
                 if is_required {
                     required_fields.push(prop_name.clone());
@@ -249,7 +249,7 @@ fn generate_struct(
                 
                 let field_type = schema_to_rust_type(prop_name, &prop_schema, all_schemas, processed)?;
                 let field_ident = format_ident!("{}", prop_name.to_snake_case());
-                let serde_name = if prop_name != prop_name.to_snake_case() {
+                let serde_name = if *prop_name != prop_name.to_snake_case() {
                     quote! { #[serde(rename = #prop_name)] }
                 } else {
                     quote! {}
@@ -270,7 +270,6 @@ fn generate_struct(
                 fields.push(field);
             }
         }
-    }
     
     let struct_ident = format_ident!("{}", type_name);
     
@@ -317,8 +316,9 @@ fn generate_array(
         quote! { serde_json::Value }
     };
     
+    let type_ident = format_ident!("{}", type_name);
     let tokens = quote! {
-        pub type #type_name = Vec<#item_type>;
+        pub type #type_ident = Vec<#item_type>;
     };
     
     let def = TypeDef {
@@ -347,17 +347,17 @@ fn schema_to_rust_type(
             } else if let Some(enum_values) = &obj.enum_values {
                 // Inline enum
                 let type_name = format!("{}{}", prop_name.to_pascal_case(), "Enum");
-                let def = generate_enum(&type_name, enum_values, obj, processed)?;
+                let def = generate_enum_values(&type_name, enum_values, processed)?;
                 let ident = format_ident!("{}", def.name);
                 Ok(quote! { #ident })
-            } else if obj.instance_type.as_ref().map(|t| matches!(t, SingleOrVec::Single(InstanceType::Object))).unwrap_or(false)
+            } else if matches!(obj.instance_type.as_ref(), Some(SingleOrVec::Single(t)) if **t == InstanceType::Object)
                 || obj.object.is_some() {
                 // Inline struct
                 let type_name = format!("{}{}", prop_name.to_pascal_case(), "Struct");
                 let def = generate_struct(&type_name, obj, all_schemas, processed)?;
                 let ident = format_ident!("{}", def.name);
                 Ok(quote! { #ident })
-            } else if obj.instance_type.as_ref().map(|t| matches!(t, SingleOrVec::Single(InstanceType::Array))).unwrap_or(false)
+            } else if matches!(obj.instance_type.as_ref(), Some(SingleOrVec::Single(t)) if **t == InstanceType::Array)
                 || obj.array.is_some() {
                 // Inline array
                 let item_type = if let Some(array_val) = &obj.array {
@@ -383,27 +383,16 @@ fn schema_to_rust_type(
 fn generate_primitive_type(obj: &SchemaObject) -> Result<TokenStream> {
     let instance_type = obj.instance_type.as_ref()
         .and_then(|t| match t {
-            SingleOrVec::Single(t) => Some(t),
+            SingleOrVec::Single(t) => Some(&**t),
             SingleOrVec::Vec(t) => t.first(),
         });
     
     let tokens = match instance_type {
-        Some(InstanceType::String) => {
-            if let Some(fmt) = &obj.metadata.as_ref().and_then(|m| m.format.as_ref()) {
-                match fmt.as_str() {
-                    "uuid" => quote! { uuid::Uuid },
-                    "date-time" | "date" | "time" => quote! { chrono::DateTime<chrono::Utc> },
-                    "uri" | "url" => quote! { String },
-                    _ => quote! { String },
-                }
-            } else {
-                quote! { String }
-            }
-        }
-        Some(InstanceType::Integer) => quote! { i64 },
-        Some(InstanceType::Number) => quote! { f64 },
-        Some(InstanceType::Boolean) => quote! { bool },
-        Some(InstanceType::Null) => quote! { () },
+        Some(InstanceType::String) => quote! { String },
+        Some(&InstanceType::Integer) => quote! { i64 },
+        Some(&InstanceType::Number) => quote! { f64 },
+        Some(&InstanceType::Boolean) => quote! { bool },
+        Some(&InstanceType::Null) => quote! { () },
         _ => quote! { serde_json::Value },
     };
     Ok(tokens)
@@ -414,7 +403,11 @@ fn generate_primitive(
     obj: &SchemaObject,
     processed: &mut HashMap<String, TypeDef>,
 ) -> Result<TypeDef> {
-    let tokens = generate_primitive_type(obj)?;
+    let inner = generate_primitive_type(obj)?;
+    let type_ident = format_ident!("{}", type_name);
+    let tokens = quote! {
+        pub type #type_ident = #inner;
+    };
     let def = TypeDef {
         name: type_name.to_string(),
         tokens,
@@ -425,7 +418,6 @@ fn generate_primitive(
 }
 
 fn generate_lib_rs(mod_name: &str, type_defs: &[TypeDef]) -> String {
-    let mod_ident = format_ident!("{}", mod_name);
     let type_items: Vec<TokenStream> = type_defs.iter().map(|d| d.tokens.clone()).collect();
     
     let tokens = quote! {

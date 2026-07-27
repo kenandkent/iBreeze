@@ -114,8 +114,8 @@ def _archive_backup_package(
                             if _sensitive_excluded(arcname):
                                 continue
                             fsize = os.path.getsize(fpath)
-                            MAX_CAS_FILE = 100 * 1024 * 1024
-                            if fsize > MAX_CAS_FILE:
+                            max_cas_file = 100 * 1024 * 1024
+                            if fsize > max_cas_file:
                                 continue
                             fhash = _sha256_file(Path(fpath))
                             manifest["files"].append({
@@ -272,7 +272,7 @@ async def restore_backup(
 
 
 async def list_backups(backup_dir: Path) -> list[dict[str, Any]]:
-    backups = []
+    backups: list[dict[str, Any]] = []
     if not backup_dir.exists():
         return backups
 

@@ -9,7 +9,7 @@ import aiosqlite
 import pytest
 
 from ibreeze.company import create_company
-from ibreeze.conversation import get_company_conversation, submit_user_message
+from ibreeze.conversation import submit_user_message
 from ibreeze.knowledge import (
     check_consolidation,
     get_knowledge,
@@ -17,7 +17,6 @@ from ibreeze.knowledge import (
     list_knowledge,
     permitted_knowledge_ids,
     remove_knowledge,
-    search_knowledge,
 )
 from ibreeze.schemas import (
     CompanyCreate,

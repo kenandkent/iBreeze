@@ -116,7 +116,7 @@ class TestPlanRevisionReusesTask:
             (first.company_task_id,),
         )
         await db.commit()
-        plan_versions_before = await (
+        await (
             await db.execute(
                 """SELECT COUNT(*) FROM company_plan_versions
                    WHERE company_task_id=? AND company_id=?""",

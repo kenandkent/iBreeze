@@ -7,7 +7,6 @@ Revises: 003_catalog
 Create Date: 2026-07-26 00:00:00.000000
 """
 
-from alembic import op
 
 revision = "004_releases"
 down_revision = "003_catalog"

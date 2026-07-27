@@ -7,8 +7,8 @@
 """
 
 from ibreeze.domain import (
-    DomainEventType,
     EVENT_REGISTRY,
+    DomainEventType,
     get_event_spec,
     list_event_types,
 )

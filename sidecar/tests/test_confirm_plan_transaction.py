@@ -43,49 +43,88 @@ async def env(db: Any) -> dict[str, str]:
     await db.execute("PRAGMA foreign_keys = OFF")
 
     await db.execute(
-        "INSERT INTO company_revisions (id, company_id, revision_number, name, introduction, content_sha256, created_by_type, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO company_revisions"
+        " (id, company_id, revision_number, name, introduction,"
+        " content_sha256, created_by_type, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?)",
         (revision_id, company_id, 1, "TestCo", "Test company", _sha256("test"), "system", now),
     )
     await db.execute(
-        "INSERT INTO catalog_cache_releases (release_id, release_sequence, manifest_json, manifest_sha256, signature, signing_key_id, status, downloaded_at, activated_at) VALUES (?,1,'{}',?, 'sig', 'k1', 'active', ?, ?)",
+        "INSERT INTO catalog_cache_releases"
+        " (release_id, release_sequence, manifest_json, manifest_sha256,"
+        " signature, signing_key_id, status, downloaded_at, activated_at)"
+        " VALUES (?,1,'{}',?, 'sig', 'k1', 'active', ?, ?)",
         (release_id, _sha256("{}"), now, now),
     )
     await db.execute(
-        "INSERT INTO employee_base_profiles (id, company_id, name, normalized_name, description, current_version_id, status, created_at, updated_at, version) VALUES (?,?,'Default','default','Default profile',?,'active',?,?,1)",
+        "INSERT INTO employee_base_profiles"
+        " (id, company_id, name, normalized_name, description,"
+        " current_version_id, status, created_at, updated_at, version)"
+        " VALUES (?,?,'Default','default','Default profile',?,'active',?,?,1)",
         (profile_id, company_id, version_id, now, now),
     )
     binding_json = json.dumps({"agent_cli": "/usr/bin/fake-cli"})
     await db.execute(
-        "INSERT INTO employee_base_profile_versions (id, profile_id, version_number, name, description, profile_type, runtime_binding_json, system_prompt, capability_tags_json, tool_policy_json, timeout_seconds, max_retries, workspace_policy, catalog_release_id, content_sha256, status, created_at, published_at) VALUES (?,?,1,'Default v1','Default profile','agent_cli',?,'Act carefully.','[]','{}',300,2,'workspace_rw_external_ro',?,?,'published',?,?)",
+        "INSERT INTO employee_base_profile_versions"
+        " (id, profile_id, version_number, name, description, profile_type,"
+        " runtime_binding_json, system_prompt, capability_tags_json,"
+        " tool_policy_json, timeout_seconds, max_retries, workspace_policy,"
+        " catalog_release_id, content_sha256, status, created_at,"
+        " published_at)"
+        " VALUES (?,?,1,'Default v1','Default profile','agent_cli',?,"
+        " 'Act carefully.','[]','{}',300,2,'workspace_rw_external_ro',?,?,"
+        " 'published',?,?)",
         (version_id, profile_id, binding_json, release_id, _sha256("default"), now, now),
     )
     await db.execute(
-        "INSERT INTO department_revisions (id, department_id, company_id, revision_number, name, function_description, content_sha256, created_at) VALUES (?,?,?,1,'Eng','Engineering dept',?,?)",
+        "INSERT INTO department_revisions"
+        " (id, department_id, company_id, revision_number, name,"
+        " function_description, content_sha256, created_at)"
+        " VALUES (?,?,?,1,'Eng','Engineering dept',?,?)",
         (dept_rev_id, dept_id, company_id, _sha256("eng"), now),
     )
     await db.execute(
-        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'department','active',?)",
+        "INSERT INTO conversations"
+        " (id, company_id, conversation_type, status, created_at)"
+        " VALUES (?,?,'department','active',?)",
         (dept_conv_id, company_id, now),
     )
     await db.execute(
-        "INSERT INTO departments (id, company_id, department_type, normalized_name, current_revision_id, leader_employee_id, department_conversation_id, status, created_at, updated_at, version) VALUES (?,?,'standard','engineering',?,?,?,'active',?,?,1)",
+        "INSERT INTO departments"
+        " (id, company_id, department_type, normalized_name,"
+        " current_revision_id, leader_employee_id,"
+        " department_conversation_id, status, created_at, updated_at,"
+        " version) VALUES (?,?,'standard','engineering',?,?,?,'active',?,?,1)",
         (dept_id, company_id, dept_rev_id, employee_id, dept_conv_id, now, now),
     )
     await db.execute(
-        "INSERT INTO employees (id, company_id, department_id, display_name, normalized_display_name, base_profile_version_id, workflow_role, status, created_at, updated_at, version) VALUES (?,?,?,'Alice','alice',?,'member','active',?,?,1)",
+        "INSERT INTO employees"
+        " (id, company_id, department_id, display_name,"
+        " normalized_display_name, base_profile_version_id, workflow_role,"
+        " status, created_at, updated_at, version)"
+        " VALUES (?,?,?,'Alice','alice',?,'member','active',?,?,1)",
         (employee_id, company_id, dept_id, version_id, now, now),
     )
     await db.execute(
-        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'company','active',?)",
+        "INSERT INTO conversations"
+        " (id, company_id, conversation_type, status, created_at)"
+        " VALUES (?,?,'company','active',?)",
         (conv_id, company_id, now),
     )
     await db.execute(
-        "INSERT INTO companies (id, normalized_name, current_revision_id, general_manager_office_id, general_manager_employee_id, company_conversation_id, status, created_at, updated_at, version) VALUES (?,?,?,?,?,?,'active',?,?,1)",
+        "INSERT INTO companies"
+        " (id, normalized_name, current_revision_id,"
+        " general_manager_office_id, general_manager_employee_id,"
+        " company_conversation_id, status, created_at, updated_at, version)"
+        " VALUES (?,?,?,?,?,?,'active',?,?,1)",
         (company_id, "testco", revision_id, dept_id, employee_id, conv_id, now, now),
     )
     task_id = _id()
     await db.execute(
-        "INSERT INTO company_tasks (id, company_id, title, company_conversation_id, user_message_event_id, status, created_at, updated_at, version) VALUES (?,?,?,?,?,'awaiting_user_confirmation',?,?,1)",
+        "INSERT INTO company_tasks"
+        " (id, company_id, title, company_conversation_id,"
+        " user_message_event_id, status, created_at, updated_at, version)"
+        " VALUES (?,?,?,?,?,'awaiting_user_confirmation',?,?,1)",
         (task_id, company_id, "Build feature", conv_id, _id(), now, now),
     )
 
@@ -115,7 +154,10 @@ async def env(db: Any) -> dict[str, str]:
     plan_sha256 = _sha256(plan_body)
     plan_version_id = _id()
     await db.execute(
-        "INSERT INTO company_plan_versions (id, company_task_id, company_id, version_number, canonical_json, content_sha256, generated_by_run_id, status, created_at) VALUES (?,?,?,1,?,?,?,?,?)",
+        "INSERT INTO company_plan_versions"
+        " (id, company_task_id, company_id, version_number, canonical_json,"
+        " content_sha256, generated_by_run_id, status, created_at)"
+        " VALUES (?,?,?,1,?,?,?,?,?)",
         (plan_version_id, task_id, company_id, plan_body, plan_sha256, _id(), "awaiting_user_confirmation", now),
     )
 

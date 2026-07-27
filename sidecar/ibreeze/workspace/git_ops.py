@@ -107,7 +107,7 @@ async def get_merge_conflicts(base_dir: str) -> list[str]:
         "diff", "--name-only", "--diff-filter=U", cwd=base_dir
     )
     if result["success"] and result["stdout"].strip():
-        return result["stdout"].strip().split("\n")
+        return result["stdout"].strip().split("\n")  # type: ignore[no-any-return]
     return []
 
 
@@ -128,4 +128,4 @@ async def create_bundle(
 async def is_git_repo(path: str) -> bool:
     """Check if a path is a git repository."""
     result = await git_command("rev-parse", "--git-dir", cwd=path)
-    return result["success"]
+    return result["success"]  # type: ignore[no-any-return]

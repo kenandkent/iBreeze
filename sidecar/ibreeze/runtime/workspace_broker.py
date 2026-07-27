@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -131,4 +130,4 @@ async def execute_external_write(
         "expires_at": expires_at,
     }
     response = await rpc.call("host.externalWrite.execute", request)
-    return response
+    return response  # type: ignore[no-any-return]

@@ -38,7 +38,7 @@ class TestExecuteExternalWrite:
     """execute_external_write builds the correct reverse RPC request."""
 
     async def test_calls_correct_method(self, mock_rpc: AsyncMock) -> None:
-        result = await execute_external_write(
+        await execute_external_write(
             mock_rpc,
             approval_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),

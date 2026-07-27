@@ -26,7 +26,10 @@ def _sha256(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
 
 
-async def _setup_profile_tables(db: aiosqlite.Connection, company_id: str, version_id: str, profile_id: str, release_id: str, employee_id: str, dept_id: str):
+async def _setup_profile_tables(
+    db: aiosqlite.Connection, company_id: str, version_id: str,
+    profile_id: str, release_id: str, employee_id: str, dept_id: str,
+):
     """Insert minimal prerequisite rows for profile tests."""
     now = "2026-01-01T00:00:00Z"
     await db.execute("PRAGMA foreign_keys = OFF")
@@ -82,7 +85,8 @@ async def _setup_profile_tables(db: aiosqlite.Connection, company_id: str, versi
         )
         await db.execute(
             """INSERT INTO catalog_cache_releases
-               (release_id, release_sequence, manifest_json, manifest_sha256, signature, signing_key_id, status, downloaded_at, activated_at)
+               (release_id, release_sequence, manifest_json, manifest_sha256,
+                signature, signing_key_id, status, downloaded_at, activated_at)
                VALUES (?, 1, '{}', ?, 'sig', 'key', 'active', ?, ?)""",
             (release_id, _sha256("{}"), now, now),
         )

@@ -168,8 +168,17 @@ async def dispatch_company_task(
                         if profile_row:
                             binding = json.loads(profile_row["runtime_binding_json"])
                             raw_type = profile_row["profile_type"]
-                            adapter_type = raw_type if raw_type in ("api_model", "codex_cli", "claude_code", "opencode") else "codex_cli"
-                            model_id = binding.get("agent_cli") or binding.get("api_model", "") or binding.get("claude_code", "") or binding.get("opencode", "")
+                            adapter_type = (
+                                raw_type
+                                if raw_type in ("api_model", "codex_cli", "claude_code", "opencode")
+                                else "codex_cli"
+                            )
+                            model_id = (
+                                binding.get("agent_cli")
+                                or binding.get("api_model", "")
+                                or binding.get("claude_code", "")
+                                or binding.get("opencode", "")
+                            )
 
                             run_id = _id()
                             job_id = _id()

@@ -1,27 +1,28 @@
 """Tests for Workspace/Artifact/Review/Approval services."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from ibreeze.artifacts.service import (
-    create_artifact,
-    get_artifact,
-    list_artifacts,
-    get_artifact_version_chain,
-)
-from ibreeze.review.service import (
-    assign_reviewer,
-    submit_review_report,
-    create_review_issue,
-    resolve_review_issue,
-    list_review_issues,
-)
+import pytest
+
 from ibreeze.approvals.service import (
+    expire_stale_approvals,
+    list_pending_approvals,
     request_external_write_approval,
     request_uncertain_recovery_approval,
     resolve_approval,
-    list_pending_approvals,
-    expire_stale_approvals,
+)
+from ibreeze.artifacts.service import (
+    create_artifact,
+    get_artifact,
+    get_artifact_version_chain,
+    list_artifacts,
+)
+from ibreeze.review.service import (
+    assign_reviewer,
+    create_review_issue,
+    list_review_issues,
+    resolve_review_issue,
+    submit_review_report,
 )
 
 
@@ -261,7 +262,7 @@ class TestArtifactExtended:
             elif call_count == 2:
                 return MagicMock(fetchone=AsyncMock(return_value={"id": "art-2", "supersedes_artifact_id": None}))
             return MagicMock(fetchone=AsyncMock(return_value=None))
-        
+
         mock_db_session.execute = mock_execute
         result = await get_artifact_version_chain(mock_db_session, "comp-1", "art-1")
         assert len(result) == 2
@@ -291,11 +292,11 @@ class TestArtifactExtended:
                 return MagicMock()
             # Simulate error on INSERT
             raise Exception("DB error")
-        
+
         mock_db_session.execute = mock_execute
         mock_db_session.rollback = AsyncMock()
         mock_db_session.commit = AsyncMock()
-        
+
         with pytest.raises(Exception, match="DB error"):
             await create_artifact(
                 mock_db_session,
@@ -314,31 +315,31 @@ class TestReviewExtended:
 
     @pytest.mark.asyncio
     async def test_submit_review_report(self, mock_db_session):
-        # Mock execute to return different values based on call order
-        call_count = 0
         async def mock_execute(sql, params=()):
-            nonlocal call_count
-            call_count += 1
             if "BEGIN" in sql:
                 return MagicMock()
-            if "review_assignments" in sql and "SELECT" in sql:
+            if "SELECT * FROM review_assignments" in sql:
                 return MagicMock(fetchone=AsyncMock(return_value={"id": "asgn-1", "status": "assigned"}))
-            return MagicMock()
-        
+            if "object_sha256 FROM artifacts" in sql:
+                return MagicMock(fetchone=AsyncMock(return_value={"object_sha256": "a" * 64}))
+            return MagicMock(fetchone=AsyncMock(return_value=None))
+
         mock_db_session.execute = mock_execute
         mock_db_session.commit = AsyncMock()
         mock_db_session.rollback = AsyncMock()
-        
+
         result = await submit_review_report(
             mock_db_session,
             "comp-1",
             assignment_id="asgn-1",
+            artifact_id="art-1",
+            artifact_sha256="a" * 64,
             report_artifact_id="rep-art-1",
             reviewer_run_id="run-1",
             verdict="approved",
             summary="Looks good",
         )
-        assert result["status"] == "completed"
+        assert result["status"] == "submitted"
 
     @pytest.mark.asyncio
     async def test_submit_review_report_not_found(self, mock_db_session):
@@ -350,6 +351,8 @@ class TestReviewExtended:
                 mock_db_session,
                 "comp-1",
                 assignment_id="nonexistent",
+                artifact_id="art-1",
+                artifact_sha256="a" * 64,
                 report_artifact_id="rep-art-1",
                 reviewer_run_id="run-1",
                 verdict="approved",
@@ -366,6 +369,8 @@ class TestReviewExtended:
                 mock_db_session,
                 "comp-1",
                 assignment_id="asgn-1",
+                artifact_id="art-1",
+                artifact_sha256="a" * 64,
                 report_artifact_id="rep-art-1",
                 reviewer_run_id="run-1",
                 verdict="approved",
@@ -376,7 +381,7 @@ class TestReviewExtended:
     async def test_resolve_review_issue(self, mock_db_session):
         mock_db_session.execute = AsyncMock(return_value=MagicMock(rowcount=1))
         mock_db_session.commit = AsyncMock()
-        
+
         result = await resolve_review_issue(
             mock_db_session,
             "comp-1",
@@ -435,11 +440,11 @@ class TestReviewExtended:
             if "review_assignments" in sql:
                 return MagicMock(fetchone=AsyncMock(return_value={"id": "existing"}))
             return MagicMock()
-        
+
         mock_db_session.execute = mock_execute
         mock_db_session.commit = AsyncMock()
         mock_db_session.rollback = AsyncMock()
-        
+
         with pytest.raises(ValueError, match="REVIEWER_ALREADY_ASSIGNED"):
             await assign_reviewer(
                 mock_db_session,

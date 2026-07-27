@@ -118,11 +118,11 @@ class TestRestoreValidation:
     async def test_restore_hash_mismatch(self, db_path, tmp_dir):
         """BACK-003: Restore rejects tampered backup."""
         backup_dir = tmp_dir / "backups"
-        result = await create_backup(db_path, backup_dir, backup_id="tamper")
+        await create_backup(db_path, backup_dir, backup_id="tamper")
         manifest_path = next((backup_dir / "tamper").glob("*.manifest.json"))
         with open(manifest_path) as f:
             manifest = json.load(f)
-        old_hash = manifest.get("archive_sha256") or manifest.get("database_hash", "")
+        manifest.get("archive_sha256") or manifest.get("database_hash", "")
         manifest["archive_sha256"] = "0" * 64
         with open(manifest_path, "w") as f:
             json.dump(manifest, f)

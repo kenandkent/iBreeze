@@ -255,7 +255,7 @@ async def apply_workspace(
         cwd=ws.repository_root,
     )
 
-    now = _now()
+    _now()
     if merge_result["success"]:
         # Commit the merge
         commit_result = await git_command(

@@ -12,7 +12,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health/live")
-async def liveness_check() -> dict:
+async def liveness_check() -> dict[str, object]:
     logger.debug("health_check")
     return {"status": "ok"}
 
@@ -20,7 +20,7 @@ async def liveness_check() -> dict:
 @router.get("/health/ready")
 async def readiness_check(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     logger.debug("readiness_check_start")
     try:
         await db.execute(text("SELECT 1"))

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.audit_log import AdminAuditLog
+from ibreeze_backend.models.user import User
 from ibreeze_backend.observability.logging_config import get_logger
 
 logger = get_logger("ibreeze.observability.router")
@@ -24,8 +25,8 @@ async def list_audit_logs(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
-) -> dict:
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     """列出审计日志（带过滤条件）"""
     logger.info(
         "list_audit_logs",

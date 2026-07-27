@@ -22,7 +22,7 @@ class VectorStore:
         if self._table is not None:
             return self._table
         try:
-            import lancedb
+            import lancedb  # type: ignore[import-untyped]
 
             db = lancedb.connect(self._db_path)
             try:
@@ -48,14 +48,14 @@ class VectorStore:
         company_id: str,
         text: str,
         embedding: list[float],
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Insert or update an embedding."""
         table = self._get_table()
         if table is None:
             return False
         try:
-            import pyarrow as pa
+            import pyarrow as pa  # type: ignore[import-untyped]
 
             safe_id = _escape_sql_literal(id)
 
@@ -103,7 +103,7 @@ class VectorStore:
                 safe_gen_id = _escape_sql_literal(generation_id)
                 query = query.where(f"generation_id = '{safe_gen_id}'")
             results = query.limit(limit).to_list()
-            return results
+            return results  # type: ignore[no-any-return]
         except Exception:
             return []
 

@@ -177,7 +177,7 @@ async def test_login_does_not_disclose_account_state(client: AsyncClient, test_u
         json=_login_body(actual_identifier, password),
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials"
+    assert response.json()["message"] == "Invalid credentials"
 
 
 @pytest.mark.asyncio
@@ -189,7 +189,7 @@ async def test_disabled_user_cannot_login(client: AsyncClient, test_user, db_ses
         json=_login_body(test_user.email, "testpassword123"),
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials"
+    assert response.json()["message"] == "Invalid credentials"
 
 
 @pytest.mark.asyncio

@@ -55,7 +55,7 @@ class CodexAdapter:
         """
         if line.startswith("event: "):
             try:
-                return json.loads(line[7:])
+                return json.loads(line[7:])  # type: ignore[no-any-return]
             except (json.JSONDecodeError, ValueError):
                 return None
         return None

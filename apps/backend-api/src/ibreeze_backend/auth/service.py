@@ -10,6 +10,7 @@ from typing import Any
 
 import jwt
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from passlib.hash import argon2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +32,7 @@ RESTRICTED_ACCESS_TOKEN_SECONDS = 5 * 60
 SESSION_SECONDS = 30 * 24 * 60 * 60
 MAX_ACTIVE_FAMILIES = 20
 
-password_hasher = argon2.using(
+password_hasher = argon2.using(  # type: ignore[no-untyped-call]
     type="ID",
     memory_cost=65536,
     rounds=3,
@@ -465,7 +466,7 @@ async def change_password(
 def get_auth_keys() -> dict[str, object]:
     issued_at = datetime.now(UTC)
     expires_at = issued_at + timedelta(hours=24)
-    keys: list[dict[str, object]] = [public_jwk(_public_pem, AUTH_KEY_ID)]
+    keys: list[dict[str, str]] = [public_jwk(_public_pem, AUTH_KEY_ID)]
     signed_payload = {
         "keys": keys,
         "issued_at": issued_at.isoformat(),
@@ -476,6 +477,7 @@ def get_auth_keys() -> dict[str, object]:
         Path(settings.catalog_key_dir)
     )
     catalog_private_key = serialization.load_pem_private_key(catalog_private_pem, password=None)
+    assert isinstance(catalog_private_key, Ed25519PrivateKey)
     signature = catalog_private_key.sign(canonical)
     return {
         **signed_payload,

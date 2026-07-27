@@ -18,6 +18,8 @@ from .scheduler import (
 )
 from .service import (
     apply_retention_policy as apply_retention_policy_fs,
+)
+from .service import (
     create_backup,
     delete_backup,
     list_backups,

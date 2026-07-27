@@ -5,9 +5,8 @@ Covers ORCH-002, ORCH-003, ORG-006, ORG-007.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-import aiosqlite
 import pytest
 
 from ibreeze.company import create_company
@@ -146,7 +145,7 @@ class TestTransferEmployeeBlocksActiveTask:
                 base_profile_version_id=published_profile,
             ),
         )
-        employee = await create_employee(
+        await create_employee(
             db,
             company.id,
             department.id,

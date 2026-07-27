@@ -97,7 +97,7 @@ class ProcessSupervisor:
                 "stderr_sha256": stderr_sha256,
                 "completed_at": _now(),
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self.kill(run_id)
             return {
                 "run_id": run_id,

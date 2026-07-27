@@ -3,8 +3,8 @@
 import time
 import uuid as _uuid
 
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
 from ibreeze_backend.db.session import async_session_factory
@@ -20,7 +20,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
         if any(path.startswith(p) for p in _HEALTH_PREFIXES):
             return await call_next(request)
@@ -33,7 +33,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         duration = time.perf_counter() - start
 
         user_id = _extract_user_id(request)
-        details: dict = {
+        details: dict[str, object] = {
             "method": request.method,
             "path": path,
             "status_code": response.status_code,

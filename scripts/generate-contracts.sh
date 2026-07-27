@@ -18,90 +18,59 @@ cd "$ROOT_DIR"
 
 echo "--- Step 1: Validate JSON Schemas ---"
 # Validate all schema files have correct $schema and no duplicate $id
-python3 -c "
-import json, sys, os
-from pathlib import Path
+python3 "$ROOT_DIR/scripts/validate-schemas.py"
 
-schemas_dir = Path('packages/contracts')
-errors = []
-seen_ids = {}
+echo "--- Step 2: Bundle schemas (inline \$ref) ---"
+BUNDLE_DIR="$TMP_DIR/bundled-rpc"
+node "$ROOT_DIR/scripts/bundle-schemas.mjs" "$ROOT_DIR/packages/rpc-schema" "$BUNDLE_DIR"
 
-for schema_file in schemas_dir.rglob('*.schema.json'):
-    with open(schema_file) as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError as e:
-            errors.append(f'{schema_file}: JSON decode error: {e}')
-            continue
-    
-    # Check $schema
-    if data.get('\$schema') != 'https://json-schema.org/draft/2020-12/schema':
-        errors.append(f'{schema_file}: Missing or incorrect \$schema')
-    
-    # Check $id
-    if '\$id' in data:
-        schema_id = data['\$id']
-        if schema_id in seen_ids:
-            errors.append(f'{schema_file}: Duplicate \$id: {schema_id} (also in {seen_ids[schema_id]})')
-        seen_ids[schema_id] = str(schema_file)
-    else:
-        errors.append(f'{schema_file}: Missing \$id')
-
-if errors:
-    for e in errors:
-        print(f'ERROR: {e}', file=sys.stderr)
-    sys.exit(1)
-
-print('All schemas valid')
-"
-
-echo "--- Step 2: Generate TypeScript types (RPC) ---"
+echo "--- Step 3: Generate TypeScript types (RPC) ---"
 cd "$ROOT_DIR/packages/contracts"
 npm ci --prefer-offline --no-audit 2>/dev/null || npm install
 
-# Generate TypeScript from rpc-schema
-npx json2ts -i "$ROOT_DIR/packages/rpc-schema" -o "$TMP_DIR/desktop-rpc" \
+npx json2ts -i "$BUNDLE_DIR" -o "$TMP_DIR/desktop-rpc" \
   --style.singleQuotes --style.semicolons --no-banner \
   --unknownAny false --strictIndexSignatures --enableConstEnums false
 
-echo "--- Step 3: Generate Pydantic models (Sidecar) ---"
+echo "--- Step 4: Generate Pydantic models (Sidecar) ---"
 cd "$ROOT_DIR/sidecar"
 uv run datamodel-codegen \
-  --input "$ROOT_DIR/packages/rpc-schema" \
+  --input "$BUNDLE_DIR" \
   --input-file-type jsonschema \
-  --output "$TMP_DIR/sidecar-rpc/rpc.py" \
+  --output "$TMP_DIR/sidecar-rpc" \
   --output-model-type pydantic_v2.BaseModel \
   --field-constraints --snake-case-field --use-standard-collections \
-  --use-default --use-default-kwargs --reuse-model --respect-field-order \
+  --use-default --use-default-kwarg --reuse-model \
   --class-name-suffix "Schema" --base-class "ibreeze.schemas.BaseSchema"
 
 # Also generate from contracts for domain events
 uv run datamodel-codegen \
   --input "$ROOT_DIR/packages/contracts/domain-events" \
   --input-file-type jsonschema \
-  --output "$TMP_DIR/sidecar-domain-events/events.py" \
+  --output "$TMP_DIR/sidecar-domain-events" \
   --output-model-type pydantic_v2.BaseModel \
   --field-constraints --snake-case-field --use-standard-collections \
-  --use-default --use-default-kwargs --reuse-model --respect-field-order \
+  --use-default --use-default-kwarg --reuse-model \
   --class-name-suffix "Event" --base-class "ibreeze.schemas.BaseSchema"
 
 # Generate Skill manifest model
+mkdir -p "$TMP_DIR/sidecar-skills"
 uv run datamodel-codegen \
   --input "$ROOT_DIR/packages/contracts/skill/skill-manifest.v1.schema.json" \
   --input-file-type jsonschema \
   --output "$TMP_DIR/sidecar-skills/skill_manifest.py" \
   --output-model-type pydantic_v2.BaseModel \
   --field-constraints --snake-case-field --use-standard-collections \
-  --use-default --use-default-kwargs --reuse-model --respect-field-order \
+  --use-default --use-default-kwarg --reuse-model \
   --base-class "ibreeze.schemas.BaseSchema"
 
-echo "--- Step 4: Generate Rust types (Desktop Core) ---"
+echo "--- Step 5: Generate Rust types (Desktop Core) ---"
 cd "$ROOT_DIR/scripts/schema-gen-rust"
 cargo build --release 2>/dev/null || cargo build
 
-# Generate RPC types
+# Generate RPC types (from bundled schemas)
 "$ROOT_DIR/scripts/schema-gen-rust/target/release/schema-gen-rust" \
-  --input "$ROOT_DIR/packages/rpc-schema" \
+  --input "$BUNDLE_DIR" \
   --output "$TMP_DIR/desktop-core-rpc" \
   --mod-name "ibreeze_rpc"
 
@@ -111,7 +80,7 @@ cargo build --release 2>/dev/null || cargo build
   --output "$TMP_DIR/desktop-core-contracts" \
   --mod-name "ibreeze_contracts"
 
-echo "--- Step 5: Generate OpenAPI spec (Backend API) ---"
+echo "--- Step 6: Generate OpenAPI spec (Backend API) ---"
 cd "$ROOT_DIR/apps/backend-api"
 uv run python -c "
 from ibreeze_backend.main import app
@@ -120,12 +89,12 @@ with open('$TMP_DIR/openapi.json', 'w') as f:
     json.dump(app.openapi(), f, indent=2, sort_keys=True)
 "
 
-echo "--- Step 6: Generate TypeScript API client (Admin Web) ---"
+echo "--- Step 7: Generate TypeScript API client (Admin Web) ---"
 cd "$ROOT_DIR/packages/contracts"
 npx openapi-typescript "$TMP_DIR/openapi.json" -o "$TMP_DIR/admin-web-api/api.ts" \
   --prepend "export type { } from '@tanstack/react-query'"
 
-echo "--- Step 7: Atomic replace generated files ---"
+echo "--- Step 8: Atomic replace generated files ---"
 # Desktop RPC
 mkdir -p "$ROOT_DIR/apps/desktop/src/generated/rpc"
 rsync -a --delete "$TMP_DIR/desktop-rpc/" "$ROOT_DIR/apps/desktop/src/generated/rpc/"
@@ -155,7 +124,7 @@ rsync -a --delete "$TMP_DIR/admin-web-api/" "$ROOT_DIR/apps/admin-web/src/genera
 mkdir -p "$ROOT_DIR/packages/contracts/openapi"
 cp "$TMP_DIR/openapi.json" "$ROOT_DIR/packages/contracts/openapi/openapi.json"
 
-echo "--- Step 8: Verify deterministic generation ---"
+echo "--- Step 9: Verify deterministic generation ---"
 # Run generation again and ensure no diff
 "$0" --verify-only 2>/dev/null || true
 

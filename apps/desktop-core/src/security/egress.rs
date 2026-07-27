@@ -82,9 +82,7 @@ impl EgressBroker {
         let lease = leases
             .iter()
             .find(|l| l.run_id == run_id && !l.cancelled)
-            .ok_or_else(|| {
-                AppError::NotFound("No active egress lease for this run".to_owned())
-            })?;
+            .ok_or_else(|| AppError::NotFound("No active egress lease for this run".to_owned()))?;
         super::ssrf_guard::validate_outbound_url(url, &lease.allowed_domains).await
     }
 }

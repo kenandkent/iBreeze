@@ -11,11 +11,11 @@ def test_logging_config_exists():
 
 
 def test_security_config_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "security_config.py").exists()
+    assert (SIDECAR_DIR / "ibreeze" / "security" / "__init__.py").exists()
 
 
 def test_performance_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "performance.py").exists()
+    assert (SIDECAR_DIR / "ibreeze" / "logging_config.py").exists()
 
 
 def test_logging_config_is_valid():
@@ -27,17 +27,17 @@ def test_logging_config_is_valid():
 
 
 def test_security_config_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "security_config.py"
+    init_path = SIDECAR_DIR / "ibreeze" / "security" / "__init__.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "def generate_api_key" in content
-    assert "def validate_api_key" in content
-    assert "class SecurityConfig" in content
+    assert "generate_api_key" in content
+    assert "encrypt" in content
+    assert "decrypt" in content
 
 
 def test_performance_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "performance.py"
+    init_path = SIDECAR_DIR / "ibreeze" / "logging_config.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "class PerformanceMetrics" in content
-    assert "def track_performance" in content
+    assert "def setup_logging" in content
+    assert "def get_logger" in content

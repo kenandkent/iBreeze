@@ -1,0 +1,16 @@
+[package]
+name = "ibreeze_rpc"
+version = "0.1.0"
+edition = "2021"
+description = "Generated JSON Schema types for ibreeze_rpc"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+lto = true
+opt-level = 3

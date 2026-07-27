@@ -208,4 +208,4 @@ async def expire_stale_approvals(
         (now, company_id, now),
     )
     await db.commit()
-    return cursor.rowcount
+    return cursor.rowcount  # type: ignore[no-any-return]

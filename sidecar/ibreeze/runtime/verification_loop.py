@@ -35,7 +35,7 @@ async def verify_and_fix(
     while attempts < MAX_FIX_ATTEMPTS:
         attempts += 1
 
-        proc_info = await supervisor.start(
+        await supervisor.start(
             f"{run_id}_verify_{attempts}",
             verification_command.split(),
             cwd=cwd,

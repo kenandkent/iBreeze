@@ -27,7 +27,7 @@ def _now() -> str:
 
 
 async def _write_event(
-    db: Any, *, company_id: str, run_id: str, event_type: str, payload: dict,
+    db: Any, *, company_id: str, run_id: str, event_type: str, payload: dict[str, Any],
 ) -> None:
     import uuid
     event_id = str(uuid.uuid4())
@@ -136,14 +136,14 @@ async def _probe_adapter(adapter_type: str) -> bool:
     if name is None:
         return adapter_type == "api_model"
     try:
-        probe = await probe_agent(name, timeout_seconds=5)
+        probe = await probe_agent(name, timeout_seconds=5)  # type: ignore[arg-type]
         return probe.available
     except Exception:
         return False
 
 
 async def _execute_cli(
-    run_id: str, spec: dict, adapter_type: str,
+    run_id: str, spec: dict[str, Any], adapter_type: str,
 ) -> dict[str, Any]:
     """Execute a CLI adapter run using the structured adapter classes."""
     import tempfile
@@ -179,7 +179,7 @@ async def _execute_cli(
     }
 
 
-def _get_adapter(adapter_type: str):
+def _get_adapter(adapter_type: str) -> CodexAdapter | ClaudeCodeAdapter | OpenCodeAdapter | None:
     mapping = {
         "codex_cli": CodexAdapter,
         "claude_code": ClaudeCodeAdapter,
@@ -189,10 +189,10 @@ def _get_adapter(adapter_type: str):
     cls = mapping.get(adapter_type)
     if cls is None:
         return None
-    return cls()
+    return cls()  # type: ignore[return-value]
 
 
-async def _execute_model(run_id: str, spec: dict) -> dict[str, Any]:
+async def _execute_model(run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """Execute an API Model run via ModelRuntime.
 
     Uses credential_ref instead of api_key - the Rust side

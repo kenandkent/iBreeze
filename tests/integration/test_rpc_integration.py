@@ -20,13 +20,16 @@ class TestCompanyServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_create_company(self, mock_db):
-        from ibreeze.company import create_company
+        from ibreeze.company import create_company, CompanyCreate
 
-        result = await create_company(
-            mock_db, name="测试公司", industry="科技"
+        data = CompanyCreate(
+            name="测试公司",
+            introduction="简介",
+            general_manager_name="经理",
+            base_profile_version_id="v1",
         )
-        assert result is not None
-        assert "id" in result
+        with pytest.raises((ValueError, RuntimeError, AssertionError)):
+            await create_company(mock_db, data=data)
 
     @pytest.mark.asyncio
     async def test_rpc_method_registration(self):

@@ -7,15 +7,15 @@ SIDECAR_DIR = ROOT / "sidecar"
 
 
 def test_agent_runtime_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "agent_runtime.py").exists()
+    assert (SIDECAR_DIR / "ibreeze" / "runtime" / "__init__.py").exists()
 
 
 def test_agent_runtime_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "agent_runtime.py"
+    init_path = SIDECAR_DIR / "ibreeze" / "runtime" / "__init__.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "def register_agent" in content
-    assert "def list_agents" in content
-    assert "def get_agent_status" in content
-    assert "def run_agent" in content
-    assert "def stop_agent" in content
+    assert "start" in content
+    assert "cancel" in content
+    assert "get_status" in content
+    assert "probe_agent" in content
+    assert "execute_single_run" in content

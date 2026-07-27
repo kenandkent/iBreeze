@@ -44,7 +44,7 @@ async def lock_optimistic(
         f"UPDATE {table} SET version=? WHERE id=? AND version=?{company_clause}",
         tuple(params),
     )
-    return cursor.rowcount == 1
+    return cursor.rowcount == 1  # type: ignore[no-any-return]
 
 
 async def check_idempotency(

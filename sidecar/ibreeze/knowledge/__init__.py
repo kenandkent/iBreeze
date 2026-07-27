@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from .chunker import chunk_code, chunk_markdown, chunk_text
+from .embeddings import EmbeddingService, get_embedding_service
 from .generation import (
     count_items_for_generation,
     count_lancedb_items,
     get_active_generation,
     list_generations,
 )
-from .chunker import chunk_code, chunk_markdown, chunk_text
-from .embeddings import EmbeddingService, get_embedding_service
 from .hybrid_search import hybrid_search, reciprocal_rank_fusion
 from .service import (
     check_consolidation,

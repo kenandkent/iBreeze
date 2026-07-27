@@ -64,6 +64,7 @@ def _session_id(request: Request, audience: str) -> uuid.UUID:
     payload = verify_access_token(_extract_access_token(request), audience)
     if payload is None:
         raise_problem(401, "AUTH_TOKEN_EXPIRED", "Invalid or expired token")
+    assert payload is not None
     return uuid.UUID(payload["sid"])
 
 
@@ -270,6 +271,7 @@ async def admin_refresh_endpoint(
     if refresh_token is None:
         logger.error("admin_refresh.failed", extra={"error": "missing_refresh_token"})
         raise_problem(401, "AUTH_MISSING_TOKEN", "Missing refresh token")
+    assert refresh_token is not None
     try:
         result = await refresh_tokens(db, refresh_token, ADMIN_AUDIENCE)
         logger.info("admin_refresh.completed")

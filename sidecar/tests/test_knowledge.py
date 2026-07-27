@@ -313,7 +313,7 @@ async def test_search_knowledge(
     published_profile: str,
 ) -> None:
     company, _, source_event = await _scope(db, published_profile, "搜索测试公司")
-    item = await import_knowledge(
+    await import_knowledge(
         db,
         company.id,
         KnowledgeItemCreate(

@@ -8,7 +8,9 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from ibreeze.schemas import (
+    CompanyStatus,
     ConversationResponse,
+    ConversationType,
     MessageResponse,
     SubmitUserMessageRequest,
     SubmitUserMessageResponse,
@@ -159,9 +161,9 @@ async def create_conversation(
     return ConversationResponse(
         id=conv_id,
         company_id=company_id,
-        conversation_type="company",
+        conversation_type=ConversationType.COMPANY,
         department_id=None,
-        status="active",
+        status=CompanyStatus.ACTIVE,
         created_at=_dt(now),
     )
 

@@ -148,8 +148,6 @@ async def test_too_many_entries_rejected(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_path_traversal_rejected(tmp_path: Path):
     manifest = _make_manifest()
-    data = _make_zip_with_manifest(manifest)
-    buf = io.BytesIO(data)
     # We need to add a traversal entry manually, recreate with malicious path
     buf2 = io.BytesIO()
     with zipfile.ZipFile(buf2, "w") as zf:
@@ -231,7 +229,6 @@ async def test_manifest_identity_mismatch_rejected(tmp_path: Path):
 async def test_file_hash_mismatch_rejected(tmp_path: Path):
     main_content = "content of main.py"
     instr_content = "# Instructions"
-    real_main_hash = hashlib.sha256(main_content.encode()).hexdigest()
     real_instr_hash = hashlib.sha256(instr_content.encode()).hexdigest()
     manifest = _make_manifest()
     manifest["files"][0]["sha256"] = "a" * 64  # wrong hash for main.py

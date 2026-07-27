@@ -32,10 +32,12 @@ public_router = APIRouter(prefix="/api/v1/catalog", tags=["compatibility-public"
 def _expected_version(value: str | None) -> int:
     if value is None:
         raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
+        return 0
     try:
         return int(value.strip('"'))
     except ValueError:
         raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
+        return 0
 
 
 def _raise(exc: ValueError) -> None:
@@ -68,12 +70,10 @@ async def list_rules_endpoint(
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     logger.info("list_rules.start", extra={"limit": limit})
-    items = {
-        "items": [RuleResponse.model_validate(item) for item in await list_rules(db, limit)],
-        "next_cursor": None,
-    }
-    logger.info("list_rules.completed", extra={"count": len(items["items"])})
-    return items
+    rules = [RuleResponse.model_validate(item) for item in await list_rules(db, limit)]
+    result: dict[str, object] = {"items": rules, "next_cursor": None}
+    logger.info("list_rules.completed", extra={"count": len(rules)})
+    return result
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)

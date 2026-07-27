@@ -19,11 +19,11 @@ _SENSITIVE_KEYS = frozenset({
 })
 
 
-def _sanitize(data: dict | None) -> dict | None:
+def _sanitize(data: dict[str, Any] | None) -> dict[str, Any] | None:
     """Sanitize audit detail: truncate content + redact sensitive fields."""
     if not data:
         return None
-    sanitized = {}
+    sanitized: dict[str, Any] = {}
     for key, value in data.items():
         if key.lower() in _SENSITIVE_KEYS:
             sanitized[key] = "[REDACTED]"

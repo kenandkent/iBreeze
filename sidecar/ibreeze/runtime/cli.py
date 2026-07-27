@@ -137,7 +137,7 @@ class CliAdapter:
             process.terminate()
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 process.kill()
                 stdout, stderr = await process.communicate()
             timed_out = True
@@ -300,4 +300,4 @@ def create_adapter(
         "opencode": OpenCodeAdapter,
     }
     adapter_cls = adapters[adapter_type]
-    return adapter_cls(executable)
+    return adapter_cls(executable)  # type: ignore[return-value]

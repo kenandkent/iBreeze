@@ -15,7 +15,7 @@ def test_conversation_is_valid():
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "def create_conversation" in content
-    assert "def add_message" in content
+    assert "def submit_user_message" in content
     assert "def list_messages" in content
     assert "def archive_conversation" in content
-    assert "def search_conversations" in content
+    assert "def list_conversations" in content

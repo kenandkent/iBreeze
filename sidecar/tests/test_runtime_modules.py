@@ -9,27 +9,26 @@ import uuid
 import aiosqlite
 import pytest
 
-from ibreeze.runtime.permission_gateway import (
-    DEFAULT_RULES,
-    PermissionDecision,
-    check_permission,
-    is_denied,
-    requires_approval,
-)
-from ibreeze.runtime.token_budget import (
-    MODEL_LIMITS,
-    calculate_budget,
-    truncate_to_budget,
-)
-from ibreeze.runtime.context_engine import ContextEngine
 from ibreeze.runtime.checkpoint import (
     create_checkpoint,
     get_latest_checkpoint,
     list_checkpoints,
     restore_checkpoint,
 )
+from ibreeze.runtime.context_engine import ContextEngine
 from ibreeze.runtime.event_compactor import compact_events
+from ibreeze.runtime.permission_gateway import (
+    PermissionDecision,
+    check_permission,
+    is_denied,
+    requires_approval,
+)
 from ibreeze.runtime.recovery import recover_stale_runs
+from ibreeze.runtime.token_budget import (
+    MODEL_LIMITS,
+    calculate_budget,
+    truncate_to_budget,
+)
 from ibreeze.runtime.workspace_broker import (
     activate_workspace,
     allocate_workspace,
@@ -335,7 +334,10 @@ class TestRecovery:
 
 
 # ── workspace_broker ─────────────────────────────────────────────────
-async def _create_workspace_prereqs(db: aiosqlite.Connection, company_id: str, company_task_id: str, workspace_grant_id: str):
+async def _create_workspace_prereqs(
+    db: aiosqlite.Connection, company_id: str,
+    company_task_id: str, workspace_grant_id: str,
+):
     now = "2026-01-01T00:00:00Z"
     conv_id = str(uuid.uuid4())
     msg_event = str(uuid.uuid4())

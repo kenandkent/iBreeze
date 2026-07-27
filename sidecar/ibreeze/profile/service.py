@@ -46,7 +46,7 @@ async def create_draft(
         if existing is not None:
             raise ValueError("DRAFT_ALREADY_EXISTS")
 
-        normalized_name = base_profile.get("name", "").strip().lower()
+        normalized_name = str(base_profile.get("name", "")).strip().lower()
 
         await db.execute(
             """INSERT INTO employee_base_profiles
@@ -219,7 +219,7 @@ async def bind_skill(
 ) -> dict[str, object]:
     """Bind a skill to profile."""
     import hashlib as _hashlib
-    now = _now()
+    _now()
 
     await db.execute("BEGIN IMMEDIATE")
     try:
@@ -251,6 +251,7 @@ async def bind_skill(
                 (draft["id"],),
             )
         )
+        assert max_order_row is not None
         next_order = max_order_row["next_order"]
 
         binding_id = _id()
@@ -411,7 +412,7 @@ async def retire_version(
     version_id: str,
 ) -> dict[str, object]:
     """Retire a published version."""
-    now = _now()
+    _now()
 
     await db.execute("BEGIN IMMEDIATE")
     try:

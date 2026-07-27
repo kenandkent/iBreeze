@@ -13,11 +13,10 @@ import os
 import sqlite3
 import tarfile
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from ibreeze.backup.validator import restore_from_backup, validate_backup_database
+from ibreeze.backup.validator import restore_from_backup
 
 
 @pytest.fixture

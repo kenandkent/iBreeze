@@ -187,7 +187,7 @@ async def test_skill_upload_rejects_invalid_packages(
         headers=_headers(admin_tokens),
     )
     assert response.status_code == 422
-    assert response.json()["detail"] == error_code
+    assert response.json()["message"] == error_code
 
 
 @pytest.mark.asyncio

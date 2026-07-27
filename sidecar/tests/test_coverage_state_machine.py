@@ -5,8 +5,6 @@ from __future__ import annotations
 import pytest
 
 from ibreeze.state_machine import (
-    CompanyTaskState,
-    EmployeeTaskState,
     StateTransitionError,
     can_transition,
     get_allowed_targets,
@@ -14,7 +12,6 @@ from ibreeze.state_machine import (
     transition,
     validate_resume_state,
 )
-
 
 # ── is_terminal ────────────────────────────────────────────────────────
 

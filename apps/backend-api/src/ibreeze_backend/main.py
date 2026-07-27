@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -30,7 +31,7 @@ logger = get_logger("ibreeze.main")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging(level=settings.log_level, json_format=settings.log_json)
     logger.info("backend.startup", extra={"version": app.version, "log_level": settings.log_level})
     yield
@@ -43,7 +44,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_exception_handler(ProblemDetailError, problem_detail_handler)
+app.add_exception_handler(ProblemDetailError, problem_detail_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, generic_exception_handler)
 
 app.add_middleware(

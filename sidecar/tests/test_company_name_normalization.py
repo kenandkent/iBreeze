@@ -5,7 +5,6 @@ Tests that equivalent NFKC names are properly rejected.
 
 from __future__ import annotations
 
-import aiosqlite
 import pytest
 
 from ibreeze.company import create_company, rename_company

@@ -21,10 +21,10 @@ def record_request(duration: float, method: str, path: str, status_code: int) ->
         _duration_count[key] += 1
 
 
-def get_metrics() -> dict:
+def get_metrics() -> dict[str, object]:
     with _lock:
         uptime = time.time() - _started_at
-        by_endpoint: dict[str, dict] = {}
+        by_endpoint: dict[str, dict[str, object]] = {}
         for key in _request_counts:
             count = _request_counts[key]
             total_duration = _duration_sum[key]

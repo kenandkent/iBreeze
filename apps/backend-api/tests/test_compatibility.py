@@ -86,7 +86,7 @@ async def test_rule_validation_rejects_ambiguous_version_range(
         headers=_headers(admin_tokens),
     )
     assert response.status_code == 422
-    assert response.json()["detail"] == "COMPATIBILITY_VERSION_RANGE_INVALID"
+    assert response.json()["message"] == "COMPATIBILITY_VERSION_RANGE_INVALID"
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_published_rule_is_immutable(
         headers=_headers(admin_tokens, "1"),
     )
     assert response.status_code == 409
-    assert response.json()["detail"] == "CATALOG_REVISION_IMMUTABLE"
+    assert response.json()["message"] == "CATALOG_REVISION_IMMUTABLE"
 
 
 @pytest.mark.asyncio

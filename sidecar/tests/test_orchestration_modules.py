@@ -3,40 +3,37 @@ plan_generator, role_behavior, availability_checker."""
 
 from __future__ import annotations
 
-import json
 import uuid
 
 import aiosqlite
 import pytest
 
-from ibreeze.orchestration.execution_chain import (
-    confirm_plan,
-    modify_plan,
-    request_plan_confirmation,
-)
-from ibreeze.orchestration.report_generator import (
-    generate_company_review,
-    generate_department_report,
-    generate_final_report,
-)
-from ibreeze.orchestration.plan_generator import generate_company_plan
-from ibreeze.orchestration.role_behavior import (
-    AgentRole,
-    DepartmentHeadBehavior,
-    EmployeeBehavior,
-    GeneralManagerBehavior,
-    RoleBehavior,
-    create_role_behavior,
-)
 from ibreeze.orchestration.availability_checker import (
     AvailabilityReport,
-    CheckResult,
     CheckStatus,
     check_concurrency_slot,
     check_health,
     check_model,
     check_workspace,
     run_availability_checks,
+)
+from ibreeze.orchestration.execution_chain import (
+    confirm_plan,
+    modify_plan,
+    request_plan_confirmation,
+)
+from ibreeze.orchestration.plan_generator import generate_company_plan
+from ibreeze.orchestration.report_generator import (
+    generate_company_review,
+    generate_department_report,
+    generate_final_report,
+)
+from ibreeze.orchestration.role_behavior import (
+    AgentRole,
+    DepartmentHeadBehavior,
+    EmployeeBehavior,
+    GeneralManagerBehavior,
+    create_role_behavior,
 )
 
 
@@ -45,7 +42,10 @@ def _sha256(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
 
 
-async def _setup_orch_env(db: aiosqlite.Connection, company_id: str, version_id: str, profile_id: str, employee_id: str, dept_id: str):
+async def _setup_orch_env(
+    db: aiosqlite.Connection, company_id: str, version_id: str,
+    profile_id: str, employee_id: str, dept_id: str,
+):
     now = "2026-01-01T00:00:00Z"
     await db.execute("PRAGMA foreign_keys = OFF")
     try:
@@ -55,7 +55,8 @@ async def _setup_orch_env(db: aiosqlite.Connection, company_id: str, version_id:
         dept_conv_id = str(uuid.uuid4())
         release_id = str(uuid.uuid4())
         await db.execute(
-            """INSERT INTO company_revisions (id, company_id, revision_number, name, introduction, content_sha256, created_by_type, created_at)
+            """INSERT INTO company_revisions
+               (id, company_id, revision_number, name, introduction, content_sha256, created_by_type, created_at)
                VALUES (?, ?, 1, 'Co', 'Intro', ?, 'system', ?)""",
             (rev_id, company_id, _sha256("co"), now),
         )
@@ -65,7 +66,8 @@ async def _setup_orch_env(db: aiosqlite.Connection, company_id: str, version_id:
             (dept_conv_id, company_id, now),
         )
         await db.execute(
-            """INSERT INTO department_revisions (id, department_id, company_id, revision_number, name, function_description, content_sha256, created_at)
+            """INSERT INTO department_revisions
+               (id, department_id, company_id, revision_number, name, function_description, content_sha256, created_at)
                VALUES (?, ?, ?, 1, 'Root', 'Root', ?, ?)""",
             (dept_rev_id, dept_id, company_id, _sha256("root"), now),
         )

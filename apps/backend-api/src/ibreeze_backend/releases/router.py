@@ -5,9 +5,9 @@ import json as _json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
 
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -25,6 +25,7 @@ from ibreeze_backend.db.session import get_db_session
 from ibreeze_backend.dependencies import get_current_user
 from ibreeze_backend.models.catalog_release import CatalogRelease, CatalogReleaseItem
 from ibreeze_backend.models.skill import Skill
+from ibreeze_backend.models.user import User
 from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.releases.bundle import cleanup_dangling_objects, upload_resource_bundles
 from ibreeze_backend.releases.emergency import (
@@ -75,8 +76,8 @@ async def _next_release_sequence(db: AsyncSession) -> int:
 @admin_router.get("/catalog/releases")
 async def list_releases_admin_endpoint(
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
-) -> dict:
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info("list_releases")
     result = await db.execute(
         select(CatalogRelease).order_by(CatalogRelease.release_sequence.desc()).limit(100)
@@ -106,8 +107,8 @@ async def list_releases_admin_endpoint(
 async def create_release_endpoint(
     body: ReleaseCreate,
     db: AsyncSession = Depends(get_db_session),
-    current_user=Depends(get_current_user),
-) -> dict:
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info("create_release", extra={"version": body.version, "notes": body.notes})
     sequence = await _next_release_sequence(db)
 
@@ -129,6 +130,8 @@ async def create_release_endpoint(
     key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     private_key = serialization.load_pem_private_key(private_pem, password=None)
+    if not isinstance(private_key, Ed25519PrivateKey):
+        raise ValueError("Unexpected private key type - expected Ed25519")
 
     manifest = await build_manifest(db, release.id, sequence, body.version, release.created_at)
     manifest_bytes = manifest_to_bytes(manifest)
@@ -188,26 +191,31 @@ async def create_release_endpoint(
 async def publish_release_endpoint(
     release_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
-) -> dict:
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info("publish_release", extra={"release_id": str(release_id)})
     result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
     release = result.scalar_one_or_none()
     if not release:
         logger.warning("publish_release_failed", extra={"reason": "not_found", "release_id": str(release_id)})
         raise_problem(404, "RELEASE_NOT_FOUND", "Release not found")
+        return {}
     if release.status == "published":
         logger.warning("publish_release_failed", extra={"reason": "already_published", "release_id": str(release_id)})
         raise_problem(400, "RELEASE_ALREADY_PUBLISHED", "Release already published")
+        return {}
 
     if not release.manifest_json:
         raise_problem(400, "RELEASE_NOT_READY", "Release manifest not built")
+        return {}
 
-    manifest: dict[str, Any] = cast(dict[str, Any], release.manifest_json)
+    manifest = release.manifest_json
     resources = manifest.get("resources", [])
     key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     private_key = serialization.load_pem_private_key(private_pem, password=None)
+    if not isinstance(private_key, Ed25519PrivateKey):
+        raise ValueError("Unexpected private key type - expected Ed25519")
 
     manifest_key = f"catalog/releases/{release.release_sequence}/manifest.json"
 
@@ -245,8 +253,8 @@ async def publish_release_endpoint(
 async def create_emergency_disable_endpoint(
     body: EmergencyDisableCreate,
     db: AsyncSession = Depends(get_db_session),
-    current_user=Depends(get_current_user),
-) -> dict:
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info(
         "create_emergency_disable",
         extra={"resource_type": body.resource_type, "resource_id": body.resource_id, "actor": current_user.id},
@@ -259,6 +267,8 @@ async def create_emergency_disable_endpoint(
     key_dir = Path(settings.catalog_key_dir)
     private_pem, public_pem, kid = load_or_create_signing_keys(key_dir)
     private_key = serialization.load_pem_private_key(private_pem, password=None)
+    if not isinstance(private_key, Ed25519PrivateKey):
+        raise ValueError("Unexpected private key type - expected Ed25519")
     signature = compute_manifest_signature(payload_bytes, private_key)
 
     disable = await create_emergency_disable(
@@ -293,13 +303,14 @@ async def create_emergency_disable_endpoint(
 @admin_router.get("/emergency-disables/latest")
 async def get_latest_emergency_disable_endpoint(
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
-) -> dict:
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info("get_latest_emergency_disable")
     disable = await get_latest_emergency_disable(db)
     if not disable:
         logger.warning("get_latest_emergency_disable_failed", extra={"reason": "not_found"})
         raise_problem(404, "EMERGENCY_DISABLE_NOT_FOUND", "No emergency disables found")
+        return {}
     payload = disable.payload_json or {}
     return {
         "id": str(disable.id),
@@ -314,7 +325,7 @@ async def get_latest_emergency_disable_endpoint(
 @public_router.get("/catalog/manifest")
 async def get_latest_manifest_endpoint(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     logger.info("get_latest_manifest")
     result = await db.execute(
         select(CatalogRelease)
@@ -326,23 +337,26 @@ async def get_latest_manifest_endpoint(
     if not release:
         logger.warning("get_latest_manifest_failed", extra={"reason": "no_published_release"})
         raise_problem(404, "RELEASE_NOT_FOUND", "No published release found")
+        return {}
     if not release.manifest_json:
         logger.warning("get_latest_manifest_failed", extra={"reason": "no_stored_manifest"})
         raise_problem(404, "MANIFEST_NOT_FOUND", "Stored manifest not found")
-    return cast(dict[str, Any], release.manifest_json)
+        return {}
+    return release.manifest_json
 
 
 @public_router.get("/catalog/releases/{release_id}")
 async def get_release_endpoint(
     release_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     logger.info("get_release", extra={"release_id": str(release_id)})
     result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
     release = result.scalar_one_or_none()
     if not release:
         logger.warning("get_release_failed", extra={"reason": "not_found", "release_id": str(release_id)})
         raise_problem(404, "RELEASE_NOT_FOUND", "Release not found")
+        return {}
     return {
         "id": str(release.id),
         "version": release.minimum_client_version,
@@ -358,17 +372,19 @@ async def get_release_endpoint(
 async def reconcile_release_endpoint(
     release_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    _current_user=Depends(get_current_user),
-) -> dict:
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
     logger.info("reconcile_release", extra={"release_id": str(release_id)})
     result = await db.execute(select(CatalogRelease).where(CatalogRelease.id == release_id))
     release = result.scalar_one_or_none()
     if not release:
         raise_problem(404, "RELEASE_NOT_FOUND", "Release not found")
+        return {}
     if not release.manifest_json:
         raise_problem(400, "RELEASE_NOT_READY", "Release manifest not built")
+        return {}
 
-    manifest_data: dict[str, Any] = cast(dict[str, Any], release.manifest_json)
+    manifest_data = release.manifest_json
     resources = manifest_data.get("resources", [])
     manifest_key = release.manifest_object_key or f"catalog/releases/{release.release_sequence}/manifest.json"
 
@@ -383,7 +399,7 @@ async def reconcile_release_endpoint(
 @public_router.get("/catalog/agents")
 async def list_agents_endpoint(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """列出所有已发布的 Agent"""
     logger.info("list_agents")
 
@@ -410,7 +426,7 @@ async def list_agents_endpoint(
 async def list_agent_models_endpoint(
     agent_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """列出指定 Agent 可用的模型"""
     logger.info("list_agent_models", extra={"agent_id": str(agent_id)})
 
@@ -425,6 +441,7 @@ async def list_agent_models_endpoint(
     if not agent:
         logger.warning("list_agent_models_failed", extra={"reason": "agent_not_found", "agent_id": str(agent_id)})
         raise_problem(404, "AGENT_NOT_FOUND", "Agent not found")
+        return {}
 
     # 获取绑定的模型
     binding_result = await db.execute(select(AgentModelBinding).where(AgentModelBinding.agent_id == agent_id))
@@ -458,7 +475,7 @@ async def list_agent_models_endpoint(
 @public_router.get("/catalog/providers")
 async def list_providers_endpoint(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """列出所有已发布的 Provider"""
     logger.info("list_providers")
 
@@ -488,7 +505,7 @@ async def list_providers_endpoint(
 async def list_provider_models_endpoint(
     provider_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """列出指定 Provider 可用的模型"""
     logger.info("list_provider_models", extra={"provider_id": str(provider_id)})
 
@@ -505,6 +522,7 @@ async def list_provider_models_endpoint(
             "list_provider_models_failed", extra={"reason": "provider_not_found", "provider_id": str(provider_id)}
         )
         raise_problem(404, "PROVIDER_NOT_FOUND", "Provider not found")
+        return {}
 
     # 获取绑定的模型
     binding_result = await db.execute(
@@ -540,7 +558,7 @@ async def list_provider_models_endpoint(
 @public_router.get("/catalog/skills")
 async def list_skills_endpoint(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """列出所有已发布的 Skill"""
     logger.info("list_skills")
 
@@ -569,7 +587,7 @@ async def get_release_resources(
     release_id: uuid.UUID,
     resource_type: str,
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """获取指定 catalog release 中特定类型的资源"""
     logger.info(
         "get_release_resources",
@@ -606,13 +624,14 @@ async def get_release_resources(
 @public_router.get("/catalog/emergency-disables/latest")
 async def get_latest_emergency_disable_public_endpoint(
     db: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, object]:
     """获取最新紧急禁用"""
     logger.info("get_latest_emergency_disable_public")
     disable = await get_latest_emergency_disable(db)
     if not disable:
         logger.warning("get_latest_emergency_disable_public_failed", extra={"reason": "not_found"})
         raise_problem(404, "EMERGENCY_DISABLE_NOT_FOUND", "No emergency disables found")
+        return {}
     payload = disable.payload_json or {}
     return {
         "id": str(disable.id),

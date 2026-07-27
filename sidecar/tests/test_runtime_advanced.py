@@ -18,7 +18,7 @@ from ibreeze.runtime.scheduler import (
     update_fairness,
 )
 from ibreeze.schemas import CompanyCreate
-from ibreeze.state_machine import can_transition, get_allowed_targets, is_terminal
+from ibreeze.state_machine import can_transition, is_terminal
 
 
 async def _company(db: aiosqlite.Connection, profile_id: str, name: str):

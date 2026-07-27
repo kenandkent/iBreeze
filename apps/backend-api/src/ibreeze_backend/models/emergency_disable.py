@@ -18,7 +18,7 @@ class EmergencyDisableRelease(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (CheckConstraint("sequence > 0", name="ck_ed_sequence"),)
 
     sequence: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
-    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    payload_json: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     signing_key_id: Mapped[str] = mapped_column(String(100), nullable=False)

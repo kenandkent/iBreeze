@@ -159,7 +159,7 @@ async def get_artifact_version_chain(
         if artifact is None:
             break
         chain.append(artifact)
-        current_id = artifact.get("supersedes_artifact_id")
+        current_id = artifact.get("supersedes_artifact_id")  # type: ignore[assignment]
 
     return chain
 

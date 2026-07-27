@@ -6,12 +6,12 @@ import re
 from typing import Any
 
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r'Authorization["\s:=]+\S+', re.I), "Authorization [REDACTED]"),
-    (re.compile(r'Cookie["\s:=]+\S+', re.I), "Cookie [REDACTED]"),
-    (re.compile(r'password["\s:=]+\S+', re.I), "password [REDACTED]"),
-    (re.compile(r'token["\s:=]+\S+', re.I), "token [REDACTED]"),
-    (re.compile(r'api[_-]?key["\s:=]+\S+', re.I), "api_key [REDACTED]"),
-    (re.compile(r'secret["\s:=]+\S+', re.I), "secret [REDACTED]"),
+    (re.compile(r'Authorization["\s:=]+[^\n]+', re.I), "Authorization [REDACTED]"),
+    (re.compile(r'Cookie["\s:=]+[^\n]+', re.I), "Cookie [REDACTED]"),
+    (re.compile(r'password["\s:=]+[^\n]+', re.I), "password [REDACTED]"),
+    (re.compile(r'token["\s:=]+[^\n]+', re.I), "token [REDACTED]"),
+    (re.compile(r'api[_-]?key["\s:=]+[^\n]+', re.I), "api_key [REDACTED]"),
+    (re.compile(r'secret["\s:=]+[^\n]+', re.I), "secret [REDACTED]"),
 ]
 
 

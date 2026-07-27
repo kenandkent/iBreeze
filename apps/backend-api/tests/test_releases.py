@@ -58,7 +58,7 @@ async def test_publish_nonexistent_release(client: AsyncClient, admin_tokens: di
         headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     assert response.status_code == 404
-    assert response.json()["detail"] == "Release not found"
+    assert response.json()["message"] == "Release not found"
 
 
 @pytest.mark.asyncio
@@ -81,7 +81,7 @@ async def test_publish_already_published(client: AsyncClient, admin_tokens: dict
         headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Release already published"
+    assert response.json()["message"] == "Release already published"
 
 
 @pytest.mark.asyncio
@@ -121,13 +121,18 @@ async def test_create_emergency_disable(client: AsyncClient, admin_tokens: dict,
 
     response = await client.post(
         "/admin/api/v1/emergency-disables",
-        json={"skill_ids": [skill_id]},
+        json={
+            "resource_type": "skill",
+            "resource_id": skill_id,
+            "reason": "test emergency disable",
+            "code": "TEST_EMERGENCY",
+        },
         headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     assert response.status_code == 201
     data = response.json()
     assert data["sequence"] == 1
-    assert skill_id in data["disabled_skill_ids"]
+    assert data["resource_id"] == skill_id
     assert "created_at" in data
 
     result = await db_session.execute(select(Skill).where(Skill.id == uuid.UUID(skill_id)))
@@ -140,12 +145,22 @@ async def test_get_latest_emergency_disable(client: AsyncClient, admin_tokens: d
     """Test getting the latest emergency disable record."""
     await client.post(
         "/admin/api/v1/emergency-disables",
-        json={"skill_ids": [str(uuid.uuid4())]},
+        json={
+            "resource_type": "skill",
+            "resource_id": str(uuid.uuid4()),
+            "reason": "test emergency disable",
+            "code": "TEST_EMERGENCY",
+        },
         headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
     await client.post(
         "/admin/api/v1/emergency-disables",
-        json={"skill_ids": [str(uuid.uuid4())]},
+        json={
+            "resource_type": "skill",
+            "resource_id": str(uuid.uuid4()),
+            "reason": "test emergency disable",
+            "code": "TEST_EMERGENCY",
+        },
         headers={"Authorization": f"Bearer {admin_tokens['access_token']}"},
     )
 

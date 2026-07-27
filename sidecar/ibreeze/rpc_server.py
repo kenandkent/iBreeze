@@ -7,7 +7,6 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import os
 import secrets
 import time
@@ -16,10 +15,6 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-from ibreeze.logging_config import get_logger
-
-logger = get_logger("ibreeze.rpc_server")
 
 from pydantic import BaseModel, ValidationError
 
@@ -54,6 +49,7 @@ from ibreeze.employee import (
     update_employee_status,
 )
 from ibreeze.local_db import LocalDB
+from ibreeze.logging_config import get_logger
 from ibreeze.schemas import (
     CompanyArchiveRequest,
     CompanyCreate,
@@ -77,6 +73,8 @@ from ibreeze.schemas import (
     ScopedListRequest,
     SubmitUserMessageRequest,
 )
+
+logger = get_logger("ibreeze.rpc_server")
 
 MAX_FRAME_BYTES = 16 * 1024 * 1024
 PROTOCOL_VERSION = 1
@@ -1090,10 +1088,10 @@ class RPCServer:
         return await create_draft(
             self._connection,
             company_id,
-            params["employee_id"],
-            params.get("agent_cli"),
-            params.get("api_model"),
-            params.get("base_profile"),
+            employee_id=params["employee_id"],
+            agent_cli=params.get("agent_cli", ""),
+            api_model=params.get("api_model", ""),
+            base_profile=params.get("base_profile", {}),
         )
 
     async def _profile_update_draft(self, params: dict[str, Any]) -> object:
@@ -1103,8 +1101,8 @@ class RPCServer:
             self._connection,
             params["company_id"],
             params["draft_id"],
-            params.get("agent_cli"),
-            params.get("api_model"),
+            agent_cli=params.get("agent_cli", ""),
+            api_model=params.get("api_model", ""),
         )
 
     async def _profile_get(self, params: dict[str, Any]) -> object:
@@ -1132,8 +1130,8 @@ class RPCServer:
             self._connection,
             params["company_id"],
             params["profile_id"],
-            params["skill_id"],
-            params["skill_version"],
+            skill_id=params["skill_id"],
+            skill_version=params["skill_version"],
         )
 
     async def _profile_unbind_skill(self, params: dict[str, Any]) -> object:
@@ -1143,7 +1141,7 @@ class RPCServer:
             self._connection,
             params["company_id"],
             params["profile_id"],
-            params["skill_id"],
+            skill_id=params["skill_id"],
         )
 
     async def _profile_validate(self, params: dict[str, Any]) -> object:
@@ -1209,7 +1207,7 @@ class RPCServer:
             params["company_id"],
             params["task_id"],
             params["employee_id"],
-            params["reason"],
+            reason=params["reason"],
         )
 
     async def _task_reject_plan(self, params: dict[str, Any]) -> object:
@@ -1220,7 +1218,7 @@ class RPCServer:
             params["company_id"],
             params["task_id"],
             params["employee_id"],
-            params["reason"],
+            reason=params["reason"],
         )
 
     async def _task_pause(self, params: dict[str, Any]) -> object:
@@ -1251,7 +1249,7 @@ class RPCServer:
             params["company_id"],
             params["task_id"],
             params["employee_id"],
-            params.get("reason", ""),
+            reason=params.get("reason", ""),
         )
 
     async def _task_get(self, params: dict[str, Any]) -> object:
@@ -1269,7 +1267,7 @@ class RPCServer:
         return await list_company_tasks(
             self._connection,
             params["company_id"],
-            params.get("status"),
+            status=params.get("status"),
         )
 
     async def _task_get_graph(self, params: dict[str, Any]) -> object:
@@ -1308,8 +1306,8 @@ class RPCServer:
             self._connection,
             params["company_id"],
             params["dept_task_id"],
-            params["old_employee_id"],
-            params["new_employee_id"],
+            old_employee_id=params["old_employee_id"],
+            new_employee_id=params["new_employee_id"],
         )
 
     async def _dept_task_get_report(self, params: dict[str, Any]) -> object:
@@ -1380,7 +1378,6 @@ class RPCServer:
         return {"run_id": run_id, "status": "queued", "created_at": now}
 
     async def _runtime_stop(self, params: dict[str, Any]) -> object:
-        from .runtime.service import cancel_run
 
         company_id = params.get("company_id")
         agent_id = params.get("agent_id") or params.get("agentId")
@@ -1412,8 +1409,8 @@ class RPCServer:
         return await list_agent_runs(
             self._connection,
             params["company_id"],
-            params.get("task_id"),
-            params.get("status"),
+            task_id=params.get("task_id"),
+            status=params.get("status"),
         )
 
     async def _run_list_events(self, params: dict[str, Any]) -> object:

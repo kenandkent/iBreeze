@@ -36,7 +36,7 @@ async def check_agent_cli(
     try:
         from ibreeze.runtime.cli import probe_agent
 
-        probe = await probe_agent(adapter_type)
+        probe = await probe_agent(adapter_type)  # type: ignore[arg-type]
         return CheckResult(
             check_name="agent_cli",
             status=CheckStatus.PASS if probe.available else CheckStatus.FAIL,
@@ -61,7 +61,7 @@ async def check_provider(
     try:
         from ibreeze.runtime.transport import create_transport
 
-        transport = create_transport(provider, api_key="probe", model=model)
+        transport = create_transport(provider, model=model)
         available = await transport.probe()
         return CheckResult(
             check_name="provider",

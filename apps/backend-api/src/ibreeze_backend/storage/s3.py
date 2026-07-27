@@ -4,9 +4,9 @@ import hashlib
 import logging
 from pathlib import Path
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
+import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from ibreeze_backend.settings import settings
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class S3ObjectStorage:
     """S3-compatible object storage for skill packages."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.bucket_name = settings.s3_bucket_name
         self.client = boto3.client(
             "s3",
@@ -182,7 +182,7 @@ class S3ObjectStorage:
 
             # 从元数据中获取 SHA-256
             metadata = response.get("Metadata", {})
-            return metadata.get("content-sha256")
+            return metadata.get("content-sha256")  # type: ignore[no-any-return]
 
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":

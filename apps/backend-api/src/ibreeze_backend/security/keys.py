@@ -91,6 +91,8 @@ def get_signed_keyset(key_dir: Path) -> dict[str, object]:
     }
     canonical = json.dumps(signed_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     private_key = serialization.load_pem_private_key(private_pem, password=None)
+    if not isinstance(private_key, Ed25519PrivateKey):
+        raise ValueError("Unexpected private key type - expected Ed25519")
     signature = private_key.sign(canonical)
     return {
         **signed_payload,

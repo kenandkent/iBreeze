@@ -4,8 +4,8 @@ from pathlib import Path
 
 from ibreeze.local_db import LocalDB
 from ibreeze.persistence.migrations import run_migrations
-from ibreeze.persistence.write_queue import WriteQueue
 from ibreeze.persistence.read_pool import ReadPool
+from ibreeze.persistence.write_queue import WriteQueue
 from ibreeze.rpc_server import RPCServer
 from ibreeze.workers.analysis import AnalysisWorker
 from ibreeze.workers.runtime import RuntimeWorker

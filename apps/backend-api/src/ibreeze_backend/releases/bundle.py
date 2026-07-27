@@ -20,8 +20,8 @@ S3_CLIENT_CACHE: dict[str, Any] = {}
 
 def _get_s3_client() -> Any:
     if "client" not in S3_CLIENT_CACHE:
-        import boto3
-        from botocore.config import Config
+        import boto3  # type: ignore[import-untyped]
+        from botocore.config import Config  # type: ignore[import-untyped]
 
         S3_CLIENT_CACHE["client"] = boto3.client(
             "s3",

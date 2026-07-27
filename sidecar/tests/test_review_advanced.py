@@ -234,7 +234,7 @@ class TestReviewReportHashBinding:
             review_round=1,
             reviewed_sha256="d" * 64,
         )
-        report_id = await _create_report_direct(
+        await _create_report_direct(
             db,
             company.id,
             assignment_id=assignment["id"],
@@ -352,7 +352,7 @@ class TestIssueCloseGuard:
             report_artifact_id="report-high",
             verdict="needs_changes",
         )
-        issue = await create_review_issue(
+        await create_review_issue(
             db,
             company.id,
             report_id=report_id,

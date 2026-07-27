@@ -50,7 +50,7 @@ class JSONFormatter(logging.Formatter):
             "message": record.msg,
         }
         if hasattr(record, "request_id"):
-            log_entry["request_id"] = record.request_id  # type: ignore[attr-defined]
+            log_entry["request_id"] = record.request_id
         if record.exc_info and record.exc_info[0] is not None:
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry, default=str)

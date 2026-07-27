@@ -19,6 +19,7 @@ class RoleBehavior:
         self.role = role
         self.employee_id = employee_id
         self.company_id = company_id
+        self.department_id: str = ""
 
     async def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         """Execute role behavior based on context."""

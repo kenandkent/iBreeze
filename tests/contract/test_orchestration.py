@@ -7,15 +7,15 @@ SIDECAR_DIR = ROOT / "sidecar"
 
 
 def test_orchestration_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "orchestration.py").exists()
+    assert (SIDECAR_DIR / "ibreeze" / "orchestration" / "__init__.py").exists()
 
 
 def test_orchestration_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "orchestration.py"
+    init_path = SIDECAR_DIR / "ibreeze" / "orchestration" / "__init__.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "def create_orchestration" in content
-    assert "def list_orchestrations" in content
-    assert "def get_orchestration" in content
-    assert "def add_node" in content
-    assert "def add_edge" in content
+    assert "generate_company_plan" in content
+    assert "dispatch_company_task" in content
+    assert "validate_plan" in content
+    assert "confirm_plan" in content
+    assert "list_workflow_templates" in content

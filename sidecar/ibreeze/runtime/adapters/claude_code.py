@@ -57,7 +57,7 @@ class ClaudeCodeAdapter:
         if not line:
             return None
         try:
-            return json.loads(line)
+            return json.loads(line)  # type: ignore[no-any-return]
         except (json.JSONDecodeError, ValueError):
             return None
 

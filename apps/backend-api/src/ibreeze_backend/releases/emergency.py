@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,7 @@ async def create_emergency_disable(
     db: AsyncSession,
     *,
     actor_user_id: uuid.UUID,
-    payload_json: dict,
+    payload_json: dict[str, Any],
     payload_sha256: str,
     signature: str,
     signing_key_id: str,

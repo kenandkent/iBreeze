@@ -192,4 +192,4 @@ async def create_subtasks(
     creator = creators.get(strategy)
     if creator is None:
         raise ValueError(f"Unknown strategy: {strategy}")
-    return await creator(**kwargs)
+    return await creator(**kwargs)  # type: ignore[no-any-return,operator]

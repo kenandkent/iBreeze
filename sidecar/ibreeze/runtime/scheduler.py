@@ -122,12 +122,12 @@ async def heartbeat_lease(db: Any, lease_id: str) -> bool:
         (now, lease_id, now),
     )
     await db.commit()
-    return cursor.rowcount == 1
+    return cursor.rowcount == 1  # type: ignore[no-any-return]
 
 
 async def release_lease(db: Any, lease_id: str) -> None:
     """Release a lease and mark queue entry completed."""
-    now = _now()
+    _now()
     cursor = await db.execute(
         "SELECT queue_id FROM runtime_leases WHERE id = ?",
         (lease_id,),

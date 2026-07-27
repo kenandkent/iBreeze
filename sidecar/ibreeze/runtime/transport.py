@@ -26,11 +26,14 @@ class ModelTransport:
         self,
         messages: tuple[dict[str, object], ...],
         tool_names: tuple[str, ...],
-    ) -> ModelTurn: ...
+    ) -> ModelTurn:
+        raise NotImplementedError
 
-    async def probe(self) -> bool: ...
+    async def probe(self) -> bool:
+        raise NotImplementedError
 
-    def normalize_usage(self, raw_usage: dict[str, Any]) -> UsageStats: ...
+    def normalize_usage(self, raw_usage: dict[str, Any]) -> UsageStats:
+        raise NotImplementedError
 
 
 class ReverseRpcClient:

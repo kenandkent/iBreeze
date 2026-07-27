@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import time
-import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-
-
-# ── security.audit ────────────────────────────────────────────────────
 
 from ibreeze.security.audit import (
     GENESIS_HASH,
@@ -22,6 +17,29 @@ from ibreeze.security.audit import (
     _sanitize,
     list_audit_logs,
     log_audit,
+)
+from ibreeze.security.encryption import (
+    decrypt,
+    derive_key,
+    encrypt,
+    generate_api_key,
+    hash_password,
+    is_bcrypt_hash,
+    sha256_hex,
+    verify_password,
+)
+from ibreeze.security.path_safety import (
+    PathViolationError,
+    create_write_approval,
+    resolve_safe,
+    validate_no_traversal,
+    verify_write_approval,
+)
+from ibreeze.security.rbac import Role, check_permission, require_permission
+from ibreeze.security.redaction import redact_dict, redact_string
+from ibreeze.security.skill_verify import (
+    compute_package_hash,
+    validate_package_paths,
 )
 
 
@@ -147,19 +165,6 @@ async def test_list_audit_logs_empty() -> None:
     assert result == []
 
 
-# ── security.encryption ──────────────────────────────────────────────
-
-from ibreeze.security.encryption import (
-    derive_key,
-    encrypt,
-    decrypt,
-    hash_password,
-    verify_password,
-    generate_api_key,
-    sha256_hex,
-    is_bcrypt_hash,
-)
-
 
 def test_derive_key_returns_key_and_salt() -> None:
     key, salt = derive_key("password123")
@@ -208,16 +213,6 @@ def test_is_bcrypt_hash() -> None:
     assert not is_bcrypt_hash("$argon2id$...")
     assert not is_bcrypt_hash("plain")
 
-
-# ── security.path_safety ─────────────────────────────────────────────
-
-from ibreeze.security.path_safety import (
-    PathViolationError,
-    resolve_safe,
-    validate_no_traversal,
-    create_write_approval,
-    verify_write_approval,
-)
 
 
 def test_resolve_safe_accepts_valid_path(tmp_path: Path) -> None:
@@ -275,10 +270,6 @@ def test_verify_write_approval_expired() -> None:
     assert verify_write_approval(approval, "/path", "hash1") is False
 
 
-# ── security.rbac ─────────────────────────────────────────────────────
-
-from ibreeze.security.rbac import Role, check_permission, require_permission
-
 
 def test_admin_has_all_permissions() -> None:
     assert check_permission(Role.ADMIN, "company.create")
@@ -313,10 +304,6 @@ def test_require_permission_raises() -> None:
 def test_require_permission_succeeds() -> None:
     require_permission(Role.USER, "task.read")
 
-
-# ── security.redaction ────────────────────────────────────────────────
-
-from ibreeze.security.redaction import redact_string, redact_dict
 
 
 def test_redact_string_authorization() -> None:
@@ -368,14 +355,6 @@ def test_redact_dict_non_string_values() -> None:
     assert result["active"] is True
     assert result["ratio"] == 3.14
 
-
-# ── security.skill_verify ─────────────────────────────────────────────
-
-from ibreeze.security.skill_verify import (
-    SkillVerificationError,
-    validate_package_paths,
-    compute_package_hash,
-)
 
 
 def test_validate_package_paths_clean(tmp_path: Path) -> None:

@@ -71,18 +71,18 @@ class TestCLIAdapterContract:
         assert hasattr(ModelTransport, "normalize_usage")
 
     def test_model_transport_openai_has_complete(self):
-        """CT-014: OpenAITransport should implement complete method."""
-        from ibreeze.runtime.transport import OpenAITransport
+        """CT-014: ReverseRpcTransport should implement complete method."""
+        from ibreeze.runtime.transport import ReverseRpcTransport
 
-        transport = OpenAITransport(api_key="test-key", model="gpt-4o")
+        transport = ReverseRpcTransport(credential_ref="test-key", model="gpt-4o")
         assert hasattr(transport, "complete")
         assert asyncio.iscoroutinefunction(transport.complete)
 
     def test_model_transport_openai_has_probe(self):
-        """CT-014: OpenAITransport should implement probe method."""
-        from ibreeze.runtime.transport import OpenAITransport
+        """CT-014: ReverseRpcTransport should implement probe method."""
+        from ibreeze.runtime.transport import ReverseRpcTransport
 
-        transport = OpenAITransport(api_key="test-key")
+        transport = ReverseRpcTransport(credential_ref="test-key", model="gpt-4o")
         assert hasattr(transport, "probe")
         assert asyncio.iscoroutinefunction(transport.probe)
 

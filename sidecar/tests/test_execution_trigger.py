@@ -11,10 +11,9 @@ import pytest
 
 from ibreeze.company import create_company
 from ibreeze.conversation import get_company_conversation, submit_user_message
-from ibreeze.schemas import CompanyCreate, SubmitUserMessageRequest
-from ibreeze.task.service import confirm_plan
 from ibreeze.orchestration.dispatcher import dispatch_company_task
 from ibreeze.runtime.run_executor import execute_single_run
+from ibreeze.schemas import CompanyCreate, SubmitUserMessageRequest
 
 
 def _id() -> str:

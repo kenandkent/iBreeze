@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +12,6 @@ import pytest
 from ibreeze.knowledge.chunker import chunk_code, chunk_markdown, chunk_text
 from ibreeze.knowledge.embeddings import EmbeddingService, get_embedding_service
 from ibreeze.knowledge.hybrid_search import (
-    RRF_K,
     _id,
     _now,
     _sha256,

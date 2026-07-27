@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -15,8 +12,6 @@ from ibreeze.rpc_server import (
     PROTOCOL_VERSION,
     DomainError,
     RPCServer,
-    _serialize,
-    _uuid,
 )
 
 
@@ -48,7 +43,9 @@ def _request(
 
 
 async def _handshake(server: RPCServer, token: bytes, launch_id: str) -> str:
-    import base64, hashlib, hmac as _hmac
+    import base64
+    import hashlib
+    import hmac as _hmac
     nonce = base64.b64encode(b"n" * 32).decode()
     message = b"1.0.0" + str(PROTOCOL_VERSION).encode() + launch_id.encode() + nonce.encode()
     proof = base64.b64encode(_hmac.new(token, message, hashlib.sha256).digest()).decode()
@@ -188,7 +185,9 @@ class TestHandshakeErrors:
 
     async def test_handshake_invalid_nonce(self, server_factory):
         server, token, launch_id = server_factory()
-        import base64, hashlib, hmac as _hmac
+        import base64
+        import hashlib
+        import hmac as _hmac
         nonce = base64.b64encode(b"n" * 32).decode()
         message = b"1.0.0" + str(PROTOCOL_VERSION).encode() + launch_id.encode() + nonce.encode()
         proof = base64.b64encode(_hmac.new(token, message, hashlib.sha256).digest()).decode()
@@ -207,7 +206,9 @@ class TestHandshakeErrors:
 
     async def test_handshake_wrong_nonce_length(self, server_factory):
         server, token, launch_id = server_factory()
-        import base64, hashlib, hmac as _hmac
+        import base64
+        import hashlib
+        import hmac as _hmac
         nonce = base64.b64encode(b"short").decode()
         message = b"1.0.0" + str(PROTOCOL_VERSION).encode() + launch_id.encode() + nonce.encode()
         proof = base64.b64encode(_hmac.new(token, message, hashlib.sha256).digest()).decode()
@@ -226,7 +227,9 @@ class TestHandshakeErrors:
 
     async def test_handshake_wrong_version(self, server_factory):
         server, token, launch_id = server_factory()
-        import base64, hashlib, hmac as _hmac
+        import base64
+        import hashlib
+        import hmac as _hmac
         nonce = base64.b64encode(b"n" * 32).decode()
         message = b"1.0.0" + str(PROTOCOL_VERSION).encode() + launch_id.encode() + nonce.encode()
         proof = base64.b64encode(_hmac.new(token, message, hashlib.sha256).digest()).decode()
@@ -301,7 +304,7 @@ class TestCursorEdgeCases:
 
     def test_decode_cursor_corrupted_hmac(self, server_factory):
         server, _, _ = server_factory()
-        import base64, json
+        import base64
         payload = json.dumps({"id": "x", "created_at": "2026-01-01T00:00:00Z"}).encode()
         bad_sig = b"\x00" * 32
         raw = payload + bad_sig
@@ -311,7 +314,9 @@ class TestCursorEdgeCases:
 
     def test_decode_cursor_bad_json(self, server_factory):
         server, _, _ = server_factory()
-        import base64, hashlib, hmac as _hmac
+        import base64
+        import hashlib
+        import hmac as _hmac
         payload = b"not json"
         sig = _hmac.new(server._cursor_key, payload, hashlib.sha256).digest()
         cursor = base64.urlsafe_b64encode(payload + sig).decode().rstrip("=")
@@ -334,7 +339,7 @@ class TestIdempotency:
     async def test_conflict_different_request(self, server_factory, published_profile):
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
-        company_id = await _setup_company(server, session, published_profile)
+        await _setup_company(server, session, published_profile)
         key = _uid()
         # First call with idempotency key (writes are idempotent)
         await server._handle_request(_request(
@@ -597,10 +602,11 @@ class TestKnowledgeImportRemove:
         if "result" not in msg_resp:
             return _uid()
         # Query the domain_events table for the event_id
-        import json as _json
         task_id = msg_resp["result"]["company_task_id"]
         cursor = await server._connection.execute(
-            "SELECT event_id FROM domain_events WHERE company_id=? AND aggregate_id=? ORDER BY occurred_at DESC LIMIT 1",
+            "SELECT event_id FROM domain_events"
+            " WHERE company_id=? AND aggregate_id=?"
+            " ORDER BY occurred_at DESC LIMIT 1",
             (company_id, task_id),
         )
         row = await cursor.fetchone()
@@ -848,7 +854,8 @@ class TestDepartmentArchive:
             _meta(ipc_session_id=session, idempotency_key=None),
         ))
         # Skip root department (can't archive)
-        items = dept_resp.get("result", {}).get("items") if isinstance(dept_resp.get("result"), dict) else dept_resp.get("result", [])
+        result_val = dept_resp.get("result", {})
+        items = result_val.get("items") if isinstance(result_val, dict) else result_val
         if items:
             found = False
             for dept in items:

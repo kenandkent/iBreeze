@@ -99,7 +99,7 @@ async def test_agent_revision_lifecycle_and_optimistic_lock(
         headers=_headers(admin_tokens, **{"If-Match": "1"}),
     )
     assert conflict.status_code == 409
-    assert conflict.json()["detail"] == "OPTIMISTIC_LOCK_CONFLICT"
+    assert conflict.json()["message"] == "OPTIMISTIC_LOCK_CONFLICT"
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_agent_validation_requires_non_overlapping_semver_ranges(
         headers=_headers(admin_tokens),
     )
     assert missing.status_code == 422
-    assert missing.json()["detail"] == "AGENT_VERSION_REQUIRED"
+    assert missing.json()["message"] == "AGENT_VERSION_REQUIRED"
 
     first = await client.post(
         f"/admin/api/v1/agents/{agent['id']}/versions",
@@ -151,7 +151,7 @@ async def test_agent_validation_requires_non_overlapping_semver_ranges(
         headers=_headers(admin_tokens),
     )
     assert rejected.status_code == 422
-    assert rejected.json()["detail"] == "AGENT_VERSION_RANGE_OVERLAP"
+    assert rejected.json()["message"] == "AGENT_VERSION_RANGE_OVERLAP"
 
 
 @pytest.mark.asyncio
@@ -178,7 +178,7 @@ async def test_catalog_requests_reject_unknown_fields_and_invalid_semver(
         headers=_headers(admin_tokens),
     )
     assert invalid.status_code == 422
-    assert invalid.json()["detail"] == "CATALOG_SEMVER_INVALID"
+    assert invalid.json()["message"] == "CATALOG_SEMVER_INVALID"
 
 
 @pytest.mark.asyncio
@@ -200,7 +200,7 @@ async def test_model_constraints_and_provider_url_policy(
         headers=_headers(admin_tokens),
     )
     assert invalid_model.status_code == 422
-    assert invalid_model.json()["detail"] == "MODEL_CAPABILITY_INVALID"
+    assert invalid_model.json()["message"] == "MODEL_CAPABILITY_INVALID"
 
     provider = await client.post(
         "/admin/api/v1/providers",
@@ -270,7 +270,7 @@ async def test_bindings_validate_ranges_and_request_defaults(
         headers=_headers(admin_tokens),
     )
     assert forbidden.status_code == 422
-    assert forbidden.json()["detail"] == "PROVIDER_REQUEST_DEFAULTS_FORBIDDEN"
+    assert forbidden.json()["message"] == "PROVIDER_REQUEST_DEFAULTS_FORBIDDEN"
 
 
 @pytest.mark.asyncio

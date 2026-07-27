@@ -1,6 +1,7 @@
 """Admin user management router."""
 
 import uuid
+from typing import cast
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
@@ -101,6 +102,7 @@ async def get_user_endpoint(
     if not user:
         logger.warning("get_user_endpoint_not_found", extra={"user_id": str(user_id)})
         raise_problem(404, "USER_NOT_FOUND", "User not found")
+        return cast(User, user)
     return user
 
 

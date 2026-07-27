@@ -7,7 +7,6 @@ from datetime import datetime
 import pytest
 
 from ibreeze.orchestration.department_matcher import (
-    DepartmentCandidate,
     DepartmentResponsibilityProfile,
     _coverage,
     match_departments,
@@ -16,12 +15,10 @@ from ibreeze.orchestration.workflow_templates import (
     SOFTWARE_REQUIREMENT_DELIVERY,
     WorkflowPhase,
     WorkflowStep,
-    WorkflowTemplate,
     get_next_steps,
     get_workflow_template,
     list_workflow_templates,
 )
-
 
 # ── workflow_templates ────────────────────────────────────────────────
 

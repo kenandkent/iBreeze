@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Request, Response
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
 
@@ -62,7 +62,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method in _READ_METHODS or _is_auth_path(request.url.path):
             return await call_next(request)
 
@@ -122,7 +122,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         .with_for_update()
                     )
                 ).scalar_one()
-                is_new = inserted.rowcount == 1
+                is_new = inserted.rowcount == 1  # type: ignore[attr-defined]
 
                 if not is_new:
                     if entry.request_sha256 != request_hash:

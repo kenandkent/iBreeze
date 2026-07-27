@@ -27,11 +27,9 @@ async fn resolve_host(host: &str) -> Result<Vec<std::net::IpAddr>, AppError> {
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
         return Ok(vec![ip]);
     }
-    let addrs = tokio::net::lookup_host((host, 0))
-        .await
-        .map_err(|e| {
-            AppError::Network(format!("SSRF guard: DNS resolution failed for {host}: {e}"))
-        })?;
+    let addrs = tokio::net::lookup_host((host, 0)).await.map_err(|e| {
+        AppError::Network(format!("SSRF guard: DNS resolution failed for {host}: {e}"))
+    })?;
     let ips: Vec<_> = addrs.map(|a| a.ip()).collect();
     if ips.is_empty() {
         return Err(AppError::Network(format!(
@@ -58,9 +56,9 @@ pub async fn validate_outbound_url(
         _ => {}
     }
 
-    let host = url.host_str().ok_or_else(|| {
-        AppError::Security("SSRF guard: URL has no host".to_owned())
-    })?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::Security("SSRF guard: URL has no host".to_owned()))?;
 
     if !allowed_domains.is_empty() {
         let is_allowed = allowed_domains

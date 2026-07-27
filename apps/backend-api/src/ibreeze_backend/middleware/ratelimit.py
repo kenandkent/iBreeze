@@ -4,8 +4,8 @@ import time
 from collections import defaultdict
 
 from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from ibreeze_backend.observability.logging_config import get_logger
@@ -33,7 +33,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         global _rate_limiter_instance
         _rate_limiter_instance = self
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path not in _AUTH_PATHS:
             return await call_next(request)
 

@@ -210,42 +210,57 @@ def create_approval_event(
     )
 
 
-def create_compacted_event(run_id: str, sequence: int, *, original_events: list, compacted_data: dict, trace_id: str = "") -> dict:
+def create_compacted_event(
+    run_id: str, sequence: int, *, original_events: list[Any],
+    compacted_data: dict[str, Any], trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "model.output.compacted", "data": {"original_count": len(original_events), **compacted_data}},
         run_id, sequence, trace_id=trace_id,
     )
 
 
-def create_tool_approved_event(run_id: str, sequence: int, *, tool_name: str, tool_args: dict, trace_id: str = "") -> dict:
+def create_tool_approved_event(
+    run_id: str, sequence: int, *, tool_name: str,
+    tool_args: dict[str, Any], trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "tool.approved", "data": {"tool": tool_name, "args": tool_args}},
         run_id, sequence, trace_id=trace_id,
     )
 
 
-def create_tool_rejected_event(run_id: str, sequence: int, *, tool_name: str, reason: str, trace_id: str = "") -> dict:
+def create_tool_rejected_event(
+    run_id: str, sequence: int, *, tool_name: str, reason: str, trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "tool.rejected", "data": {"tool": tool_name, "reason": reason}},
         run_id, sequence, trace_id=trace_id,
     )
 
 
-def create_workspace_changed_event(run_id: str, sequence: int, *, changes: list, trace_id: str = "") -> dict:
+def create_workspace_changed_event(
+    run_id: str, sequence: int, *, changes: list[Any], trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "workspace.changed", "data": {"changes": changes}},
         run_id, sequence, trace_id=trace_id,
     )
 
 
-def create_verification_started_event(run_id: str, sequence: int, *, target_run_id: str, trace_id: str = "") -> dict:
+def create_verification_started_event(
+    run_id: str, sequence: int, *, target_run_id: str, trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "verification.started", "data": {"target_run_id": target_run_id}},
         run_id, sequence, trace_id=trace_id,
     )
 
 
-def create_verification_completed_event(run_id: str, sequence: int, *, verdict: str, issues: list, trace_id: str = "") -> dict:
+def create_verification_completed_event(
+    run_id: str, sequence: int, *, verdict: str,
+    issues: list[Any], trace_id: str = "",
+) -> dict[str, Any]:
     return normalize_event(
         {"type": "verification.completed", "data": {"verdict": verdict, "issues": issues}},
         run_id, sequence, trace_id=trace_id,
@@ -271,4 +286,4 @@ async def store_event(db: Any, event: dict[str, Any]) -> str:
         ),
     )
     await db.commit()
-    return event["event_id"]
+    return event["event_id"]  # type: ignore[no-any-return]

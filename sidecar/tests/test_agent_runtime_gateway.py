@@ -273,7 +273,8 @@ class TestEvents:
     def test_event_publisher_unsubscribe(self):
         publisher = EventPublisher()
         received = []
-        callback = lambda e: received.append(e)
+        def callback(e):
+            return received.append(e)
         publisher.subscribe(EventType.RUN_STARTED, callback)
         publisher.unsubscribe(EventType.RUN_STARTED, callback)
         publisher.publish(
@@ -304,7 +305,8 @@ class TestEvents:
 
     def test_event_publisher_unsubscribe_nonexistent(self):
         publisher = EventPublisher()
-        callback = lambda e: None
+        def callback(e):
+            return None
         publisher.unsubscribe(EventType.RUN_STARTED, callback)
 
     def test_serialize_deserialize_event(self):

@@ -18,8 +18,8 @@ async def write_audit_log(
     resource_id: uuid.UUID | None = None,
     request_id: uuid.UUID,
     outcome: str,
-    before_json: dict | None = None,
-    after_json: dict | None = None,
+    before_json: dict[str, object] | None = None,
+    after_json: dict[str, object] | None = None,
     error_code: str | None = None,
     ip_address: str | None = None,
 ) -> None:

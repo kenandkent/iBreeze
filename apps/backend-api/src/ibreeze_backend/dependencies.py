@@ -30,6 +30,7 @@ async def get_current_user(
     payload = verify_access_token(credentials.credentials, audience)
     if not payload:
         raise_problem(401, "AUTH_TOKEN_EXPIRED", "Invalid or expired token")
+    assert payload is not None
 
     user_id = payload.get("sub")
     if not user_id:
@@ -39,6 +40,7 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user or user.status != "active":
         raise_problem(401, "AUTH_USER_DISABLED", "User not found or inactive")
+    assert user is not None
 
     expected_type = "admin" if audience == ADMIN_AUDIENCE else "app_user"
     if user.user_type != expected_type:

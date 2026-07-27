@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { readFileSync, readdirSync, existsSync, statSync } from "fs";
-import { join, dirname, extname } from "path";
-import { fileURLToPath } from "url";
+import { join, dirname, extname, resolve } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
@@ -87,6 +87,14 @@ for (const { filePath, schema } of schemas) {
   }
 }
 
+// Build a map of file path -> $id for relative $ref resolution
+const filePathToId = new Map();
+for (const { filePath, schema } of schemas) {
+  if (schema.$id) {
+    filePathToId.set(filePath, schema.$id);
+  }
+}
+
 // Phase 3: AJV compilation in a second pass (with all schemas loaded)
 const ajv = new Ajv({
   strictSchema: false,
@@ -98,11 +106,14 @@ const ajv = new Ajv({
 addFormats(ajv);
 
 // First add all schemas to AJV
-for (const { schema } of schemas) {
+for (const { filePath, schema } of schemas) {
   try {
     if (schema.$id) {
       ajv.addSchema(schema, schema.$id);
     }
+    // Also register by file URI so relative $ref paths resolve
+    const fileUri = pathToFileURL(resolve(filePath)).href;
+    ajv.addSchema(schema, fileUri);
   } catch (e) {
     // Ignore add errors, we'll catch them in compilation
   }
@@ -120,6 +131,19 @@ for (const { filePath, schema } of schemas) {
 }
 
 // Phase 4: Check for broken $ref references
+function resolveRefTarget(target, sourceFile) {
+  if (target.startsWith("#")) return null;
+  const fragment = target.includes("#") ? target.split("#")[1] : null;
+  const base = target.includes("#") ? target.split("#")[0] : target;
+  if (base.startsWith("http")) return null;
+  if (base.startsWith("file://")) return null;
+  // Resolve relative paths against the source file's directory
+  const resolved = resolve(dirname(sourceFile), base);
+  const fileUri = pathToFileURL(resolved).href;
+  // Look up by file URI or by $id
+  return { resolved, fileUri };
+}
+
 for (const [id, filePath] of allIds) {
   const content = readFileSync(filePath, "utf-8");
   const schema = JSON.parse(content);
@@ -129,13 +153,18 @@ for (const [id, filePath] of allIds) {
     const target = ref.match(/\$ref":\s*"([^"]+)"/)[1];
     if (target.startsWith("#")) continue;
     const resolvedId = target.includes("#") ? target.split("#")[0] : target;
-    if (resolvedId && !allIds.has(resolvedId)) {
-      if (resolvedId.startsWith("http")) continue;
-      console.error(
-        `BROKEN_REF: ${filePath} references "${target}" but no schema has $id="${resolvedId}"`,
-      );
-      errors++;
+    if (resolvedId && allIds.has(resolvedId)) continue;
+    if (resolvedId && resolvedId.startsWith("http")) continue;
+    // Check relative path resolution
+    const resolved = resolveRefTarget(target, filePath);
+    if (resolved) {
+      if (allIds.has(resolved.fileUri)) continue;
+      if (filePathToId.has(resolved.resolved) || filePathToId.has(resolved.fileUri)) continue;
     }
+    console.error(
+      `BROKEN_REF: ${filePath} references "${target}" but no schema has $id="${resolvedId}"`,
+    );
+    errors++;
   }
 }
 

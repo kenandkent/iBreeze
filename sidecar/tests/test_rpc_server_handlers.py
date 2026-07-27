@@ -12,8 +12,7 @@ import hmac
 import json
 import uuid
 from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -295,7 +294,7 @@ class TestSessionValidation:
 
     async def test_wrong_session_rejected(self, server_factory):
         server, token, launch_id = server_factory()
-        session = await _handshake(server, token, launch_id)
+        await _handshake(server, token, launch_id)
         wrong_session = _uid()
         resp = await server._handle_request(
             _request("company.list", {},
@@ -481,7 +480,7 @@ class TestBackupHandlers:
     async def test_backup_list(self, server_factory, published_profile):
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
-        company_id = await _setup_company(server, session, published_profile)
+        await _setup_company(server, session, published_profile)
         resp = await server._handle_request(_request(
             "backup.list",
             {},
@@ -495,7 +494,7 @@ class TestSettingsHandlers:
     async def test_settings_get_empty(self, server_factory, published_profile):
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
-        company_id = await _setup_company(server, session, published_profile)
+        await _setup_company(server, session, published_profile)
         resp = await server._handle_request(_request(
             "settings.get",
             {},
@@ -506,7 +505,7 @@ class TestSettingsHandlers:
     async def test_settings_update_empty(self, server_factory, published_profile):
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
-        company_id = await _setup_company(server, session, published_profile)
+        await _setup_company(server, session, published_profile)
         resp = await server._handle_request(_request(
             "settings.update",
             {"updates": {}},
@@ -872,7 +871,7 @@ class TestDomainErrorAndValidationError:
     async def test_domain_error_from_handler(self, server_factory, published_profile):
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
-        company_id = await _setup_company(server, session, published_profile)
+        await _setup_company(server, session, published_profile)
         resp = await server._handle_request(_request(
             "company.get",
             {"id": _uid(), "company_id": _uid()},

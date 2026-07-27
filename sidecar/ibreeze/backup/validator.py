@@ -10,14 +10,12 @@ Validates:
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import sqlite3
 import tarfile
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import zstandard as zstd

@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -52,7 +52,8 @@ async def _run_availability_checks(db: Any, company_id: str) -> dict[str, Any]:
         "detail": "",
     })
     cursor = await db.execute(
-        "SELECT release_id, downloaded_at FROM catalog_cache_releases WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1",
+        "SELECT release_id, downloaded_at FROM catalog_cache_releases"
+        " WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1",
     )
     row = await cursor.fetchone()
     if row is None:
@@ -77,10 +78,13 @@ async def _ensure_catalog_release(db: Any, now: str) -> str:
     )
     row = await cursor.fetchone()
     if row:
-        return row["release_id"]
+        return row["release_id"]  # type: ignore[no-any-return]
     new_id = _id()
     await db.execute(
-        "INSERT INTO catalog_cache_releases (release_id, release_sequence, manifest_json, manifest_sha256, signature, signing_key_id, status, downloaded_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO catalog_cache_releases"
+        " (release_id, release_sequence, manifest_json, manifest_sha256,"
+        " signature, signing_key_id, status, downloaded_at)"
+        " VALUES (?,?,?,?,?,?,?,?)",
         (new_id, 1, "{}", _sha256("{}"), "auto", "auto", "active", now),
     )
     return new_id
@@ -99,7 +103,9 @@ async def _insert_domain_event(
     now: str,
 ) -> None:
     await db.execute(
-        "INSERT INTO domain_events (event_id, company_id, aggregate_type, aggregate_id, aggregate_version, event_type, payload_json, trace_id, occurred_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO domain_events (event_id, company_id, aggregate_type,"
+        " aggregate_id, aggregate_version, event_type, payload_json,"
+        " trace_id, occurred_at) VALUES (?,?,?,?,?,?,?,?,?)",
         (
             event_id,
             company_id,
@@ -123,7 +129,9 @@ async def _insert_outbox(
     now: str,
 ) -> None:
     await db.execute(
-        "INSERT INTO outbox_events (id, domain_event_id, topic, payload_json, status, attempts, next_attempt_at, created_at) VALUES (?,?,?,?,'pending',0,?,?)",
+        "INSERT INTO outbox_events"
+        " (id, domain_event_id, topic, payload_json, status, attempts,"
+        " next_attempt_at, created_at) VALUES (?,?,?,?,'pending',0,?,?)",
         (outbox_id, domain_event_id, topic, json.dumps(payload, sort_keys=True), now, now),
     )
 
@@ -152,7 +160,10 @@ async def confirm_and_dispatch(
         raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
     cursor = await db.execute(
-        "SELECT id, canonical_json, content_sha256, version_number FROM company_plan_versions WHERE company_task_id=? AND company_id=? AND status='awaiting_user_confirmation' ORDER BY version_number DESC LIMIT 1",
+        "SELECT id, canonical_json, content_sha256, version_number"
+        " FROM company_plan_versions WHERE company_task_id=? AND company_id=?"
+        " AND status='awaiting_user_confirmation'"
+        " ORDER BY version_number DESC LIMIT 1",
         (command.company_task_id, command.company_id),
     )
     plan_row = await cursor.fetchone()
@@ -207,7 +218,11 @@ async def confirm_and_dispatch(
         initial_status = "ready" if not has_upstream else "waiting_dependency"
 
         await db.execute(
-            "INSERT INTO department_tasks (id, company_id, company_task_id, department_id, stage_key, objective, deliverables_json, acceptance_criteria_json, status, created_at, updated_at, version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO department_tasks"
+            " (id, company_id, company_task_id, department_id, stage_key,"
+            " objective, deliverables_json, acceptance_criteria_json,"
+            " status, created_at, updated_at, version)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 dept_task_id,
                 command.company_id,
@@ -230,7 +245,9 @@ async def confirm_and_dispatch(
             dep_dept_task_id = local_ref_to_dept_task.get(dep_ref)
             if dep_dept_task_id:
                 await db.execute(
-                    "INSERT OR IGNORE INTO department_task_dependencies (company_id, company_task_id, department_task_id, depends_on_task_id) VALUES (?,?,?,?)",
+                    "INSERT OR IGNORE INTO department_task_dependencies"
+                    " (company_id, company_task_id, department_task_id,"
+                    " depends_on_task_id) VALUES (?,?,?,?)",
                     (command.company_id, command.company_task_id, dept_task_id, dep_dept_task_id),
                 )
 
@@ -240,7 +257,11 @@ async def confirm_and_dispatch(
             for emp_id in contributor_ids:
                 emp_task_id = _id()
                 await db.execute(
-                    "INSERT INTO employee_tasks (id, company_id, department_task_id, employee_id, task_kind, objective, acceptance_criteria_json, status, created_at, updated_at, version) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO employee_tasks"
+                    " (id, company_id, department_task_id, employee_id,"
+                    " task_kind, objective, acceptance_criteria_json,"
+                    " status, created_at, updated_at, version)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         emp_task_id,
                         command.company_id,
@@ -276,8 +297,17 @@ async def confirm_and_dispatch(
 
                 binding = json.loads(profile_row["runtime_binding_json"])
                 raw_type = profile_row["profile_type"]
-                adapter_type = raw_type if raw_type in ("api_model", "codex_cli", "claude_code", "opencode") else "codex_cli"
-                model_id = binding.get("agent_cli") or binding.get("api_model", "") or binding.get("claude_code", "") or binding.get("opencode", "")
+                adapter_type = (
+                    raw_type
+                    if raw_type in ("api_model", "codex_cli", "claude_code", "opencode")
+                    else "codex_cli"
+                )
+                model_id = (
+                    binding.get("agent_cli")
+                    or binding.get("api_model", "")
+                    or binding.get("claude_code", "")
+                    or binding.get("opencode", "")
+                )
 
                 run_id = _id()
                 job_id = _id()
@@ -293,7 +323,12 @@ async def confirm_and_dispatch(
                 avail_snap_id = _id()
                 availability_checks = {"checks": [], "overall": "pending"}
                 await db.execute(
-                    "INSERT INTO employee_availability_snapshots (id, company_id, company_task_id, department_task_id, work_item_type, work_item_id, employee_id, base_profile_version_id, prospective_execution_sha256, catalog_release_id, checks_json, overall_status, checked_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO employee_availability_snapshots"
+                    " (id, company_id, company_task_id, department_task_id,"
+                    " work_item_type, work_item_id, employee_id,"
+                    " base_profile_version_id, prospective_execution_sha256,"
+                    " catalog_release_id, checks_json, overall_status,"
+                    " checked_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         avail_snap_id,
                         command.company_id,
@@ -321,7 +356,16 @@ async def confirm_and_dispatch(
 
                 exec_snap_id = _id()
                 await db.execute(
-                    "INSERT INTO execution_snapshots (id, company_id, company_task_id, department_id, department_task_id, employee_task_id, employee_id, snapshot_purpose, work_item_id, company_revision_id, department_revision_id, base_profile_version_id, catalog_release_id, runtime_binding_json, skill_lock_json, tool_policy_json, workspace_policy_json, verification_commands_json, content_sha256, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO execution_snapshots"
+                    " (id, company_id, company_task_id, department_id,"
+                    " department_task_id, employee_task_id, employee_id,"
+                    " snapshot_purpose, work_item_id, company_revision_id,"
+                    " department_revision_id, base_profile_version_id,"
+                    " catalog_release_id, runtime_binding_json,"
+                    " skill_lock_json, tool_policy_json,"
+                    " workspace_policy_json, verification_commands_json,"
+                    " content_sha256, created_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         exec_snap_id,
                         command.company_id,
@@ -347,7 +391,14 @@ async def confirm_and_dispatch(
                 )
 
                 await db.execute(
-                    "INSERT INTO agent_runs (id, company_id, company_task_id, department_task_id, employee_task_id, work_item_id, employee_id, conversation_id, availability_snapshot_id, execution_snapshot_id, run_purpose, adapter_type, run_spec_json, run_spec_sha256, status, attempt, created_at, updated_at, version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO agent_runs"
+                    " (id, company_id, company_task_id, department_task_id,"
+                    " employee_task_id, work_item_id, employee_id,"
+                    " conversation_id, availability_snapshot_id,"
+                    " execution_snapshot_id, run_purpose, adapter_type,"
+                    " run_spec_json, run_spec_sha256, status, attempt,"
+                    " created_at, updated_at, version)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         run_id,
                         command.company_id,
@@ -371,7 +422,10 @@ async def confirm_and_dispatch(
                     ),
                 )
                 await db.execute(
-                    "INSERT INTO runtime_queue (id, company_id, work_item_type, work_item_id, job_id, run_id, priority, status, queued_at) VALUES (?,?, 'employee_task', ?, ?, ?, 0, 'ready', ?)",
+                    "INSERT INTO runtime_queue"
+                    " (id, company_id, work_item_type, work_item_id, job_id,"
+                    " run_id, priority, status, queued_at)"
+                    " VALUES (?,?, 'employee_task', ?, ?, ?, 0, 'ready', ?)",
                     (_id(), command.company_id, emp_task_id, job_id, run_id, now),
                 )
 
@@ -384,7 +438,10 @@ async def confirm_and_dispatch(
         "company_task_id": command.company_task_id,
     }, sort_keys=True)
     await db.execute(
-        "INSERT INTO artifacts (id, company_id, company_task_id, artifact_type, logical_name, object_sha256, object_size, media_type, metadata_json, created_by_type, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO artifacts"
+        " (id, company_id, company_task_id, artifact_type, logical_name,"
+        " object_sha256, object_size, media_type, metadata_json,"
+        " created_by_type, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             plan_artifact_id,
             command.company_id,
@@ -402,7 +459,8 @@ async def confirm_and_dispatch(
 
     new_version = task_row["version"] + 1
     cursor = await db.execute(
-        "UPDATE company_tasks SET status='executing', version=version+1, updated_at=? WHERE id=? AND company_id=? AND version=?",
+        "UPDATE company_tasks SET status='executing', version=version+1,"
+        " updated_at=? WHERE id=? AND company_id=? AND version=?",
         (now, command.company_task_id, command.company_id, command.expected_version),
     )
     if cursor.rowcount != 1:

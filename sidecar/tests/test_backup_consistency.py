@@ -12,7 +12,6 @@ import json
 import sqlite3
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 

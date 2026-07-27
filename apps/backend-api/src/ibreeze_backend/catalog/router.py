@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from pydantic import BaseModel
@@ -77,6 +77,7 @@ router = APIRouter(prefix="/admin/api/v1", tags=["catalog"])
 def _if_match(value: str | None) -> int:
     if value is None:
         raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
+    value = cast(str, value)
     try:
         parsed = int(value.strip('"'))
     except ValueError:
@@ -107,7 +108,7 @@ async def _call(operation: Callable[[], Awaitable[Any]]) -> Any:
 def _page[ResponseModel: BaseModel](
     items: list[Any],
     schema: type[ResponseModel],
-) -> dict[str, object]:
+) -> dict[str, Any]:
     return {
         "items": [schema.model_validate(item) for item in items],
         "next_cursor": None,

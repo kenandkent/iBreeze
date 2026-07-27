@@ -1,17 +1,16 @@
 """Tests for backup service."""
 
-import json
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock
+
+import pytest
 
 from ibreeze.backup.service import (
-    create_backup,
-    restore_backup,
-    list_backups,
     apply_retention_policy,
+    create_backup,
     delete_backup,
+    list_backups,
+    restore_backup,
 )
 
 

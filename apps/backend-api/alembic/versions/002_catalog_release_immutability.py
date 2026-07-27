@@ -6,7 +6,6 @@ Create Date: 2026-07-27 10:00:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
 
 from alembic import op
 
@@ -17,12 +16,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "catalog_releases",
-        sa.Column("manifest_json", JSONB, nullable=True),
-    )
-
     bind = op.get_bind()
+    bind.execute(
+        sa.text(
+            "ALTER TABLE catalog_releases ADD COLUMN IF NOT EXISTS manifest_json JSONB"
+        )
+    )
     bind.execute(
         sa.text(
             """

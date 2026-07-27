@@ -23,16 +23,17 @@ os.environ.setdefault("IBREEZE_CATALOG_KEY_DIR", "/tmp/ibreeze_keys/catalog")
 
 from ibreeze_backend.main import app
 
+
 def main():
     output_path = Path(__file__).parent.parent / "packages" / "contracts" / "openapi" / "openapi.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     openapi_spec = app.openapi()
-    
+
     # Ensure consistent ordering
     with open(output_path, 'w') as f:
         json.dump(openapi_spec, f, indent=2, sort_keys=True)
-    
+
     print(f"OpenAPI spec exported to {output_path}")
     print(f"Paths: {len(openapi_spec.get('paths', {}))}")
     print(f"Components schemas: {len(openapi_spec.get('components', {}).get('schemas', {}))}")

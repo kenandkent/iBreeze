@@ -7,15 +7,15 @@ SIDECAR_DIR = ROOT / "sidecar"
 
 
 def test_workspace_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "workspace.py").exists()
+    assert (SIDECAR_DIR / "ibreeze" / "workspace" / "__init__.py").exists()
 
 
 def test_workspace_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "workspace.py"
+    init_path = SIDECAR_DIR / "ibreeze" / "workspace" / "__init__.py"
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
-    assert "def create_workspace" in content
-    assert "def list_workspaces" in content
-    assert "def get_workspace" in content
-    assert "def add_member" in content
-    assert "def list_members" in content
+    assert "create_workspace" in content
+    assert "get_workspace" in content
+    assert "apply_workspace" in content
+    assert "abandon_workspace" in content
+    assert "create_bundle" in content

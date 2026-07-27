@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -11,13 +9,11 @@ import pytest
 
 from ibreeze.knowledge.embeddings import EMBEDDING_DIM, EmbeddingService, get_embedding_service
 from ibreeze.knowledge.hybrid_search import (
-    RRF_K,
     hybrid_search,
     reciprocal_rank_fusion,
 )
 from ibreeze.knowledge.text_search import search_fts
 from ibreeze.knowledge.vector_store import VectorStore, _escape_sql_literal, get_vector_store
-
 
 # ── Embeddings ─────────────────────────────────────────────────────────
 
@@ -181,7 +177,7 @@ class TestReciprocalRankFusion:
 @pytest.mark.asyncio
 class TestHybridSearch:
     async def test_search_empty_results(self, db, published_profile):
-        with patch("ibreeze.knowledge.hybrid_search.search_fts", return_value=[]) as mock_fts, \
+        with patch("ibreeze.knowledge.hybrid_search.search_fts", return_value=[]), \
              patch("ibreeze.knowledge.hybrid_search.get_embedding_service") as mock_emb, \
              patch("ibreeze.knowledge.hybrid_search.get_vector_store") as mock_vs:
             mock_emb.return_value.embed_single.return_value = [0.1] * 384

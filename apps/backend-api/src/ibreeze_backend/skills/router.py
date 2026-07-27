@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
+from typing import cast
 
 from fastapi import (
     APIRouter,
@@ -56,10 +57,12 @@ public_router = APIRouter(prefix="/api/v1/catalog/skills", tags=["skills"])
 def _version(value: str | None) -> int:
     if value is None:
         raise_problem(428, "IF_MATCH_REQUIRED", "If-Match header required")
+        return 0
     try:
         return int(value.strip('"'))
     except ValueError:
         raise_problem(400, "IF_MATCH_INVALID", "If-Match header invalid")
+        return 0
 
 
 def _raise(exc: ValueError) -> None:
@@ -100,11 +103,9 @@ async def list_skills_endpoint(
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     logger.info("list_skills.start", extra={"limit": limit})
-    result = {
-        "items": [SkillResponse.model_validate(item) for item in await list_skills(db, limit)],
-        "next_cursor": None,
-    }
-    logger.info("list_skills.completed", extra={"count": len(result["items"])})
+    items = [SkillResponse.model_validate(item) for item in await list_skills(db, limit)]
+    result: dict[str, object] = {"items": items, "next_cursor": None}
+    logger.info("list_skills.completed", extra={"count": len(items)})
     return result
 
 
@@ -237,14 +238,12 @@ async def list_skill_versions_endpoint(
     _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     logger.info("list_skill_versions.start", extra={"skill_id": str(skill_id)})
-    result = {
-        "items": [
-            SkillVersionResponse.model_validate(item)
-            for item in await list_skill_versions(db, skill_id)
-        ],
-        "next_cursor": None,
-    }
-    logger.info("list_skill_versions.completed", extra={"skill_id": str(skill_id), "count": len(result["items"])})
+    items = [
+        SkillVersionResponse.model_validate(item)
+        for item in await list_skill_versions(db, skill_id)
+    ]
+    result: dict[str, object] = {"items": items, "next_cursor": None}
+    logger.info("list_skill_versions.completed", extra={"skill_id": str(skill_id), "count": len(items)})
     return result
 
 
@@ -289,7 +288,7 @@ async def download_skill_package_endpoint(
         raise_problem(404, "SKILL_PACKAGE_NOT_FOUND", "Skill package not found")
     logger.info("download_skill_package.completed", extra={"skill_id": str(skill_id), "version": version})
     return FileResponse(
-        path,
+        cast(Path, path),
         media_type="application/zip",
         filename=f"{skill_id}-{version}.zip",
     )

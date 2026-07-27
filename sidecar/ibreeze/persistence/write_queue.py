@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import aiosqlite
 
@@ -9,9 +9,7 @@ T = TypeVar("T")
 
 class WriteQueue:
     def __init__(self, capacity: int = 32) -> None:
-        self._queue: asyncio.Queue[
-            tuple[Callable[[aiosqlite.Connection], Awaitable[T]], asyncio.Future[T]]
-        ] = asyncio.Queue(maxsize=capacity)
+        self._queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=capacity)
         self._worker_task: asyncio.Task[None] | None = None
         self._db: aiosqlite.Connection | None = None
 
@@ -50,7 +48,7 @@ class WriteQueue:
             command, future = await self._queue.get()
             try:
                 async with self._db.execute("BEGIN IMMEDIATE"):
-                    result = await command(self._db)
+                    result: Any = await command(self._db)
                     await self._db.commit()
                 future.set_result(result)
             except Exception as e:

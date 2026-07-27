@@ -5,7 +5,6 @@ Covers WORK-004, WORK-005, WORK-006.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import pytest

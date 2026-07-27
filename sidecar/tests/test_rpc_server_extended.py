@@ -6,7 +6,6 @@ import base64
 import hashlib
 import hmac
 import uuid
-from typing import Any
 
 import pytest
 
@@ -603,7 +602,7 @@ async def test_method_not_found_write_method(server_factory) -> None:
 @pytest.mark.asyncio
 async def test_invalid_meta_missing_keys(server_factory) -> None:
     server, token, launch_id = server_factory()
-    session = await _handshake(server, token, launch_id)
+    await _handshake(server, token, launch_id)
     resp = await server._handle_request({
         "jsonrpc": "2.0",
         "id": f"core:{_uuid()}",
@@ -617,7 +616,7 @@ async def test_invalid_meta_missing_keys(server_factory) -> None:
 @pytest.mark.asyncio
 async def test_ipc_session_invalid(server_factory) -> None:
     server, token, launch_id = server_factory()
-    session = await _handshake(server, token, launch_id)
+    await _handshake(server, token, launch_id)
     resp = await server._handle_request(_request(
         "settings.get", {},
         _meta(ipc_session_id="00000000-0000-0000-0000-000000000000", idempotency_key=None),
