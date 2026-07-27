@@ -628,7 +628,10 @@ class RPCServer:
         }
 
     async def _health(self) -> dict[str, object]:
-        event_loop_lag_ms = 0
+        loop = asyncio.get_event_loop()
+        start = loop.time()
+        await asyncio.sleep(0)
+        event_loop_lag_ms = int((loop.time() - start) * 1000)
 
         write_queue_depth = 0
         if self._write_queue is not None:
@@ -644,16 +647,33 @@ class RPCServer:
         except Exception:
             database_status = "degraded"
 
+        # Get actual migration version from database
+        migration_version = "unknown"
+        try:
+            result = await self.db.fetch_val(
+                "SELECT version FROM schema_migrations WHERE status='completed' ORDER BY applied_at DESC LIMIT 1"
+            )
+            if result:
+                migration_version = str(result)
+        except Exception:
+            pass
+
+        # Check process pool status
+        process_pool_status = "unknown"
+        if hasattr(self, '_process_supervisor') and self._process_supervisor is not None:
+            active = self._process_supervisor.active_count
+            process_pool_status = "ready" if active >= 0 else "degraded"
+
         return {
             "status": "healthy" if database_status == "ready" else "degraded",
             "database_status": database_status,
-            "migration_version": "001",
+            "migration_version": migration_version,
             "event_loop_lag_ms": event_loop_lag_ms,
             "write_queue_depth": write_queue_depth,
             "runtime_queue_depth": int(
                 await self.db.fetch_val("SELECT COUNT(*) FROM runtime_queue WHERE status='ready'") or 0
             ),
-            "process_pool_status": "ready",
+            "process_pool_status": process_pool_status,
         }
 
     async def _idempotent_call(

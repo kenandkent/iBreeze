@@ -5,9 +5,12 @@ import type { RouteObject } from 'react-router-dom';
 function collectPaths(routeList: RouteObject[], parentPath = ''): string[] {
   const paths: string[] = [];
   for (const route of routeList) {
+    const segment = route.path ?? '';
     const fullPath = route.index
       ? parentPath || '/'
-      : `${parentPath}${route.path ?? ''}`;
+      : parentPath.endsWith('/') || segment.startsWith('/')
+        ? `${parentPath}${segment}`
+        : `${parentPath}/${segment}`;
     if (route.path || route.index) {
       paths.push(fullPath || '/');
     }

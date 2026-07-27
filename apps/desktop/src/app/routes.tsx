@@ -97,7 +97,7 @@ export const routes: RouteObject[] = [
     ],
   },
   {
-    path: '/company/:companyId',
+    path: '/companies/:companyId',
     element: (
       <OriginGuard>
         <AuthGuard>

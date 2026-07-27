@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, Typography, Table, Tag, Button, Tabs } from 'antd';
 import { useListCompanyTasks } from '../hooks/useTask';
 import { formatTime } from '../utils/formatters';
@@ -14,11 +15,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function TaskListPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('TaskListPage'); }, []);
 
-  const companyId = 'default';
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const { data: tasks = [], isLoading } = useListCompanyTasks(companyId, statusFilter);
+  const { data: tasks = [], isLoading } = useListCompanyTasks(companyId!, statusFilter);
   const navigate = useNavigate();
 
   const columns = [

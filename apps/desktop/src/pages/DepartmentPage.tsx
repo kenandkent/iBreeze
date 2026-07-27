@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, Typography, Table, Button, Space, Modal, Form, Input, Popconfirm, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useListDepartments, useCreateDepartment } from '../hooks/useDepartment';
@@ -9,10 +10,10 @@ import { logger } from '../utils/logger';
 const { Title } = Typography;
 
 export default function DepartmentPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('DepartmentPage'); }, []);
 
-  const companyId = 'default';
-  const { data: deptData, isLoading } = useListDepartments(companyId);
+  const { data: deptData, isLoading } = useListDepartments(companyId!);
   const departments = deptData?.items ?? [];
   const createDept = useCreateDepartment();
   const [modalOpen, setModalOpen] = useState(false);
@@ -39,7 +40,7 @@ export default function DepartmentPage() {
     logger.logAction('DepartmentPage', editingId ? 'edit_department' : 'create_department');
     const values = await form.validateFields();
     await createDept.mutateAsync({
-      company_id: companyId,
+      company_id: companyId!,
       name: values.name,
       function_description: values.description || values.name,
       leader_name: '部门负责人',

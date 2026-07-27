@@ -19,9 +19,10 @@ const READ_OPERATIONS = new Set([
   'knowledge.search',
   'event.replay',
   'review.listIssues',
-  'approval.list',
-  'approval.pending',
+  'approval.listPending',
   'orchestration.list',
+  'orchestration.listRuns',
+  'planVersion.list',
 ]);
 
 export function isReadOperation(operationId: string): boolean {

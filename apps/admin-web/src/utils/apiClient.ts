@@ -68,8 +68,7 @@ async function tryRefreshToken(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: token }),
+        credentials: 'include',
       });
       if (!res.ok) return false;
       const data = await res.json();
@@ -104,6 +103,7 @@ async function apiFetch<T>(path: string, options?: RequestInit, version?: number
 
   const mergedOptions: RequestInit = {
     ...options,
+    credentials: 'include',
     headers: { ...headers, ...(options?.headers as Record<string, string>) },
   };
 

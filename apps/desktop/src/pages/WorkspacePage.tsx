@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Table, Button, Space, Tag, Drawer, Form, Input, Typography, Popconfirm, List,
 } from 'antd';
@@ -14,6 +15,7 @@ import { logger } from '../utils/logger';
 const { Title, Text } = Typography;
 
 export default function WorkspacePage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('WorkspacePage'); }, []);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -23,8 +25,7 @@ export default function WorkspacePage() {
   const [form] = Form.useForm();
   const [memberForm] = Form.useForm();
 
-  const companyId = 'default';
-  const { data: workspace, isLoading } = useGetWorkspace(companyId);
+  const { data: workspace, isLoading } = useGetWorkspace(companyId!);
   const abandonMutation = useAbandonWorkspace();
 
   const handleCreate = () => {
@@ -72,7 +73,7 @@ export default function WorkspacePage() {
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewWs(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('WorkspacePage', 'delete_workspace'); try { logger.info('WorkspacePage', 'delete_start', { id: record.id }); await abandonMutation.mutateAsync({ company_id: companyId, workspace_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', msg, { id: record.id }); } }}>
+          <Popconfirm title="确认删除？" onConfirm={async () => { logger.logAction('WorkspacePage', 'delete_workspace'); try { logger.info('WorkspacePage', 'delete_start', { id: record.id });           await abandonMutation.mutateAsync({ company_id: companyId!, workspace_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('WorkspacePage', 'delete_failed', msg, { id: record.id }); } }}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>

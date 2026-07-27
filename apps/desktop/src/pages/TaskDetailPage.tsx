@@ -8,11 +8,10 @@ import { logger } from '../utils/logger';
 const { Title } = Typography;
 
 export default function TaskDetailPage() {
+  const { companyId, taskId } = useParams<{ companyId: string; taskId: string }>();
   useEffect(() => { logger.logPageInit('TaskDetailPage'); }, []);
 
-  const { id } = useParams<{ id: string }>();
-  const companyId = 'default';
-  const { data: task, isLoading } = useGetCompanyTask(companyId, id || '');
+  const { data: task, isLoading } = useGetCompanyTask(companyId!, taskId || '');
 
   if (isLoading) return <Spin />;
   if (!task) return <Card>任务不存在</Card>;

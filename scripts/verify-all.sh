@@ -35,7 +35,8 @@ echo "--- desktop-core coverage ---"
 if command -v cargo-llvm-cov &>/dev/null; then
     cargo llvm-cov --manifest-path apps/desktop-core/Cargo.toml --all-features --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
 else
-    echo "WARNING: cargo-llvm-cov not found, coverage skipped (CI must install it)"
+    echo "ERROR: cargo-llvm-cov not found, coverage check cannot proceed"
+    exit 1
 fi
 
 # Python: backend-api
@@ -87,7 +88,8 @@ echo "--- e2e tests ---"
 if [ -n "$(ls -A tests/e2e/*.spec.ts 2>/dev/null || ls -A tests/e2e/tests/*.spec.ts 2>/dev/null)" ]; then
   npm --prefix tests/e2e run test
 else
-  echo "SKIP: no e2e test files found (not a failure, but CI should add e2e tests)"
+  echo "ERROR: no e2e test files found"
+  exit 1
 fi
 
 # Drift check

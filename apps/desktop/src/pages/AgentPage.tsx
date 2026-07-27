@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, Row, Col, Tag, Typography, Button, Input, Space, Empty } from 'antd';
 import { PlayCircleOutlined, PoweroffOutlined } from '@ant-design/icons';
 import type { AgentInfo } from '../types';
@@ -20,11 +21,11 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function AgentPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('AgentPage'); }, []);
 
-  const companyId = 'default';
   const [messageInputs, setMessageInputs] = useState<Record<string, string>>({});
-  const { data: agents, isLoading } = useListAgents(companyId);
+  const { data: agents, isLoading } = useListAgents(companyId!);
 
   return (
     <div>

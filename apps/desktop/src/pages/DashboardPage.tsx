@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Col, Row, Statistic, Timeline, Button, Typography, Space } from 'antd';
 import {
   BankOutlined,
@@ -7,7 +8,6 @@ import {
   AppstoreOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 import { useListCompanies } from '../hooks/useCompany';
 import { useListConversations } from '../hooks/useConversation';
 import { useListKnowledgeEntries } from '../hooks/useKnowledge';
@@ -19,16 +19,16 @@ import { logger } from '../utils/logger';
 const { Title, Text } = Typography;
 
 export default function DashboardPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
 
   useEffect(() => { logger.logPageInit('DashboardPage'); }, []);
 
-  const companyId = 'default';
   const { data: companyData } = useListCompanies();
   const companies = companyData?.items ?? [];
-  const { data: conversations } = useListConversations(companyId);
-  const { data: knowledge } = useListKnowledgeEntries(companyId);
-  const { data: workspace } = useGetWorkspace(companyId);
+  const { data: conversations } = useListConversations(companyId!);
+  const { data: knowledge } = useListKnowledgeEntries(companyId!);
+  const { data: workspace } = useGetWorkspace(companyId!);
   const { data: auditLogs } = useListAuditLogs({ limit: 10 });
 
   return (

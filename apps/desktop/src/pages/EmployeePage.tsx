@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, Typography, Table, Button, Space, Modal, Form, Input, Select, Popconfirm, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined } from '@ant-design/icons';
 import { useListEmployees, useCreateEmployee } from '../hooks/useEmployee';
@@ -10,12 +11,12 @@ import { logger } from '../utils/logger';
 const { Title } = Typography;
 
 export default function EmployeePage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('EmployeePage'); }, []);
 
-  const companyId = 'default';
-  const { data: empData, isLoading } = useListEmployees(companyId);
+  const { data: empData, isLoading } = useListEmployees(companyId!);
   const employees = empData?.items ?? [];
-  const { data: deptData } = useListDepartments(companyId);
+  const { data: deptData } = useListDepartments(companyId!);
   const departments = deptData?.items ?? [];
   const createEmp = useCreateEmployee();
   const [modalOpen, setModalOpen] = useState(false);
@@ -43,7 +44,7 @@ export default function EmployeePage() {
     logger.logAction('EmployeePage', 'create_employee');
     const values = await form.validateFields();
     await createEmp.mutateAsync({
-      company_id: companyId,
+      company_id: companyId!,
       department_id: values.department_id,
       display_name: values.display_name,
       base_profile_version_id: '',

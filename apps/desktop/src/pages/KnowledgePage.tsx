@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Table, Button, Input, Space, Tag, Drawer, Form, Select, Card, Row, Col, Statistic, Typography, Popconfirm,
 } from 'antd';
@@ -18,6 +19,7 @@ const { Title, Text } = Typography;
 const typeColor: Record<string, string> = { FAQ: 'blue', DOC: 'green', URL: 'orange' };
 
 export default function KnowledgePage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('KnowledgePage'); }, []);
 
   const [search, setSearch] = useState('');
@@ -28,8 +30,7 @@ export default function KnowledgePage() {
   const [viewEntry, setViewEntry] = useState<KnowledgeEntry | null>(null);
   const [form] = Form.useForm();
 
-  const companyId = 'default';
-  const { data, isLoading } = useListKnowledgeEntries(companyId);
+  const { data, isLoading } = useListKnowledgeEntries(companyId!);
   const createMutation = useCreateKnowledgeEntry();
   const archiveMutation = useArchiveKnowledgeEntry();
 
@@ -53,7 +54,7 @@ export default function KnowledgePage() {
     try {
       logger.info('KnowledgePage', 'create_start');
       await createMutation.mutateAsync({
-        company_id: companyId,
+        company_id: companyId!,
         title: values.title,
         content: values.content,
         visibility: 'company',
@@ -105,7 +106,7 @@ export default function KnowledgePage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => setViewEntry(record)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           {record.status === 'active' && (
-            <Popconfirm title="确认归档？" onConfirm={async () => { logger.logAction('KnowledgePage', 'archive_entry'); try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync({ company_id: companyId, item_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', msg, { id: record.id }); } }}>
+            <Popconfirm title="确认归档？" onConfirm={async () => { logger.logAction('KnowledgePage', 'archive_entry'); try { logger.info('KnowledgePage', 'archive_start', { id: record.id }); await archiveMutation.mutateAsync({ company_id: companyId!, item_id: record.id }); } catch (e) { const err = e as Record<string, unknown>; const msg = (err?.error as string) || (e instanceof Error ? e.message : String(e)); logger.error('KnowledgePage', 'archive_failed', msg, { id: record.id }); } }}>
               <Button size="small" icon={<InboxOutlined />}>归档</Button>
             </Popconfirm>
           )}

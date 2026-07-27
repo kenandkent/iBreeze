@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Typography, Table, Tag, Button } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { ReviewIssue } from '../types';
@@ -16,17 +17,17 @@ const severityColor: Record<string, string> = {
 };
 
 export default function ReviewPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('ReviewPage'); }, []);
 
-  const companyId = 'default';
   const artifactId = 'default';
-  const { data: issues = [], isLoading } = useListReviewIssues(companyId, artifactId);
+  const { data: issues = [], isLoading } = useListReviewIssues(companyId!, artifactId);
   const resolveIssue = useResolveReviewIssue();
 
   const handleResolve = async (issueId: string) => {
     try {
       logger.info('ReviewPage', 'resolve_start', { issueId });
-      await resolveIssue.mutateAsync({ company_id: companyId, issue_id: issueId });
+      await resolveIssue.mutateAsync({ company_id: companyId!, issue_id: issueId });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error('ReviewPage', 'resolve_failed', msg, { issueId });

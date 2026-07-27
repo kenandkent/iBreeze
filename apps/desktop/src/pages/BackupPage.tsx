@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Typography, Table, Button, Tag, message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,23 +18,23 @@ interface BackupRecord {
 }
 
 export default function BackupPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('BackupPage'); }, []);
 
-  const companyId = 'default';
   const qc = useQueryClient();
 
   const { data: backups = [], isLoading } = useQuery({
-    queryKey: ['backups', companyId],
+    queryKey: ['backups', companyId!],
     queryFn: async (): Promise<BackupRecord[]> => {
       logger.info('BackupPage', 'list_start');
-      return invoke<BackupRecord[]>('rpc_request', { method: 'backup.list', params: { company_id: companyId } });
+      return invoke<BackupRecord[]>('rpc_request', { method: 'backup.list', params: { company_id: companyId! } });
     },
   });
 
   const createBackup = useMutation({
     mutationFn: async () => {
       logger.info('BackupPage', 'create_start');
-      return invoke('rpc_request', { method: 'backup.create', params: { company_id: companyId, backup_type: 'manual' } });
+      return invoke('rpc_request', { method: 'backup.create', params: { company_id: companyId!, backup_type: 'manual' } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['backups'] });

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Typography, Table, Tag, Button, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +18,7 @@ interface ApprovalRecord {
 }
 
 export default function ApprovalListPage() {
+  const { companyId } = useParams<{ companyId: string }>();
   useEffect(() => { logger.logPageInit('ApprovalListPage'); }, []);
 
   const queryClient = useQueryClient();
@@ -29,7 +31,7 @@ export default function ApprovalListPage() {
     mutationFn: (id: string) =>
       invoke('rpc_request', {
         method: 'approval.resolve',
-        params: { approval_id: id, decision: 'approved' },
+        params: { approval_id: id, decision: 'approved', company_id: companyId! },
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {
@@ -41,7 +43,7 @@ export default function ApprovalListPage() {
     mutationFn: (id: string) =>
       invoke('rpc_request', {
         method: 'approval.resolve',
-        params: { approval_id: id, decision: 'denied' },
+        params: { approval_id: id, decision: 'rejected', company_id: companyId! },
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {
