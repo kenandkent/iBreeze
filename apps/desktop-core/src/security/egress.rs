@@ -48,6 +48,7 @@ impl EgressBroker {
                 "Run already has an active egress lease".to_owned(),
             ));
         }
+        // 代理端口已分配，实际 TCP 代理将在后续版本中实现
         let proxy_port = _allocate_free_port()?;
         let token = uuid::Uuid::new_v4().to_string().into_bytes();
         let lease = EgressLease {
@@ -61,6 +62,15 @@ impl EgressBroker {
         drop(leases);
         self.leases.write().await.push(lease.clone());
         Ok(lease)
+    }
+
+    pub async fn get_lease(&self, run_id: Uuid) -> Option<EgressLease> {
+        self.leases
+            .read()
+            .await
+            .iter()
+            .find(|l| l.run_id == run_id && !l.cancelled)
+            .cloned()
     }
 
     pub async fn cancel_lease(&self, run_id: Uuid) -> Result<(), AppError> {

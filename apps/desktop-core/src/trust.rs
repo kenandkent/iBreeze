@@ -72,7 +72,10 @@ pub fn verify_catalog_keyset(
         }
     } else {
         return Err(AppError::Security(
-            "Catalog trust key is not embedded in this build".to_owned(),
+            "Catalog trust key is not embedded in this build. \
+             Set IBREEZE_CATALOG_TRUST_KEY_BASE64 at build time, \
+             or build with RUSTFLAGS='--cfg=ibreeze_development' for development mode."
+                .to_owned(),
         ));
     }
     Err(AppError::Security("CATALOG_SIGNATURE_INVALID".to_owned()))

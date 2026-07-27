@@ -40,9 +40,14 @@ class ModelTransport:
 
 
 class ReverseRpcClient:
-    # Transitional: real UDS transport will replace stub mode.
-    # When _use_stub is True (socket_path is None), returns canned responses.
-    # Set socket_path in production to enable real UDS transport.
+    """RPC client that talks to the Rust Credential/Egress Broker via UDS.
+
+    When *socket_path* is ``None`` (the default) the client runs in **stub
+    mode** and every ``call()`` raises ``RuntimeError`` because the Credential
+    Broker is not configured.  In production, supply a real UDS socket path;
+    the UDS transport layer is not yet implemented and will raise
+    ``NotImplementedError``.
+    """
 
     def __init__(self, socket_path: str | None = None) -> None:
         self._socket_path = socket_path
@@ -52,16 +57,21 @@ class ReverseRpcClient:
 
     async def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         if self._use_stub:
-            logger.warning("ReverseRpcClient using stub mode (no UDS socket configured)")
+            logger.warning(
+                "ReverseRpcClient stub mode: Credential Broker not configured "
+                "(socket_path is None). Cannot execute method=%s",
+                method,
+            )
             self.last_method = method
             self.last_params = params
-            return {
-                "status": "ok",
-                "content": "",
-                "tool_calls": [],
-                "usage": {},
-            }
-        raise NotImplementedError("UDS transport not yet implemented")
+            raise RuntimeError(
+                "Credential Broker is not configured (socket_path is None). "
+                "Set the UDS socket path to enable real RPC transport."
+            )
+        raise NotImplementedError(
+            f"UDS transport for method={method!r} is not yet implemented. "
+            "The Credential/Egress Broker integration is pending."
+        )
 
 
 class ReverseRpcTransport(ModelTransport):
@@ -69,6 +79,11 @@ class ReverseRpcTransport(ModelTransport):
 
     Never holds an api_key directly - only a credential_ref that the Rust
     side resolves into actual credentials for the provider.
+
+    Currently uses :class:`ReverseRpcClient` in stub mode (no socket_path)
+    because the UDS transport layer is not yet wired up.  Calls to
+    :meth:`complete` / :meth:`probe` will raise ``RuntimeError`` until a
+    real Credential Broker socket is provided.
     """
 
     def __init__(
@@ -78,7 +93,7 @@ class ReverseRpcTransport(ModelTransport):
     ) -> None:
         self._credential_ref = credential_ref
         self._model = model
-        self._rpc = ReverseRpcClient()
+        self._rpc = ReverseRpcClient()  # stub mode; UDS transport TBD
 
     async def complete(
         self,

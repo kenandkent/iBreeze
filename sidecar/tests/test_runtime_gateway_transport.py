@@ -331,26 +331,25 @@ class TestTransport:
     @pytest.mark.asyncio
     async def test_reverse_rpc_transport_complete_uses_credential_http_start(self):
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        result = await t.complete(
-            messages=({"role": "user", "content": "hello"},),
-            tool_names=("bash",),
-        )
-        assert result.content == ""
-        assert list(result.tool_calls) == []
-        # Verify the reverse RPC call was made with the right method
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(
+                messages=({"role": "user", "content": "hello"},),
+                tool_names=("bash",),
+            )
         assert t._rpc.last_method == "credential.http.start"
 
     @pytest.mark.asyncio
     async def test_reverse_rpc_transport_probe_uses_credential_probe(self):
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        ok = await t.probe()
-        assert ok is True
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
         assert t._rpc.last_method == "credential.probe"
 
     @pytest.mark.asyncio
     async def test_reverse_rpc_client_stores_last_call(self):
         client = ReverseRpcClient()
-        await client.call("test.method", {"key": "val"})
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await client.call("test.method", {"key": "val"})
         assert client.last_method == "test.method"
         assert client.last_params == {"key": "val"}
 

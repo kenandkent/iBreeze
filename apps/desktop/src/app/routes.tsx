@@ -83,46 +83,6 @@ export const routes: RouteObject[] = [
         element: <SuspenseWrapper><CompanyPage /></SuspenseWrapper>,
       },
       {
-        path: 'companies/:companyId/departments',
-        element: <SuspenseWrapper><DepartmentPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/employees',
-        element: <SuspenseWrapper><EmployeePage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/tasks',
-        element: <SuspenseWrapper><TaskListPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/tasks/:taskId',
-        element: <SuspenseWrapper><TaskDetailPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/conversations',
-        element: <SuspenseWrapper><ConversationPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/knowledge',
-        element: <SuspenseWrapper><KnowledgePage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/workspaces',
-        element: <SuspenseWrapper><WorkspacePage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/orchestrations',
-        element: <SuspenseWrapper><OrchestrationPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/agents',
-        element: <SuspenseWrapper><AgentPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'companies/:companyId/reviews',
-        element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
-      },
-      {
         path: 'settings',
         element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
       },

@@ -1,0 +1,56 @@
+name: Sidecar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: sidecar
+      - name: Lint
+        run: uv run ruff check ibreeze tests
+        working-directory: sidecar
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: sidecar
+      - name: Typecheck
+        run: uv run mypy ibreeze
+        working-directory: sidecar
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: sidecar
+      - name: Test with coverage
+        run: uv run pytest --cov=ibreeze --cov-branch --cov-fail-under=100
+        working-directory: sidecar

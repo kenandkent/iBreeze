@@ -87,8 +87,7 @@ echo "--- e2e tests ---"
 if [ -n "$(ls -A tests/e2e/*.spec.ts 2>/dev/null || ls -A tests/e2e/tests/*.spec.ts 2>/dev/null)" ]; then
   npm --prefix tests/e2e run test
 else
-  # TODO: implement e2e tests and remove this SKIP branch
-  echo "SKIP: no e2e test files found"
+  echo "SKIP: no e2e test files found (not a failure, but CI should add e2e tests)"
 fi
 
 # Drift check

@@ -54,10 +54,11 @@ class TestTransportNoApiKey:
     @pytest.mark.asyncio
     async def test_transport_complete_params_no_api_key(self) -> None:
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        await t.complete(
-            messages=({"role": "user", "content": "hello"},),
-            tool_names=(),
-        )
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(
+                messages=({"role": "user", "content": "hello"},),
+                tool_names=(),
+            )
         params = t._rpc.last_params
         assert params is not None
         assert "api_key" not in params
@@ -66,7 +67,8 @@ class TestTransportNoApiKey:
     @pytest.mark.asyncio
     async def test_transport_probe_params_no_api_key(self) -> None:
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        await t.probe()
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
         params = t._rpc.last_params
         assert params is not None
         assert "api_key" not in params

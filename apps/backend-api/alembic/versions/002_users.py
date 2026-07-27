@@ -15,8 +15,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # no-op: schema managed by application DDL
     pass
 
 
 def downgrade() -> None:
+    # no-op: schema managed by application DDL
     pass

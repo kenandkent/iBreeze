@@ -23,8 +23,8 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 use crate::commands::{
     auth_change_password, auth_close_profile, auth_list_offline_profiles, auth_login, auth_logout,
     auth_open_profile, auth_register, backend_validate_origin, diagnostics_export, external_open,
-    readonly_file_select, rpc_request, updater_check, updater_install, updater_restore_stable,
-    updater_verify_launch, workspace_select, AppState,
+    readonly_file_select, rpc_request, system_health, updater_check, updater_install,
+    updater_restore_stable, updater_verify_launch, workspace_select, AppState,
 };
 use crate::store::LocalStore;
 
@@ -105,6 +105,7 @@ pub fn run() {
             auth_open_profile,
             auth_close_profile,
             rpc_request,
+            system_health,
             workspace_select,
             readonly_file_select,
             external_open,

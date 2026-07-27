@@ -1,0 +1,72 @@
+name: Backend API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: apps/backend-api
+      - name: Lint
+        run: uv run ruff check src tests
+        working-directory: apps/backend-api
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: apps/backend-api
+      - name: Typecheck
+        run: uv run mypy src
+        working-directory: apps/backend-api
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ibreeze_test
+          POSTGRES_USER: ibreeze
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: apps/backend-api
+      - name: Test with coverage
+        run: uv run pytest --cov=ibreeze_backend --cov-branch --cov-fail-under=100
+        working-directory: apps/backend-api
+        env:
+          DATABASE_URL: postgresql://ibreeze:test_password@localhost:5432/ibreeze_test

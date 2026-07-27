@@ -1263,14 +1263,6 @@ class LocalDB:
         await self._write_conn.execute("PRAGMA wal_autocheckpoint=1000")
         await self._write_conn.executescript(_CREATE_TABLES_SQL)
         await self._write_conn.executescript(_IMMUTABILITY_TRIGGERS)
-        # Migration: add hash chain columns to audit_logs for existing databases
-        for _col in ("hash", "prev_hash"):
-            try:
-                await self._write_conn.execute(
-                    f"ALTER TABLE audit_logs ADD COLUMN {_col} TEXT NOT NULL DEFAULT ''"
-                )
-            except Exception:
-                pass  # Column already exists
         await self._write_conn.commit()
 
         # 读连接池

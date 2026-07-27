@@ -18,17 +18,19 @@ class TestNoDirectHttpCalls:
     async def test_complete_uses_credential_http_start(self) -> None:
         """complete() must only use credential.http.start reverse method."""
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        await t.complete(
-            messages=({"role": "user", "content": "hello"},),
-            tool_names=(),
-        )
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(
+                messages=({"role": "user", "content": "hello"},),
+                tool_names=(),
+            )
         assert t._rpc.last_method == "credential.http.start"
 
     @pytest.mark.asyncio
     async def test_probe_uses_credential_probe(self) -> None:
         """probe() must only use credential.probe reverse method."""
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        await t.probe()
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
         assert t._rpc.last_method == "credential.probe"
 
     def test_transport_has_no_aiohttp_session(self) -> None:
@@ -52,7 +54,9 @@ class TestNoDirectHttpCalls:
         """Verify only credential.* reverse methods are used by transport."""
         t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
         allowed = {"credential.http.start", "credential.probe"}
-        await t.complete(({"role": "user", "content": "hi"},), ())
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(({"role": "user", "content": "hi"},), ())
         assert t._rpc.last_method in allowed
-        await t.probe()
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
         assert t._rpc.last_method in allowed

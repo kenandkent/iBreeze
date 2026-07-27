@@ -12,7 +12,7 @@ export function useListSkills() {
 export function useInstallSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { skill_key: string; version: string; agent_bindings?: string[] }) =>
+    mutationFn: (data: { key: string; display_name: string; description: string }) =>
       apiPost<SkillCatalogItem>('/skills', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills'] }),
   });

@@ -693,6 +693,15 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
     }
 }
 
+#[tauri::command]
+pub async fn system_health() -> Result<serde_json::Value, AppError> {
+    Ok(serde_json::json!({
+        "status": "healthy",
+        "platform": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

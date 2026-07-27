@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -103,25 +102,29 @@ pub async fn handle_credential_http_start(
     request: CredentialHttpStart,
 ) -> Result<serde_json::Value, AppError> {
     let request_id = Uuid::new_v4();
-    tracing::info!(
+    tracing::warn!(
         credential_ref = %request.credential_ref,
         provider_id = %request.provider_id,
         %request_id,
-        "credential.http.start: pending"
+        "credential.http.start: broker not yet operational"
     );
-    Ok(json!({"status": "pending", "request_id": request_id}))
+    Err(AppError::Internal(
+        "CREDENTIAL_BROKER_NOT_OPERATIONAL: reverse UDS transport not yet wired".to_owned(),
+    ))
 }
 
 pub async fn handle_credential_http_cancel(request: CredentialHttpCancel) -> Result<(), AppError> {
-    tracing::info!(
+    tracing::warn!(
         request_id = %request.request_id,
-        "credential.http.cancel: acknowledged"
+        "credential.http.cancel: broker not yet operational"
     );
-    Ok(())
+    Err(AppError::Internal(
+        "CREDENTIAL_BROKER_NOT_OPERATIONAL".to_owned(),
+    ))
 }
 
 pub async fn handle_credential_probe(_request: CredentialProbe) -> Result<bool, AppError> {
-    Ok(true)
+    Ok(false)
 }
 
 /// Allowed reverse methods from Sidecar to Rust
