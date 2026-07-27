@@ -23,7 +23,7 @@ export default function ProviderCatalogPage() {
   const [editing, setEditing] = useState<ProviderCatalogItem | null>(null);
   const [form] = Form.useForm();
 
-  const providers = data?.data ?? [];
+  const providers = data?.items ?? [];
 
   const openCreate = () => {
     setEditing(null);

@@ -5,7 +5,7 @@ import type { AdminUser } from '../types';
 export function useListAdminUsers() {
   return useQuery({
     queryKey: ['admin-users'],
-    queryFn: () => apiGet<{ data: AdminUser[] }>('/users'),
+    queryFn: () => apiGet<{ users: AdminUser[] }>('/users'),
   });
 }
 

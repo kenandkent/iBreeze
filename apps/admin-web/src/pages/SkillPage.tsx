@@ -19,7 +19,7 @@ export default function SkillPage() {
   const [form] = Form.useForm();
   const [uploadForm] = Form.useForm();
 
-  const skills = data?.data ?? [];
+  const skills = data?.items ?? [];
 
   const handleInstall = async () => {
     const values = await form.validateFields();
@@ -33,9 +33,9 @@ export default function SkillPage() {
     }
   };
 
-  const handleRemove = async (id: string) => {
+  const handleRemove = async (id: string, version: number) => {
     try {
-      await removeSkill.mutateAsync(id);
+      await removeSkill.mutateAsync({ id, version });
       message.success('移除成功');
     } catch {
       message.error('移除失败');
@@ -95,7 +95,7 @@ export default function SkillPage() {
               上传版本
             </Button>
           )}
-          <Popconfirm title="确认移除？需要确保绑定的 Agent 未在运行。" onConfirm={() => handleRemove(record.id)}>
+          <Popconfirm title="确认移除？需要确保绑定的 Agent 未在运行。" onConfirm={() => handleRemove(record.id, Number(record.version))}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               移除
             </Button>

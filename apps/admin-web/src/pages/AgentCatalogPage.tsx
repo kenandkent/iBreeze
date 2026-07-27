@@ -23,7 +23,7 @@ export default function AgentCatalogPage() {
   const [editing, setEditing] = useState<AgentCatalogItem | null>(null);
   const [form] = Form.useForm();
 
-  const agents = data?.data ?? [];
+  const agents = data?.items ?? [];
 
   const openCreate = () => {
     setEditing(null);

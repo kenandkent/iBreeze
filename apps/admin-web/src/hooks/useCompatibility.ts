@@ -5,7 +5,7 @@ import type { CompatibilityRule } from '../types';
 export function useListCompatibilityRules() {
   return useQuery({
     queryKey: ['compatibility-rules'],
-    queryFn: () => apiGet<{ data: CompatibilityRule[] }>('/compatibility-rules'),
+    queryFn: () => apiGet<{ items: CompatibilityRule[] }>('/compatibility-rules'),
   });
 }
 

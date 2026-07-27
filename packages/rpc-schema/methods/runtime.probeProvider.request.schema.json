@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/runtime.probeProvider.request.v1",
+  "title": "RuntimeProbeproviderRequest",
+  "type": "object",
+  "properties": {
+    "provider_type": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "provider_type"
+  ]
+}

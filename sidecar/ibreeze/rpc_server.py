@@ -50,6 +50,7 @@ from ibreeze.employee import (
 )
 from ibreeze.local_db import LocalDB
 from ibreeze.logging_config import get_logger
+from ibreeze.review.service import submit_review_report
 from ibreeze.schemas import (
     CompanyArchiveRequest,
     CompanyCreate,
@@ -190,6 +191,7 @@ class RPCServer:
         startup_token: bytes,
         launch_id: str,
         app_version: str,
+        write_queue: Any | None = None,
     ) -> None:
         self.db = db
         self.socket_path = Path(socket_path)
@@ -204,6 +206,7 @@ class RPCServer:
         self._shutdown = asyncio.Event()
         self._cursor_key = self._load_cursor_key()
         self._transaction_connection: _NestedTransactionConnection | None = None
+        self._write_queue = write_queue
         self.methods: dict[str, Handler] = {
             "company.create": self._company_create,
             "company.get": self._company_get,
@@ -625,15 +628,26 @@ class RPCServer:
         }
 
     async def _health(self) -> dict[str, object]:
+        # TODO: measure actual event loop lag via asyncio event loop monitoring
+        event_loop_lag_ms = 0
+
+        write_queue_depth = 0
+        if self._write_queue is not None:
+            try:
+                write_queue_depth = self._write_queue._queue.qsize()
+            except Exception:
+                pass
+
         return {
             "status": "healthy",
             "database_status": "ready",
             "migration_version": "001",
-            "event_loop_lag_ms": 0,
-            "write_queue_depth": 0,
+            "event_loop_lag_ms": event_loop_lag_ms,
+            "write_queue_depth": write_queue_depth,
             "runtime_queue_depth": int(
                 await self.db.fetch_val("SELECT COUNT(*) FROM runtime_queue WHERE status='ready'") or 0
             ),
+            # process_pool_status: kept as "ready" until real process pool monitoring is added
             "process_pool_status": "ready",
         }
 
@@ -1595,32 +1609,19 @@ class RPCServer:
     # ── Review ────────────────────────────────────────────────────────
 
     async def _review_submit(self, params: dict[str, Any]) -> object:
-        import uuid as _uuid_mod
-
-        rid = str(_uuid_mod.uuid4())
-        now = _now()
-        await self._connection.execute(
-            "INSERT INTO review_reports "
-            "(id, company_id, assignment_id, reviewer_run_id, verdict, "
-            "report_artifact_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                rid,
-                params["company_id"],
-                params["assignment_id"],
-                params["reviewer_run_id"],
-                params["verdict"],
-                params["report_artifact_id"],
-                now,
-            ),
+        result = await submit_review_report(
+            self._connection,
+            params["company_id"],
+            assignment_id=params["assignment_id"],
+            artifact_id=params["artifact_id"],
+            artifact_sha256=params["artifact_sha256"],
+            report_artifact_id=params["report_artifact_id"],
+            reviewer_run_id=params["reviewer_run_id"],
+            verdict=params["verdict"],
+            summary=params.get("summary", ""),
+            issues=params.get("issues"),
         )
-        await self._connection.execute(
-            "UPDATE review_assignments SET status='submitted', submitted_at=? "
-            "WHERE id=? AND company_id=?",
-            (now, params["assignment_id"], params["company_id"]),
-        )
-        await self._connection.commit()
-        return {"id": rid, "created_at": now}
+        return result
 
     async def _review_list_issues(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(

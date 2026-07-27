@@ -23,6 +23,11 @@ pub fn verify_manifest_signature(
     manifest: &UpdateManifest,
     trusted_keys: &[SigningKey],
 ) -> Result<(), AppError> {
+    if trusted_keys.is_empty() {
+        return Err(AppError::Security(
+            "UPDATE_NO_TRUSTED_KEYS: no trusted signing keys configured".to_owned(),
+        ));
+    }
     let payload = manifest_payload(manifest);
     let raw_signature = base64::engine::general_purpose::STANDARD
         .decode(&manifest.signature)

@@ -20,7 +20,7 @@ export default function AdminUserPage() {
   const [form] = Form.useForm();
   const [resetPwdForm] = Form.useForm();
 
-  const users = data?.data ?? [];
+  const users = data?.users ?? [];
 
   const openCreate = () => {
     setEditing(null);

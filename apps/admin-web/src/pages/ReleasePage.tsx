@@ -24,7 +24,7 @@ export default function ReleasePage() {
   const [drawerRelease, setDrawerRelease] = useState<Release | null>(null);
   const [form] = Form.useForm();
 
-  const releases = data?.data ?? [];
+  const releases = data?.items ?? [];
 
   const handleCreate = async () => {
     const values = await form.validateFields();

@@ -106,6 +106,33 @@ async def generate_company_review(
     return review
 
 
+async def _check_completion_gates(db: Any, *, company_id: str, task_id: str) -> dict[str, Any] | None:
+    try:
+        cursor = await db.execute(
+            """SELECT id, gate_type, status, failed_at, error_message
+               FROM completion_gates
+               WHERE company_id=? AND (task_id=? OR task_id IS NULL)
+               ORDER BY gate_type""",
+            (company_id, task_id),
+        )
+        gates = await cursor.fetchall()
+    except Exception:
+        return None
+
+    if not gates:
+        return None
+
+    blocking = []
+    for g in gates:
+        gd = dict(g)
+        if gd["status"] != "passed":
+            blocking.append(gd)
+
+    if blocking:
+        return {"gate_blocked": True, "blocking_gates": blocking}
+    return None
+
+
 async def generate_final_report(
     db: Any,
     *,
@@ -113,6 +140,10 @@ async def generate_final_report(
     task_id: str,
 ) -> dict[str, Any]:
     """Generate the final company task report after all departments complete."""
+    blocked = await _check_completion_gates(db, company_id=company_id, task_id=task_id)
+    if blocked is not None:
+        return blocked
+
     company_review = await generate_company_review(db, company_id=company_id, task_id=task_id)
 
     cursor = await db.execute(

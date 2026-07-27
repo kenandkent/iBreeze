@@ -34,7 +34,7 @@ export default function AdminAuditLogPage() {
 
   const { data, isLoading } = useListAuditLogs(filters);
 
-  const logs = data?.data ?? [];
+  const logs = data?.items ?? [];
 
   const columns = [
     {

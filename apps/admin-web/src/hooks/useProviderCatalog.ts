@@ -5,7 +5,7 @@ import type { ProviderCatalogItem } from '../types';
 export function useListProviders() {
   return useQuery({
     queryKey: ['providers'],
-    queryFn: () => apiGet<{ data: ProviderCatalogItem[] }>('/providers'),
+    queryFn: () => apiGet<{ items: ProviderCatalogItem[] }>('/providers'),
   });
 }
 

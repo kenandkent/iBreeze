@@ -86,6 +86,7 @@ class SidecarApplication:
             startup_token=self._startup_token,
             launch_id=self._socket_path.parent.name,
             app_version=self._app_version,
+            write_queue=self._write_queue,
         )
 
         # Start background workers
@@ -93,6 +94,9 @@ class SidecarApplication:
             asyncio.create_task(AnalysisWorker(self._database, self._write_queue).run()),
             asyncio.create_task(RuntimeWorker(self._database, self._write_queue).run()),
         ]
+        self._health.status = "healthy"
+        self._health.worker_count = len(self._workers)
+        self._health.healthy_workers = len(self._workers)
 
         # Serve RPC (blocks until shutdown)
         try:

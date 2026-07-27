@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import aiosqlite
 
@@ -11,37 +12,43 @@ class Migration:
     sql: str
     sha256: str
 
+    def load_sql(self) -> str:
+        if self.sql.startswith("file://"):
+            base = Path(__file__).resolve().parent
+            file_path = base / self.sql[len("file://"):]
+            return file_path.read_text("utf-8")
+        return self.sql
+
 
 MIGRATIONS: list[Migration] = [
     Migration(
         version=1,
         filename="001_initial.sql",
-        sql="-- Initial schema is handled by LocalDB._CREATE_TABLES_SQL",
-        sha256="",
+        sql="file://migrations/001_initial.sql",
+        sha256="aa25f8fd64aac09755f64271ff9e4c292bc52fdbf894682a4a5c966a57913249",
     ),
 ]
 
 
 async def ensure_migration_ledger(db: aiosqlite.Connection) -> None:
     await db.execute("""
-        CREATE TABLE IF NOT EXISTS _migrations (
-            version INTEGER PRIMARY KEY,
-            filename TEXT NOT NULL,
-            sha256 TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            started_at TEXT,
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            script_sha256 TEXT NOT NULL CHECK(length(script_sha256) = 64),
+            started_at TEXT NOT NULL,
             completed_at TEXT,
-            error_code TEXT
+            status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed')),
+            error_message TEXT
         )
     """)
 
 
 async def get_applied_migrations(db: aiosqlite.Connection) -> set[int]:
     cursor = await db.execute(
-        "SELECT version, sha256 FROM _migrations WHERE status = 'completed'",
+        "SELECT version, script_sha256 FROM schema_migrations WHERE status = 'completed'",
     )
     rows = await cursor.fetchall()
-    return {row[0] for row in rows}
+    return {int(row[0]) for row in rows}
 
 
 async def run_migrations(
@@ -58,26 +65,27 @@ async def run_migrations(
         now = time.time()
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
         await db.execute(
-            "INSERT OR REPLACE INTO _migrations (version, filename, sha256, status, started_at) "
-            "VALUES (?, ?, ?, 'running', ?)",
-            (m.version, m.filename, m.sha256, started_at),
+            "INSERT OR REPLACE INTO schema_migrations (version, script_sha256, status, started_at) "
+            "VALUES (?, ?, 'running', ?)",
+            (str(m.version), m.sha256, started_at),
         )
         try:
-            if m.sql and not m.sql.startswith("--"):
-                await db.executescript(m.sql)
+            sql = m.load_sql()
+            if sql and not sql.startswith("--"):
+                await db.executescript(sql)
             completed_at = time.strftime(
                 "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time()),
             )
             await db.execute(
-                "UPDATE _migrations SET status = 'completed', completed_at = ? "
+                "UPDATE schema_migrations SET status = 'completed', completed_at = ? "
                 "WHERE version = ?",
-                (completed_at, m.version),
+                (completed_at, str(m.version)),
             )
         except Exception as exc:
             error_code = str(exc)[:200]
             await db.execute(
-                "UPDATE _migrations SET status = 'failed', error_code = ? "
+                "UPDATE schema_migrations SET status = 'failed', error_message = ? "
                 "WHERE version = ?",
-                (error_code, m.version),
+                (error_code, str(m.version)),
             )
             raise

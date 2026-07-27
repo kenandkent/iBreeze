@@ -6,10 +6,13 @@ via reverse RPC. The Sidecar must NOT do direct outbound HTTP to providers.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from ibreeze.runtime.model_loop import ModelTurn, ToolCall
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,25 +40,28 @@ class ModelTransport:
 
 
 class ReverseRpcClient:
-    """Stub reverse RPC client—real UDS transport TBD.
+    # Transitional: real UDS transport will replace stub mode.
+    # When _use_stub is True (socket_path is None), returns canned responses.
+    # Set socket_path in production to enable real UDS transport.
 
-    Stores the last request and returns a canned response
-    since real Rust credential broker integration is TBD.
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, socket_path: str | None = None) -> None:
+        self._socket_path = socket_path
+        self._use_stub = socket_path is None
         self.last_method: str | None = None
         self.last_params: dict[str, Any] | None = None
 
     async def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-        self.last_method = method
-        self.last_params = params
-        return {
-            "status": "ok",
-            "content": "",
-            "tool_calls": [],
-            "usage": {},
-        }
+        if self._use_stub:
+            logger.warning("ReverseRpcClient using stub mode (no UDS socket configured)")
+            self.last_method = method
+            self.last_params = params
+            return {
+                "status": "ok",
+                "content": "",
+                "tool_calls": [],
+                "usage": {},
+            }
+        raise NotImplementedError("UDS transport not yet implemented")
 
 
 class ReverseRpcTransport(ModelTransport):

@@ -2,7 +2,7 @@ import type { RouteObject } from 'react-router-dom';
 import { Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Spin } from 'antd';
-import { OriginGuard, AuthGuard } from './guards';
+import { OriginGuard, AuthGuard, CompanyGuard } from './guards';
 
 const Layout = lazy(() => import('../components/Layout'));
 const ServerPage = lazy(() => import('../pages/ServerPage'));
@@ -123,6 +123,53 @@ export const routes: RouteObject[] = [
         element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
       },
       {
+        path: 'settings',
+        element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'diagnostics',
+        element: <SuspenseWrapper><DiagnosticsPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'backups',
+        element: <SuspenseWrapper><BackupPage /></SuspenseWrapper>,
+      },
+    ],
+  },
+  {
+    path: '/company/:companyId',
+    element: (
+      <OriginGuard>
+        <AuthGuard>
+          <CompanyGuard>
+            <SuspenseWrapper><Layout /></SuspenseWrapper>
+          </CompanyGuard>
+        </AuthGuard>
+      </OriginGuard>
+    ),
+    children: [
+      { index: true, element: <Navigate to="dashboard" replace /> },
+      {
+        path: 'dashboard',
+        element: <SuspenseWrapper><DashboardPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'departments',
+        element: <SuspenseWrapper><DepartmentPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'employees',
+        element: <SuspenseWrapper><EmployeePage /></SuspenseWrapper>,
+      },
+      {
+        path: 'tasks',
+        element: <SuspenseWrapper><TaskListPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'tasks/:taskId',
+        element: <SuspenseWrapper><TaskDetailPage /></SuspenseWrapper>,
+      },
+      {
         path: 'conversations',
         element: <SuspenseWrapper><ConversationPage /></SuspenseWrapper>,
       },
@@ -143,6 +190,10 @@ export const routes: RouteObject[] = [
         element: <SuspenseWrapper><AgentPage /></SuspenseWrapper>,
       },
       {
+        path: 'reviews',
+        element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
+      },
+      {
         path: 'audit-logs',
         element: <SuspenseWrapper><AuditLogPage /></SuspenseWrapper>,
       },
@@ -155,32 +206,12 @@ export const routes: RouteObject[] = [
         element: <SuspenseWrapper><DiagnosticsPage /></SuspenseWrapper>,
       },
       {
-        path: 'departments',
-        element: <SuspenseWrapper><DepartmentPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'employees',
-        element: <SuspenseWrapper><EmployeePage /></SuspenseWrapper>,
-      },
-      {
-        path: 'tasks',
-        element: <SuspenseWrapper><TaskListPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'tasks/:id',
-        element: <SuspenseWrapper><TaskDetailPage /></SuspenseWrapper>,
-      },
-      {
         path: 'skills',
         element: <SuspenseWrapper><SkillsPage /></SuspenseWrapper>,
       },
       {
         path: 'backups',
         element: <SuspenseWrapper><BackupPage /></SuspenseWrapper>,
-      },
-      {
-        path: 'reviews',
-        element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
       },
       {
         path: 'approvals',

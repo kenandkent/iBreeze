@@ -569,7 +569,7 @@ fn read_profile_json<T: serde::de::DeserializeOwned>(
         .map_err(|_| AppError::Security(format!("{name} is corrupt")))
 }
 
-fn load_catalog_keyset(
+pub(super) fn load_catalog_keyset(
     state: &State<'_, AppState>,
     profile_directory_id: &str,
 ) -> Result<crate::rpc::api_client::CatalogKeyset, AppError> {

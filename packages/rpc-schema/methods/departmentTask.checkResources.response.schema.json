@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/departmentTask.checkResources.response.v1",
+  "title": "DepartmenttaskCheckresourcesResponse",
+  "type": "object",
+  "properties": {
+    "available": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "available"
+  ]
+}

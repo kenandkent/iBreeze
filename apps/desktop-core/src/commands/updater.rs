@@ -7,6 +7,7 @@ use crate::update::manifest::{is_newer_version, validate_manifest, UpdateManifes
 use crate::update::rollback::UpdateStore;
 
 use crate::commands::AppState;
+use crate::trust::verify_catalog_keyset;
 use tauri::State;
 
 #[tauri::command]
@@ -141,7 +142,9 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
             let package_bytes = std::fs::read(&package_path)
                 .map_err(|e| AppError::Storage(format!("read package: {e}")))?;
 
-            match validate_manifest(&manifest, &current_version, &[], &package_bytes) {
+            let trusted_keys = load_trusted_signing_keys(&state).await?;
+
+            match validate_manifest(&manifest, &current_version, &trusted_keys, &package_bytes) {
                 Ok(()) => {
                     let install_path = &base_path;
                     let backup_sha =
@@ -212,6 +215,20 @@ pub async fn updater_verify_launch(state: State<'_, AppState>) -> Result<bool, A
     let result =
         update_store.verify_pending_update(&state.sidecar_executable, &state.app_version)?;
     Ok(result)
+}
+
+async fn load_trusted_signing_keys(
+    state: &State<'_, AppState>,
+) -> Result<Vec<crate::rpc::api_client::SigningKey>, AppError> {
+    let profile_directory_id = state
+        .auth
+        .read()
+        .await
+        .profile_directory_id
+        .clone()
+        .ok_or_else(|| AppError::NotFound("UPDATE_NO_OPEN_PROFILE".to_owned()))?;
+    let keyset = super::load_catalog_keyset(state, &profile_directory_id)?;
+    verify_catalog_keyset(&keyset, state.development_mode, false)
 }
 
 #[tauri::command]

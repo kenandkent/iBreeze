@@ -3,6 +3,7 @@ import logging
 
 from ibreeze.local_db import LocalDB
 from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.runtime.run_executor import run_consumer_loop
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +15,8 @@ class RuntimeWorker:
 
     async def run(self) -> None:
         logger.info("RuntimeWorker started")
+        db = self._database._write_conn
         try:
-            while True:
-                await asyncio.sleep(1)
+            await run_consumer_loop(db, poll_interval=1.0, max_concurrent=4)
         except asyncio.CancelledError:
             logger.info("RuntimeWorker stopped")

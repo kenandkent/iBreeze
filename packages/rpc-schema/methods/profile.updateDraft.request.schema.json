@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/profile.updateDraft.request.v1",
+  "title": "ProfileUpdatedraftRequest",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "draft_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "agent_cli": {
+      "type": "string"
+    },
+    "api_model": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "company_id",
+    "draft_id"
+  ]
+}

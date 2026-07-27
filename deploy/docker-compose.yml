@@ -1,14 +1,39 @@
+# =============================================================================
+# iBreeze 开发环境 Docker Compose
+# =============================================================================
+# 使用方式：
+#   创建 .env 文件并填写所有必填变量：
+#     POSTGRES_PASSWORD=your_password_here
+#     MINIO_ROOT_USER=minioadmin
+#     MINIO_ROOT_PASSWORD=your_minio_password_here
+#   然后运行：
+#     docker compose -f deploy/docker-compose.yml up
+#
+# 生产部署安全要求（当前文件仅供开发使用）：
+#   - 所有镜像使用摘要引用（image@sha256:...）而非标签
+#   - 使用只读根文件系统，配合 tmpfs 用于临时写入
+#   - 删除所有非必要 Linux capabilities（cap_drop: ALL）
+#   - 所有网络通信启用 TLS
+#   - 实施自动化数据库备份并加密存储
+#   - 使用加密卷或文件系统级加密
+#   - 所有服务设置资源限制（memory、CPU）
+#   - 使用密钥管理服务或外部 vault 管理凭证
+# =============================================================================
+
 services:
   postgres:
-    image: postgres:16
+    # TODO: pin digest for production (e.g. postgres:16-alpine@sha256:...)
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: ibreeze
       POSTGRES_USER: ibreeze
-      POSTGRES_PASSWORD: ibreeze_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
     ports:
       - "51543:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ibreeze -d ibreeze"]
       interval: 5s
@@ -17,17 +42,25 @@ services:
     networks:
       - ibreeze-net
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
   minio:
-    image: minio/minio
+    # TODO: pin digest for production (e.g. minio/minio@sha256:...)
+    image: minio/minio:RELEASE.2024-10-13T13-34-42Z
     ports:
       - "51900:9000"
       - "51901:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?error}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?error}
     volumes:
       - minio_data:/data
+    tmpfs:
+      - /tmp
     command: server /data --console-address ":51901"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -37,20 +70,32 @@ services:
     networks:
       - ibreeze-net
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
   migration:
     build:
       context: ../apps/backend-api
       dockerfile: Dockerfile
     environment:
-      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:ibreeze_password@postgres:5432/ibreeze
+      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:${POSTGRES_PASSWORD}@postgres:5432/ibreeze
       IBREEZE_API_PORT: "51080"
+    tmpfs:
+      - /tmp
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - ibreeze-net
     command: ["/app/.venv/bin/alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
   backend-api:
     build:
@@ -59,12 +104,14 @@ services:
     ports:
       - "51080:51080"
     environment:
-      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:ibreeze_password@postgres:5432/ibreeze
+      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:${POSTGRES_PASSWORD}@postgres:5432/ibreeze
       IBREEZE_API_PORT: "51080"
       IBREEZE_S3_ENDPOINT_URL: http://minio:9000
-      IBREEZE_S3_ACCESS_KEY_ID: minioadmin
-      IBREEZE_S3_SECRET_ACCESS_KEY: minioadmin
+      IBREEZE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      IBREEZE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       IBREEZE_S3_BUCKET_NAME: ibreeze
+    tmpfs:
+      - /tmp
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -75,6 +122,11 @@ services:
     networks:
       - ibreeze-net
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
   admin-web:
     build:
@@ -87,9 +139,15 @@ services:
     networks:
       - ibreeze-net
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
   nginx:
-    image: nginx:alpine
+    # TODO: pin digest for production (e.g. nginx:1.26-alpine@sha256:...)
+    image: nginx:1.26-alpine
     ports:
       - "8080:80"
     volumes:
@@ -100,6 +158,10 @@ services:
     networks:
       - ibreeze-net
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
 
 networks:
   ibreeze-net:

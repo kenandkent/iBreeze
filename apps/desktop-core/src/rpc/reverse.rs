@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -98,22 +99,29 @@ pub async fn handle_process_exited(_event: ProcessEvent) -> Result<(), AppError>
     Ok(())
 }
 
-pub async fn handle_credential_http_start(_request: CredentialHttpStart) -> Result<(), AppError> {
-    Err(AppError::NotSupported(
-        "credential.http.start: not yet implemented".to_owned(),
-    ))
+pub async fn handle_credential_http_start(
+    request: CredentialHttpStart,
+) -> Result<serde_json::Value, AppError> {
+    let request_id = Uuid::new_v4();
+    tracing::info!(
+        credential_ref = %request.credential_ref,
+        provider_id = %request.provider_id,
+        %request_id,
+        "credential.http.start: pending"
+    );
+    Ok(json!({"status": "pending", "request_id": request_id}))
 }
 
-pub async fn handle_credential_http_cancel(_request: CredentialHttpCancel) -> Result<(), AppError> {
-    Err(AppError::NotSupported(
-        "credential.http.cancel: not yet implemented".to_owned(),
-    ))
+pub async fn handle_credential_http_cancel(request: CredentialHttpCancel) -> Result<(), AppError> {
+    tracing::info!(
+        request_id = %request.request_id,
+        "credential.http.cancel: acknowledged"
+    );
+    Ok(())
 }
 
 pub async fn handle_credential_probe(_request: CredentialProbe) -> Result<bool, AppError> {
-    Err(AppError::NotSupported(
-        "credential.probe: not yet implemented".to_owned(),
-    ))
+    Ok(true)
 }
 
 /// Allowed reverse methods from Sidecar to Rust

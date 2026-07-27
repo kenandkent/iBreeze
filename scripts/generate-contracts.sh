@@ -16,6 +16,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 cd "$ROOT_DIR"
 
+# Allow overriding output root (used by check-contract-drift.sh for read-only drift check)
+OUTPUT_ROOT="${IBREEZE_OUTPUT_ROOT:-$ROOT_DIR}"
+
 echo "--- Step 1: Validate JSON Schemas ---"
 # Validate all schema files have correct $schema and no duplicate $id
 python3 "$ROOT_DIR/scripts/validate-schemas.py"
@@ -96,41 +99,39 @@ npx openapi-typescript "$TMP_DIR/openapi.json" -o "$TMP_DIR/admin-web-api/api.ts
 
 echo "--- Step 8: Atomic replace generated files ---"
 # Desktop RPC
-mkdir -p "$ROOT_DIR/apps/desktop/src/generated/rpc"
-rsync -a --delete "$TMP_DIR/desktop-rpc/" "$ROOT_DIR/apps/desktop/src/generated/rpc/"
+mkdir -p "$OUTPUT_ROOT/apps/desktop/src/generated/rpc"
+rsync -a --delete "$TMP_DIR/desktop-rpc/" "$OUTPUT_ROOT/apps/desktop/src/generated/rpc/"
 
-mkdir -p "$ROOT_DIR/apps/desktop-core/src/generated/rpc"
-rsync -a --delete "$TMP_DIR/desktop-core-rpc/" "$ROOT_DIR/apps/desktop-core/src/generated/rpc/"
+mkdir -p "$OUTPUT_ROOT/apps/desktop-core/src/generated/rpc"
+rsync -a --delete "$TMP_DIR/desktop-core-rpc/" "$OUTPUT_ROOT/apps/desktop-core/src/generated/rpc/"
 
-mkdir -p "$ROOT_DIR/apps/desktop-core/src/generated/contracts"
-rsync -a --delete "$TMP_DIR/desktop-core-contracts/" "$ROOT_DIR/apps/desktop-core/src/generated/contracts/"
+mkdir -p "$OUTPUT_ROOT/apps/desktop-core/src/generated/contracts"
+rsync -a --delete "$TMP_DIR/desktop-core-contracts/" "$OUTPUT_ROOT/apps/desktop-core/src/generated/contracts/"
 
 # Sidecar RPC
-mkdir -p "$ROOT_DIR/sidecar/ibreeze/generated"
-mkdir -p "$ROOT_DIR/sidecar/ibreeze/generated/rpc"
-rsync -a --delete "$TMP_DIR/sidecar-rpc/" "$ROOT_DIR/sidecar/ibreeze/generated/rpc/"
+mkdir -p "$OUTPUT_ROOT/sidecar/ibreeze/generated"
+mkdir -p "$OUTPUT_ROOT/sidecar/ibreeze/generated/rpc"
+rsync -a --delete "$TMP_DIR/sidecar-rpc/" "$OUTPUT_ROOT/sidecar/ibreeze/generated/rpc/"
 
-mkdir -p "$ROOT_DIR/sidecar/ibreeze/generated/domain_events"
-rsync -a --delete "$TMP_DIR/sidecar-domain-events/" "$ROOT_DIR/sidecar/ibreeze/generated/domain_events/"
+mkdir -p "$OUTPUT_ROOT/sidecar/ibreeze/generated/domain_events"
+rsync -a --delete "$TMP_DIR/sidecar-domain-events/" "$OUTPUT_ROOT/sidecar/ibreeze/generated/domain_events/"
 
-mkdir -p "$ROOT_DIR/sidecar/ibreeze/generated/skills"
-rsync -a --delete "$TMP_DIR/sidecar-skills/" "$ROOT_DIR/sidecar/ibreeze/generated/skills/"
+mkdir -p "$OUTPUT_ROOT/sidecar/ibreeze/generated/skills"
+rsync -a --delete "$TMP_DIR/sidecar-skills/" "$OUTPUT_ROOT/sidecar/ibreeze/generated/skills/"
 
 # Admin Web API
-mkdir -p "$ROOT_DIR/apps/admin-web/src/generated/openapi"
-rsync -a --delete "$TMP_DIR/admin-web-api/" "$ROOT_DIR/apps/admin-web/src/generated/openapi/"
+mkdir -p "$OUTPUT_ROOT/apps/admin-web/src/generated/openapi"
+rsync -a --delete "$TMP_DIR/admin-web-api/" "$OUTPUT_ROOT/apps/admin-web/src/generated/openapi/"
 
 # OpenAPI spec for contracts
-mkdir -p "$ROOT_DIR/packages/contracts/openapi"
-cp "$TMP_DIR/openapi.json" "$ROOT_DIR/packages/contracts/openapi/openapi.json"
+mkdir -p "$OUTPUT_ROOT/packages/contracts/openapi"
+cp "$TMP_DIR/openapi.json" "$OUTPUT_ROOT/packages/contracts/openapi/openapi.json"
 
-echo "--- Step 9: Verify deterministic generation ---"
-# Run generation again and ensure no diff
-"$0" --verify-only 2>/dev/null || true
+# Remove verify step — handled by check-contract-drift.sh
 
 echo "=== Contract Generation Complete ==="
 echo "Generated files:"
-find "$ROOT_DIR/apps/desktop/src/generated" -name "*.ts" 2>/dev/null | head -20
-find "$ROOT_DIR/apps/desktop-core/src/generated" -name "*.rs" 2>/dev/null | head -20
-find "$ROOT_DIR/sidecar/ibreeze/generated" -name "*.py" 2>/dev/null | head -20
-find "$ROOT_DIR/apps/admin-web/src/generated" -name "*.ts" 2>/dev/null | head -10
+find "$OUTPUT_ROOT/apps/desktop/src/generated" -name "*.ts" 2>/dev/null | head -20
+find "$OUTPUT_ROOT/apps/desktop-core/src/generated" -name "*.rs" 2>/dev/null | head -20
+find "$OUTPUT_ROOT/sidecar/ibreeze/generated" -name "*.py" 2>/dev/null | head -20
+find "$OUTPUT_ROOT/apps/admin-web/src/generated" -name "*.ts" 2>/dev/null | head -10

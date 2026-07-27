@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/employee.transfer.response.v1",
+  "title": "EmployeeTransferResponse",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ]
+}

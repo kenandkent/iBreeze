@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/catalog.installSkill.response.v1",
+  "title": "CatalogInstallskillResponse",
+  "type": "object",
+  "properties": {
+    "installed": {
+      "type": "boolean"
+    },
+    "skill_id": {
+      "type": "string"
+    },
+    "installed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "installed",
+    "skill_id",
+    "installed_at"
+  ]
+}

@@ -1,7 +1,20 @@
+use std::net::TcpListener;
+
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::AppError;
+
+fn _allocate_free_port() -> Result<u16, AppError> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| AppError::Internal(format!("Failed to bind egress proxy port: {e}")))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| AppError::Internal(format!("Failed to get egress proxy port: {e}")))?
+        .port();
+    let _ = listener; // Drop listener, port may be reused by actual proxy
+    Ok(port)
+}
 
 #[derive(Debug, Clone)]
 pub struct EgressLease {
@@ -35,10 +48,11 @@ impl EgressBroker {
                 "Run already has an active egress lease".to_owned(),
             ));
         }
+        let proxy_port = _allocate_free_port()?;
         let token = uuid::Uuid::new_v4().to_string().into_bytes();
         let lease = EgressLease {
             run_id,
-            proxy_port: 0,
+            proxy_port,
             allowed_domains,
             token,
             created_at: std::time::Instant::now(),

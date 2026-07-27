@@ -52,18 +52,13 @@ describe('routes structure', () => {
     expect(allPaths).toContain('/companies/:companyId/reviews');
   });
 
-  it('has flat legacy routes', () => {
+  it('has flat legacy routes (global scope only)', () => {
     const allPaths = collectPaths(routes);
     expect(allPaths).toContain('/dashboard');
     expect(allPaths).toContain('/companies');
-    expect(allPaths).toContain('/conversations');
-    expect(allPaths).toContain('/knowledge');
     expect(allPaths).toContain('/settings');
     expect(allPaths).toContain('/diagnostics');
-    expect(allPaths).toContain('/audit-logs');
-    expect(allPaths).toContain('/skills');
     expect(allPaths).toContain('/backups');
-    expect(allPaths).toContain('/approvals');
   });
 
   it('has company routes nested under the main layout', () => {

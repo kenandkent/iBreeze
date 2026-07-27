@@ -23,7 +23,7 @@ export default function ModelCatalogPage() {
   const [editing, setEditing] = useState<ModelCatalogItem | null>(null);
   const [form] = Form.useForm();
 
-  const models = data?.data ?? [];
+  const models = data?.items ?? [];
 
   const openCreate = () => {
     setEditing(null);

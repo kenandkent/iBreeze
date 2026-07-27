@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/departmentTask.replaceEmployee.request.v1",
+  "title": "DepartmenttaskReplaceemployeeRequest",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "department_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "current_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "new_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "company_id",
+    "department_task_id",
+    "current_employee_id",
+    "new_employee_id"
+  ]
+}

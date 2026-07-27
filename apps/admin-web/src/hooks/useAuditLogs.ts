@@ -21,6 +21,6 @@ export function useListAuditLogs(params?: {
 
   return useQuery({
     queryKey: ['audit-logs', params],
-    queryFn: () => apiGet<{ data: AuditLogEntry[] }>(url),
+    queryFn: () => apiGet<{ items: AuditLogEntry[] }>(url),
   });
 }

@@ -5,7 +5,7 @@ import type { AgentCatalogItem } from '../types';
 export function useListAgents() {
   return useQuery({
     queryKey: ['agents'],
-    queryFn: () => apiGet<{ data: AgentCatalogItem[] }>('/agents'),
+    queryFn: () => apiGet<{ items: AgentCatalogItem[] }>('/agents'),
   });
 }
 

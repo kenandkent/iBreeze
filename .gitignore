@@ -62,3 +62,34 @@ temp/
 # CI workflow files are tracked
 tsconfig.tsbuildinfo
 tests/e2e/test-results/
+
+# Prevent cross-contamination in generated directories
+# Desktop (TypeScript only: .d.ts)
+apps/desktop/src/generated/contracts/
+apps/desktop/src/generated/domain_events/
+apps/desktop/src/generated/openapi/
+apps/desktop/src/generated/skills/
+apps/desktop/src/generated/**/*.py
+apps/desktop/src/generated/**/*.rs
+
+# Desktop Core (Rust only: .rs, Cargo.toml)
+apps/desktop-core/src/generated/domain_events/
+apps/desktop-core/src/generated/openapi/
+apps/desktop-core/src/generated/skills/
+apps/desktop-core/src/generated/**/*.d.ts
+apps/desktop-core/src/generated/**/*.py
+apps/desktop-core/src/generated/**/*.ts
+
+# Sidecar (Python only: .py)
+sidecar/ibreeze/generated/contracts/
+sidecar/ibreeze/generated/openapi/
+sidecar/ibreeze/generated/**/*.d.ts
+sidecar/ibreeze/generated/**/*.rs
+sidecar/ibreeze/generated/**/*.ts
+
+# Admin Web (TypeScript only: .d.ts, .ts)
+apps/admin-web/src/generated/contracts/
+apps/admin-web/src/generated/domain_events/
+apps/admin-web/src/generated/skills/
+apps/admin-web/src/generated/**/*.py
+apps/admin-web/src/generated/**/*.rs

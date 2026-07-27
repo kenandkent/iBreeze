@@ -5,7 +5,7 @@ import type { SkillCatalogItem } from '../types';
 export function useListSkills() {
   return useQuery({
     queryKey: ['skills'],
-    queryFn: () => apiGet<{ data: SkillCatalogItem[] }>('/skills'),
+    queryFn: () => apiGet<{ items: SkillCatalogItem[] }>('/skills'),
   });
 }
 
@@ -21,8 +21,8 @@ export function useInstallSkill() {
 export function useRemoveSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiDelete(`/skills/${id}`),
+    mutationFn: ({ id, version }: { id: string; version: number }) =>
+      apiDelete(`/skills/${id}`, version),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills'] }),
   });
 }

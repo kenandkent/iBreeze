@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/event.subscribe.request.v1",
+  "title": "EventSubscribeRequest",
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

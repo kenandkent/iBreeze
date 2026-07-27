@@ -5,7 +5,7 @@ import type { Release } from '../types';
 export function useListReleases() {
   return useQuery({
     queryKey: ['releases'],
-    queryFn: () => apiGet<{ data: Release[] }>('/catalog/releases'),
+    queryFn: () => apiGet<{ items: Release[] }>('/catalog/releases'),
   });
 }
 

@@ -5,7 +5,7 @@ import type { ModelCatalogItem } from '../types';
 export function useListModels() {
   return useQuery({
     queryKey: ['models'],
-    queryFn: () => apiGet<{ data: ModelCatalogItem[] }>('/models'),
+    queryFn: () => apiGet<{ items: ModelCatalogItem[] }>('/models'),
   });
 }
 

@@ -25,7 +25,7 @@ export default function CompatibilityPage() {
   const [form] = Form.useForm();
   const [testForm] = Form.useForm();
 
-  const rules = data?.data ?? [];
+  const rules = data?.items ?? [];
 
   const openCreate = () => {
     setEditing(null);

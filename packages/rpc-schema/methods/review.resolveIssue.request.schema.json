@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/review.resolveIssue.request.v1",
+  "title": "ReviewResolveissueRequest",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

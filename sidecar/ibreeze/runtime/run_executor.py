@@ -332,7 +332,20 @@ async def _feedback_to_tasks(
                    WHERE company_task_id=? AND company_id=? AND status='failed'""",
                 (run["company_task_id"], company_id),
             )).fetchone()
-            ct_status = "failed" if (any_dept_failed and any_dept_failed["cnt"] > 0) else "reviewing"
+            if any_dept_failed and any_dept_failed["cnt"] > 0:
+                ct_status = "failed"
+            else:
+                company_gate = CompletionGate()
+                gate_result = await company_gate.evaluate_company_task(
+                    db, run["company_task_id"], company_id,
+                )
+                ct_status = "reviewing" if gate_result.allowed else "needs_rework"
+                if not gate_result.allowed:
+                    logger.warning(
+                        "Company gate blocked for task %s: %s",
+                        run["company_task_id"],
+                        [b.code for b in gate_result.blockers],
+                    )
             await db.execute(
                 """UPDATE company_tasks
                    SET status=?, updated_at=?, version=version+1

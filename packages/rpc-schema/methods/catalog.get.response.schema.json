@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/catalog.get.response.v1",
+  "title": "CatalogGetResponse",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}
