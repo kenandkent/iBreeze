@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,27 +18,41 @@ class AnalysisWorker:
     def __init__(self, database: LocalDB, write_queue: WriteQueue) -> None:
         self._database = database
         self._write_queue = write_queue
+        self._alive = False
+        self._last_beat: float = 0.0
+
+    @property
+    def alive(self) -> bool:
+        return self._alive
+
+    @property
+    def last_beat(self) -> float:
+        return self._last_beat
 
     async def run(self) -> None:
         logger.info("AnalysisWorker started")
-        db = self._database._write_conn
+        self._alive = True
         try:
             while True:
-                await self._cleanup_expired_leases(db)
+                await self._cleanup_expired_leases()
+                self._last_beat = time.time()
                 await asyncio.sleep(60)
         except asyncio.CancelledError:
             logger.info("AnalysisWorker stopped")
+        finally:
+            self._alive = False
 
-    async def _cleanup_expired_leases(self, db: Any) -> None:
+    async def _cleanup_expired_leases(self) -> None:
         now = _now()
-        try:
+
+        async def _do_cleanup(db: Any) -> int:
             expired = await (await db.execute(
                 """SELECT id, queue_id, job_id, run_id, company_id
                    FROM runtime_leases WHERE expires_at < ?""",
                 (now,),
             )).fetchall()
             if not expired:
-                return
+                return 0
             for row in expired:
                 await db.execute(
                     """UPDATE runtime_queue
@@ -56,7 +71,11 @@ class AnalysisWorker:
                            WHERE id=? AND company_id=?""",
                         (now, row["run_id"], row["company_id"]),
                     )
-            await db.commit()
-            logger.info("Cleaned up %d expired runtime leases", len(expired))
+            return len(expired)
+
+        try:
+            count = await self._write_queue.execute(_do_cleanup)
+            if count:
+                logger.info("Cleaned up %d expired runtime leases", count)
         except Exception:
             logger.exception("Failed to cleanup expired leases")

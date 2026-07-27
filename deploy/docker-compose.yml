@@ -53,7 +53,7 @@ services:
     image: minio/minio:RELEASE.2024-10-13T13-34-42Z@sha256:2578f1aea4ff07f80e46e5b8c1e95d8f851b3e20e5457b3f8b5c8b5d8e4f6a7b
     ports:
       - "51900:9000"
-      - "51901:9001"
+      - "51901:51901"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?error}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?error}

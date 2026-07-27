@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from ibreeze.rpc_server import RPCServer
 from ibreeze.workers.analysis import AnalysisWorker
 from ibreeze.workers.runtime import RuntimeWorker
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class HealthSnapshot:
@@ -17,6 +21,10 @@ class HealthSnapshot:
     database_status: str = "unknown"
     worker_count: int = 0
     healthy_workers: int = 0
+    analysis_worker_alive: bool = False
+    runtime_worker_alive: bool = False
+    analysis_worker_last_beat: float = 0.0
+    runtime_worker_last_beat: float = 0.0
     errors: list[str] = field(default_factory=list)
 
 
@@ -49,7 +57,9 @@ class SidecarApplication:
         self._read_pool = ReadPool(size=8)
         self._server: RPCServer | None = None
         self._workers: list[asyncio.Task[None]] = []
+        self._worker_instances: list = []
         self._health = HealthSnapshot()
+        self._monitor_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         db_path = self._profile_root / "profile.db"
@@ -90,13 +100,19 @@ class SidecarApplication:
         )
 
         # Start background workers
+        analysis = AnalysisWorker(self._database, self._write_queue)
+        runtime = RuntimeWorker(self._database, self._write_queue)
+        self._worker_instances = [analysis, runtime]
         self._workers = [
-            asyncio.create_task(AnalysisWorker(self._database, self._write_queue).run()),
-            asyncio.create_task(RuntimeWorker(self._database, self._write_queue).run()),
+            asyncio.create_task(analysis.run()),
+            asyncio.create_task(runtime.run()),
         ]
         self._health.status = "healthy"
         self._health.worker_count = len(self._workers)
         self._health.healthy_workers = len(self._workers)
+
+        # Start health monitor
+        self._monitor_task = asyncio.create_task(self._monitor_health())
 
         # Serve RPC (blocks until shutdown)
         try:
@@ -104,7 +120,30 @@ class SidecarApplication:
         finally:
             await self.stop()
 
+    async def _monitor_health(self) -> None:
+        """Periodically check worker health and update snapshot."""
+        while True:
+            await asyncio.sleep(30)
+            try:
+                alive_count = 0
+                for inst in self._worker_instances:
+                    if inst.alive:
+                        alive_count += 1
+                self._health.healthy_workers = alive_count
+                if alive_count < self._health.worker_count:
+                    self._health.status = "degraded"
+                else:
+                    self._health.status = "healthy"
+            except Exception:
+                logger.exception("Health monitor check failed")
+
     async def stop(self, grace_seconds: float = 10.0) -> None:
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
         for w in self._workers:
             w.cancel()
         if self._workers:
@@ -117,4 +156,11 @@ class SidecarApplication:
             await self._database.close()
 
     async def health(self) -> HealthSnapshot:
+        if self._worker_instances:
+            analysis = self._worker_instances[0]
+            runtime = self._worker_instances[1]
+            self._health.analysis_worker_alive = analysis.alive
+            self._health.runtime_worker_alive = runtime.alive
+            self._health.analysis_worker_last_beat = analysis.last_beat
+            self._health.runtime_worker_last_beat = runtime.last_beat
         return self._health

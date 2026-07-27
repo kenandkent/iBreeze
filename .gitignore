@@ -93,3 +93,4 @@ apps/admin-web/src/generated/domain_events/
 apps/admin-web/src/generated/skills/
 apps/admin-web/src/generated/**/*.py
 apps/admin-web/src/generated/**/*.rs
+.vite/
