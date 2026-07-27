@@ -1,0 +1,29 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Python audit
+        run: uv run pip-audit
+        working-directory: sidecar
+        continue-on-error: true

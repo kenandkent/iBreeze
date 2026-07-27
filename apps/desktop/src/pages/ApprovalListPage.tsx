@@ -24,7 +24,7 @@ export default function ApprovalListPage() {
   const queryClient = useQueryClient();
   const { data: approvals = [], isLoading } = useQuery<ApprovalRecord[]>({
     queryKey: ['approvals'],
-    queryFn: () => invoke('rpc_request', { method: 'approval.listPending', params: {} }),
+    queryFn: () => invoke('rpc_request', { method: 'approval.listPending', params: { company_id: companyId } }),
   });
 
   const resolveMutation = useMutation({

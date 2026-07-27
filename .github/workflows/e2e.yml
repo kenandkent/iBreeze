@@ -1,0 +1,25 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+        working-directory: tests/e2e
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+        working-directory: tests/e2e
+      - name: Run E2E tests
+        run: npm test
+        working-directory: tests/e2e

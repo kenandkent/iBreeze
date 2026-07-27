@@ -1,0 +1,22 @@
+name: Contracts Validation
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  validate-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Validate JSON Schemas
+        run: python3 scripts/validate-schemas.py
+      - name: Check Contract Drift
+        run: bash scripts/check-contract-drift.sh

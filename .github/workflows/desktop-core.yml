@@ -1,0 +1,23 @@
+name: Desktop Core Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --check
+        working-directory: apps/desktop-core
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+        working-directory: apps/desktop-core
+      - name: Test
+        run: cargo test
+        working-directory: apps/desktop-core
