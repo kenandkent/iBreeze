@@ -3,6 +3,36 @@
   "$id": "https://ibreeze.ai/schemas/review.submit.request.v1",
   "title": "ReviewSubmitRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "assignment_id": {"type": "string", "format": "uuid"},
+    "reviewer_run_id": {"type": "string", "format": "uuid"},
+    "reviewed_artifact_id": {"type": "string", "format": "uuid"},
+    "reviewed_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "report_artifact_id": {"type": "string", "format": "uuid"},
+    "verdict": {"type": "string", "enum": ["pass", "needs_changes", "failed"]},
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "client_issue_id": {"type": "string", "format": "uuid"},
+          "severity": {"type": "string", "enum": ["blocker", "high", "medium", "low"]},
+          "category": {"type": "string", "enum": ["functional", "security", "performance", "reliability", "maintainability", "documentation", "test", "contract", "review_execution"]},
+          "description": {"type": "string", "minLength": 1, "maxLength": 20000},
+          "expected": {"type": "string", "minLength": 1, "maxLength": 10000},
+          "actual": {"type": "string", "minLength": 1, "maxLength": 10000},
+          "evidence_refs": {"type": "array", "items": {"type": "string", "format": "uuid"}, "minItems": 1},
+          "suggested_fix": {"type": "string", "minLength": 1, "maxLength": 20000},
+          "assignee_employee_id": {"type": "string", "format": "uuid"}
+        },
+        "required": ["client_issue_id", "severity", "category", "description", "expected", "actual", "evidence_refs", "suggested_fix"],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "expected_assignment_version": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "assignment_id", "reviewer_run_id", "reviewed_artifact_id", "reviewed_sha256", "report_artifact_id", "verdict", "issues", "expected_assignment_version"]
 }

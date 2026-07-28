@@ -3,6 +3,11 @@
   "$id": "https://ibreeze.ai/schemas/employee.updateDisplayName.request.v1",
   "title": "EmployeeUpdatedisplaynameRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "employee_id": {"type": "string", "format": "uuid"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 100}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "employee_id", "display_name"]
 }

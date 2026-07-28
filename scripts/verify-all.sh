@@ -4,7 +4,7 @@ trap 'code=$?; echo "verify-all failed at line ${LINENO} with exit code ${code}"
 
 echo "=== iBreeze Verify All ==="
 
-required_tools=(node npm cargo)
+required_tools=(node npm cargo uv cargo-nextest cargo-llvm-cov)
 for tool in "${required_tools[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
         echo "FATAL: required tool '$tool' not found" >&2
@@ -24,12 +24,7 @@ echo "--- desktop-core clippy ---"
 cargo clippy --manifest-path apps/desktop-core/Cargo.toml --all-targets --all-features -- -D warnings
 
 echo "--- desktop-core test ---"
-if command -v cargo-nextest &>/dev/null; then
-    cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features
-else
-    echo "WARNING: cargo-nextest not found, falling back to cargo test"
-    cargo test --manifest-path apps/desktop-core/Cargo.toml --all-features
-fi
+cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features
 
 echo "--- desktop-core coverage ---"
 if command -v cargo-llvm-cov &>/dev/null; then
@@ -47,7 +42,7 @@ echo "--- backend-api typecheck ---"
 uv run --directory apps/backend-api mypy src
 
 echo "--- backend-api test ---"
-uv run --directory apps/backend-api pytest --cov=ibreeze_backend --cov-branch --cov-fail-under=62
+uv run --directory apps/backend-api pytest --cov=ibreeze_backend --cov-branch --cov-fail-under=100
 
 # Python: sidecar
 echo "--- sidecar lint ---"
@@ -57,7 +52,7 @@ echo "--- sidecar typecheck ---"
 uv run --directory sidecar mypy ibreeze
 
 echo "--- sidecar test ---"
-uv run --directory sidecar pytest --cov=ibreeze --cov-branch --cov-fail-under=77
+uv run --directory sidecar pytest --cov=ibreeze --cov-branch --cov-fail-under=100
 
 # Node: desktop UI
 echo "--- desktop lint ---"
@@ -81,14 +76,15 @@ npm --prefix apps/admin-web run test:coverage
 
 # Contract/Integration/Security tests
 echo "--- python tests ---"
-python3 -m pytest tests/contract tests/integration tests/faults tests/scripts -v
+uv run --directory sidecar pytest tests/contract tests/integration tests/faults tests/scripts -v
 
 # E2E
 echo "--- e2e tests ---"
-if [ -n "$(ls -A tests/e2e/*.spec.ts 2>/dev/null || ls -A tests/e2e/tests/*.spec.ts 2>/dev/null)" ]; then
+e2e_count=$(find tests/e2e -name '*.spec.ts' -maxdepth 2 2>/dev/null | wc -l | tr -d ' ')
+if [ "$e2e_count" -gt 0 ]; then
   npm --prefix tests/e2e run test
 else
-  echo "ERROR: no e2e test files found"
+  echo "ERROR: no e2e test files found (expected at least 1 .spec.ts)"
   exit 1
 fi
 

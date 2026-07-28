@@ -19,13 +19,13 @@ services:
     image: minio/minio
     ports:
       - "51900:9000"
-      - "51901:51901"
+      - "51901:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio_data:/data
-    command: server /data --console-address ":51901"
+    command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 
 from ibreeze.local_db import LocalDB
 from ibreeze.persistence.write_queue import WriteQueue
@@ -14,7 +13,7 @@ class RuntimeWorker:
         self._write_queue = write_queue
         self._alive = False
         self._last_beat: float = 0.0
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     @property
     def alive(self) -> bool:

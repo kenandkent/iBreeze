@@ -4,5 +4,6 @@
   "title": "AuthLogoutRequest",
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "maxProperties": 0
 }

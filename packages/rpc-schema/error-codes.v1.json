@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/error-codes.v1",
+  "title": "Error Codes Registry",
+  "description": "Standardized error codes for all RPC methods — Section 6.4 of the core architecture",
+  "type": "object",
+  "required": ["version", "error_codes"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "error_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "http_status": { "type": "integer" },
+          "description": { "type": "string" },
+          "retryable": { "type": "boolean" }
+        },
+        "required": ["code", "http_status", "description", "retryable"]
+      }
+    }
+  },
+  "error_codes": [
+    {
+      "code": "VALIDATION_FAILED",
+      "http_status": 400,
+      "description": "Request payload failed schema validation",
+      "retryable": false
+    },
+    {
+      "code": "RESOURCE_NOT_FOUND",
+      "http_status": 404,
+      "description": "Requested resource does not exist",
+      "retryable": false
+    },
+    {
+      "code": "METHOD_NOT_ALLOWED",
+      "http_status": 405,
+      "description": "Method is not allowed in the current state or context",
+      "retryable": false
+    },
+    {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "http_status": 409,
+      "description": "Idempotency key collision with a different request",
+      "retryable": false
+    },
+    {
+      "code": "OPTIMISTIC_LOCK_CONFLICT",
+      "http_status": 409,
+      "description": "Resource version mismatch due to concurrent modification",
+      "retryable": true
+    },
+    {
+      "code": "STATE_TRANSITION_INVALID",
+      "http_status": 409,
+      "description": "Requested state transition is not allowed from current state",
+      "retryable": false
+    },
+    {
+      "code": "RATE_LIMITED",
+      "http_status": 429,
+      "description": "Request rate limit exceeded",
+      "retryable": true
+    },
+    {
+      "code": "INTERNAL_ERROR",
+      "http_status": 500,
+      "description": "Internal server error",
+      "retryable": true
+    },
+    {
+      "code": "RESOURCE_ALREADY_EXISTS",
+      "http_status": 409,
+      "description": "Resource with the given identity already exists",
+      "retryable": false
+    },
+    {
+      "code": "EXECUTION_SNAPSHOT_MISMATCH",
+      "http_status": 409,
+      "description": "Execution snapshot version does not match the current state",
+      "retryable": true
+    },
+    {
+      "code": "RUNTIME_OUTPUT_LIMIT_EXCEEDED",
+      "http_status": 413,
+      "description": "Runtime output exceeded maximum allowed size",
+      "retryable": false
+    },
+    {
+      "code": "ADAPTER_RESULT_MISMATCH",
+      "http_status": 500,
+      "description": "Adapter returned an unexpected result type",
+      "retryable": true
+    },
+    {
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "http_status": 401,
+      "description": "Authentication credentials are invalid or malformed",
+      "retryable": false
+    },
+    {
+      "code": "AUTH_TOKEN_EXPIRED",
+      "http_status": 401,
+      "description": "Authentication token has expired",
+      "retryable": false
+    },
+    {
+      "code": "IPC_CONNECTION_LOST",
+      "http_status": 503,
+      "description": "IPC connection between sidecar and core was lost",
+      "retryable": true
+    },
+    {
+      "code": "IPC_BACKPRESSURE",
+      "http_status": 503,
+      "description": "IPC channel is at capacity; backpressure applied",
+      "retryable": true
+    },
+    {
+      "code": "IPC_DEADLINE_EXCEEDED",
+      "http_status": 504,
+      "description": "IPC request exceeded deadline",
+      "retryable": true
+    },
+    {
+      "code": "CREDENTIAL_UNAVAILABLE",
+      "http_status": 502,
+      "description": "Credential provider returned no credential",
+      "retryable": true
+    },
+    {
+      "code": "CREDENTIAL_BROKER_NOT_OPERATIONAL",
+      "http_status": 503,
+      "description": "Credential broker service is not operational",
+      "retryable": true
+    },
+    {
+      "code": "PROVIDER_CONFIGURATION_INVALID",
+      "http_status": 502,
+      "description": "Provider configuration is invalid or incomplete",
+      "retryable": false
+    },
+    {
+      "code": "PROVIDER_UNREACHABLE",
+      "http_status": 502,
+      "description": "Provider endpoint is unreachable",
+      "retryable": true
+    },
+    {
+      "code": "REVIEW_SELF_ASSIGNMENT",
+      "http_status": 409,
+      "description": "Cannot assign review to oneself",
+      "retryable": false
+    },
+    {
+      "code": "PROFILE_NOT_READY",
+      "http_status": 503,
+      "description": "Profile is not ready for the requested operation",
+      "retryable": true
+    },
+    {
+      "code": "PROFILE_SCHEMA_UNSUPPORTED",
+      "http_status": 400,
+      "description": "Profile schema version is not supported",
+      "retryable": false
+    },
+    {
+      "code": "MIGRATION_CHECKSUM_MISMATCH",
+      "http_status": 400,
+      "description": "Migration data checksum does not match expected value",
+      "retryable": false
+    },
+    {
+      "code": "LOCAL_WRITE_BACKPRESSURE",
+      "http_status": 503,
+      "description": "Local write buffer is at capacity; backpressure applied",
+      "retryable": true
+    },
+    {
+      "code": "BACKUP_WRITE_BARRIER_TIMEOUT",
+      "http_status": 503,
+      "description": "Backup write barrier timed out",
+      "retryable": true
+    },
+    {
+      "code": "BACKUP_VERIFICATION_FAILED",
+      "http_status": 500,
+      "description": "Backup verification checksum mismatch",
+      "retryable": true
+    }
+  ]
+}

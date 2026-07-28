@@ -3,6 +3,11 @@
   "$id": "https://ibreeze.ai/schemas/task.supersede.request.v1",
   "title": "TaskSupersedeRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "task_id": {"type": "string", "format": "uuid"},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "task_id", "reason"]
 }

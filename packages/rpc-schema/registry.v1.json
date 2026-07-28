@@ -1,0 +1,1835 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/rpc-registry.v1",
+  "title": "Canonical RPC Method Registry",
+  "description": "Registry of all public RPC methods with ownership, kind, scope, and schema references",
+  "type": "object",
+  "required": [
+    "version",
+    "methods"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "methods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "rust",
+              "sidecar",
+              "supervisor"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "stream"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "profile",
+              "company"
+            ]
+          },
+          "request_schema": {
+            "type": "string"
+          },
+          "response_schema": {
+            "type": "string"
+          },
+          "idempotency_ttl_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "allowed_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "empty_request": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "method",
+          "owner",
+          "kind",
+          "scope",
+          "request_schema",
+          "response_schema",
+          "idempotency_ttl_seconds",
+          "allowed_errors",
+          "empty_request"
+        ]
+      }
+    }
+  },
+  "methods": [
+    {
+      "method": "approval.listPending",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/approval.listPending.request.schema.json",
+      "response_schema": "methods/approval.listPending.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "approval.resolve",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/approval.resolve.request.schema.json",
+      "response_schema": "methods/approval.resolve.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "artifact.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/artifact.create.request.schema.json",
+      "response_schema": "methods/artifact.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "artifact.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/artifact.get.request.schema.json",
+      "response_schema": "methods/artifact.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "artifact.getSnapshot",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/artifact.getSnapshot.request.schema.json",
+      "response_schema": "methods/artifact.getSnapshot.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "artifact.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/artifact.list.request.schema.json",
+      "response_schema": "methods/artifact.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "auth.changePassword",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.changePassword.request.schema.json",
+      "response_schema": "methods/auth.changePassword.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "auth.closeProfile",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.closeProfile.request.schema.json",
+      "response_schema": "methods/auth.closeProfile.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "auth.listOfflineProfiles",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/auth.listOfflineProfiles.request.schema.json",
+      "response_schema": "methods/auth.listOfflineProfiles.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "auth.login",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.login.request.schema.json",
+      "response_schema": "methods/auth.login.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "auth.logout",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.logout.request.schema.json",
+      "response_schema": "methods/auth.logout.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "auth.openProfile",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.openProfile.request.schema.json",
+      "response_schema": "methods/auth.openProfile.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "auth.register",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/auth.register.request.schema.json",
+      "response_schema": "methods/auth.register.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "backend.validateOrigin",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/backend.validateOrigin.request.schema.json",
+      "response_schema": "methods/backend.validateOrigin.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "backup.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/backup.create.request.schema.json",
+      "response_schema": "methods/backup.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "backup.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/backup.get.request.schema.json",
+      "response_schema": "methods/backup.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "backup.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/backup.list.request.schema.json",
+      "response_schema": "methods/backup.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "backup.restore",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/backup.restore.request.schema.json",
+      "response_schema": "methods/backup.restore.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "catalog.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.get.request.schema.json",
+      "response_schema": "methods/catalog.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "catalog.getActiveRelease",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.getActiveRelease.request.schema.json",
+      "response_schema": "methods/catalog.getActiveRelease.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "catalog.installSkill",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/catalog.installSkill.request.schema.json",
+      "response_schema": "methods/catalog.installSkill.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "catalog.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.list.request.schema.json",
+      "response_schema": "methods/catalog.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "catalog.listAgents",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.listAgents.request.schema.json",
+      "response_schema": "methods/catalog.listAgents.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "catalog.listModels",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.listModels.request.schema.json",
+      "response_schema": "methods/catalog.listModels.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "catalog.listSkills",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "none",
+      "request_schema": "methods/catalog.listSkills.request.schema.json",
+      "response_schema": "methods/catalog.listSkills.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "catalog.removeSkill",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/catalog.removeSkill.request.schema.json",
+      "response_schema": "methods/catalog.removeSkill.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "catalog.sync",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/catalog.sync.request.schema.json",
+      "response_schema": "methods/catalog.sync.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "catalog.verifyCache",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "none",
+      "request_schema": "methods/catalog.verifyCache.request.schema.json",
+      "response_schema": "methods/catalog.verifyCache.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "company.archive",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "company",
+      "request_schema": "methods/company.archive.request.schema.json",
+      "response_schema": "methods/company.archive.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "company.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "company",
+      "request_schema": "methods/company.create.request.schema.json",
+      "response_schema": "methods/company.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "company.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/company.get.request.schema.json",
+      "response_schema": "methods/company.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "company.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/company.list.request.schema.json",
+      "response_schema": "methods/company.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "company.update",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "company",
+      "request_schema": "methods/company.update.request.schema.json",
+      "response_schema": "methods/company.update.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.archive",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/conversation.archive.request.schema.json",
+      "response_schema": "methods/conversation.archive.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/conversation.create.request.schema.json",
+      "response_schema": "methods/conversation.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.getCompany",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/conversation.getCompany.request.schema.json",
+      "response_schema": "methods/conversation.getCompany.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.getDepartment",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/conversation.getDepartment.request.schema.json",
+      "response_schema": "methods/conversation.getDepartment.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/conversation.list.request.schema.json",
+      "response_schema": "methods/conversation.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.listMessages",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/conversation.listMessages.request.schema.json",
+      "response_schema": "methods/conversation.listMessages.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "conversation.submitUserMessage",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/conversation.submitUserMessage.request.schema.json",
+      "response_schema": "methods/conversation.submitUserMessage.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.archive",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.archive.request.schema.json",
+      "response_schema": "methods/department.archive.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.create.request.schema.json",
+      "response_schema": "methods/department.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/department.get.request.schema.json",
+      "response_schema": "methods/department.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/department.list.request.schema.json",
+      "response_schema": "methods/department.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.responsibility.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.responsibility.create.request.schema.json",
+      "response_schema": "methods/department.responsibility.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.responsibility.delete",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.responsibility.delete.request.schema.json",
+      "response_schema": "methods/department.responsibility.delete.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.responsibility.update",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.responsibility.update.request.schema.json",
+      "response_schema": "methods/department.responsibility.update.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.setLeader",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.setLeader.request.schema.json",
+      "response_schema": "methods/department.setLeader.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "department.update",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/department.update.request.schema.json",
+      "response_schema": "methods/department.update.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "departmentTask.checkResources",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/departmentTask.checkResources.request.schema.json",
+      "response_schema": "methods/departmentTask.checkResources.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "departmentTask.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/departmentTask.get.request.schema.json",
+      "response_schema": "methods/departmentTask.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "departmentTask.getReport",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/departmentTask.getReport.request.schema.json",
+      "response_schema": "methods/departmentTask.getReport.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "departmentTask.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/departmentTask.list.request.schema.json",
+      "response_schema": "methods/departmentTask.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "departmentTask.replaceEmployee",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/departmentTask.replaceEmployee.request.schema.json",
+      "response_schema": "methods/departmentTask.replaceEmployee.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.archive",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.archive.request.schema.json",
+      "response_schema": "methods/employee.archive.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.create",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.create.request.schema.json",
+      "response_schema": "methods/employee.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/employee.get.request.schema.json",
+      "response_schema": "methods/employee.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/employee.list.request.schema.json",
+      "response_schema": "methods/employee.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.transfer",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.transfer.request.schema.json",
+      "response_schema": "methods/employee.transfer.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.updateBaseProfile",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.updateBaseProfile.request.schema.json",
+      "response_schema": "methods/employee.updateBaseProfile.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.updateDisplayName",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.updateDisplayName.request.schema.json",
+      "response_schema": "methods/employee.updateDisplayName.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.updateStatus",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.updateStatus.request.schema.json",
+      "response_schema": "methods/employee.updateStatus.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employee.updateWorkRole",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/employee.updateWorkRole.request.schema.json",
+      "response_schema": "methods/employee.updateWorkRole.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employeeTask.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/employeeTask.get.request.schema.json",
+      "response_schema": "methods/employeeTask.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "employeeTask.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/employeeTask.list.request.schema.json",
+      "response_schema": "methods/employeeTask.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "event.replay",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/event.replay.request.schema.json",
+      "response_schema": "methods/event.replay.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "event.subscribe",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/event.subscribe.request.schema.json",
+      "response_schema": "methods/event.subscribe.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "knowledge.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/knowledge.get.request.schema.json",
+      "response_schema": "methods/knowledge.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "knowledge.import",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/knowledge.import.request.schema.json",
+      "response_schema": "methods/knowledge.import.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "knowledge.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/knowledge.list.request.schema.json",
+      "response_schema": "methods/knowledge.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "knowledge.remove",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/knowledge.remove.request.schema.json",
+      "response_schema": "methods/knowledge.remove.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "knowledge.search",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/knowledge.search.request.schema.json",
+      "response_schema": "methods/knowledge.search.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.bindSkill",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.bindSkill.request.schema.json",
+      "response_schema": "methods/profile.bindSkill.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.createDraft",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.createDraft.request.schema.json",
+      "response_schema": "methods/profile.createDraft.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/profile.get.request.schema.json",
+      "response_schema": "methods/profile.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/profile.list.request.schema.json",
+      "response_schema": "methods/profile.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.publish",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.publish.request.schema.json",
+      "response_schema": "methods/profile.publish.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.retire",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.retire.request.schema.json",
+      "response_schema": "methods/profile.retire.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.retireVersion",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.retireVersion.request.schema.json",
+      "response_schema": "methods/profile.retireVersion.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.unbindSkill",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.unbindSkill.request.schema.json",
+      "response_schema": "methods/profile.unbindSkill.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.updateDraft",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.updateDraft.request.schema.json",
+      "response_schema": "methods/profile.updateDraft.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "profile.validate",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/profile.validate.request.schema.json",
+      "response_schema": "methods/profile.validate.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "report.generateDepartment",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/report.generateDepartment.request.schema.json",
+      "response_schema": "methods/report.generateDepartment.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "report.generateFinal",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/report.generateFinal.request.schema.json",
+      "response_schema": "methods/report.generateFinal.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.assign",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/review.assign.request.schema.json",
+      "response_schema": "methods/review.assign.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/review.get.request.schema.json",
+      "response_schema": "methods/review.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/review.list.request.schema.json",
+      "response_schema": "methods/review.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.listIssues",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/review.listIssues.request.schema.json",
+      "response_schema": "methods/review.listIssues.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.rerun",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/review.rerun.request.schema.json",
+      "response_schema": "methods/review.rerun.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.resolveIssue",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/review.resolveIssue.request.schema.json",
+      "response_schema": "methods/review.resolveIssue.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "review.submit",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/review.submit.request.schema.json",
+      "response_schema": "methods/review.submit.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "run.cancel",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/run.cancel.request.schema.json",
+      "response_schema": "methods/run.cancel.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "run.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/run.get.request.schema.json",
+      "response_schema": "methods/run.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "run.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/run.list.request.schema.json",
+      "response_schema": "methods/run.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "run.listEvents",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/run.listEvents.request.schema.json",
+      "response_schema": "methods/run.listEvents.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "run.resume",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/run.resume.request.schema.json",
+      "response_schema": "methods/run.resume.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "runtime.getStatus",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/runtime.getStatus.request.schema.json",
+      "response_schema": "methods/runtime.getStatus.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "runtime.listAvailableModels",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/runtime.listAvailableModels.request.schema.json",
+      "response_schema": "methods/runtime.listAvailableModels.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": true
+    },
+    {
+      "method": "runtime.probeAgent",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/runtime.probeAgent.request.schema.json",
+      "response_schema": "methods/runtime.probeAgent.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "runtime.probeProvider",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/runtime.probeProvider.request.schema.json",
+      "response_schema": "methods/runtime.probeProvider.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "runtime.run",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/runtime.run.request.schema.json",
+      "response_schema": "methods/runtime.run.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "runtime.stop",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/runtime.stop.request.schema.json",
+      "response_schema": "methods/runtime.stop.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "settings.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/settings.get.request.schema.json",
+      "response_schema": "methods/settings.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "settings.update",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/settings.update.request.schema.json",
+      "response_schema": "methods/settings.update.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.cancel",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.cancel.request.schema.json",
+      "response_schema": "methods/task.cancel.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.confirmPlan",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.confirmPlan.request.schema.json",
+      "response_schema": "methods/task.confirmPlan.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/task.get.request.schema.json",
+      "response_schema": "methods/task.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.getEvidence",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/task.getEvidence.request.schema.json",
+      "response_schema": "methods/task.getEvidence.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.getGraph",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/task.getGraph.request.schema.json",
+      "response_schema": "methods/task.getGraph.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/task.list.request.schema.json",
+      "response_schema": "methods/task.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.pause",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.pause.request.schema.json",
+      "response_schema": "methods/task.pause.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.rejectPlan",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.rejectPlan.request.schema.json",
+      "response_schema": "methods/task.rejectPlan.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.requestPlanRevision",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.requestPlanRevision.request.schema.json",
+      "response_schema": "methods/task.requestPlanRevision.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.resume",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.resume.request.schema.json",
+      "response_schema": "methods/task.resume.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "task.supersede",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/task.supersede.request.schema.json",
+      "response_schema": "methods/task.supersede.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "workspace.abandon",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/workspace.abandon.request.schema.json",
+      "response_schema": "methods/workspace.abandon.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "workspace.apply",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/workspace.apply.request.schema.json",
+      "response_schema": "methods/workspace.apply.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "workspace.cleanupTask",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/workspace.cleanupTask.request.schema.json",
+      "response_schema": "methods/workspace.cleanupTask.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND",
+        "INTERNAL_ERROR"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "workspace.get",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/workspace.get.request.schema.json",
+      "response_schema": "methods/workspace.get.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    },
+    {
+      "method": "workspace.list",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/workspace.list.request.schema.json",
+      "response_schema": "methods/workspace.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": [
+        "VALIDATION_FAILED",
+        "RESOURCE_NOT_FOUND"
+      ],
+      "empty_request": false
+    }
+  ]
+}

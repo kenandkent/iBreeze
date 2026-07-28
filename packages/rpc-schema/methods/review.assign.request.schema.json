@@ -3,6 +3,11 @@
   "$id": "https://ibreeze.ai/schemas/review.assign.request.v1",
   "title": "ReviewAssignRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "assignment_id": {"type": "string", "format": "uuid"},
+    "reviewer_employee_id": {"type": "string", "format": "uuid"}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "assignment_id", "reviewer_employee_id"]
 }

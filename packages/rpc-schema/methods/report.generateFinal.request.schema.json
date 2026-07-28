@@ -3,6 +3,10 @@
   "$id": "https://ibreeze.ai/schemas/report.generateFinal.request.v1",
   "title": "ReportGeneratefinalRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "company_task_id": {"type": "string", "format": "uuid"}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "company_task_id"]
 }

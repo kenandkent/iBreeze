@@ -694,11 +694,29 @@ fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
 }
 
 #[tauri::command]
-pub async fn system_health() -> Result<serde_json::Value, AppError> {
+pub async fn system_health(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    let (sidecar_running, sidecar_healthy) = if state.supervisor.is_running().await {
+        (true, state.supervisor.check_health().await.is_ok())
+    } else {
+        (false, false)
+    };
+
+    let status = if sidecar_running && sidecar_healthy {
+        "healthy"
+    } else if sidecar_running {
+        "degraded"
+    } else {
+        "unhealthy"
+    };
+
     Ok(serde_json::json!({
-        "status": "healthy",
+        "status": status,
         "platform": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "sidecar": {
+            "running": sidecar_running,
+            "healthy": sidecar_healthy,
+        },
     }))
 }
 

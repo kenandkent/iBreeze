@@ -55,8 +55,8 @@ ibreeze/
 ├─ sidecar/             # Python Sidecar
 ├─ deploy/              # Docker Compose + Nginx + Dockerfile
 ├─ packages/
-│  ├─ contracts/        # JSON Schema 契约
-│  ├─ rpc-schema/       # 本地 RPC Schema
+│  ├─ contracts/        # JSON Schema 契约 + Domain Event Registry
+│  ├─ rpc-schema/       # Canonical RPC Registry + 方法 Schema + 错误码
 │  └─ ui/               # 共享 UI 组件
 ├─ tests/               # 集成、E2E、安全、性能测试
 ├─ scripts/             # 构建和验证脚本
@@ -71,6 +71,8 @@ ibreeze/
 - Rust >= 1.75
 - Python >= 3.12
 - uv (Python 包管理器)
+- cargo-nextest (Rust 测试运行器)
+- cargo-llvm-cov (Rust 覆盖率)
 - PostgreSQL 16 (管理后台)
 
 ### 快速开始

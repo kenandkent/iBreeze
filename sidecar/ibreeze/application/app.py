@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 from ibreeze.local_db import LocalDB
 from ibreeze.persistence.migrations import run_migrations
@@ -10,9 +12,32 @@ from ibreeze.persistence.read_pool import ReadPool
 from ibreeze.persistence.write_queue import WriteQueue
 from ibreeze.rpc_server import RPCServer
 from ibreeze.workers.analysis import AnalysisWorker
+from ibreeze.workers.outbox import OutboxWorker
 from ibreeze.workers.runtime import RuntimeWorker
 
 logger = logging.getLogger(__name__)
+
+
+class _WorkerProtocol(Protocol):
+    @property
+    def alive(self) -> bool: ...
+    @property
+    def last_beat(self) -> float: ...
+    async def run(self) -> None: ...
+
+_loop_start_time: float = time.monotonic()
+
+
+def _get_loop_start() -> float:
+    return _loop_start_time
+
+
+def _get_disk_free_bytes(path: Path) -> int:
+    try:
+        usage = shutil.disk_usage(path)
+        return usage.free
+    except OSError:
+        return 0
 
 
 @dataclass
@@ -23,8 +48,12 @@ class HealthSnapshot:
     healthy_workers: int = 0
     analysis_worker_alive: bool = False
     runtime_worker_alive: bool = False
+    outbox_worker_alive: bool = False
     analysis_worker_last_beat: float = 0.0
     runtime_worker_last_beat: float = 0.0
+    outbox_worker_last_beat: float = 0.0
+    disk_free_bytes: int = 0
+    event_loop_lag_ms: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -57,9 +86,9 @@ class SidecarApplication:
         self._read_pool = ReadPool(size=8)
         self._server: RPCServer | None = None
         self._workers: list[asyncio.Task[None]] = []
-        self._worker_instances: list = []
+        self._worker_instances: list[_WorkerProtocol] = []
         self._health = HealthSnapshot()
-        self._monitor_task: asyncio.Task | None = None
+        self._monitor_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         db_path = self._profile_root / "profile.db"
@@ -102,10 +131,12 @@ class SidecarApplication:
         # Start background workers
         analysis = AnalysisWorker(self._database, self._write_queue)
         runtime = RuntimeWorker(self._database, self._write_queue)
-        self._worker_instances = [analysis, runtime]
+        outbox = OutboxWorker(self._database, self._write_queue)
+        self._worker_instances = [analysis, runtime, outbox]
         self._workers = [
             asyncio.create_task(analysis.run()),
             asyncio.create_task(runtime.run()),
+            asyncio.create_task(outbox.run()),
         ]
         self._health.status = "healthy"
         self._health.worker_count = len(self._workers)
@@ -159,8 +190,13 @@ class SidecarApplication:
         if self._worker_instances:
             analysis = self._worker_instances[0]
             runtime = self._worker_instances[1]
+            outbox = self._worker_instances[2]
             self._health.analysis_worker_alive = analysis.alive
             self._health.runtime_worker_alive = runtime.alive
+            self._health.outbox_worker_alive = outbox.alive
             self._health.analysis_worker_last_beat = analysis.last_beat
             self._health.runtime_worker_last_beat = runtime.last_beat
+            self._health.outbox_worker_last_beat = outbox.last_beat
+        self._health.disk_free_bytes = _get_disk_free_bytes(self._profile_root)
+        self._health.event_loop_lag_ms = int((asyncio.get_event_loop().time() - _get_loop_start()) * 1000)
         return self._health

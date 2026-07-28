@@ -20,9 +20,6 @@ const READ_OPERATIONS = new Set([
   'event.replay',
   'review.listIssues',
   'approval.listPending',
-  'orchestration.list',
-  'orchestration.listRuns',
-  'planVersion.list',
 ]);
 
 export function isReadOperation(operationId: string): boolean {

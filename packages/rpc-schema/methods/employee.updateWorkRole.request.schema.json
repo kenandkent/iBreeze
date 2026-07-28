@@ -3,6 +3,11 @@
   "$id": "https://ibreeze.ai/schemas/employee.updateWorkRole.request.v1",
   "title": "EmployeeUpdateworkroleRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "employee_id": {"type": "string", "format": "uuid"},
+    "work_role": {"type": "string", "minLength": 1, "maxLength": 100}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "employee_id", "work_role"]
 }

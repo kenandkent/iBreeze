@@ -3,6 +3,10 @@
   "$id": "https://ibreeze.ai/schemas/report.generateDepartment.request.v1",
   "title": "ReportGeneratedepartmentRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "department_task_id": {"type": "string", "format": "uuid"}
+  },
+  "additionalProperties": false,
+  "required": ["company_id", "department_task_id"]
 }

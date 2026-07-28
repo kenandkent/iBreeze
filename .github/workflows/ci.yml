@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+      - name: Contracts lint
+        run: npm --prefix packages/contracts run lint
+      - name: Rust check
+        run: |
+          cargo fmt --manifest-path apps/desktop-core/Cargo.toml --all -- --check
+          cargo clippy --manifest-path apps/desktop-core/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Sidecar lint
+        run: uv run --directory sidecar ruff check ibreeze tests
+      - name: Sidecar typecheck
+        run: uv run --directory sidecar mypy ibreeze
+      - name: Backend lint
+        run: uv run --directory apps/backend-api ruff check src tests
+      - name: Contract drift
+        run: bash scripts/check-contract-drift.sh

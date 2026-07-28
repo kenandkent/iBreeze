@@ -72,7 +72,7 @@ async function tryRefreshToken(): Promise<boolean> {
       });
       if (!res.ok) return false;
       const data = await res.json();
-      useAuthStore.getState().login(data.access_token, data.user);
+      useAuthStore.getState().login(data.data.access_token, data.data.user);
       return true;
     } catch {
       return false;

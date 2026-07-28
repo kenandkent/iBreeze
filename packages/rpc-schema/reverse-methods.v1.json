@@ -2,22 +2,37 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ibreeze.ai/schemas/reverse-methods.v1",
   "title": "Reverse RPC Methods",
-  "description": "Sidecar-to-Rust reverse RPC allowlist",
-  "type": "array",
-  "items": {
-    "type": "string"
+  "description": "Sidecar-to-Rust reverse RPC allowlist — Section 6.5 of the core architecture",
+  "type": "object",
+  "required": ["sidecar_to_rust", "rust_to_sidecar"],
+  "additionalProperties": false,
+  "properties": {
+    "sidecar_to_rust": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Sidecar→Rust synchronous request methods"
+    },
+    "rust_to_sidecar": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Rust→Sidecar notification methods (fire-and-forget)"
+    }
   },
-  "uniqueItems": true,
-  "default": [
-    "credential.resolve",
-    "egress.connect",
-    "process.execute",
-    "process.registered",
-    "process.exited",
-    "platform.dialog",
-    "platform.open",
-    "file.read",
-    "file.write",
-    "notification.show"
+  "sidecar_to_rust": [
+    "credential.http.start",
+    "credential.http.cancel",
+    "credential.probe",
+    "host.externalWrite.execute",
+    "runtime.process.start",
+    "runtime.process.cancel",
+    "runtime.process.status"
+  ],
+  "rust_to_sidecar": [
+    "credential.http.event",
+    "runtime.process.registered",
+    "runtime.process.output",
+    "runtime.process.exited"
   ]
 }

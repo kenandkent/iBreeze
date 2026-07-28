@@ -1,27 +1,50 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ibreeze.ai/schemas/domain-events/registry.v1",
-  "title": "Domain Event Registry",
-  "type": "object",
-  "required": ["version", "events"],
-  "additionalProperties": false,
-  "properties": {
-    "version": { "type": "integer", "const": 1 },
-    "events": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "required": ["schema_ref", "description"],
-        "additionalProperties": false,
-        "properties": {
-          "schema_ref": { "type": "string" },
-          "description": { "type": "string" },
-          "requires_company_id": { "type": "boolean", "default": true }
-        }
-      },
-      "propertyNames": {
-        "pattern": "^[a-z]+(\\.[a-z]+)+$"
-      }
-    }
-  }
+  "version": 1,
+  "events": [
+    {"event_type": "company.created", "version": 1, "producer": "company.create", "payload_schema": "company.created.v1.schema.json", "requires_company_id": false, "consumers": ["company_projection"]},
+    {"event_type": "company.updated", "version": 1, "producer": "company.update", "payload_schema": "company.updated.v1.schema.json", "requires_company_id": true, "consumers": ["company_projection"]},
+    {"event_type": "company.archived", "version": 1, "producer": "company.archive", "payload_schema": "company.archived.v1.schema.json", "requires_company_id": true, "consumers": ["company_projection"]},
+    {"event_type": "department.created", "version": 1, "producer": "department.create", "payload_schema": "department.created.v1.schema.json", "requires_company_id": true, "consumers": ["department_projection"]},
+    {"event_type": "department.updated", "version": 1, "producer": "department.update", "payload_schema": "department.updated.v1.schema.json", "requires_company_id": true, "consumers": ["department_projection"]},
+    {"event_type": "department.archived", "version": 1, "producer": "department.archive", "payload_schema": "department.archived.v1.schema.json", "requires_company_id": true, "consumers": ["department_projection"]},
+    {"event_type": "department.leader_changed", "version": 1, "producer": "department.changeLeader", "payload_schema": "department.leader_changed.v1.schema.json", "requires_company_id": true, "consumers": ["department_projection"]},
+    {"event_type": "department.responsibility_changed", "version": 1, "producer": "department.changeResponsibility", "payload_schema": "department.responsibility_changed.v1.schema.json", "requires_company_id": true, "consumers": ["department_projection"]},
+    {"event_type": "employee.created", "version": 1, "producer": "employee.create", "payload_schema": "employee.created.v1.schema.json", "requires_company_id": true, "consumers": ["employee_projection"]},
+    {"event_type": "employee.updated", "version": 1, "producer": "employee.update", "payload_schema": "employee.updated.v1.schema.json", "requires_company_id": true, "consumers": ["employee_projection"]},
+    {"event_type": "employee.transferred", "version": 1, "producer": "employee.transfer", "payload_schema": "employee.transferred.v1.schema.json", "requires_company_id": true, "consumers": ["employee_projection"]},
+    {"event_type": "employee.status_changed", "version": 1, "producer": "employee.changeStatus", "payload_schema": "employee.status_changed.v1.schema.json", "requires_company_id": true, "consumers": ["employee_projection"]},
+    {"event_type": "company_task.status_changed", "version": 1, "producer": "companyTask.changeStatus", "payload_schema": "company_task.status_changed.v1.schema.json", "requires_company_id": true, "consumers": ["task_projection"]},
+    {"event_type": "department_task.status_changed", "version": 1, "producer": "departmentTask.changeStatus", "payload_schema": "department_task.status_changed.v1.schema.json", "requires_company_id": true, "consumers": ["task_projection"]},
+    {"event_type": "employee_task.status_changed", "version": 1, "producer": "employeeTask.changeStatus", "payload_schema": "employee_task.status_changed.v1.schema.json", "requires_company_id": true, "consumers": ["task_projection"]},
+    {"event_type": "plan.analyzed", "version": 1, "producer": "plan.analyze", "payload_schema": "plan.analyzed.v1.schema.json", "requires_company_id": true, "consumers": ["plan_projection"]},
+    {"event_type": "plan.confirmed", "version": 1, "producer": "plan.confirm", "payload_schema": "plan.confirmed.v1.schema.json", "requires_company_id": true, "consumers": ["plan_projection"]},
+    {"event_type": "plan.rejected", "version": 1, "producer": "plan.reject", "payload_schema": "plan.rejected.v1.schema.json", "requires_company_id": true, "consumers": ["plan_projection"]},
+    {"event_type": "plan.revision_requested", "version": 1, "producer": "plan.requestRevision", "payload_schema": "plan.revision_requested.v1.schema.json", "requires_company_id": true, "consumers": ["plan_projection"]},
+    {"event_type": "run.queued", "version": 1, "producer": "run.queue", "payload_schema": "run.queued.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.leased", "version": 1, "producer": "run.lease", "payload_schema": "run.leased.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.started", "version": 1, "producer": "run.start", "payload_schema": "run.started.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.checkpointed", "version": 1, "producer": "run.checkpoint", "payload_schema": "run.checkpointed.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.cancelled", "version": 1, "producer": "run.cancel", "payload_schema": "run.cancelled.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.failed", "version": 1, "producer": "run.fail", "payload_schema": "run.failed.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection"]},
+    {"event_type": "run.completed", "version": 1, "producer": "run.complete", "payload_schema": "run.completed.v1.schema.json", "requires_company_id": true, "consumers": ["run_projection", "completion_projection"]},
+    {"event_type": "artifact.created", "version": 1, "producer": "artifact.create", "payload_schema": "artifact.created.v1.schema.json", "requires_company_id": true, "consumers": ["artifact_projection"]},
+    {"event_type": "artifact.superseded", "version": 1, "producer": "artifact.supersede", "payload_schema": "artifact.superseded.v1.schema.json", "requires_company_id": true, "consumers": ["artifact_projection", "review_projection"]},
+    {"event_type": "artifact.verified", "version": 1, "producer": "artifact.verify", "payload_schema": "artifact.verified.v1.schema.json", "requires_company_id": true, "consumers": ["artifact_projection"]},
+    {"event_type": "review.assigned", "version": 1, "producer": "review.assign", "payload_schema": "review.assigned.v1.schema.json", "requires_company_id": true, "consumers": ["review_projection"]},
+    {"event_type": "review.submitted", "version": 1, "producer": "review.submit", "payload_schema": "review.submitted.v1.schema.json", "requires_company_id": true, "consumers": ["review_projection", "completion_projection"]},
+    {"event_type": "review.staled", "version": 1, "producer": "review.stale", "payload_schema": "review.staled.v1.schema.json", "requires_company_id": true, "consumers": ["review_projection"]},
+    {"event_type": "review.issue_changed", "version": 1, "producer": "review.resolveIssue", "payload_schema": "review.issue_changed.v1.schema.json", "requires_company_id": true, "consumers": ["review_projection", "completion_projection"]},
+    {"event_type": "approval.requested", "version": 1, "producer": "approval.request", "payload_schema": "approval.requested.v1.schema.json", "requires_company_id": true, "consumers": ["approval_projection"]},
+    {"event_type": "approval.resolved", "version": 1, "producer": "approval.resolve", "payload_schema": "approval.resolved.v1.schema.json", "requires_company_id": true, "consumers": ["approval_projection"]},
+    {"event_type": "approval.consumed", "version": 1, "producer": "approval.consume", "payload_schema": "approval.consumed.v1.schema.json", "requires_company_id": true, "consumers": ["approval_projection"]},
+    {"event_type": "approval.expired", "version": 1, "producer": "approval.expire", "payload_schema": "approval.expired.v1.schema.json", "requires_company_id": true, "consumers": ["approval_projection"]},
+    {"event_type": "report.generated", "version": 1, "producer": "report.generate", "payload_schema": "report.generated.v1.schema.json", "requires_company_id": true, "consumers": ["report_projection"]},
+    {"event_type": "report.published", "version": 1, "producer": "report.publish", "payload_schema": "report.published.v1.schema.json", "requires_company_id": true, "consumers": ["report_projection"]},
+    {"event_type": "knowledge.imported", "version": 1, "producer": "knowledge.import", "payload_schema": "knowledge.imported.v1.schema.json", "requires_company_id": true, "consumers": ["knowledge_projection"]},
+    {"event_type": "knowledge.indexed", "version": 1, "producer": "knowledge.index", "payload_schema": "knowledge.indexed.v1.schema.json", "requires_company_id": true, "consumers": ["knowledge_projection"]},
+    {"event_type": "knowledge.removed", "version": 1, "producer": "knowledge.remove", "payload_schema": "knowledge.removed.v1.schema.json", "requires_company_id": true, "consumers": ["knowledge_projection"]},
+    {"event_type": "backup.created", "version": 1, "producer": "backup.create", "payload_schema": "backup.created.v1.schema.json", "requires_company_id": false, "consumers": ["backup_projection"]},
+    {"event_type": "backup.verified", "version": 1, "producer": "backup.verify", "payload_schema": "backup.verified.v1.schema.json", "requires_company_id": false, "consumers": ["backup_projection"]},
+    {"event_type": "backup.restored", "version": 1, "producer": "backup.restore", "payload_schema": "backup.restored.v1.schema.json", "requires_company_id": false, "consumers": ["backup_projection"]}
+  ]
 }

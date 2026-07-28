@@ -3,6 +3,15 @@
   "$id": "https://ibreeze.ai/schemas/knowledge.remove.request.v1",
   "title": "KnowledgeRemoveRequest",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "company_id": {"type": "string", "format": "uuid"},
+    "knowledge_id": {"type": "string", "format": "uuid"},
+    "source_id": {"type": "string", "format": "uuid"}
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {"required": ["knowledge_id"]},
+    {"required": ["source_id"]}
+  ],
+  "required": ["company_id"]
 }

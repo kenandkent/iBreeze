@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Form, Input, Button, Card, Alert, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { getDeviceId } from '../utils/deviceId';
 import { logger } from '../utils/logger';
 
 export default function LoginPage() {
@@ -15,7 +16,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const deviceId = crypto.randomUUID();
+      const deviceId = getDeviceId();
       logger.info('LoginPage', 'login_start', { identifier: values.identifier });
       const res = await fetch('/admin/api/v1/auth/login', {
         method: 'POST',
