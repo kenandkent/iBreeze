@@ -4,6 +4,8 @@
 
 **目标：** 严格按照《AI公司桌面应用设计方案.md》从空代码基线实现可发布的 iBreeze 桌面客户端、Python Sidecar、中心管理后台及其自动化测试、部署和用户文档。
 
+**规范性补充：** `docs/设计方案/iBreeze五项核心架构重构设计方案.md` 固定 Canonical Contract Registry、Credential/HTTP/Egress Broker、Profile Persistence Kernel、CLI Runtime/Seatbelt 和 Review/Completion 状态机的最终实现边界。对应任务必须同时满足该文档；正式实现不得包含占位实现、双轨 Schema、非公开 RPC 或兼容层。
+
 **架构：** 桌面端由 React WebView、Tauri/Rust Core 和唯一 Python Sidecar 组成，全部公司、部门、职员、任务、会话、运行、知识与审计数据保存在本地 Profile。中心后台只负责认证、用户管理和签名发布 Agent、Model、Provider、Skill、兼容规则目录；后台不接收桌面业务数据。所有跨语言边界先定义 JSON Schema/OpenAPI，再生成类型并实现，禁止三端手写同名 DTO。
 
 **技术栈：** React 19、TypeScript 5.7、Vite 6、TanStack Query 5、Zustand 5、Ant Design 5、Tauri 2、Rust 2021、Tokio 1、Python 3.12、Pydantic 2、aiosqlite、LanceDB、ONNX Runtime、FastAPI、SQLAlchemy 2 Async、asyncpg、Alembic、PostgreSQL 16、MinIO、OpenAPI 3.1、JSON-RPC 2.0、JSON Schema 2020-12。
@@ -237,7 +239,7 @@ ibreeze/
 - 创建：`packages/contracts/{events,domain-events,artifacts,skill}/`
 - 创建：`packages/contracts/domain-events/registry.v1.json` 及H.4注册表引用的全部v1 payload Schema（含 `knowledge.imported/removed`）
 - 创建：`packages/contracts/package.json`、`packages/contracts/package-lock.json`
-- 创建：`packages/rpc-schema/methods/`、`packages/rpc-schema/meta.schema.json`、`packages/rpc-schema/ownership.v1.json`
+- 创建：`packages/rpc-schema/methods/`、`packages/rpc-schema/meta.schema.json`、`packages/rpc-schema/registry.v1.json`、`packages/rpc-schema/error-codes.v1.json`
 - 创建：`scripts/generate-contracts.sh`、`scripts/check-contract-drift.sh`
 - 创建：`scripts/schema-gen-rust/Cargo.toml`、`scripts/schema-gen-rust/Cargo.lock`、`scripts/schema-gen-rust/src/main.rs`
 - 创建：`apps/desktop/src/generated/rpc/`
@@ -260,7 +262,7 @@ ibreeze/
 
 - [ ] **步骤 2：先实现 RPC meta 和最小 health 契约**
 
-  `meta.schema.json` 固定要求 `trace_id/ipc_session_id/window_session_id/idempotency_key`，其中 `ipc_session_id` 仅Rust本地方法和首次handshake可为null；`ownership.v1.json` 把公开方法精确分配给 `rust_core/sidecar/supervisor_only`，集合必须与J.14及三个Supervisor方法一致且互斥；`reverse-methods.v1.json` 精确登记F.4四个Sidecar→Rust请求和两个通知，并为 `host.externalWrite.execute` 生成严格请求/响应Schema；创建 `system.handshake` 请求/响应Schema及 `system.health` 请求/响应Schema，handshake响应固定五字段ready契约，health response只包含F.5的七个健康字段。
+  `meta.schema.json` 固定要求 `trace_id/ipc_session_id/window_session_id/idempotency_key/deadline_at`，其中 `ipc_session_id` 仅Rust本地方法和首次handshake可为null；`registry.v1.json` 按核心重构设计第5节记录每个公开方法的owner/kind/scope/Schema/幂等TTL/错误码，集合必须与J.14及Supervisor方法一致且互斥；`reverse-methods.v1.json` 精确登记F.4七个Sidecar→Rust请求和四个Rust→Sidecar notification，并为各方法生成严格Schema；创建 `system.handshake` 请求/响应Schema及 `system.health` 请求/响应Schema，字段逐字符合F.3、F.5与核心重构设计第11.4节。
 
   同时一次性创建H.4完整DomainEvent registry及每个独立payload Schema；目录测试要求registry引用零悬空且集合与H.4逐项相等。后续领域任务只能实现和消费已登记v1事件，不能等到功能阶段再补一个P3运行时所需的Schema。
 
@@ -778,7 +780,7 @@ ibreeze/
 
 - [ ] **步骤 2：实现最小 Command 路由**
 
-  每个Command先验证 `window_session_id` 和主窗口label。`rpc_request`读取生成的 `ownership.v1.json`：`rust_core` 方法调用Rust handler，`sidecar` 方法仅在Profile已打开且IPC session有效时转发UDS，`supervisor_only` 方法拒绝WebView；其余Command再转交对应service。本任务使用 `NotInitialized` 内部错误，不创建业务假响应。
+  每个Command先验证 `window_session_id` 和主窗口label。`rpc_request`读取由 `registry.v1.json` 生成的Rust `MethodMeta`：`rust` 方法调用Rust handler，`sidecar` 方法仅在Profile已打开且IPC session有效时转发UDS，`supervisor` 方法拒绝WebView；其余Command再转交对应service。本任务使用 `NotInitialized` 内部错误，不创建业务假响应。
 
 - [ ] **步骤 3：应用生产 CSP**
 
@@ -1000,16 +1002,17 @@ ibreeze/
 
 **完成标准：** WebView、Sidecar 和模型均不能用任意绝对路径伪造授权；审批不可重复消费。
 
-### P2-T07：CLI Egress Broker 与 Credential HTTP Broker
+### P2-T07：CLI Process Supervisor、Egress Broker 与 Credential HTTP Broker
 
 **依赖：** P2-T03、P2-T05。
 
 **文件：**
 
-- 创建：`apps/desktop-core/src/security/{egress_proxy.rs,domain_policy.rs,credential_broker.rs}`
-- 创建：`apps/desktop-core/tests/{egress_proxy.rs,credential_broker.rs,ssrf.rs}`
+- 创建：`apps/desktop-core/src/broker/{egress.rs,dns_policy.rs,lease.rs,credential.rs,http.rs,http_stream.rs}`
+- 创建：`apps/desktop-core/src/runtime/{process_supervisor.rs,process_registry.rs,seatbelt.rs,invocation.rs,cancellation.rs}`
+- 创建：`apps/desktop-core/tests/{egress_proxy.rs,credential_broker.rs,ssrf.rs,process_supervisor.rs,seatbelt.rs}`
 
-**产生接口：** 每 Run loopback CONNECT proxy；Sidecar 反向 RPC 只允许 `credential.http.start/cancel/probe`、`host.externalWrite.execute` 和两个 process notification，集合逐字来自 `reverse-methods.v1.json`。
+**产生接口：** 每 Run loopback CONNECT proxy；Sidecar 反向 RPC 只允许 `credential.http.start/cancel/probe`、`host.externalWrite.execute`、`runtime.process.start/cancel/status`；Rust 只发送 `credential.http.event`、`runtime.process.registered/output/exited` notification，集合逐字来自 `reverse-methods.v1.json`。
 
 - [ ] **步骤 1：写代理绕过和 SSRF 失败测试**
 
@@ -1027,15 +1030,19 @@ ibreeze/
 
   对锁定的三种 CLI 验证登录探测、模型调用和原生恢复均只通过代理；任一 CLI 忽略 proxy env 时该版本 range 必须 unavailable，禁止放开公网。
 
-- [ ] **步骤 5：验证并提交**
+- [ ] **步骤 5：实现 Process Supervisor 与 Seatbelt**
+
+  Sidecar只提交固定Invocation；Rust重新验证Catalog、ExecutionSnapshot、argv/cwd、purpose、Workspace/Network policy hash，创建Seatbelt、Egress Lease和独立进程组。stdout/stderr按4MiB行上限通过单调sequence notification返回；取消固定SIGINT 5秒→SIGTERM 5秒→SIGKILL→waitpid→清理。UDS断线终止当前session的全部进程组。
+
+- [ ] **步骤 6：验证并提交**
 
   ```bash
-  cargo nextest run --manifest-path apps/desktop-core/Cargo.toml egress_proxy credential_broker ssrf
+  cargo nextest run --manifest-path apps/desktop-core/Cargo.toml egress_proxy credential_broker ssrf process_supervisor seatbelt
   git add apps/desktop-core tests/security docs/部署文档.md
   git commit -m "feat(security): broker cli and model network access"
   ```
 
-**完成标准：** CLI 沙箱直接出站失败；Credential 明文只在 Rust 零化内存中短暂存在。
+**完成标准：** Sidecar不能直接启动Agent；CLI沙箱直接出站失败；Credential明文只在Rust零化内存中短暂存在；取消、断线和失败均不残留进程、隧道、Token或临时文件。
 
 ### P2-T08：Updater、诊断导出与桌面打包骨架
 
@@ -1090,7 +1097,7 @@ ibreeze/
 **文件：**
 
 - 创建：`sidecar/ibreeze/persistence/{connection.py,migrator.py,write_queue.py,profile.py}`
-- 创建：`sidecar/migrations/20260722000100_profile_catalog.sql`
+- 创建：`sidecar/ibreeze/persistence/migrations/001_initial.sql`；本任务先写 Profile 与 Catalog 基础段，后续本地领域任务只向同一初始脚本补充各自固定段；Migration Ledger 由 Migration Runner 在执行该脚本前独立 bootstrap，禁止写入初始脚本
 - 创建：`sidecar/tests/persistence/{test_connection.py,test_migrator.py,test_profile.py}`
 
 **产生接口：** `ProfileDatabase.open(path, identity)`、单写队列、8 读连接池、H.1 migration state machine。
@@ -1138,7 +1145,7 @@ ibreeze/
 
 - [ ] **步骤 1：写协议与方法注册失败测试**
 
-  从 `ownership.v1.json` 断言Sidecar registry与 `sidecar` 集合精确一致，并断言所有Rust本地方法缺席；未知方法、方向错误、缺meta、写方法缺idempotency、读方法带key、Schema extra field全部失败。
+  从 `registry.v1.json` 生成并断言Sidecar dispatcher与 `owner=sidecar` 集合精确一致，并断言所有Rust本地方法缺席；未知方法、方向错误、缺meta、写方法缺idempotency、读方法带key、Schema extra field全部失败。
 
 - [ ] **步骤 2：实现 request pipeline**
 
@@ -1170,7 +1177,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000200_events_idempotency.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Event、Outbox、Projection Offset 与 RPC Idempotency 段
 - 创建：`sidecar/ibreeze/events/{registry.py,writer.py,outbox.py,replay.py}`
 - 创建：`sidecar/ibreeze/application/idempotency.py`
 - 创建：`sidecar/tests/fixtures/sqlite_company_parent.py`
@@ -1210,7 +1217,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000300_profiles_catalog_cache.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Catalog Cache、Skill 安装状态、职员底座及版本绑定段
 - 创建：`sidecar/ibreeze/application/catalog/{cache.py,sync.py,skills.py,availability.py}`
 - 创建：`sidecar/ibreeze/domain/profiles/{entities.py,service.py,repository.py}`
 - 创建：`sidecar/tests/catalog/{test_sync.py,test_skill_install.py,test_profile_versions.py}`
@@ -1249,7 +1256,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000400_audit_settings.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 append-only Audit 与 typed Settings 段
 - 创建：`sidecar/ibreeze/application/{audit.py,settings.py}`
 - 创建：`sidecar/ibreeze/observability/{logging.py,redaction.py}`
 - 创建：`sidecar/tests/observability/{test_audit.py,test_redaction.py,test_settings.py}`
@@ -1296,7 +1303,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000500_company_bootstrap.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Company、Department、Revision、Responsibility、Employee 与 Conversation 段
 - 创建：`sidecar/ibreeze/domain/company/{entities.py,commands.py,repository.py,service.py}`
 - 创建：`sidecar/ibreeze/domain/company/bootstrap.py`
 - 创建：`sidecar/ibreeze/domain/department/{entities.py,responsibilities.py,repository.py,service.py}`
@@ -1376,7 +1383,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000600_local_domain_runtime_parents.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Conversation Message、Task、Plan、Snapshot、AgentRun Core 与 Workspace Parent 段
 - 修改：`sidecar/ibreeze/domain/conversation/{entities.py,repository.py}`
 - 创建：`sidecar/ibreeze/domain/conversation/{projection.py,service.py}`
 - 创建：`sidecar/tests/domain/test_conversations.py`
@@ -1411,7 +1418,7 @@ ibreeze/
 
 **文件：**
 
-- 使用：P4-T03 已创建的 `20260722000600_local_domain_runtime_parents.sql`，本任务不新增迁移
+- 使用：P4-T03 已写入 `001_initial.sql` 的 Local Domain/Runtime Parent 段，本任务不创建第二个迁移文件
 - 创建：`sidecar/ibreeze/domain/tasks/{entities.py,state.py,repository.py,service.py,plans.py,snapshots.py}`
 - 创建：`sidecar/ibreeze/application/task_intake.py`
 - 创建：`sidecar/tests/tasks/{test_schema.py,test_state_machines.py,test_plan_versions.py,test_snapshots.py,test_task_intake.py}`
@@ -1462,7 +1469,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000700_runtime_queue.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Runtime Queue、Lease、Slot 与 Fairness 段
 - 创建：`sidecar/ibreeze/runtime/{queue.py,leases.py,scheduler.py,limits.py}`
 - 创建：`sidecar/tests/runtime/{test_queue.py,test_leases.py,test_fairness.py}`
 
@@ -1507,24 +1514,24 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000800_runtime_foundation.sql`
-- 创建：`sidecar/ibreeze/runtime/{gateway.py,process_supervisor.py,event_normalizer.py,run_repository.py}`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 RunEvent、Checkpoint、ToolExecution、VerificationResult、HumanApproval 与 Artifact Core 段
+- 创建：`sidecar/ibreeze/runtime/{gateway.py,process_client.py,event_normalizer.py,run_repository.py}`
 - 创建：`sidecar/ibreeze/artifacts/{model.py,cas.py,runtime_sink.py}`
-- 创建：`sidecar/tests/runtime/{test_gateway.py,test_run_state.py,test_events.py,test_process_supervisor.py,test_runtime_artifact_sink.py}`
+- 创建：`sidecar/tests/runtime/{test_gateway.py,test_run_state.py,test_events.py,test_process_client.py,test_runtime_artifact_sink.py}`
 
 **产生接口：** I.1四个入口；使用 P4-T04 已创建的 H.11 AgentRun 核心表，并创建 RunEvent/Checkpoint/ToolExecution/VerificationResult/HumanApproval存储表及 H.12 `artifacts` 核心表；提供仅供 Runtime 写 diagnostic/log/transcript/checkpoint 等证据的不可变 CAS sink；14.6标准事件。HumanApproval决策服务和完整Artifact领域分别由P6-T05、P6-T03实现。
 
 - [ ] **步骤 1：写 Gateway边界失败测试**
 
-  静态扫描禁止runtime外调用`asyncio.create_subprocess_exec`或模型HTTP；start缺snapshot、过期availability、hash不一致、非法purpose均失败；Runtime Foundation迁移逐字创建H.11运行子表/HumanApproval及H.12 Artifact核心表、任务索引和不可变Trigger，验证可写Artifact、VerificationResult、ToolExecution和pending HumanApproval且不存在缺失父表，直接UPDATE/DELETE Artifact必须失败。
+  静态扫描禁止整个Sidecar调用`asyncio.create_subprocess_exec`、`subprocess`、`os.exec*`或模型HTTP；start缺snapshot、过期availability、hash不一致、非法purpose均失败；Runtime Foundation迁移逐字创建H.11运行子表/HumanApproval及H.12 Artifact核心表、任务索引和不可变Trigger，验证可写Artifact、VerificationResult、ToolExecution和pending HumanApproval且不存在缺失父表，直接UPDATE/DELETE Artifact必须失败。
 
 - [ ] **步骤 2：实现 Run创建和状态迁移**
 
   AgentRunSpec先过E.8 Schema；持久化run_spec canonical JSON/hash、`department_task_id/work_item_id` 可索引列、两个 snapshot id 和 conversation。按 E.8/H.11 校验 company_plan/summary→CompanyTask、interactive_turn→Conversation、task_execution→standard EmployeeTask、merge→merge EmployeeTask、review→ReviewAssignment、verification→Artifact、repair→ReviewIssue；P5单元测试对尚由009迁移创建的ReviewAssignment/ReviewIssue使用Repository fake，P6-T04必须补真实SQLite集成测试。运行状态只用H.7表。
 
-- [ ] **步骤 3：实现进程登记通知**
+- [ ] **步骤 3：实现 Rust Process Client 与通知持久化**
 
-  spawn后立即存PID/PGID/start time并通知Rust；退出通知含exit/signal/hash。Rust拒绝登记时立刻终止Run进程组。
+  Adapter生成固定Invocation后调用`runtime.process.start`；Rust返回process id/PID/PGID/start time/lease id。`runtime.process.registered/output/exited`只接受当前session且sequence连续；Sidecar在WriteQueue事务保存进程引用和事件。取消只调用`runtime.process.cancel`，禁止Sidecar直接发signal。
 
 - [ ] **步骤 4：实现事件归一化**
 
@@ -1533,7 +1540,7 @@ ibreeze/
 - [ ] **步骤 5：验证并提交**
 
   ```bash
-  uv run --directory sidecar pytest tests/runtime/test_gateway.py tests/runtime/test_run_state.py tests/runtime/test_events.py tests/runtime/test_process_supervisor.py tests/runtime/test_runtime_artifact_sink.py -v --cov=ibreeze.runtime --cov=ibreeze.artifacts --cov-branch --cov-fail-under=100
+  uv run --directory sidecar pytest tests/runtime/test_gateway.py tests/runtime/test_run_state.py tests/runtime/test_events.py tests/runtime/test_process_client.py tests/runtime/test_runtime_artifact_sink.py -v --cov=ibreeze.runtime --cov=ibreeze.artifacts --cov-branch --cov-fail-under=100
   git add sidecar packages/contracts packages/rpc-schema
   git commit -m "feat(runtime): add durable agent run gateway"
   ```
@@ -1658,18 +1665,18 @@ ibreeze/
 
 **完成标准：** API Model能完整执行工具任务，不存在“直接请求模型并返回文本”的捷径。
 
-### P5-T06：Tool Registry、Permission Gateway 与Seatbelt生成
+### P5-T06：Tool Registry、Permission Gateway 与Seatbelt策略输入
 
 **依赖：** P5-T05、P2-T06、P2-T07。
 
 **文件：**
 
 - 创建：`sidecar/ibreeze/runtime/tools/{registry.py,files.py,search.py,shell.py,artifacts.py,knowledge.py}`
-- 创建：`sidecar/ibreeze/runtime/{permission_gateway.py,seatbelt.py}`
+- 创建：`sidecar/ibreeze/runtime/{permission_gateway.py,workspace_policy.py}`
 - 创建：`packages/contracts/approvals/external-write-target.v1.schema.json`
-- 创建：`sidecar/tests/security/{test_tool_schemas.py,test_permissions.py,test_seatbelt.py,test_external_write.py}`
+- 创建：`sidecar/tests/security/{test_tool_schemas.py,test_permissions.py,test_workspace_policy.py,test_external_write.py}`
 
-**产生接口：** I.12工具集合；purpose权限缩减；I.8 SBPL模板；I.13审批。
+**产生接口：** I.12工具集合；purpose权限缩减；供Rust校验的WorkspacePolicy hash；I.13审批。SBPL生成、转义、探测和进程加载只在P2-T07的Rust模块实现。
 
 - [ ] **步骤 1：写每个工具Schema和边界失败测试**
 
@@ -1683,14 +1690,14 @@ ibreeze/
 
   interactive/company_plan/review/summary移除workspace写工具；verification只运行snapshot锁定命令；外部写只创建 H.11 pending HumanApproval并停止执行，决策、Rust receipt和消费由P6-T05实现。
 
-- [ ] **步骤 4：实现并实测SBPL**
+- [ ] **步骤 4：生成策略输入并联调Rust SBPL**
 
-  使用设计方案I.8模板，变量realpath+转义；启动时探测 `/usr/bin/sandbox-exec` 及最小allow/deny/代理用例，任一失败则所有CLI职员unavailable。普通CI用fake执行器覆盖模板、转义和拒绝路径；发布门禁必须在最低与最高受支持macOS版本的真实机器上实际尝试读其他profile/credential、写外部、直连公网和fork逃逸，不能降为可选nightly任务。没有满足版本矩阵的真实runner时禁止发布，但不影响API Model职员使用Built-in Runtime。
+  Sidecar只生成包含purpose、Workspace realpath、只读/读写标志、受保护路径集合和policy hash的封闭WorkspacePolicy；Rust按P2-T07重新验证并生成SBPL。普通CI在Rust侧覆盖模板、转义和拒绝路径；发布门禁必须在最低与最高受支持macOS版本的真实机器上实际尝试读其他profile/credential、写外部、直连公网和fork逃逸，不能降为可选nightly任务。没有满足版本矩阵的真实runner时禁止发布，但不影响API Model职员使用Built-in Runtime。
 
 - [ ] **步骤 5：验证并提交**
 
   ```bash
-  uv run --directory sidecar pytest tests/security/test_tool_schemas.py tests/security/test_permissions.py tests/security/test_seatbelt.py tests/security/test_external_write.py -v --cov=ibreeze.runtime.tools --cov=ibreeze.runtime.permission_gateway --cov=ibreeze.runtime.seatbelt --cov-branch --cov-fail-under=100
+  uv run --directory sidecar pytest tests/security/test_tool_schemas.py tests/security/test_permissions.py tests/security/test_workspace_policy.py tests/security/test_external_write.py -v --cov=ibreeze.runtime.tools --cov=ibreeze.runtime.permission_gateway --cov=ibreeze.runtime.workspace_policy --cov-branch --cov-fail-under=100
   git add sidecar packages/contracts tests/security docs
   git commit -m "feat(runtime): enforce tools sandbox and approvals"
   ```
@@ -1757,7 +1764,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722000900_workspace_artifacts.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Artifact Contributor/Version 与 Review 段
 - 创建：`sidecar/ibreeze/workspace/{grants.py,task_workspace.py,repository_probe.py}`
 - 修改：`sidecar/ibreeze/domain/tasks/service.py`
 - 创建：`sidecar/tests/workspace/{test_grants.py,test_task_workspace.py,test_repository_probe.py,test_plan_confirmation.py}`
@@ -2032,7 +2039,7 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/migrations/20260722001000_knowledge_backup.sql`
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Knowledge、Index Generation、Access Log 与 Backup/Restore 段
 - 创建：`sidecar/ibreeze/knowledge/{model.py,importer.py,permissions.py,chunking.py}`
 - 使用：P0-T02 已创建的 `packages/contracts/domain-events/{knowledge.imported.v1.schema.json,knowledge.removed.v1.schema.json}`
 - 创建：`sidecar/tests/knowledge/{test_import.py,test_permissions.py,test_chunking.py}`
@@ -2880,7 +2887,7 @@ RPC方法以设计方案 J.14 为唯一契约来源；下表规定实现归属�
 
 所有Namespace均必须满足：
 
-1. 请求固定包含 `jsonrpc/id/method/params/meta`；`meta` 只含 `trace_id/ipc_session_id/window_session_id/idempotency_key`。仅Rust本地方法和首次handshake允许 `ipc_session_id=null`；Profile由当前Sidecar进程绑定，不在请求中任意指定。
+1. 请求固定包含 `jsonrpc/id/method/params/meta`；`meta` 只含 `trace_id/ipc_session_id/window_session_id/idempotency_key/deadline_at`。`deadline_at` 必须为 RFC3339 UTC，晚于接收时间且最多为接收时间后10分钟；仅Rust本地方法和首次handshake允许 `ipc_session_id=null`；Profile由当前Sidecar进程绑定，不在请求中任意指定。
 2. params与响应均通过对应方法的JSON Schema；公司作用域方法按 J.14 携带 `company_id`，未知字段拒绝，不静默忽略拼写错误。
 3. 读方法 `meta.idempotency_key=null`；写方法必须使用UUID。Rust本地写只合并in-flight请求且不缓存敏感响应；Sidecar写按J.14保留期限保存结果。只有 `update/resolve` 类方法必须带 `expected_version`。
 4. 列表cursor与method、profile、company、filter hash绑定；不匹配统一返回 `VALIDATION_FAILED`。`EVENT_SEQUENCE_INVALID`只用于事件续传序号非法。
@@ -2926,18 +2933,9 @@ RPC方法以设计方案 J.14 为唯一契约来源；下表规定实现归属�
 
 | 文件 | 创建内容 | 所属任务 |
 |---|---|---|
-| `20260722000100_profile_catalog.sql` | Profile identity、migration元数据以及目录基础引用 | P3-T01 |
-| `20260722000200_events_idempotency.sql` | DomainEvent、Outbox、projection offset与RPC幂等；不创建Conversation或message投影 | P3-T03 |
-| `20260722000300_profiles_catalog_cache.sql` | Catalog cache、Skill安装状态、职员底座及版本绑定 | P3-T04 |
-| `20260722000400_audit_settings.sql` | append-only本地审计与typed settings | P3-T05 |
-| `20260722000500_company_bootstrap.sql` | Company、Department、Revision、职责、Employee基础实例与Company/Department Conversation | P4-T01、P4-T02 |
-| `20260722000600_local_domain_runtime_parents.sql` | `conversation_messages`；H.6的八张任务/Plan/Snapshot表；`agent_runs`核心；`workspace_grants/task_workspaces`父表，具体表名以P4-T03固定清单为准 | P4-T03、P4-T04、P5-T01、P6-T01 |
-| `20260722000700_runtime_queue.sql` | durable queue、lease、slot与fairness状态 | P4-T05 |
-| `20260722000800_runtime_foundation.sql` | RunEvent、Checkpoint、ToolExecution、VerificationResult、HumanApproval存储及Artifact核心表；AgentRun核心表已在006迁移创建 | P5-T01、P5-T07、P5-T06 |
-| `20260722000900_workspace_artifacts.sql` | Artifact贡献者/版本服务与Review表；复用006的Workspace表和008的Artifact/HumanApproval核心表 | P6-T01至P6-T05 |
-| `20260722001000_knowledge_backup.sql` | Knowledge、索引generation/access log、backup/restore记录 | P8-T01至P8-T04 |
+| `sidecar/ibreeze/persistence/migrations/001_initial.sql` | Profile、Catalog Cache、Event/Outbox/Idempotency、Audit/Settings、Company/Department/Employee、Conversation、Task/Plan/Snapshot、Runtime Queue/Run/Event/Checkpoint、Workspace、Artifact、Review、Approval、Knowledge、Backup 的完整 v1 Schema | P3-T01 创建骨架；P3-T03至P8-T04 按任务顺序补充固定段；P8 阶段出口冻结最终 SHA-256 |
 
-迁移实现必须遵守项目 `AGENTS.md` 的SQLite幂等规则。新表和索引使用 `IF NOT EXISTS`；新增列先由迁移runner检查 `PRAGMA table_info`；迁移记录hash，已执行同名文件hash变化立即停止。v1只创建本设计定义的Profile schema；外部数据进入Profile必须经过显式导入器，不能隐式猜测字段。
+本项目不迁移已有 Profile，v1 只允许一个 `001_initial.sql`，禁止生成 `20260722000xxx` 过渡脚本。P3-T01先创建文件，各后续任务按顺序修改同一文件并同步更新Migration Registry hash；任何并行任务不得同时修改该脚本。P8阶段出口必须从空目录仅执行该脚本，完成全部表、索引、组合外键、CHECK和不可变Trigger验证。首个正式版本发布后的新增Schema才使用时间戳增量Migration。外部数据进入Profile必须经过显式导入器，不能隐式猜测字段。
 
 ---
 

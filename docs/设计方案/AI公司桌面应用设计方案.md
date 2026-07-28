@@ -21,6 +21,8 @@
 
 本文档没有“建议实现”“可自行选择”“或等价方案”。第三方开发团队若发现本文档未覆盖的实现决策，必须先补充设计并通过 Review，不能在代码中自行决定。
 
+《iBreeze五项核心架构重构设计方案.md》是本文档关于 Canonical Contract Registry、Credential/HTTP/Egress Broker、Profile Persistence Kernel、CLI Runtime/Seatbelt 和 Review/Completion 状态机的规范性组成部分：该文档固定这五项子系统的字段级、协议级和生命周期级实现，本文档固定完整产品边界及其余子系统。两份文档已经按该分工对齐，不提供“任选其一”或“以更严格者为准”的解释空间；未来若发现同一字段、状态边、路径或时序不一致，实施必须阻断并先修正文档。
+
 ## 1. 产品定义
 
 iBreeze 是一个以“模拟公司运作方式”组织多个 Agent 协作完成任务的桌面应用。应用中的公司、部门、总经理、部门负责人和职员均为 Agent 工作流概念，不代表真实企业、客户组织或租户。
@@ -93,6 +95,8 @@ iBreeze 是一个以“模拟公司运作方式”组织多个 Agent 协作完�
 │        │ Tauri Command / Event                              │
 │ Rust Desktop Core                                           │
 │ ├─ Window / Keychain / File Grant                           │
+│ ├─ Credential / HTTP / CONNECT Egress Broker                │
+│ ├─ CLI Process Supervisor / Seatbelt                        │
 │ └─ Python Sidecar Supervisor                                │
 │        │ authenticated local IPC                            │
 │ Python Sidecar（单进程）                                    │
@@ -121,7 +125,7 @@ iBreeze 是一个以“模拟公司运作方式”组织多个 Agent 协作完�
 └─────────────────────────────────────────────────────────────┘
 ```
 
-桌面端固定只有一个 Python Sidecar 进程。本地领域服务、Agent Orchestration Platform 和 Agent Runtime Gateway 是该进程内的三个模块，不允许拆成三个独立进程。CLI Agent 是 Sidecar 监管的子进程。管理后台不参与本地任务调度或执行。
+桌面端固定只有一个 Python Sidecar 进程。本地领域服务、Agent Orchestration Platform 和 Agent Runtime Gateway 是该进程内的三个模块，不允许拆成三个独立 Python 进程。CLI Agent 由 Rust Process Supervisor 作为独立进程组启动和监管；Sidecar 只生成 Invocation、消费 RuntimeEvent 并持久化业务状态，禁止直接启动或发送信号给 CLI 进程。管理后台不参与本地任务调度或执行。
 
 固定技术栈：
 
@@ -896,7 +900,7 @@ CLI Adapter 优先使用原生 session id 恢复。原生恢复失败时，使�
 - 公司聚合根和需要按公司直接查询的表必须带 `company_id`；纯子表可以经唯一父外键继承 company scope。任何同时引用两个公司业务对象的表必须用含 `company_id` 的组合外键，或在同一 Command 事务中显式断言两者 scope 相同并由测试覆盖，禁止只依赖 UUID 全局唯一性推断隔离正确。
 - 可变聚合带 `version` 实现乐观并发控制。
 - 写命令带 `idempotency_key`，相同键和相同请求返回原结果；相同键不同请求返回冲突。
-- SQLite Schema 变更全部通过 `sidecar/migrations/YYYYMMDDHHMMSS_description.sql`。
+- 全新项目的完整 SQLite Schema 只由 `sidecar/ibreeze/persistence/migrations/001_initial.sql` 创建。首个正式发布后的 Schema 变更才使用 `sidecar/ibreeze/persistence/migrations/YYYYMMDDHHMMSS_description.sql`，禁止在应用启动代码、Repository或测试Fixture复制DDL。
 - 迁移使用 `CREATE ... IF NOT EXISTS`；增加列前检查 `PRAGMA table_info`。
 
 ## 18. 后台持久化模型
@@ -936,7 +940,8 @@ WebView 只能经 Tauri Command 调用 Rust Core。Rust Core 与唯一的 Python
     "trace_id": "uuid",
     "ipc_session_id": "uuid-or-null",
     "window_session_id": "uuid",
-    "idempotency_key": "uuid"
+    "idempotency_key": "uuid",
+    "deadline_at": "RFC3339-Z"
   }
 }
 ```
@@ -1740,16 +1745,20 @@ CI 使用 `npm ci`、`cargo build --locked` 和 `uv sync --frozen`。禁止在 C
 Tauri WebView
   └─ Tauri Command/Event
 Rust Desktop Core
+  ├─ Credential HTTP Broker / CONNECT Egress Broker
+  ├─ CLI Process Supervisor / Seatbelt
+  │  └─ Codex / Claude Code / OpenCode 子进程组
   └─ Unix Domain Socket
-Python Sidecar（唯一）
-  ├─ Local Application Service
-  ├─ Agent Orchestration Platform
-  ├─ Agent Runtime Gateway
-  ├─ ProcessPoolExecutor Workers
-  └─ Codex / Claude Code / OpenCode 子进程组
+     └─ Python Sidecar（唯一）
+        ├─ Local Application Service
+        ├─ Agent Orchestration Platform
+        ├─ Agent Runtime Gateway
+        └─ ProcessPoolExecutor Workers
 ```
 
 WebView 禁止直接访问文件系统、数据库、Keychain、后台 API 和 CLI。访问后台 API 的 HTTP Client 在 Rust Core 中实现；目录响应经 Rust 验签后才传给 Sidecar。
+
+Sidecar 的 CLI Adapter 只生成并解析 Invocation/RuntimeEvent；CLI 进程、管道、进程组、Seatbelt Profile 和 Egress Lease 由 Rust Process Supervisor 持有。Sidecar 禁止直接调用 `asyncio.create_subprocess_exec`、`subprocess` 或 `os.exec*` 启动 Agent。
 
 ### F.3 Sidecar 启动
 
@@ -1803,14 +1812,15 @@ JSON-RPC 请求必须包含：
     "trace_id": "uuid",
     "ipc_session_id": "uuid-or-null",
     "window_session_id": "uuid",
-    "idempotency_key": "uuid-or-null"
+    "idempotency_key": "uuid-or-null",
+    "deadline_at": "RFC3339-Z"
   }
 }
 ```
 
-读方法的 `idempotency_key` 为 null；写方法必须是 UUID。Rust本地认证与Profile生命周期写方法只用该key合并当前进程内尚未完成的同请求，请求完成立即删除，不持久化密码、Token或响应；用户显式重试必须生成新key。Sidecar业务写方法按J.14期限持久化幂等结果。`ipc_session_id` 仅允许在 Rust 本地方法和首次 `system.handshake` 时为 null；Sidecar业务方法、握手后的Supervisor方法及反向调用必须携带当前session id。Rust收到WebView提供的非当前session id时拒绝请求，且不会把调用方值替换为有效值后继续执行。
+读方法的 `idempotency_key` 为 null；写方法必须是 UUID。`deadline_at` 必须晚于接收时间且最多为接收时间后 10 分钟；长任务 RPC 只负责受理，不能用扩大 deadline 等待 Agent 完成。Rust本地认证与Profile生命周期写方法只用该key合并当前进程内尚未完成的同请求，请求完成立即删除，不持久化密码、Token或响应；用户显式重试必须生成新key。Sidecar业务写方法按J.14期限持久化幂等结果。`ipc_session_id` 仅允许在 Rust 本地方法和首次 `system.handshake` 时为 null；Sidecar业务方法、握手后的Supervisor方法及反向调用必须携带当前session id。Rust收到WebView提供的非当前session id时拒绝请求，且不会把调用方值替换为有效值后继续执行。
 
-RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`、`host.externalWrite.execute`，并允许发送无 id 的 `runtime.processRegistered/runtime.processExited` 通知；允许集合固定在 `packages/rpc-schema/reverse-methods.v1.json`，Rust 收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。进程通知只接受当前 ipc session，Rust 必须用系统进程信息验证 PID/PGID、可执行路径和 Sidecar 父子关系后才登记。
+RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`；Rust 只允许发送无 id 的 `credential.http.event`、`runtime.process.registered`、`runtime.process.output`、`runtime.process.exited` 通知。允许集合固定在 `packages/rpc-schema/reverse-methods.v1.json`，任一端收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。Rust 启动进程前必须用当前 ipc session、已验签 Catalog、ExecutionSnapshot、Workspace/Network policy hash 重新验证 Invocation；Sidecar 不持有或启动 CLI 进程。
 
 `host.externalWrite.execute` 仅可由当前 Sidecar session 发起，params 固定为 `{approval_id,run_id,operation,target_realpath,expected_old_sha256,source_relative_path,source_sha256,source_size,expires_at}`，其中 `operation` 只允许 `create_file/replace_file/delete_file/create_directory`；create/replace 必须提供位于 `${profile_root}/external-write-staging/{approval_id}/` 下的无 symlink source 及 hash/size，delete/create_directory 的 source 三字段必须为 null。Rust 重新规范化目标、校验过期时间、旧目标 hash 和 source，使用只允许该单一目标的临时 Seatbelt Profile 执行，销毁 staging 与临时权限后返回 `{approval_id,run_id,operation,target_realpath,result_state_sha256,completed_at,receipt_sha256}`；`result_state_sha256` 是目标存在性、类型和内容hash的RFC 8785状态对象SHA-256，`receipt_sha256` 是其余response字段的RFC 8785 SHA-256。相同approval重试时，若目标仍是expected old state且尚未过期则执行一次，若已经等于requested result state则即使刚过期也只读重建等价receipt，其他状态返回 `APPROVAL_TARGET_CHANGED`，从而覆盖“动作完成但响应丢失”且绝不在过期后产生新副作用。Rust 不读取或修改业务 SQLite；Sidecar 校验 receipt 的全部绑定字段与哈希后，才按 H.11 消费审批。
 
@@ -1823,26 +1833,46 @@ RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id
 - 第 4 次失败进入诊断页，不继续自动重启。
 - 正常退出调用 `system.shutdown`；10 秒未退出执行 SIGTERM，5 秒后执行 SIGKILL。
 
-Sidecar Health 不依赖外部 Agent 或 Provider，返回：
+`system.health` 不访问外部 Agent 或 Provider，固定返回：
 
-```text
-status healthy | degraded | unhealthy
-database_status
-migration_version
-event_loop_lag_ms
-write_queue_depth
-runtime_queue_depth
-process_pool_status
+```json
+{
+  "status": "healthy|degraded|unhealthy",
+  "observed_at": "RFC3339-Z",
+  "profile": {
+    "schema_epoch": 1,
+    "migration_version": 1,
+    "database_status": "ready|migrating|failed"
+  },
+  "ipc": {
+    "session_id": "uuid",
+    "generation": 1,
+    "heartbeat_age_ms": 0
+  },
+  "queues": {
+    "write_depth": 0,
+    "runtime_ready": 0,
+    "outbox_pending": 0
+  },
+  "runtime": {
+    "active_processes": 0,
+    "credential_broker": "ready|degraded|unavailable",
+    "egress_broker": "ready|degraded|unavailable"
+  },
+  "workers": [],
+  "event_loop_lag_ms": 0,
+  "disk_free_bytes": 0
+}
 ```
 
-`status=healthy` 仅表示 Profile 数据库、迁移、写队列、事件循环和进程池均可用；`database_status` 固定为 `ready/migrating/failed`。Rust 只在握手响应和首次 health 均为 `ready/healthy` 后返回 `auth.login.status='profile_opened'` 或完成 `auth.openProfile`。
+DB、Migration、IPC 或 WriteQueue 任一 failed 时 `status=unhealthy`；Runtime/Credential/Egress 不可用或非关键 Worker failed 时 `status=degraded`；所有必需项 ready 且观测未过期时才为 `healthy`。外部 CLI 未安装只改变对应 Agent availability，不改变系统总健康。Sidecar 返回 Profile、Queue、Worker 和事件循环观测，Rust 追加其独占的 IPC、Process Supervisor、Credential Broker 与 Egress Broker 观测后生成上述快照；两部分都必须通过同一个响应 Schema。Rust 只在握手响应和首次合成 health 均为 `ready/healthy` 后返回 `auth.login.status='profile_opened'` 或完成 `auth.openProfile`。
 
 ### F.6 asyncio 与数据库并发
 
 - Sidecar 主线程只运行 asyncio 事件循环。
 - SQLite 写操作进入容量 32 的 `asyncio.Queue`，由单写协程串行执行；队列满时生产者等待，不允许旁路写入。
 - SQLite 读连接池上限 8。
-- CLI stdout/stderr 各一个异步读取任务。
+- Rust Process Supervisor 为每个 CLI 的 stdout/stderr 各启动一个 Tokio 异步读取任务；Sidecar 只消费有序 `runtime.process.output` 通知并重组逻辑行。
 - CPU 密集型 embedding、Tree-sitter 解析和摘要后处理进入 `ProcessPoolExecutor`。
 - ProcessPool 上限 `min(4, os.cpu_count())`，最少 1。
 - CLI 全局并发默认 4，用户配置范围 `1..16`。
@@ -2747,20 +2777,22 @@ Sidecar 发布包必须绑定同一 SQLite `>=3.45,<3.46` 动态库，不使用 
 
 `PRAGMA defer_foreign_keys` 的连接默认值必须为 `OFF`。连接创建、归还和再次借出时都读取并断言为 `0`；发现非零视为事务边界泄漏，立即回滚并丢弃该连接，同时把 health 降级，禁止把它交给下一条命令。除 H.5 明确列出的创建事务外，Repository 不得设置该 PRAGMA。
 
-迁移文件命名 `YYYYMMDDHHMMSS_description.sql`。迁移记录：
+全新项目初始迁移固定命名 `001_initial.sql` 并一次性创建 H 章全部 Profile Schema；首个正式发布后的增量迁移才命名 `YYYYMMDDHHMMSS_description.sql`。迁移记录：
 
 ```sql
 CREATE TABLE schema_migrations (
-    version TEXT PRIMARY KEY,
+    version INTEGER PRIMARY KEY,
+    filename TEXT NOT NULL UNIQUE,
     script_sha256 TEXT NOT NULL CHECK(length(script_sha256)=64),
+    status TEXT NOT NULL CHECK(status IN ('running','completed','failed')),
     started_at TEXT NOT NULL,
     completed_at TEXT,
-    status TEXT NOT NULL CHECK(status IN ('running','completed','failed')),
+    error_code TEXT,
     error_message TEXT
 );
 ```
 
-已完成 migration 的脚本哈希变化时拒绝启动。
+`schema_migrations` 是 Migration Runner 唯一允许在 `001_initial.sql` 外创建的 bootstrap 表，初始脚本禁止重复定义。已完成 migration 的文件名、版本或脚本哈希变化时拒绝启动。
 
 迁移器按文件名升序执行并持有 Profile 单实例文件锁。除首次创建 `schema_migrations` 外，每个脚本流程固定为：事务 A 插入/更新 running 后提交；事务 B `BEGIN IMMEDIATE` 执行脚本、运行 `PRAGMA foreign_key_check`，成功时同事务更新 completed 并提交；失败回滚事务 B，再用事务 C 更新 failed/error_message。启动发现 running 记录视为上次中断，重新执行该幂等脚本。已有 Profile 执行版本升级前必须成功创建 J.9 的 `pre_upgrade` 备份；全新空库不要求备份。备份失败禁止迁移。
 
@@ -4121,7 +4153,7 @@ BEGIN SELECT RAISE(ABORT, 'audit log is immutable'); END;
 sidecar/ibreeze/runtime/
 ├── gateway.py
 ├── scheduler.py
-├── process_supervisor.py
+├── process_client.py
 ├── event_normalizer.py
 ├── checkpoint.py
 ├── context_engine.py
@@ -4286,13 +4318,14 @@ Read the attached task.md and execute every instruction.
 
 ### I.7 子进程监管
 
-- 每个 Run 创建独立进程组。
-- CLI 启动成功后立即把 PID、PGID 和进程启动时间写入 `agent_runs` 并通过 `runtime.processRegistered` 事件通知 Rust；Rust 在 Sidecar 心跳丢失时按 PGID 终止已登记进程组。重新启动时 Sidecar 用 PID+启动时间+可执行文件路径三项校验，防止 PID 复用后误杀无关进程。
-- stdout/stderr 分开读取；单行最大 4 MiB。
-- stderr 最近 1 MiB写诊断记录，完整日志滚动写文件。
-- 超时或取消：SIGINT 等 5 秒、SIGTERM 等 5 秒、SIGKILL 整个进程组。
-- 退出时记录 exit code、signal、最后 sequence、stdout/stderr SHA-256。
-- 子进程不得双重 fork 或脱离进程组；安全测试发现即禁用版本。
+- Sidecar Adapter 通过 `runtime.process.start` 把固定 argv、cwd、stdin、locale、ExecutionSnapshot hash 和两类 policy hash 交给 Rust；Sidecar 不传环境变量字典并禁止直接启动 Agent，完整进程环境由 Rust 根据已验签 Catalog 和固定模板生成。
+- Rust 用已验签 Catalog 和 ExecutionSnapshot 重新验证可执行路径、版本、argv、Workspace、purpose 和网络策略，验证失败不创建任何进程或代理。
+- Rust 为每个 Run 创建独立进程组、Seatbelt Profile 和 Egress Lease，再启动 CLI；成功后以 `runtime.process.registered` 通知 Sidecar，Sidecar 在同一 WriteQueue 事务写入 PID、PGID 和进程启动时间。
+- Rust 分开读取 stdout/stderr；单行最大 4 MiB，通过带单调 sequence 的 `runtime.process.output` 通知 Sidecar。Sidecar只保存 stderr 最近 1 MiB诊断摘要，完整滚动日志保持本地且经过脱敏。
+- 超时或 `runtime.process.cancel`：SIGINT 等 5 秒、SIGTERM 等 5 秒、SIGKILL 整个进程组；随后 waitpid、关闭全部管道和隧道、清零 Token并删除临时文件。
+- 退出时 Rust 通过 `runtime.process.exited` 返回 exit code、signal、最后 sequence、stdout/stderr SHA-256；Sidecar 只据此完成 AgentRun，不直接完成业务 Task。
+- Sidecar 心跳丢失、UDS session 更换或 Rust 关闭时，Rust按PGID终止该 session 的全部进程组。恢复时用 process id、PID、启动时间、可执行路径和 session generation 防止PID复用后误杀无关进程。
+- 子进程不得双重 fork 或脱离进程组；安全测试发现即把该 Agent 版本标记 incompatible。
 
 ### I.8 macOS Seatbelt
 
@@ -4694,7 +4727,7 @@ Rust 本地方法的 params/response 固定如下，密码只存在于 WebView �
 
 `approval.listPending` 请求固定为 `{company_id,cursor,limit}`，返回 pending 以及 allowed但尚无有效receipt的审批；后者标记 `execution_pending=true`。`approval.resolve` 请求固定为 `{company_id,approval_id,decision:'allow'|'deny',expected_version}`：pending接受一次用户决策；allowed只接受与原 allow 相同的幂等重试并重新调用F.4，deny或不同decision返回 `STATE_TRANSITION_INVALID`。响应固定为 `{approval_id,status,run_status,execution_pending,version}`，外部写与不确定恢复的后续状态严格按I.13处理。
 
-每个方法必须在 `packages/rpc-schema/methods/{namespace}.{action}.request.schema.json` 和 `.response.schema.json` 各有一个 JSON Schema；`packages/rpc-schema/ownership.v1.json` 固定记录 `rust_core/sidecar/supervisor_only` 三类所有权，生成器拒绝未分配或重复分配的方法。`get` 请求固定为 `{id, company_id}`；`list` 固定为 `{company_id, filter, cursor, limit}`，`limit` 默认 50、范围 1..200；`update/resolve` 必须含 `expected_version`。跨公司对象 id 即使真实存在也返回 `RESOURCE_NOT_FOUND`，不得泄露其他公司存在性。写请求的幂等键只放在 RPC `meta`，禁止在 params 重复定义。
+每个方法必须在 `packages/rpc-schema/methods/{namespace}.{action}.request.schema.json` 和 `.response.schema.json` 各有一个 JSON Schema；`packages/rpc-schema/registry.v1.json` 为每个方法固定记录 `owner=rust/sidecar/supervisor`、`kind=read/write/stream`、scope、Schema路径、幂等TTL和允许错误码，生成器拒绝未分配、重复分配或Registry外方法。禁止再维护独立 `ownership.v1.json`。`get` 请求固定为 `{id, company_id}`；`list` 固定为 `{company_id, filter, cursor, limit}`，`limit` 默认 50、范围 1..200；`update/resolve` 必须含 `expected_version`。跨公司对象 id 即使真实存在也返回 `RESOURCE_NOT_FOUND`，不得泄露其他公司存在性。写请求的幂等键只放在 RPC `meta`，禁止在 params 重复定义。
 
 JSON-RPC 协议错误使用标准码 `-32700/-32600/-32601/-32602/-32603`。所有领域错误固定使用 `-32000`，并返回：
 
@@ -4928,7 +4961,7 @@ Backend 每个进程固定 SQLAlchemy `pool_size=20/max_overflow=20/pool_timeout
 - `/health/live` 只检查进程。
 - `/health/ready` 依次检查 PostgreSQL `SELECT 1`、Alembic head、S3 bucket `HeadBucket`、Auth active private/public key 配对、Catalog active private/public key 配对和默认保护管理员存在；任一失败返回 503，正文只给稳定组件代码，不包含连接串、bucket key 或密钥路径。
 - `/metrics` 只监听容器私网 `0.0.0.0:9090`，Compose 不发布宿主端口且 Nginx 不配置公网 location；只有加入独立 `monitoring` Docker network 的监控服务可以访问。
-- `system.health` 检查本地 DB、迁移、event loop lag、write queue、runtime queue 和 ProcessPool；外部 Agent unavailable 不使 Sidecar unhealthy。
+- `system.health` 合成本地 DB、迁移、event loop lag、write queue、runtime queue、Outbox、Worker、磁盘、IPC、Process Supervisor、Credential Broker 与 Egress Broker 实时状态；外部 Agent unavailable 只影响对应 availability，不使系统总健康降级。
 
 ### K.13 日志
 
