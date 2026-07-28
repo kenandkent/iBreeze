@@ -6,7 +6,7 @@
 
 目标读者：产品、架构、客户端、服务端、测试、运维及第三方实施团队
 
-首发客户端：macOS Apple Silicon
+首发客户端：macOS Apple Silicon；最低部署目标 macOS 14.0，支持并发布验证 14.x、15.x、26.x
 
 ### 文档规范
 
@@ -20,6 +20,8 @@
 - **默认**：产品初始值，用户只能在本文档明确给出范围时修改。
 
 本文档没有“建议实现”“可自行选择”“或等价方案”。第三方开发团队若发现本文档未覆盖的实现决策，必须先补充设计并通过 Review，不能在代码中自行决定。
+
+桌面端固定设置 `MACOSX_DEPLOYMENT_TARGET=14.0`，只产出 `aarch64-apple-darwin` 安装包。v1 支持矩阵为 macOS 14.x、15.x、26.x；每个受支持系列均以 Apple 当前安全更新的最新补丁版本为准。发布门禁必须分别在真实 Apple Silicon 的 macOS 14 与 macOS 26 机器执行完整签名、公证、Seatbelt、CLI、Updater 和端到端测试，并在发布清单中记录实际系统构建号；macOS 15 由最低部署目标兼容测试与正式用户验收覆盖。任何未列入该矩阵的系统不得标记为“受支持”。
 
 《iBreeze五项核心架构重构设计方案.md》是本文档关于 Canonical Contract Registry、Credential/HTTP/Egress Broker、Profile Persistence Kernel、CLI Runtime/Seatbelt 和 Review/Completion 状态机的规范性组成部分：该文档固定这五项子系统的字段级、协议级和生命周期级实现，本文档固定完整产品边界及其余子系统。两份文档已经按该分工对齐，不提供“任选其一”或“以更严格者为准”的解释空间；未来若发现同一字段、状态边、路径或时序不一致，实施必须阻断并先修正文档。
 
@@ -1018,7 +1020,7 @@ WebView 只能经 Tauri Command 调用 Rust Core。Rust Core 与唯一的 Python
 | `CATALOG_SIGNATURE_INVALID` | 目录签名无效 |
 | `CATALOG_VERSION_ROLLBACK` | 收到低于当前的目录版本 |
 | `CATALOG_ITEM_DISABLED` | 目录项已禁用 |
-| `COMPANY_SCOPE_VIOLATION` | 发生跨公司访问 |
+| `COMPANY_SCOPE_VIOLATION` | 内部审计原因：检测到跨公司关系；公开 RPC 必须归一化为 `RESOURCE_NOT_FOUND` |
 | `PLAN_CONFIRMATION_REQUIRED` | 未确认计划试图执行 |
 | `PLAN_VALIDATION_FAILED` | 计划结构或依赖无效 |
 | `EMPLOYEE_UNAVAILABLE` | 职员可用性检查失败 |
@@ -3946,6 +3948,7 @@ CREATE TABLE review_assignments (
     status TEXT NOT NULL CHECK(status IN ('assigned','in_review','submitted','stale','cancelled')),
     assigned_at TEXT NOT NULL,
     submitted_at TEXT,
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version >= 1),
     FOREIGN KEY(artifact_id, company_id) REFERENCES artifacts(id, company_id),
     FOREIGN KEY(reviewer_employee_id, company_id) REFERENCES employees(id, company_id),
     UNIQUE(id, company_id),
@@ -4670,17 +4673,17 @@ Rust 本地方法的 params/response 固定如下，密码只存在于 WebView �
 | `auth.openProfile` | 写 | 仅in-flight | `OFFLINE_TICKET_INVALID`、`KEYCHAIN_BUNDLE_CORRUPT` |
 | `auth.closeProfile` | 写 | 仅in-flight | `STATE_TRANSITION_INVALID` |
 | `company.create` | 写 | 30d | `PROFILE_VERSION_INVALID`、`NAME_EXISTS` |
-| `company.get/list` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `company.get/list` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `company.update` | 写 | 30d | `OPTIMISTIC_LOCK_CONFLICT` |
 | `company.archive` | 写 | 30d | `STATE_TRANSITION_INVALID` |
 | `department.create` | 写 | 30d | `LEADER_PROFILE_UNAVAILABLE` |
-| `department.get/list` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `department.get/list` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `department.update` | 写 | 30d | `RESPONSIBILITY_CYCLE` |
 | `department.archive` | 写 | 30d | `STATE_TRANSITION_INVALID` |
 | `department.setLeader` | 写 | 30d | `LEADER_PROFILE_UNAVAILABLE` |
 | `department.responsibility.create/update/delete` | 写 | 30d | `RESPONSIBILITY_CYCLE` |
 | `employee.create` | 写 | 30d | `PROFILE_VERSION_INVALID` |
-| `employee.get/list` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `employee.get/list` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `employee.updateStatus` | 写 | 30d | `EMPLOYEE_HAS_ACTIVE_ASSIGNMENT` |
 | `employee.updateDisplayName` | 写 | 30d | `NAME_EXISTS` |
 | `employee.updateBaseProfile` | 写 | 30d | `PROFILE_VERSION_INVALID` |
@@ -4691,32 +4694,32 @@ Rust 本地方法的 params/response 固定如下，密码只存在于 WebView �
 | `profile.publish` | 写 | 30d | `SKILL_INCOMPATIBLE` |
 | `profile.retireVersion/retire` | 写 | 30d | `EMPLOYEE_HAS_ACTIVE_ASSIGNMENT` |
 | `conversation.submitUserMessage` | 写 | 30d | `COMPANY_ARCHIVED` |
-| `conversation.getCompany/getDepartment/listMessages` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `conversation.getCompany/getDepartment/listMessages` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `task.confirmPlan` | 写 | 30d | `PLAN_VERSION_CONFLICT` |
 | `task.requestPlanRevision/rejectPlan` | 写 | 30d | `STATE_TRANSITION_INVALID` |
 | `task.pause/resume/cancel` | 写 | 24h | `STATE_TRANSITION_INVALID` |
-| `task.get/list/getGraph/getEvidence` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `task.get/list/getGraph/getEvidence` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `departmentTask.checkResources` | 写 | 24h | `EMPLOYEE_UNAVAILABLE` |
 | `departmentTask.replaceEmployee` | 写 | 30d | `EMPLOYEE_UNAVAILABLE` |
-| `departmentTask.getReport` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `departmentTask.getReport` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `runtime.probeAgent/probeProvider` | 写 | 24h | `AGENT_AUTH_UNAVAILABLE` |
 | `runtime.listAvailableModels/getStatus` | 读 | 无 | `MODEL_UNAVAILABLE` |
 | `run.cancel/resume` | 写 | 24h | `RUN_RECOVERY_UNCERTAIN` |
-| `run.get/list/listEvents` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
-| `approval.listPending` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `run.get/list/listEvents` | 读 | 无 | `RESOURCE_NOT_FOUND` |
+| `approval.listPending` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `approval.resolve` | 写 | 30d | `APPROVAL_TARGET_CHANGED` |
 | `artifact.list/getSnapshot` | 读 | 无 | `WORKSPACE_ACCESS_DENIED` |
 | `workspace.get` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `workspace.apply/abandon/cleanupTask` | 写 | 30d | `WORKSPACE_ACCESS_DENIED` |
 | `review.submit` | 写 | 30d | `REVIEW_SELF_ASSIGNMENT` |
-| `review.listIssues` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `review.listIssues` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `review.rerun` | 写 | 30d | `STATE_TRANSITION_INVALID` |
 | `review.resolveIssue` | 写 | 30d | `REVIEW_ISSUE_TRANSITION_INVALID` |
 | `catalog.sync` | 写 | 24h | `CATALOG_SIGNATURE_INVALID` |
 | `catalog.getActiveRelease/listAgents/listModels/listSkills` | 读 | 无 | `CATALOG_ITEM_DISABLED` |
 | `catalog.installSkill/removeSkill/verifyCache` | 写 | 30d | `SKILL_INCOMPATIBLE` |
 | `knowledge.import/remove` | 写 | 30d | `WORKSPACE_ACCESS_DENIED` |
-| `knowledge.list/search` | 读 | 无 | `COMPANY_SCOPE_VIOLATION` |
+| `knowledge.list/search` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `backup.create/restore` | 写 | 30d | `STATE_TRANSITION_INVALID` |
 | `backup.list` | 读 | 无 | `RESOURCE_NOT_FOUND` |
 | `settings.get` | 读 | 无 | `RESOURCE_NOT_FOUND` |

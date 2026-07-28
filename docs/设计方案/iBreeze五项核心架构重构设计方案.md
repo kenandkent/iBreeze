@@ -12,6 +12,7 @@
 
 - `docs/设计方案/AI公司桌面应用设计方案.md`
 - `docs/设计方案/AI公司桌面应用-实施计划.md`
+- `docs/superpowers/plans/2026-07-28-ibreeze-five-core-architecture-rewrite.md`
 - `docs/review报告/AI公司桌面应用-二次全量复核报告.md`
 
 ## 1. 文档效力与实施边界
@@ -37,6 +38,7 @@
 5. 开发和测试环境中的旧 Profile、CAS、Worktree 与索引数据由一次性清理脚本删除；正式运行时代码不得内置“自动删除未知用户数据”的逻辑。
 6. 首个对外发布版本只识别 `schema_epoch=1`。检测到其他 epoch 时返回 `PROFILE_SCHEMA_UNSUPPORTED`，不尝试猜测字段或自动迁移。
 7. 文档中的路径、类型、字段、状态、错误码和顺序均为固定要求，不允许第三方替换为“等价方案”。
+8. 桌面构建固定 `aarch64-apple-darwin` 与 `MACOSX_DEPLOYMENT_TARGET=14.0`；v1 支持 macOS 14.x、15.x、26.x，发布安全矩阵固定使用真实 Apple Silicon 的 macOS 14 和 macOS 26 runner。
 
 ## 2. 目标与非目标
 
@@ -53,7 +55,7 @@
 ### 2.2 非目标
 
 1. 不支持旧 Profile 数据迁移。
-2. 不支持 Windows 或 Linux 沙箱；v1 固定 macOS Apple Silicon。
+2. 不支持 Windows 或 Linux 沙箱；v1 固定 macOS Apple Silicon，最低部署目标 macOS 14.0，支持系列为 14.x、15.x、26.x。
 3. 不让 Python Sidecar 读取 Keychain 或直接访问公网模型端点。
 4. 不把 Review 状态机移动到 Rust。
 5. 不把公司业务数据移动到中心后台。
@@ -242,10 +244,10 @@ sidecar/ibreeze/
   "idempotency_ttl_seconds": 2592000,
   "allowed_errors": [
     "VALIDATION_FAILED",
-    "COMPANY_SCOPE_VIOLATION",
+    "RESOURCE_NOT_FOUND",
     "REVIEW_SELF_ASSIGNMENT",
     "STATE_TRANSITION_INVALID",
-    "VERSION_CONFLICT"
+    "OPTIMISTIC_LOCK_CONFLICT"
   ],
   "empty_request": false
 }
@@ -325,7 +327,7 @@ orchestration.archive
   "reviewed_artifact_id": "uuid",
   "reviewed_sha256": "64-char-lower-hex",
   "report_artifact_id": "uuid",
-  "verdict": "approved|changes_requested",
+  "verdict": "pass|needs_changes|failed",
   "issues": [],
   "expected_assignment_version": 1
 }
@@ -337,13 +339,13 @@ orchestration.archive
 {
   "client_issue_id": "uuid",
   "severity": "blocker|high|medium|low",
-  "title": "1..200",
+  "category": "functional|security|performance|reliability|maintainability|documentation|test|contract|review_execution",
   "description": "1..20000",
-  "evidence": "1..20000",
   "expected": "1..10000",
   "actual": "1..10000",
-  "recommended_solution": "1..20000",
-  "owner_employee_id": "uuid|null"
+  "evidence_refs": ["uuid"],
+  "suggested_fix": "1..20000",
+  "assignee_employee_id": "uuid|null"
 }
 ```
 
@@ -362,18 +364,57 @@ orchestration.archive
 }
 ```
 
-至少覆盖以下事件族：
+v1 event type 集合固定为：
 
-- company、department、employee 配置变化；
-- company_task、department_task、employee_task 状态变化；
-- plan analyzed/confirmed/rejected/revision_requested；
-- run queued/leased/started/checkpointed/cancelled/failed/completed；
-- artifact created/superseded/verified；
-- review assigned/submitted/staled 与 review issue_changed；`review.issue_changed` payload 必须包含 `issue_id/from_state/to_state/severity/owner_employee_id/evidence_artifact_id`；
-- approval requested/resolved/consumed/expired；
-- report generated/published；
-- knowledge imported/indexed/removed；
-- backup created/verified/restored。
+```text
+company.created
+company.updated
+company.archived
+department.created
+department.updated
+department.archived
+department.leader_changed
+department.responsibility_changed
+employee.created
+employee.updated
+employee.transferred
+employee.status_changed
+company_task.status_changed
+department_task.status_changed
+employee_task.status_changed
+plan.analyzed
+plan.confirmed
+plan.rejected
+plan.revision_requested
+run.queued
+run.leased
+run.started
+run.checkpointed
+run.cancelled
+run.failed
+run.completed
+artifact.created
+artifact.superseded
+artifact.verified
+review.assigned
+review.submitted
+review.staled
+review.issue_changed
+approval.requested
+approval.resolved
+approval.consumed
+approval.expired
+report.generated
+report.published
+knowledge.imported
+knowledge.indexed
+knowledge.removed
+backup.created
+backup.verified
+backup.restored
+```
+
+状态事件 payload 必须包含 `aggregate_id/from_state/to_state/version`。`run.completed` payload 必须包含 `run_id/status:'succeeded'/evidence_artifact_ids`，该事件不能代表业务 Task 完成。`review.issue_changed` payload 必须包含 `issue_id/from_state/to_state/severity/assignee_employee_id/evidence_refs`，其中 `evidence_refs` 是至少一个 Artifact UUID 的去重数组。
 
 Registry 中每个事件必须存在 payload schema、合法 fixture、非法 fixture、生产者和至少一个消费者。无消费者的审计事件必须显式声明 `consumers:["audit_only"]`。
 
@@ -534,6 +575,8 @@ start response：
 }
 ```
 
+`runtime.process.registered` notification 的 payload 与 start response 七个字段逐字相同。Rust 必须先登记 Process Registry，再发送 notification 和完成 start response；两者到达顺序不作为 Sidecar 正确性的前提，Sidecar 以 `process_id/run_id` 幂等合并且字段不一致时立即取消进程并返回 `ADAPTER_RESULT_MISMATCH`。
+
 `runtime.process.output` notification：
 
 ```json
@@ -564,7 +607,26 @@ Rust 按实际读取顺序为 stdout/stderr 共用一个单调 sequence；单个
 }
 ```
 
-`runtime.process.cancel` 固定 `{process_id,run_id,reason}`，重复调用返回相同终态。`runtime.process.status` 固定 `{process_id,run_id}`，只用于断线恢复核对，不允许列出其他 Profile 的进程。
+`runtime.process.cancel` request 固定 `{process_id,run_id,reason}`，`reason` 长度 1..500；调用必须等待进程组回收并返回与 status 相同的终态对象，重复调用返回相同对象。
+
+`runtime.process.status` request 固定 `{process_id,run_id}`，response 固定为：
+
+```json
+{
+  "process_id": "uuid",
+  "run_id": "uuid",
+  "state": "running|exited",
+  "pid": 123,
+  "pgid": 123,
+  "start_time": "RFC3339-Z",
+  "exit_code": "integer|null",
+  "signal": "integer|null",
+  "last_sequence": 10,
+  "ended_at": "RFC3339-Z|null"
+}
+```
+
+`state=running` 时 `exit_code/signal/ended_at` 必须全为 null；`state=exited` 时 `ended_at` 必填且 `exit_code/signal` 至少一个非 null。status 只用于断线恢复核对，不允许列出其他 Profile 的进程；未知、其他 session 或其他 Profile 的 process id 统一返回 `RESOURCE_NOT_FOUND`。
 
 ## 7. API Model Credential HTTP Broker
 
@@ -631,7 +693,32 @@ Sidecar 禁止传入 Authorization、API Key、完整 Provider URL 或任意 Hea
 }
 ```
 
-`credential.http.cancel` 固定 `{request_id,run_id,reason}`。Cancel 幂等；已终止请求返回原终态。
+`credential.http.cancel` request 固定 `{request_id,run_id,reason}`，`reason` 长度 1..500；response 固定为：
+
+```json
+{
+  "request_id": "uuid",
+  "run_id": "uuid",
+  "state": "cancelled|completed|failed",
+  "last_sequence": 10,
+  "ended_at": "RFC3339-Z"
+}
+```
+
+Cancel 幂等；已终止请求返回原终态。
+
+`credential.probe` request 固定为 `{credential_ref,provider_release_id,model_binding_id}`，response 固定为：
+
+```json
+{
+  "available": true,
+  "state": "ready|credential_missing|credential_corrupt|provider_unreachable|provider_rejected|configuration_invalid",
+  "checked_at": "RFC3339-Z",
+  "error_code": "stable-error-code|null"
+}
+```
+
+`available` 当且仅当 `state=ready`。probe 必须使用同一 Catalog/Keychain/SSRF/timeout 路径，但不进入 `system.health`；401/403 为 `provider_rejected`，网络失败为 `provider_unreachable`，不得返回 Secret 或 Provider 原始错误正文。
 
 ### 7.3 Keychain 与凭据对象
 
@@ -984,7 +1071,7 @@ UDS 可以在 Migration 前接受唯一一个 `system.handshake`，但该请求�
 - company/department/employee task、plan、snapshot 与 dependency；
 - agent run、runtime queue、event、checkpoint、tool execution；
 - workspace、grant、artifact、contributor、version；
-- review assignment/report/issue；
+- review assignment/report/issue、rework attempt/issue binding；
 - approval、verification；
 - domain event store、outbox、idempotency；
 - knowledge source/chunk/index generation；
@@ -1326,9 +1413,10 @@ CompleteCompanyTask
 5. reviewer 不在 Artifact contributors。
 6. reviewed artifact id/hash 与 assignment 快照一致。
 7. report Artifact 类型为 `review_report` 且由 reviewer run 创建。
-8. verdict 为 changes_requested 时至少一个 issue。
-9. approved 时 issues 为空。
-10. 每个 issue 的 severity、owner 和证据字段合法。
+8. verdict 为 `pass` 时 issues 必须为空。
+9. verdict 为 `needs_changes` 时至少一个 issue。
+10. verdict 为 `failed` 时至少一个 blocker 且其 category 为 `review_execution`，表示缺失、损坏或不可执行的证据使本轮无法形成可信结论。
+11. 每个 issue 的 severity、category、assignee 和 evidence refs 合法。
 
 成功写入：
 
@@ -1358,7 +1446,7 @@ Artifact 创建新版本的同一事务中：
 - Artifact contributor 包含该 EmployeeTask 的执行职员；
 - 必需 VerificationResult 全部 passed 且指向当前 hash；
 - 所有必需 ReviewAssignment submitted；
-- Review verdict 全部 approved；
+- Review verdict 全部为 `pass`；
 - 当前 Artifact 关联 blocker/high Issue 全部 closed；
 - execution report 存在并引用全部证据；
 - 没有 running/queued/waiting_approval Run。
@@ -1372,7 +1460,7 @@ Artifact 创建新版本的同一事务中：
 - 所有 required EmployeeTask 为 accepted；
 - Merge Task 为 accepted；
 - department_report 当前版本存在；
-- department_report 的公司级 Review approved；
+- department_report 的公司级 Review verdict 为 `pass`；
 - 当前任务链 blocker/high Issue 全部 closed；
 - 测试/验证 Artifact passed；
 - 下游所需交付物已发布；
@@ -1383,8 +1471,8 @@ Artifact 创建新版本的同一事务中：
 `CompleteCompanyTask` 必须同时满足：
 
 - 所有 required DepartmentTask completed；
-- 所有 department_report 通过公司级 Review；
-- 跨部门一致性 Review approved；
+- 所有 department_report 的公司级 Review verdict 为 `pass`；
+- 跨部门一致性 Review verdict 为 `pass`；
 - 所有 blocker/high Issue closed；
 - final_report 当前版本存在；
 - final_report 引用当前计划版本、部门报告 hash、测试结果、Review 与修复证据；
@@ -1394,22 +1482,59 @@ Artifact 创建新版本的同一事务中：
 
 ### 12.9 返工
 
-返工使用新 attempt：
+返工使用新 attempt，固定持久化为：
 
-```text
-ReworkAttempt {
-  id,
-  company_task_id,
-  department_task_id?,
-  source_review_issue_ids[],
-  attempt_no,
-  status,
-  created_at,
-  completed_at?
-}
+```sql
+CREATE TABLE rework_attempts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    company_task_id TEXT NOT NULL,
+    department_task_id TEXT,
+    attempt_no INTEGER NOT NULL CHECK(attempt_no >= 1),
+    status TEXT NOT NULL
+        CHECK(status IN ('planned','running','completed','cancelled','failed')),
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    version INTEGER NOT NULL DEFAULT 1 CHECK(version >= 1),
+    UNIQUE(id, company_id),
+    FOREIGN KEY(company_task_id, company_id)
+        REFERENCES company_tasks(id, company_id),
+    FOREIGN KEY(department_task_id, company_id)
+        REFERENCES department_tasks(id, company_id),
+    CHECK(
+        (status IN ('completed','cancelled','failed') AND completed_at IS NOT NULL)
+        OR
+        (status IN ('planned','running') AND completed_at IS NULL)
+    )
+);
+CREATE UNIQUE INDEX ux_rework_attempt_scope_no
+ON rework_attempts(
+    company_id,
+    company_task_id,
+    COALESCE(department_task_id, ''),
+    attempt_no
+);
+CREATE UNIQUE INDEX ux_rework_attempt_active_scope
+ON rework_attempts(
+    company_id,
+    company_task_id,
+    COALESCE(department_task_id, '')
+)
+WHERE status IN ('planned','running');
+
+CREATE TABLE rework_attempt_issues (
+    company_id TEXT NOT NULL,
+    rework_attempt_id TEXT NOT NULL,
+    review_issue_id TEXT NOT NULL,
+    PRIMARY KEY(rework_attempt_id, review_issue_id),
+    FOREIGN KEY(rework_attempt_id, company_id)
+        REFERENCES rework_attempts(id, company_id),
+    FOREIGN KEY(review_issue_id, company_id)
+        REFERENCES review_issues(id, company_id)
+);
 ```
 
-返工不得重置或覆盖旧证据。新 Artifact 和 Review 必须通过版本链关联旧证据。Completion Gate 只读取当前 attempt 的 current Artifact/Review。
+状态只允许 `planned→running/cancelled`、`running→completed/cancelled/failed`，终态无出边。创建新 attempt 时，`attempt_no` 等于同一 company task 与可空 department scope 的历史最大值加 1，且必须绑定至少一个未 closed/rejected 的 ReviewIssue。返工不得重置或覆盖旧证据。新 Artifact 和 Review 必须通过版本链关联旧证据。Completion Gate 读取该 scope 最大 `attempt_no`：其状态必须是 completed，并且只使用该 attempt 的 current Artifact/Review；最大 attempt 为 planned/running/failed 时 Gate 阻断，cancelled attempt 不使更早证据重新生效，必须创建更高 attempt 或显式取消整个任务。
 
 ### 12.10 事件驱动推进
 
@@ -1418,9 +1543,9 @@ Event Consumer 不直接改状态，映射为 Command：
 ```text
 run.completed → EvaluateEmployeeSubmission
 review.submitted → EvaluateEmployeeAcceptance
-review_issue.closed → EvaluateAffectedTask
-employee_task.accepted → EvaluateDepartmentReadiness
-department_task.completed → EvaluateCompanyReadiness
+review.issue_changed(to_state=closed) → EvaluateAffectedTask
+employee_task.status_changed(to_state=accepted) → EvaluateDepartmentReadiness
+department_task.status_changed(to_state=completed) → EvaluateCompanyReadiness
 ```
 
 `Evaluate*` 是幂等内部 Command，仍通过 WriteQueue 和 Unit of Work。

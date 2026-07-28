@@ -6,6 +6,8 @@
 
 **规范性补充：** `docs/设计方案/iBreeze五项核心架构重构设计方案.md` 固定 Canonical Contract Registry、Credential/HTTP/Egress Broker、Profile Persistence Kernel、CLI Runtime/Seatbelt 和 Review/Completion 状态机的最终实现边界。对应任务必须同时满足该文档；正式实现不得包含占位实现、双轨 Schema、非公开 RPC 或兼容层。
 
+**字段级执行计划：** `docs/superpowers/plans/2026-07-28-ibreeze-five-core-architecture-rewrite.md` 把上述五项子系统拆成可独立测试、Review 和提交的字段级任务。实施这五项子系统时必须按该计划的 Task 1–19 依赖顺序执行；本文件继续负责完整产品的阶段关系和其余模块，不得用本文件中粒度较粗的描述跳过字段级计划的失败测试、删除项或阶段出口。
+
 **架构：** 桌面端由 React WebView、Tauri/Rust Core 和唯一 Python Sidecar 组成，全部公司、部门、职员、任务、会话、运行、知识与审计数据保存在本地 Profile。中心后台只负责认证、用户管理和签名发布 Agent、Model、Provider、Skill、兼容规则目录；后台不接收桌面业务数据。所有跨语言边界先定义 JSON Schema/OpenAPI，再生成类型并实现，禁止三端手写同名 DTO。
 
 **技术栈：** React 19、TypeScript 5.7、Vite 6、TanStack Query 5、Zustand 5、Ant Design 5、Tauri 2、Rust 2021、Tokio 1、Python 3.12、Pydantic 2、aiosqlite、LanceDB、ONNX Runtime、FastAPI、SQLAlchemy 2 Async、asyncpg、Alembic、PostgreSQL 16、MinIO、OpenAPI 3.1、JSON-RPC 2.0、JSON Schema 2020-12。
@@ -13,7 +15,7 @@
 ## 全局约束
 
 - 设计方案是功能、字段、状态机、DDL、RPC、REST、安全参数和门禁的唯一事实来源；计划只确定实现顺序、文件归属和验收方法。发现设计缺口时先修改并审核设计方案，禁止在代码中自行补充规则。
-- 首发平台固定为 macOS Apple Silicon；CLI Adapter 固定支持 Codex CLI `>=0.144.0 <0.145.0`、Claude Code `>=2.1.0 <2.2.0`、OpenCode `>=1.18.0 <1.19.0`。
+- 首发平台固定为 macOS Apple Silicon，构建目标固定 `aarch64-apple-darwin`，`MACOSX_DEPLOYMENT_TARGET=14.0`；v1 支持 macOS 14.x、15.x、26.x，发布安全矩阵固定使用真实 Apple Silicon 的 macOS 14 和 macOS 26 runner。CLI Adapter 固定支持 Codex CLI `>=0.144.0 <0.145.0`、Claude Code `>=2.1.0 <2.2.0`、OpenCode `>=1.18.0 <1.19.0`。
 - 桌面每个 Profile 只有一个 Python Sidecar 进程；Local Application Service、Orchestration Platform 与 Runtime Gateway 都是该进程内模块。
 - 公司是模拟 Agent 工作流，不是真实组织、租户或客户；后台禁止出现公司、部门、职员实例、任务、会话、报告、知识和 Workspace 数据表或 API。
 - API Model 是职员模型底座，由 iBreeze Built-in Agent Runtime 驱动完整 Agent Loop；不得实现为简单模型聊天 Adapter。
@@ -1396,7 +1398,7 @@ ibreeze/
 
 - [ ] **步骤 2：创建无缺失父表的本地域骨架迁移**
 
-  同一迁移按附录分组且只创建以下表：H.4 的 `conversation_messages`；H.6 的 `company_tasks/company_plan_versions/task_context_snapshots/department_tasks/department_task_dependencies/employee_tasks/employee_availability_snapshots/execution_snapshots`；H.11 的 `agent_runs` 核心表；H.11 Workspace父表 `workspace_grants/task_workspaces`。此归组是 SQLite 的运行要求：message 的可空 `task_id`、ExecutionSnapshot 的可空 `task_workspace_id` 仍要求父表已经存在。P4-T04、P5-T01、P6-T01 分别实现任务、Runtime、Workspace业务，不得再次创建这些表；`agent_run_events/checkpoints/tool_executions/human_approvals/verification_results` 明确由008迁移创建。迁移完成后立即执行 `foreign_key_check`，并实际插入 `task_id=null` 的消息和 `task_workspace_id=null` 的非代码 ExecutionSnapshot 验证父表闭环。
+  同一初始脚本按附录分组且只创建以下表：H.4 的 `conversation_messages`；H.6 的 `company_tasks/company_plan_versions/task_context_snapshots/department_tasks/department_task_dependencies/employee_tasks/employee_availability_snapshots/execution_snapshots`；H.11 的 `agent_runs` 核心表；H.11 Workspace父表 `workspace_grants/task_workspaces`。此归组是 SQLite 的运行要求：message 的可空 `task_id`、ExecutionSnapshot 的可空 `task_workspace_id` 仍要求父表已经存在。P4-T04、P5-T01、P6-T01 分别实现任务、Runtime、Workspace业务，不得再次创建这些表；`agent_run_events/checkpoints/tool_executions/human_approvals/verification_results` 由P5-T01继续写入同一 `001_initial.sql`，不创建另一迁移。初始脚本完成后立即执行 `foreign_key_check`，并实际插入 `task_id=null` 的消息和 `task_workspace_id=null` 的非代码 ExecutionSnapshot 验证父表闭环。
 
 - [ ] **步骤 3：实现消息投影**
 
@@ -1527,7 +1529,7 @@ ibreeze/
 
 - [ ] **步骤 2：实现 Run创建和状态迁移**
 
-  AgentRunSpec先过E.8 Schema；持久化run_spec canonical JSON/hash、`department_task_id/work_item_id` 可索引列、两个 snapshot id 和 conversation。按 E.8/H.11 校验 company_plan/summary→CompanyTask、interactive_turn→Conversation、task_execution→standard EmployeeTask、merge→merge EmployeeTask、review→ReviewAssignment、verification→Artifact、repair→ReviewIssue；P5单元测试对尚由009迁移创建的ReviewAssignment/ReviewIssue使用Repository fake，P6-T04必须补真实SQLite集成测试。运行状态只用H.7表。
+  AgentRunSpec先过E.8 Schema；持久化run_spec canonical JSON/hash、`department_task_id/work_item_id` 可索引列、两个 snapshot id 和 conversation。按 E.8/H.11 校验 company_plan/summary→CompanyTask、interactive_turn→Conversation、task_execution→standard EmployeeTask、merge→merge EmployeeTask、review→ReviewAssignment、verification→Artifact、repair→ReviewIssue；P5单元测试对由P6-T01向同一 `001_initial.sql` 补齐的ReviewAssignment/ReviewIssue使用Repository fake，P6-T04必须在初始脚本完整后补真实SQLite集成测试。运行状态只用H.7表。
 
 - [ ] **步骤 3：实现 Rust Process Client 与通知持久化**
 
@@ -1692,7 +1694,7 @@ ibreeze/
 
 - [ ] **步骤 4：生成策略输入并联调Rust SBPL**
 
-  Sidecar只生成包含purpose、Workspace realpath、只读/读写标志、受保护路径集合和policy hash的封闭WorkspacePolicy；Rust按P2-T07重新验证并生成SBPL。普通CI在Rust侧覆盖模板、转义和拒绝路径；发布门禁必须在最低与最高受支持macOS版本的真实机器上实际尝试读其他profile/credential、写外部、直连公网和fork逃逸，不能降为可选nightly任务。没有满足版本矩阵的真实runner时禁止发布，但不影响API Model职员使用Built-in Runtime。
+  Sidecar只生成包含purpose、Workspace realpath、只读/读写标志、受保护路径集合和policy hash的封闭WorkspacePolicy；Rust按P2-T07重新验证并生成SBPL。普通CI在Rust侧覆盖模板、转义和拒绝路径；发布门禁必须在真实 Apple Silicon 的 macOS 14 与 macOS 26 runner 上实际尝试读其他profile/credential、写外部、直连公网和fork逃逸，不能降为可选nightly任务。没有满足该固定版本矩阵的真实runner时禁止发布，但不影响API Model职员使用Built-in Runtime。
 
 - [ ] **步骤 5：验证并提交**
 
@@ -1752,7 +1754,7 @@ ibreeze/
 - [ ] API Model三协议、tools、repair loop、断流和Credential Broker集成通过。
 - [ ] Seatbelt、Egress、敏感路径、purpose只读和外部审批安全测试通过。
 - [ ] Run crash/restart/checkpoint/native session恢复矩阵通过。
-- [ ] Runtime Artifact sink、VerificationResult、ToolExecution和pending HumanApproval可在008正式Schema上持久化，不依赖尚未执行的迁移。
+- [ ] Runtime Artifact sink、VerificationResult、ToolExecution和pending HumanApproval可在完整 `001_initial.sql` Schema上持久化，不依赖第二个迁移文件。
 
 ---
 
@@ -1764,12 +1766,12 @@ ibreeze/
 
 **文件：**
 
-- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Artifact Contributor/Version 与 Review 段
+- 修改：`sidecar/ibreeze/persistence/migrations/001_initial.sql`，补充 Artifact Contributor/Version、Review 与核心重构设计 12.9 的 Rework Attempt/Issue Binding 段
 - 创建：`sidecar/ibreeze/workspace/{grants.py,task_workspace.py,repository_probe.py}`
 - 修改：`sidecar/ibreeze/domain/tasks/service.py`
 - 创建：`sidecar/tests/workspace/{test_grants.py,test_task_workspace.py,test_repository_probe.py,test_plan_confirmation.py}`
 
-**产生接口：** `workspace.get/apply/abandon/cleanupTask`；J.1准入；使用 P4-T03 已创建的 H.11 grant/workspace表，本任务的009迁移创建P6后续任务所需的Artifact扩展与Review表。
+**产生接口：** `workspace.get/apply/abandon/cleanupTask`；J.1准入；使用 P4-T03 已写入初始脚本的 H.11 grant/workspace表，本任务继续补齐P6后续任务所需的Artifact扩展、Review与Rework表，不创建第二个迁移文件。
 
 - [ ] **步骤 1：写仓库准入失败测试**：非git、detached、dirty、merge/rebase/cherry-pick、路径已被其他公司active grant、bookmark stale和HEAD变化全部进入`waiting_resource`且不修改仓库。
 - [ ] **步骤 2：接入计划确认编排并创建TaskWorkspace**：扩展 P4-T04 的确认 Application Service；代码项目在确认事务中锁定 grant/root/baseline/user branch，预生成 integration branch/path 并创建 TaskWorkspace，repository_root只能来自Rust grant。任一 Workspace 写入或 Plan 确认写入失败时整笔回滚；非代码任务不创建 Git TaskWorkspace，仍执行 H.8 的领域确认事务。
@@ -1848,7 +1850,7 @@ ibreeze/
 
 - [ ] **步骤 1：写Reviewer池矩阵失败测试**：贡献者排除、参与职员池、leader fallback、唯一贡献者无peer、关键Artifact最多2人、department report公司级池、final report不递归review。
 - [ ] **步骤 2：实现确定性分配**：按当前负载、最后分配时间、employee id排序；eligible为空将任务置waiting_resource。
-- [ ] **步骤 3：实现Report与Run引用校验**：reviewer run employee/purpose、artifact hash、report artifact type/creator全部匹配；使用009正式Schema集成验证 review→ReviewAssignment、repair→ReviewIssue，verification→Artifact及merge→merge EmployeeTask 的同公司/同任务链映射，替换P5-T01的Repository fake；否则拒绝。
+- [ ] **步骤 3：实现Report与Run引用校验**：reviewer run employee/purpose、artifact hash、report artifact type/creator全部匹配；使用完整 `001_initial.sql` Schema集成验证 review→ReviewAssignment、repair→ReviewIssue，verification→Artifact及merge→merge EmployeeTask 的同公司/同任务链映射，替换P5-T01的Repository fake；否则拒绝。
 - [ ] **步骤 4：实现Issue状态机**：blocker/high不能rejected；medium/low需理由；resolved→verified→closed，Artifact新版本使旧assignment stale。
 - [ ] **步骤 5：验证并提交**：
 
