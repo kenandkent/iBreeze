@@ -3,6 +3,31 @@
   "$id": "https://ibreeze.ai/schemas/catalog.get.response.v1",
   "title": "CatalogGetResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "catalog_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "catalog_id",
+    "name",
+    "version",
+    "description",
+    "updated_at"
+  ]
 }

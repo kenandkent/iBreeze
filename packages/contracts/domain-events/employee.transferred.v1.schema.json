@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/employee.transferred.v1.schema.json",
+  "title": "Employee.transferred Event",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "from_department_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "to_department_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "company_id",
+    "aggregate_id",
+    "version",
+    "from_department_id",
+    "to_department_id"
+  ]
+}

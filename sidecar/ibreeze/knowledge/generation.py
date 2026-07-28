@@ -52,7 +52,7 @@ async def count_items_for_generation(db: Any, generation_id: str) -> int:
 async def count_lancedb_items(company_id: str) -> int:
     """Count rows in LanceDB for a company."""
     try:
-        import lancedb  # type: ignore[import-untyped]
+        import lancedb
         db = lancedb.connect("~/.ibreeze/lancedb")
         try:
             table = db.open_table("knowledge_embeddings")

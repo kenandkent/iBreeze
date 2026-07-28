@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface CatalogListagentsResponse {}
+export interface CatalogListagentsResponse {
+  agents: {
+    agent_id: string;
+    name: string;
+    version: string;
+    capabilities?: string[];
+  }[];
+}

@@ -3,6 +3,40 @@
   "$id": "https://ibreeze.ai/schemas/backup.list.response.v1",
   "title": "BackupListResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "backups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "backup_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "verified",
+              "restored"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "backup_id",
+          "status",
+          "created_at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "backups"
+  ]
 }

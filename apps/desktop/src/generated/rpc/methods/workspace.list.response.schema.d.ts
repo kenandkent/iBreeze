@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface WorkspaceListResponse {}
+export interface WorkspaceListResponse {
+  workspaces: {
+    workspace_id: string;
+    name: string;
+    status: string;
+    created_at: string;
+  }[];
+}

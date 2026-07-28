@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface EmployeeUpdatebaseprofileRequest {}
+export interface EmployeeUpdatebaseprofileRequest {
+  company_id: string;
+  employee_id: string;
+  base_profile: {
+    avatar?: string;
+    phone?: string;
+  };
+}

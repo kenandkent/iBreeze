@@ -3,6 +3,37 @@
   "$id": "https://ibreeze.ai/schemas/catalog.listSkills.response.v1",
   "title": "CatalogListskillsResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "skill_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_id",
+          "name",
+          "version"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "skills"
+  ]
 }

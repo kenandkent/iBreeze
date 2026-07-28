@@ -5,4 +5,13 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface RunListeventsResponse {}
+export interface RunListeventsResponse {
+  events: {
+    event_id: string;
+    event_type: string;
+    payload?: {
+      [k: string]: any | undefined;
+    };
+    occurred_at: string;
+  }[];
+}

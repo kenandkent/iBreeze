@@ -5,32 +5,53 @@ iBreeze 是一个以"模拟公司运作方式"组织多个 Agent 协作完成任
 ## 架构概览
 
 ```
-┌──────────────────── iBreeze 桌面客户端 ────────────────────┐
-│ React + TypeScript                                          │
-│        │ Tauri Command / Event                              │
-│ Rust Desktop Core                                           │
-│ ├─ Window / Keychain / File Grant                           │
-│ └─ Python Sidecar Supervisor                                │
-│        │ authenticated local IPC                            │
-│ Python Sidecar（单进程）                                    │
-│ ├─ Local Application Service                                │
-│ ├─ Agent Orchestration Platform                             │
-│ └─ Agent Runtime Gateway                                    │
-│    ├─ Built-in Agent Runtime                                │
-│    ├─ Codex / Claude Code / OpenCode Adapter                │
-│    ├─ Checkpoint / Event Compactor                           │
-│    ├─ Run Executor / Verification Loop                       │
-│    ├─ Dispatcher (Orchestration)                             │
-│    └─ Tool / Permission / Workspace                          │
-└─────────────────────────────────────────────────────────────┘
-                         │ HTTPS
-                         ▼
-┌────────────── iBreeze 管理后台服务 ─────────────────────────┐
-│ Admin Web                                                   │
-│ Backend API                                                 │
-│ PostgreSQL + S3-Compatible Object Storage                   │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ React WebView (Desktop UI, Admin UI)                          │
+│ GeneratedRpcClient + TanStack Query + Zustand                 │
+└───────────────────────────┬───────────────────────────────────┘
+                           │ Tauri Command (JSON-RPC 2.0)
+┌──────────────────────────▼───────────────────────────────────┐
+│ Rust Trusted Host Kernel                                      │
+│ ├─ Duplex UDS Multiplexer (frame/multiplexer/session)         │
+│ ├─ Credential HTTP Broker (Keychain → Provider)               │
+│ ├─ CONNECT Egress Proxy (per-Run lease + domain policy)       │
+│ ├─ Process Supervisor / Seatbelt (sandbox-exec / SBPL)        │
+│ ├─ External Write (single-target receipt)                     │
+│ └─ IPC Dispatcher (generated method routing)                  │
+└───────────────────────────┬───────────────────────────────────┘
+                           │ authenticated framed UDS (4B-length + JSON)
+┌──────────────────────────▼───────────────────────────────────┐
+│ Python Sidecar Domain Kernel                                  │
+│ ├─ Application Lifecycle (11-phase startup / 9-step shutdown) │
+│ ├─ Generated RPC Dispatcher / Reverse Client                  │
+│ ├─ Profile Persistence Kernel                                 │
+│ │  ├─ Migration Runner (001_initial.sql)                      │
+│ │  ├─ WriteQueue (cap 32) + Unit of Work + Idempotency        │
+│ │  └─ ReadPool (8 connections)                                 │
+│ ├─ Worker Supervisor (7 workers + heartbeat + backoff)         │
+│ ├─ Review/Completion State Machine (Command-driven)           │
+│ ├─ CLI Adapter Protocol (Codex/Claude Code/OpenCode)          │
+│ └─ Built-in Model Runtime (via Credential HTTP Broker)        │
+└───────────────────────────┬───────────────────────────────────┘
+                           │ single-writer / read pool
+┌──────────────────────────▼───────────────────────────────────┐
+│ Profile Persistence (SQLite WAL)                              │
+│ Domain Event Store / Outbox / CAS / Search Index              │
+└───────────────────────────────────────────────────────────────┘
+
+                         signed HTTPS catalog only
+Rust Trusted Host Kernel ───────────────────────────────────────►
+                         iBreeze Backend API
 ```
+
+### 信任边界
+
+| 组件 | 可以持有 | 禁止持有 |
+|------|---------|---------|
+| WebView | Access Token 内存态、非敏感页面数据 | Refresh Token、API Key、CLI 凭据 |
+| Rust Core | Keychain 明文的零化对象、代理 Token、进程句柄 | 公司业务状态机、直接修改 SQLite |
+| Sidecar | `credential_ref`、目录快照、业务数据、Run 状态 | API Key、Refresh Token、直接公网 socket |
+| SQLite | 业务数据、`credential_ref`、非敏感审计 | API Key、代理 Token、CLI 登录 Cookie |
 
 ## 技术栈
 

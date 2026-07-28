@@ -5,4 +5,12 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ProfileListResponse {}
+export interface ProfileListResponse {
+  profiles: {
+    profile_id: string;
+    display_name: string;
+    status: "draft" | "published" | "retired";
+    version: number;
+    updated_at: string;
+  }[];
+}

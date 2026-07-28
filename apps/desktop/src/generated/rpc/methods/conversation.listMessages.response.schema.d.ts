@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ConversationListmessagesResponse {}
+export interface ConversationListmessagesResponse {
+  messages: {
+    message_id: string;
+    role: "user" | "assistant" | "system";
+    content: string;
+    created_at: string;
+  }[];
+}

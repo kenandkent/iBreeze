@@ -1,104 +1,84 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Orchestration, OrchestrationRun } from '../types';
+import type { Task, Run } from '../types';
 import { createRpcRequest } from '../shared/rpcClient';
 import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
-export function useListOrchestrations() {
+export function useListTasks(companyId: string) {
   const ctx = useQueryCtx();
   return useQuery({
-    queryKey: queryKeys.orchestrationList(ctx),
-    queryFn: async (): Promise<Orchestration[]> => {
+    queryKey: queryKeys.taskList(ctx, companyId),
+    queryFn: async (): Promise<Task[]> => {
       const start = performance.now();
       try {
-        const result = await createRpcRequest<Orchestration[]>('orchestration.list', {});
-        logger.logHookSuccess('useOrchestration', 'orchestration.list', performance.now() - start);
+        const result = await createRpcRequest<Task[]>('task.list', { company_id: companyId });
+        logger.logHookSuccess('useTask', 'task.list', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('useOrchestration', 'orchestration.list', e as Error, performance.now() - start);
+        logger.logHookError('useTask', 'task.list', e as Error, performance.now() - start);
         throw e;
       }
     },
+    enabled: !!companyId,
   });
 }
 
-export function useListOrchestrationRuns(orchestrationId: string) {
+export function useGetTaskGraph(companyId: string, taskId: string) {
   const ctx = useQueryCtx();
   return useQuery({
-    queryKey: queryKeys.orchestrationRunList(ctx, orchestrationId),
-    queryFn: async (): Promise<OrchestrationRun[]> => {
+    queryKey: queryKeys.all(ctx),
+    queryFn: async (): Promise<Task> => {
       const start = performance.now();
       try {
-        const result = await createRpcRequest<OrchestrationRun[]>('orchestration.listRuns', { orchestration_id: orchestrationId });
-        logger.logHookSuccess('useOrchestration', 'orchestration.listRuns', performance.now() - start);
+        const result = await createRpcRequest<Task>('task.getGraph', { company_id: companyId, id: taskId });
+        logger.logHookSuccess('useOrchestration', 'task.getGraph', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('useOrchestration', 'orchestration.listRuns', e as Error, performance.now() - start);
+        logger.logHookError('useOrchestration', 'task.getGraph', e as Error, performance.now() - start);
         throw e;
       }
     },
-    enabled: !!orchestrationId,
+    enabled: !!companyId && !!taskId,
   });
 }
 
-export function useCreateOrchestration() {
+export function useListRuns(companyId: string, taskId?: string) {
+  const ctx = useQueryCtx();
+  return useQuery({
+    queryKey: queryKeys.all(ctx),
+    queryFn: async (): Promise<Run[]> => {
+      const start = performance.now();
+      try {
+        const filter = taskId ? { task_id: taskId } : {};
+        const result = await createRpcRequest<Run[]>('run.list', { company_id: companyId, filter, cursor: null, limit: 50 });
+        logger.logHookSuccess('useOrchestration', 'run.list', performance.now() - start);
+        return result;
+      } catch (e) {
+        logger.logHookError('useOrchestration', 'run.list', e as Error, performance.now() - start);
+        throw e;
+      }
+    },
+    enabled: !!companyId,
+  });
+}
+
+export function useRunTask() {
   const queryClient = useQueryClient();
   const ctx = useQueryCtx();
   return useMutation({
-    mutationFn: async (data: { name: string }) => {
+    mutationFn: async (taskId: string) => {
       const start = performance.now();
       try {
-        const result = await createRpcRequest<Orchestration>('orchestration.create', { name: data.name });
-        logger.logHookSuccess('useOrchestration', 'orchestration.create', performance.now() - start);
+        const result = await createRpcRequest('runtime.run', { id: taskId });
+        logger.logHookSuccess('useOrchestration', 'runtime.run', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('useOrchestration', 'orchestration.create', e as Error, performance.now() - start);
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orchestrationList(ctx) });
-    },
-  });
-}
-
-export function useRunOrchestration() {
-  const queryClient = useQueryClient();
-  const ctx = useQueryCtx();
-  return useMutation({
-    mutationFn: async (orchestrationId: string) => {
-      const start = performance.now();
-      try {
-        const result = await createRpcRequest<OrchestrationRun>('orchestration.run', { orchestration_id: orchestrationId });
-        logger.logHookSuccess('useOrchestration', 'orchestration.run', performance.now() - start);
-        return result;
-      } catch (e) {
-        logger.logHookError('useOrchestration', 'orchestration.run', e as Error, performance.now() - start);
+        logger.logHookError('useOrchestration', 'runtime.run', e as Error, performance.now() - start);
         throw e;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.all(ctx) });
-    },
-  });
-}
-
-export function useDeleteOrchestration() {
-  const queryClient = useQueryClient();
-  const ctx = useQueryCtx();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const start = performance.now();
-      try {
-        await createRpcRequest('orchestration.archive', { orchestration_id: id });
-        logger.logHookSuccess('useOrchestration', 'orchestration.archive', performance.now() - start);
-      } catch (e) {
-        logger.logHookError('useOrchestration', 'orchestration.archive', e as Error, performance.now() - start);
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orchestrationList(ctx) });
     },
   });
 }

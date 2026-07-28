@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/review.issue_changed.v1.schema.json",
+  "title": "Review.issue Changed Event",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "issue_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "from_state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "resolved",
+        "dismissed"
+      ]
+    },
+    "to_state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "resolved",
+        "dismissed"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "blocker",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "assignee_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "aggregate_id",
+    "version",
+    "issue_id",
+    "from_state",
+    "to_state",
+    "severity",
+    "assignee_employee_id",
+    "evidence_refs"
+  ]
+}

@@ -5,4 +5,6 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface EventReplayResponse {}
+export interface EventReplayResponse {
+  replayed_event_ids: string[];
+}

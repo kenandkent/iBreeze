@@ -4,10 +4,6 @@ Aligns with design doc §17 (本地持久化):
 - 公司隔离: 所有查询强制 company_id 过滤
 - 乐观锁: 所有更新通过 version 或 expected_version 条件
 - 幂等键: RPC 层使用 idempotency_key 防重复提交
-
-Idempotency: rpc_idempotency 表存储 method+idempotency_key 主键,
-每条记录含 request_sha256 和 response_json, 支持 processing/completed/failed
-三种状态, 超时由 expires_at 控制.
 """
 
 from __future__ import annotations
@@ -53,16 +49,12 @@ async def check_idempotency(
     idempotency_key: str,
     request_sha256: str,
 ) -> dict[str, Any] | None:
-    """Check RPC idempotency key.
-
-    Returns existing response dict if key exists with matching request SHA,
-    or None if key doesn't exist.
-    """
+    """Check RPC idempotency key. Uses the `idempotency` table (single global key)."""
     cursor = await db.execute(
         """SELECT status, response_json, error_code
-           FROM rpc_idempotency
-           WHERE method=? AND idempotency_key=?""",
-        (method, idempotency_key),
+           FROM idempotency
+           WHERE idempotency_key=?""",
+        (idempotency_key,),
     )
     row = await cursor.fetchone()
     if row is None:
@@ -93,11 +85,11 @@ async def claim_idempotency(
     ).isoformat(timespec="microseconds").replace("+00:00", "Z")
     try:
         await db.execute(
-            """INSERT INTO rpc_idempotency
-               (method, idempotency_key, request_sha256, status,
+            """INSERT INTO idempotency
+               (idempotency_key, request_sha256, status,
                 response_json, error_code, created_at, expires_at)
-               VALUES (?,?,?, 'processing', NULL, NULL, ?, ?)""",
-            (method, idempotency_key, request_sha256, now, expires),
+               VALUES (?, ?, 'processing', NULL, NULL, ?, ?)""",
+            (idempotency_key, request_sha256, now, expires),
         )
         await db.commit()
         return True
@@ -126,7 +118,7 @@ async def complete_idempotency(
     else:
         return
     await db.execute(
-        f"UPDATE rpc_idempotency SET status=?, {result_field} WHERE method=? AND idempotency_key=?",
-        (status, result_value, method, idempotency_key),
+        f"UPDATE idempotency SET status=?, {result_field} WHERE idempotency_key=?",
+        (status, result_value, idempotency_key),
     )
     await db.commit()

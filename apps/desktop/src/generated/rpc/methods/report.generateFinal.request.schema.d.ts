@@ -5,4 +5,7 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ReportGeneratefinalRequest {}
+export interface ReportGeneratefinalRequest {
+  company_id: string;
+  company_task_id: string;
+}

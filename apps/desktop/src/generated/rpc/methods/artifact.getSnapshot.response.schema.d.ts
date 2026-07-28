@@ -5,4 +5,9 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ArtifactGetsnapshotResponse {}
+export interface ArtifactGetsnapshotResponse {
+  snapshot_id: string;
+  artifact_id: string;
+  content: string;
+  snapshot_at: string;
+}

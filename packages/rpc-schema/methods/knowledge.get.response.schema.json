@@ -3,6 +3,37 @@
   "$id": "https://ibreeze.ai/schemas/knowledge.get.response.v1",
   "title": "KnowledgeGetResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "content": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "item_id",
+    "content",
+    "content_hash",
+    "version",
+    "created_at",
+    "updated_at"
+  ]
 }

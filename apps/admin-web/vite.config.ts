@@ -25,11 +25,12 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-antd': ['antd', '@ant-design/icons'],
+          'vendor-antd-icons': ['@ant-design/icons'],
+          'vendor-antd': ['antd'],
         },
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 1100,
   },
   test: {
     globals: true,

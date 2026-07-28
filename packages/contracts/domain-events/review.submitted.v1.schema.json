@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/review.submitted.v1.schema.json",
+  "title": "Review.submitted Event",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assignment_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reviewer_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs_changes",
+        "failed"
+      ]
+    }
+  },
+  "required": [
+    "company_id",
+    "aggregate_id",
+    "version",
+    "assignment_id",
+    "reviewer_employee_id",
+    "verdict"
+  ]
+}

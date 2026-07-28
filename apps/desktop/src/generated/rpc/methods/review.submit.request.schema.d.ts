@@ -5,4 +5,39 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ReviewSubmitRequest {}
+export interface ReviewSubmitRequest {
+  company_id: string;
+  assignment_id: string;
+  reviewer_run_id: string;
+  reviewed_artifact_id: string;
+  reviewed_sha256: string;
+  report_artifact_id: string;
+  verdict: "pass" | "needs_changes" | "failed";
+  /**
+   * @minItems 0
+   */
+  issues: {
+    client_issue_id: string;
+    severity: "blocker" | "high" | "medium" | "low";
+    category:
+      | "functional"
+      | "security"
+      | "performance"
+      | "reliability"
+      | "maintainability"
+      | "documentation"
+      | "test"
+      | "contract"
+      | "review_execution";
+    description: string;
+    expected: string;
+    actual: string;
+    /**
+     * @minItems 1
+     */
+    evidence_refs: [string, ...string[]];
+    suggested_fix: string;
+    assignee_employee_id?: string;
+  }[];
+  expected_assignment_version: number;
+}

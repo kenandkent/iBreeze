@@ -116,11 +116,11 @@ class TestIdempotency:
         now = "2026-01-01T00:00:00.000000Z"
         expires = "2026-12-31T23:59:59.000000Z"
         await db.execute(
-            """INSERT INTO rpc_idempotency
-               (method, idempotency_key, request_sha256, status, response_json,
+            """INSERT INTO idempotency
+               (idempotency_key, request_sha256, status, response_json,
                 error_code, created_at, expires_at)
-               VALUES (?, ?, ?, 'completed', ?, NULL, ?, ?)""",
-            ("test.method", "key1", _SHA, '{"result":"ok"}', now, expires),
+               VALUES (?, ?, 'completed', ?, NULL, ?, ?)""",
+            ("key1", _SHA, '{"result":"ok"}', now, expires),
         )
         await db.commit()
         result = await check_idempotency(db, "test.method", "key1", _SHA)
@@ -130,11 +130,11 @@ class TestIdempotency:
         now = "2026-01-01T00:00:00.000000Z"
         expires = "2026-12-31T23:59:59.000000Z"
         await db.execute(
-            """INSERT INTO rpc_idempotency
-               (method, idempotency_key, request_sha256, status, response_json,
+            """INSERT INTO idempotency
+               (idempotency_key, request_sha256, status,
                 error_code, created_at, expires_at)
-               VALUES (?, ?, ?, 'failed', NULL, ?, ?, ?)""",
-            ("test.method", "key2", _SHA, "SOME_ERROR", now, expires),
+               VALUES (?, ?, 'failed', ?, ?, ?)""",
+            ("key2", _SHA, "SOME_ERROR", now, expires),
         )
         await db.commit()
         result = await check_idempotency(db, "test.method", "key2", _SHA)
@@ -144,11 +144,11 @@ class TestIdempotency:
         now = "2026-01-01T00:00:00.000000Z"
         expires = "2026-12-31T23:59:59.000000Z"
         await db.execute(
-            """INSERT INTO rpc_idempotency
-               (method, idempotency_key, request_sha256, status, response_json,
-                error_code, created_at, expires_at)
-               VALUES (?, ?, ?, 'processing', NULL, NULL, ?, ?)""",
-            ("test.method", "key3", _SHA, now, expires),
+            """INSERT INTO idempotency
+               (idempotency_key, request_sha256, status,
+                created_at, expires_at)
+               VALUES (?, ?, 'processing', ?, ?)""",
+            ("key3", _SHA, now, expires),
         )
         await db.commit()
         result = await check_idempotency(db, "test.method", "key3", _SHA)

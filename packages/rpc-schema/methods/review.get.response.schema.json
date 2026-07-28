@@ -3,6 +3,53 @@
   "$id": "https://ibreeze.ai/schemas/review.get.response.v1",
   "title": "ReviewGetResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "review_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "assignment_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reviewer_employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "assigned",
+        "in_progress",
+        "submitted",
+        "staled"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs_changes",
+        "failed"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "review_id",
+    "assignment_id",
+    "reviewer_employee_id",
+    "status",
+    "verdict",
+    "created_at",
+    "updated_at"
+  ]
 }

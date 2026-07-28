@@ -23,6 +23,11 @@ pub struct StableMarker {
     pub confirmed_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HealthObservation {
+    started_at: String,
+}
+
 pub struct UpdateStore {
     base_path: PathBuf,
 }
@@ -48,6 +53,10 @@ impl UpdateStore {
         self.update_root().join("stable.json")
     }
 
+    pub fn health_observation_path(&self) -> PathBuf {
+        self.update_root().join("health-observation.json")
+    }
+
     pub fn ensure_dirs(&self) -> Result<(), AppError> {
         let dirs = [self.update_root(), self.backups_path()];
         for dir in &dirs {
@@ -61,7 +70,7 @@ impl UpdateStore {
         &self,
         install_path: &Path,
         app_version: &str,
-    ) -> Result<String, AppError> {
+    ) -> Result<(String, String), AppError> {
         self.ensure_dirs()?;
         let backup_id = Uuid::new_v4().to_string();
         let backup_dir = self.backups_path().join(&backup_id);
@@ -89,7 +98,116 @@ impl UpdateStore {
         let sha = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
 
         info!(backup_id = %backup_id, sha = %sha, version = %app_version, "UPDATE_BACKUP_CREATED");
-        Ok(sha)
+        Ok((backup_id, sha))
+    }
+
+    pub fn safe_extract(package_path: &Path, target_dir: &Path) -> Result<(), AppError> {
+        Self::validate_tar_entries(package_path)?;
+
+        let parent = target_dir.parent().unwrap_or(Path::new("."));
+        let staging = parent.join(format!(".staging_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&staging)
+            .map_err(|e| AppError::Storage(format!("create staging: {e}")))?;
+
+        let status = std::process::Command::new("tar")
+            .arg("-xzf")
+            .arg(package_path)
+            .arg("-C")
+            .arg(&staging)
+            .status()
+            .map_err(|e| AppError::Io(format!("extract: {e}")))?;
+
+        if !status.success() {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(AppError::Io("UPDATE_EXTRACT_FAILED".to_owned()));
+        }
+
+        if let Err(e) = Self::validate_extracted(&staging) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(e);
+        }
+
+        if target_dir.exists() {
+            std::fs::remove_dir_all(target_dir)
+                .map_err(|e| AppError::Storage(format!("remove target: {e}")))?;
+        }
+        std::fs::rename(&staging, target_dir)
+            .map_err(|e| AppError::Storage(format!("rename: {e}")))?;
+
+        Ok(())
+    }
+
+    fn validate_tar_entries(package_path: &Path) -> Result<(), AppError> {
+        let output = std::process::Command::new("tar")
+            .arg("-tzf")
+            .arg(package_path)
+            .output()
+            .map_err(|e| AppError::Io(format!("list entries: {e}")))?;
+
+        if !output.status.success() {
+            return Err(AppError::Io("UPDATE_LIST_FAILED".to_owned()));
+        }
+
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let path_str = line.trim_end_matches('/');
+            let path = std::path::Path::new(path_str);
+            if path.components().any(|c| c == std::path::Component::ParentDir) {
+                return Err(AppError::Io("UPDATE_PATH_TRAVERSAL_DETECTED".to_owned()));
+            }
+
+            if line.contains(" -> ") {
+                return Err(AppError::Io("UPDATE_SYMLINK_REJECTED".to_owned()));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_extracted(dir: &Path) -> Result<(), AppError> {
+        let canonical_base = dir
+            .canonicalize()
+            .map_err(|e| AppError::Io(format!("canonicalize: {e}")))?;
+        Self::validate_entry(&canonical_base, &canonical_base)
+    }
+
+    fn validate_entry(canonical_base: &Path, path: &Path) -> Result<(), AppError> {
+        let metadata = std::fs::symlink_metadata(path)
+            .map_err(|e| AppError::Io(format!("metadata: {e}")))?;
+
+        if metadata.file_type().is_symlink() {
+            return Err(AppError::Io("UPDATE_SYMLINK_REJECTED".to_owned()));
+        }
+
+        #[cfg(unix)]
+        if metadata.is_file() {
+            use std::os::unix::fs::MetadataExt;
+            if metadata.nlink() > 1 {
+                return Err(AppError::Io("UPDATE_HARDLINK_REJECTED".to_owned()));
+            }
+        }
+
+        if metadata.is_dir() {
+            let canonical = path
+                .canonicalize()
+                .map_err(|e| AppError::Io(format!("canonicalize: {e}")))?;
+            if !canonical.starts_with(canonical_base) {
+                return Err(AppError::Io("UPDATE_PATH_TRAVERSAL_DETECTED".to_owned()));
+            }
+
+            for entry in
+                std::fs::read_dir(path).map_err(|e| AppError::Io(format!("read_dir: {e}")))? 
+            {
+                let entry = entry.map_err(|e| AppError::Io(e.to_string()))?;
+                Self::validate_entry(canonical_base, &entry.path())?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn create_pending_marker(
@@ -216,10 +334,43 @@ impl UpdateStore {
             return Ok(true);
         }
 
-        info!("UPDATE_VERIFY_PASSED_FIRST_LAUNCH");
+        let obs_path = self.health_observation_path();
+        if !obs_path.exists() {
+            let obs = HealthObservation {
+                started_at: chrono::Utc::now().to_rfc3339(),
+            };
+            let bytes =
+                serde_json::to_vec(&obs).map_err(|e| AppError::Internal(e.to_string()))?;
+            std::fs::write(&obs_path, &bytes)
+                .map_err(|e| AppError::Storage(format!("write health observation: {e}")))?;
+            info!("UPDATE_HEALTH_OBSERVATION_STARTED");
+            return Ok(true);
+        }
+
+        let obs_bytes = std::fs::read(&obs_path)
+            .map_err(|e| AppError::Storage(format!("read health observation: {e}")))?;
+        let obs: HealthObservation = serde_json::from_slice(&obs_bytes)
+            .map_err(|e| AppError::Storage(format!("parse health observation: {e}")))?;
+
+        let started_at = obs
+            .started_at
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .map_err(|e| AppError::Internal(format!("invalid observation time: {e}")))?;
+        let elapsed = chrono::Utc::now().signed_duration_since(started_at);
+
+        if elapsed.num_seconds() < 30 {
+            info!(
+                elapsed = %elapsed.num_seconds(),
+                "UPDATE_HEALTH_OBSERVATION_IN_PROGRESS"
+            );
+            return Ok(true);
+        }
+
+        info!("UPDATE_HEALTH_OBSERVATION_PASSED");
         self.mark_stable(app_version)?;
         self.delete_pending_marker()?;
         self.delete_backup(&marker.backup_id)?;
+        let _ = std::fs::remove_file(&obs_path);
         Ok(true)
     }
 

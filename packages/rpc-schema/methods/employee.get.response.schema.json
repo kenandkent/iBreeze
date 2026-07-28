@@ -3,6 +3,46 @@
   "$id": "https://ibreeze.ai/schemas/employee.get.response.v1",
   "title": "EmployeeGetResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "employee_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "transferred"
+      ]
+    },
+    "work_role": {
+      "type": "string"
+    },
+    "department_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "employee_id",
+    "display_name",
+    "status",
+    "work_role",
+    "department_id",
+    "created_at",
+    "updated_at"
+  ]
 }

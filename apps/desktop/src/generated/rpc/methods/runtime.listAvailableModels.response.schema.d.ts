@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface RuntimeListavailablemodelsResponse {}
+export interface RuntimeListavailablemodelsResponse {
+  models: {
+    model_id: string;
+    name: string;
+    provider: string;
+    available: boolean;
+  }[];
+}

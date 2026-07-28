@@ -5,4 +5,9 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface BackupGetResponse {}
+export interface BackupGetResponse {
+  backup_id: string;
+  version: number;
+  status: "created" | "verified" | "restored";
+  created_at: string;
+}

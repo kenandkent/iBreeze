@@ -1,7 +1,15 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
+use crate::broker::{CredentialStore, HttpBroker};
 use crate::error::AppError;
+use crate::ipc::dispatcher::ReverseMethodTable;
+use crate::ipc::multiplexer::IpcError;
 use crate::security::external_write::ReceiptStore;
 use crate::security::grant_store::GrantStore;
 
@@ -46,25 +54,30 @@ pub struct ExternalWriteResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CredentialHttpStart {
-    pub credential_ref: String,
-    pub provider_id: Uuid,
-    pub provider_version: u64,
+    pub run_id: Uuid,
+    pub credential_ref: Uuid,
+    pub provider_release_id: Uuid,
+    pub model_binding_id: Uuid,
+    pub protocol: String,
+    pub operation: String,
     pub relative_path: String,
-    pub headers: Vec<(String, String)>,
-    pub body: Option<Vec<u8>>,
+    pub request: Value,
+    pub deadline_at: String,
+    pub provider_base_url: String,
+    pub profile_directory_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CredentialHttpCancel {
+    pub run_id: Uuid,
     pub request_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CredentialProbe {
-    pub credential_ref: String,
-    pub provider_id: Uuid,
+    pub credential_ref: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,33 +111,122 @@ pub async fn handle_process_exited(_event: ProcessEvent) -> Result<(), AppError>
     Ok(())
 }
 
-pub async fn handle_credential_http_start(
-    request: CredentialHttpStart,
-) -> Result<serde_json::Value, AppError> {
-    let request_id = Uuid::new_v4();
-    tracing::warn!(
-        credential_ref = %request.credential_ref,
-        provider_id = %request.provider_id,
-        %request_id,
-        "credential.http.start: broker not yet operational"
-    );
-    Err(AppError::Internal(
-        "CREDENTIAL_BROKER_NOT_OPERATIONAL: reverse UDS transport not yet wired".to_owned(),
-    ))
+pub struct ReverseBroker {
+    pub http_broker: Arc<HttpBroker>,
+    pub credential_store: Arc<CredentialStore>,
+    cancel_senders: tokio::sync::RwLock<HashMap<Uuid, oneshot::Sender<()>>>,
 }
 
-pub async fn handle_credential_http_cancel(request: CredentialHttpCancel) -> Result<(), AppError> {
-    tracing::warn!(
-        request_id = %request.request_id,
-        "credential.http.cancel: broker not yet operational"
-    );
-    Err(AppError::Internal(
-        "CREDENTIAL_BROKER_NOT_OPERATIONAL".to_owned(),
-    ))
+impl ReverseBroker {
+    pub fn new(http_broker: Arc<HttpBroker>, credential_store: Arc<CredentialStore>) -> Self {
+        Self {
+            http_broker,
+            credential_store,
+            cancel_senders: tokio::sync::RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub async fn handle_credential_http_start(
+        &self,
+        request: CredentialHttpStart,
+    ) -> Result<Value, AppError> {
+        let deadline_s = parse_deadline(&request.deadline_at).unwrap_or(300);
+        let (request_id, cancel_tx) = self
+            .http_broker
+            .start(
+                &request.profile_directory_id,
+                &request.provider_base_url,
+                request.credential_ref,
+                request.provider_release_id,
+                request.model_binding_id,
+                request.run_id,
+                &request.relative_path,
+                request.request,
+                deadline_s,
+            )
+            .await?;
+        self.cancel_senders
+            .write()
+            .await
+            .insert(request_id, cancel_tx);
+        Ok(serde_json::json!({
+            "request_id": request_id,
+            "status": "accepted",
+        }))
+    }
+
+    pub async fn handle_credential_http_cancel(
+        &self,
+        request: CredentialHttpCancel,
+    ) -> Result<Value, AppError> {
+        let mut senders = self.cancel_senders.write().await;
+        if let Some(cancel_tx) = senders.remove(&request.request_id) {
+            let _ = cancel_tx.send(());
+            Ok(serde_json::json!({"status": "cancelled"}))
+        } else {
+            Err(AppError::NotFound("Request not found or already completed".to_owned()))
+        }
+    }
+
+    pub async fn handle_credential_probe(
+        &self,
+        request: CredentialProbe,
+        profile_directory_id: &str,
+    ) -> Result<Value, AppError> {
+        self.credential_store
+            .load_keychain_credential(profile_directory_id, request.credential_ref)?;
+        Ok(serde_json::json!({"status": "ok"}))
+    }
 }
 
-pub async fn handle_credential_probe(_request: CredentialProbe) -> Result<bool, AppError> {
-    Ok(false)
+fn parse_deadline(rfc3339: &str) -> Option<u64> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339)
+        .ok()
+        .map(|dt| {
+            let now = chrono::Utc::now();
+            let dur = dt.signed_duration_since(now);
+            dur.num_seconds().max(1) as u64
+        })
+}
+
+/// Register all reverse handlers into a ReverseMethodTable.
+pub fn register_reverse_handlers(
+    table: &mut ReverseMethodTable,
+    http_broker: Arc<HttpBroker>,
+    credential_store: Arc<CredentialStore>,
+) {
+    let broker = Arc::new(ReverseBroker::new(http_broker, credential_store));
+    let broker_clone = broker.clone();
+    table.register("credential.http.start", Arc::new(move |params| {
+        let broker = broker_clone.clone();
+        Box::pin(async move {
+            let request: CredentialHttpStart =
+                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
+            let result = broker.handle_credential_http_start(request).await;
+            result.map_err(|e| IpcError::Internal(e.to_string()))
+        })
+    }));
+    let broker_clone = broker.clone();
+    table.register("credential.http.cancel", Arc::new(move |params| {
+        let broker = broker_clone.clone();
+        Box::pin(async move {
+            let request: CredentialHttpCancel =
+                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
+            let result = broker.handle_credential_http_cancel(request).await;
+            result.map_err(|e| IpcError::Internal(e.to_string()))
+        })
+    }));
+    // probe handler — needs profile_directory_id; stored in credential_ref field for lookup
+    table.register("credential.probe", Arc::new(move |params| {
+        Box::pin(async move {
+            let _request: CredentialProbe =
+                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
+            // probe needs profile_directory_id from context; not yet wired
+            Err(IpcError::Internal(
+                "CREDENTIAL_PROBE_REQUIRES_PROFILE: use credential.probe with a profile_directory_id param".to_owned(),
+            ))
+        })
+    }));
 }
 
 /// Allowed reverse methods from Sidecar to Rust

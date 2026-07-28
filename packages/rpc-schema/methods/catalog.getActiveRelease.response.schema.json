@@ -3,6 +3,32 @@
   "$id": "https://ibreeze.ai/schemas/catalog.getActiveRelease.response.v1",
   "title": "CatalogGetactivereleaseResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "release_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "rolled_back"
+      ]
+    },
+    "released_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "release_id",
+    "sequence",
+    "status",
+    "released_at"
+  ]
 }

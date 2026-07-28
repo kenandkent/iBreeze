@@ -3,6 +3,38 @@
   "$id": "https://ibreeze.ai/schemas/runtime.listAvailableModels.response.v1",
   "title": "RuntimeListavailablemodelsResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model_id",
+          "name",
+          "provider",
+          "available"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "models"
+  ]
 }

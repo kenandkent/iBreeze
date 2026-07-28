@@ -1,25 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { PlanVersion } from '../types';
+import type { Task } from '../types';
 import { createRpcRequest } from '../shared/rpcClient';
 import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
 
-export function useListPlanVersions(companyId: string) {
+export function useGetTask(companyId: string, taskId: string) {
   const ctx = useQueryCtx();
   return useQuery({
-    queryKey: queryKeys.planVersionList(ctx, companyId),
-    queryFn: async (): Promise<PlanVersion[]> => {
+    queryKey: queryKeys.task(ctx, companyId, taskId),
+    queryFn: async (): Promise<Task> => {
       const start = performance.now();
       try {
-        const result = await createRpcRequest<PlanVersion[]>('planVersion.list', { company_id: companyId });
-        logger.logHookSuccess('usePlan', 'planVersion.list', performance.now() - start);
+        const result = await createRpcRequest<Task>('task.get', { company_id: companyId, id: taskId });
+        logger.logHookSuccess('usePlan', 'task.get', performance.now() - start);
         return result;
       } catch (e) {
-        logger.logHookError('usePlan', 'planVersion.list', e as Error, performance.now() - start);
+        logger.logHookError('usePlan', 'task.get', e as Error, performance.now() - start);
         throw e;
       }
     },
-    enabled: !!companyId,
+    enabled: !!companyId && !!taskId,
   });
 }
 

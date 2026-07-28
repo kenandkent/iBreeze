@@ -9,6 +9,22 @@ I.7 子进程监管：
 macOS Seatbelt (spec §I.8):
 - 在 macOS 上通过 sandbox-exec 对子进程施加最小权限沙箱
 - 非 macOS 平台跳过沙箱步骤，仅使用 minimal_env 隔离
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 迁移契约 — Rust ProcessSupervisor                                       │
+│ 目标：将 CLI 子进程管理从 Python 迁移到 rust/process 模块               │
+│ 状态：Rust 端尚未实现（只有 `mod.rs` 占位注释）                         │
+│ 迁移路径：                                                              │
+│   1. Rust 端实现 ProcessSupervisor（进程组创建、PGID 跟踪、SIGTERM →    │
+│      SIGKILL 升级、心跳监视）                                           │
+│   2. Rust ProcessSupervisor 注册为 reverse handler（通过                 │
+│      `runtime.processRegistered` / `runtime.processExited` 通知）        │
+│   3. Sidecar 侧改用 UDS 反向调用 Rust ProcessSupervisor 来启停 CLI，     │
+│      不再直接使用 asyncio.create_subprocess_exec                         │
+│   4. 此文件降级为仅提供 minimal_env 和 seatbelt 包装，进程生命周期由     │
+│      Rust 端控制                                                        │
+│ 当前：Sidecar 使用本地 asyncio.create_subprocess_exec（未迁移）          │
+└──────────────────────────────────────────────────────────────────────────┘
 """
 
 from __future__ import annotations

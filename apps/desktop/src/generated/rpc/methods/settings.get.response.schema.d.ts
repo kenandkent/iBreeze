@@ -5,4 +5,8 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface SettingsGetResponse {}
+export interface SettingsGetResponse {
+  settings: {
+    [k: string]: any | undefined;
+  };
+}

@@ -17,6 +17,12 @@ const SCHEMA_DIRS = [
   "../rpc-schema",
 ];
 
+const SKIP_FILES = new Set([
+  "registry.v1.json",
+  "reverse-methods.v1.json",
+  "meta.schema.json",
+]);
+
 function collectAllSchemaFiles() {
   const files = [];
   for (const dir of SCHEMA_DIRS) {
@@ -29,6 +35,8 @@ function collectAllSchemaFiles() {
     for (const entry of entries) {
       const full = join(dirPath, entry);
       if (extname(entry) === ".json" && statSync(full).isFile()) {
+        const basename = entry.split("/").pop() || entry;
+        if (SKIP_FILES.has(basename)) continue;
         files.push(full);
       }
     }

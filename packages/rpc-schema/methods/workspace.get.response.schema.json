@@ -3,6 +3,37 @@
   "$id": "https://ibreeze.ai/schemas/workspace.get.response.v1",
   "title": "WorkspaceGetResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "workspace_id",
+    "name",
+    "status",
+    "version",
+    "created_at",
+    "updated_at"
+  ]
 }

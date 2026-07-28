@@ -3,6 +3,17 @@
   "$id": "https://ibreeze.ai/schemas/event.replay.response.v1",
   "title": "EventReplayResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "replayed_event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "replayed_event_ids"
+  ]
 }

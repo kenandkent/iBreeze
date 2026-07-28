@@ -196,7 +196,7 @@ async def test_result_persistence_failure_rolls_back_domain_write(
     session = await _handshake(server, token, launch_id)
     await server.db.write_connection.execute(
         """CREATE TRIGGER reject_completed_idempotency
-           BEFORE UPDATE OF status ON rpc_idempotency
+           BEFORE UPDATE OF status ON idempotency
            WHEN NEW.status='completed'
            BEGIN SELECT RAISE(ABORT, 'forced result failure'); END"""
     )

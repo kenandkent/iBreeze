@@ -5,4 +5,9 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface DepartmenttaskGetreportResponse {}
+export interface DepartmenttaskGetreportResponse {
+  report_id: string;
+  task_id: string;
+  content: string;
+  generated_at: string;
+}

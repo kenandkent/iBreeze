@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface KnowledgeGetResponse {}
+export interface KnowledgeGetResponse {
+  item_id: string;
+  content: string;
+  content_hash: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}

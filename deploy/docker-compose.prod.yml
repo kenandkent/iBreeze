@@ -1,0 +1,82 @@
+# =============================================================================
+# iBreeze 生产环境 Docker Compose
+# =============================================================================
+# 使用方式：
+#   创建 .env 文件并填写所有必填变量：
+#     POSTGRES_PASSWORD=...
+#     MINIO_ROOT_USER=...
+#     MINIO_ROOT_PASSWORD=...
+#     IBREEZE_S3_SECRET_KEY=...   # 可选，与 MINIO_ROOT_PASSWORD 不同时设置
+#   然后运行：
+#     docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d
+#
+# 安全特性：
+#   - 内部服务（PostgreSQL、MinIO、Backend）不暴露对外端口
+#   - 外部入口仅通过 Nginx（8080）和 Admin Web（51421）
+#   - 所有服务设置 CPU/内存资源限制
+#   - 重启策略为 always（配合编排工具可进一步自动恢复）
+#   - 生产应配合 Caddy/Nginx/Traefik 配置 TLS
+# =============================================================================
+
+services:
+  postgres:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  minio:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  migration:
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  backend-api:
+    ports: []
+    environment:
+      IBREEZE_LOG_LEVEL: WARNING
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  admin-web:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  nginx:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M

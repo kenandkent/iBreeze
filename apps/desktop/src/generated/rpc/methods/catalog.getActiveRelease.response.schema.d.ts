@@ -5,4 +5,9 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface CatalogGetactivereleaseResponse {}
+export interface CatalogGetactivereleaseResponse {
+  release_id: string;
+  sequence: number;
+  status: "active" | "rolled_back";
+  released_at: string;
+}

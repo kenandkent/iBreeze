@@ -651,7 +651,7 @@ class RPCServer:
         migration_version = "unknown"
         try:
             result = await self.db.fetch_val(
-                "SELECT version FROM schema_migrations WHERE status='completed' ORDER BY applied_at DESC LIMIT 1"
+                "SELECT MAX(version) FROM schema_migrations WHERE status='completed'"
             )
             if result:
                 migration_version = str(result)
@@ -692,9 +692,9 @@ class RPCServer:
             ).encode("utf-8")
         ).hexdigest()
         existing = await self.db.fetch_one(
-            """SELECT * FROM rpc_idempotency
-               WHERE method=? AND idempotency_key=?""",
-            (method, key),
+            """SELECT * FROM idempotency
+               WHERE idempotency_key=?""",
+            (key,),
         )
         if existing is not None:
             if existing["request_sha256"] != request_sha:
@@ -707,80 +707,99 @@ class RPCServer:
             created = datetime.fromisoformat(existing["created_at"].replace("Z", "+00:00"))
             if datetime.now(UTC) - created < timedelta(minutes=10):
                 raise DomainError("IDEMPOTENCY_IN_PROGRESS")
-            await self.db.execute_write(
-                """UPDATE rpc_idempotency
-                   SET status='failed',error_code='IDEMPOTENCY_PROCESSING_ABANDONED'
-                   WHERE method=? AND idempotency_key=?""",
-                (method, key),
-            )
+            if self._write_queue is not None:
+                async def _abandon(conn: Any) -> None:
+                    await conn.execute(
+                        """UPDATE idempotency
+                           SET status='failed',error_code='IDEMPOTENCY_PROCESSING_ABANDONED'
+                           WHERE idempotency_key=?""",
+                        (key,),
+                    )
+                await self._write_queue.submit(
+                    "rpc.abandon",
+                    uuid.UUID(int=0),
+                    datetime.now(UTC) + timedelta(seconds=30),
+                    _abandon,
+                )
+            else:
+                await self.db.execute_write(
+                    """UPDATE idempotency
+                       SET status='failed',error_code='IDEMPOTENCY_PROCESSING_ABANDONED'
+                       WHERE idempotency_key=?""",
+                    (key,),
+                )
             raise DomainError("IDEMPOTENCY_PROCESSING_ABANDONED")
 
         now = _now()
         expires_at = (
             datetime.now(UTC) + timedelta(days=30)
         ).isoformat(timespec="microseconds").replace("+00:00", "Z")
-        # 写操作通过 idempotency 保护，WriteQueue 串行化将在后续版本中集成
+
+        async def _execute(conn: Any) -> object:
+            await conn.execute(
+                """INSERT INTO idempotency
+                   (idempotency_key,request_sha256,status,response_json,
+                    error_code,created_at,expires_at)
+                   VALUES (?,?,'processing',NULL,NULL,?,?)""",
+                (key, request_sha, now, expires_at),
+            )
+            self._transaction_connection = _NestedTransactionConnection(conn)
+            try:
+                result = await handler(params)
+            except Exception:
+                await conn.execute(
+                    """UPDATE idempotency
+                       SET status='failed', error_code=?
+                       WHERE idempotency_key=?""",
+                    ("WRITE_QUEUE_HANDLER_ERROR", key),
+                )
+                raise
+            finally:
+                self._transaction_connection = None
+            serialized = _serialize(result)
+            await conn.execute(
+                """UPDATE idempotency
+                   SET status='completed',response_json=?
+                   WHERE idempotency_key=?""",
+                (json.dumps(serialized, ensure_ascii=False, separators=(",", ":")), key),
+            )
+            return serialized
+
+        if self._write_queue is not None:
+            return await self._write_queue.submit(
+                "rpc.execute",
+                uuid.UUID(int=0),
+                datetime.now(UTC) + timedelta(seconds=30),
+                _execute,
+            )
         connection = self.db.write_connection
         await connection.execute("BEGIN IMMEDIATE")
         await connection.execute(
-            """INSERT INTO rpc_idempotency
-               (method,idempotency_key,request_sha256,status,response_json,
+            """INSERT INTO idempotency
+               (idempotency_key,request_sha256,status,response_json,
                 error_code,created_at,expires_at)
-               VALUES (?,?,?,'processing',NULL,NULL,?,?)""",
-            (
-                method,
-                key,
-                request_sha,
-                now,
-                expires_at,
-            ),
+               VALUES (?,?,'processing',NULL,NULL,?,?)""",
+            (key, request_sha, now, expires_at),
         )
         self._transaction_connection = _NestedTransactionConnection(connection)
         try:
             result = await handler(params)
-        except Exception as exc:
-            code = str(exc) if isinstance(exc, ValueError) else "INTERNAL_ERROR"
+        except Exception:
             await connection.rollback()
-            await self._store_failed_idempotency(
-                connection,
-                method=method,
-                key=key,
-                request_sha=request_sha,
-                code=code,
-                now=now,
-                expires_at=expires_at,
-            )
             raise
         finally:
             self._transaction_connection = None
         serialized = _serialize(result)
         try:
             await connection.execute(
-                """UPDATE rpc_idempotency
+                """UPDATE idempotency
                    SET status='completed',response_json=?
-                   WHERE method=? AND idempotency_key=?""",
-                (
-                    json.dumps(
-                        serialized,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ),
-                    method,
-                    key,
-                ),
+                   WHERE idempotency_key=?""",
+                (json.dumps(serialized, ensure_ascii=False, separators=(",", ":")), key),
             )
             await connection.commit()
         except Exception:
             await connection.rollback()
-            await self._store_failed_idempotency(
-                connection,
-                method=method,
-                key=key,
-                request_sha=request_sha,
-                code="INTERNAL_ERROR",
-                now=now,
-                expires_at=expires_at,
-            )
             raise
         return serialized
 
@@ -796,12 +815,11 @@ class RPCServer:
         expires_at: str,
     ) -> None:
         await connection.execute(
-            """INSERT INTO rpc_idempotency
-               (method,idempotency_key,request_sha256,status,response_json,
+            """INSERT INTO idempotency
+               (idempotency_key,request_sha256,status,response_json,
                 error_code,created_at,expires_at)
-               VALUES (?,?,?,'failed',NULL,?,?,?)""",
+               VALUES (?,?,'failed',NULL,?,?,?)""",
             (
-                method,
                 key,
                 request_sha,
                 code,

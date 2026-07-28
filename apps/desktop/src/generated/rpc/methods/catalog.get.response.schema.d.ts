@@ -5,4 +5,10 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface CatalogGetResponse {}
+export interface CatalogGetResponse {
+  catalog_id: string;
+  name: string;
+  version: string;
+  description: string;
+  updated_at: string;
+}

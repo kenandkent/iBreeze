@@ -1,6 +1,7 @@
 //! iBreeze desktop security and operating-system boundary.
 
 pub mod auth;
+pub mod broker;
 pub mod commands;
 pub mod error;
 pub mod ipc;

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 
 def _escape_sql_literal(value: str) -> str:
@@ -22,7 +22,7 @@ class VectorStore:
         if self._table is not None:
             return self._table
         try:
-            import lancedb  # type: ignore[import-untyped]
+            import lancedb
 
             db = lancedb.connect(self._db_path)
             try:
@@ -55,7 +55,7 @@ class VectorStore:
         if table is None:
             return False
         try:
-            import pyarrow as pa  # type: ignore[import-untyped]
+            import pyarrow as pa
 
             safe_id = _escape_sql_literal(id)
 
@@ -103,7 +103,7 @@ class VectorStore:
                 safe_gen_id = _escape_sql_literal(generation_id)
                 query = query.where(f"generation_id = '{safe_gen_id}'")
             results = query.limit(limit).to_list()
-            return results  # type: ignore[no-any-return]
+            return cast("list[dict[str, Any]]", results)
         except Exception:
             return []
 

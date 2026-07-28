@@ -5,4 +5,15 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface TaskGetgraphResponse {}
+export interface TaskGetgraphResponse {
+  nodes: {
+    node_id: string;
+    type: string;
+    label: string;
+  }[];
+  edges: {
+    source_id: string;
+    target_id: string;
+    relation: string;
+  }[];
+}

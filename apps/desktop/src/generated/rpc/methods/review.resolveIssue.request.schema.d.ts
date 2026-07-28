@@ -5,4 +5,8 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ReviewResolveissueRequest {}
+export interface ReviewResolveissueRequest {
+  company_id: string;
+  issue_id: string;
+  resolution: string;
+}

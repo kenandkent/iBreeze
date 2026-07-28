@@ -6,6 +6,15 @@
  */
 
 /**
- * Sidecar-to-Rust reverse RPC allowlist
+ * Sidecar-to-Rust reverse RPC allowlist — Section 6.5 of the core architecture
  */
-export type ReverseRPCMethods = string[];
+export interface ReverseRPCMethods {
+  /**
+   * Sidecar→Rust synchronous request methods
+   */
+  sidecar_to_rust: string[];
+  /**
+   * Rust→Sidecar notification methods (fire-and-forget)
+   */
+  rust_to_sidecar: string[];
+}

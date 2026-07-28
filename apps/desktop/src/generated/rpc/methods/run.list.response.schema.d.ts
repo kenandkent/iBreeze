@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface RunListResponse {}
+export interface RunListResponse {
+  runs: {
+    run_id: string;
+    status: string;
+    agent_id: string;
+    created_at: string;
+  }[];
+}

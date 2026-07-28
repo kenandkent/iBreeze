@@ -25,7 +25,7 @@ MIGRATIONS: list[Migration] = [
         version=1,
         filename="001_initial.sql",
         sql="file://migrations/001_initial.sql",
-        sha256="aa25f8fd64aac09755f64271ff9e4c292bc52fdbf894682a4a5c966a57913249",
+        sha256="bb0fddf3a67911087b4d209826ec1e5246be925acf206e076b6ddc2a6c1ac2e7",
     ),
 ]
 

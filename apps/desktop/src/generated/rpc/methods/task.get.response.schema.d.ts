@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface TaskGetResponse {}
+export interface TaskGetResponse {
+  task_id: string;
+  title: string;
+  status: "pending" | "in_progress" | "completed" | "failed" | "cancelled";
+  version: number;
+  created_at: string;
+  updated_at: string;
+}

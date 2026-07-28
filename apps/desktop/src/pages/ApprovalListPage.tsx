@@ -31,7 +31,7 @@ export default function ApprovalListPage() {
     mutationFn: (id: string) =>
       invoke('rpc_request', {
         method: 'approval.resolve',
-        params: { approval_id: id, decision: 'approved', company_id: companyId! },
+        params: { approval_id: id, decision: 'allow', expected_version: 1, company_id: companyId! },
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {
@@ -43,7 +43,7 @@ export default function ApprovalListPage() {
     mutationFn: (id: string) =>
       invoke('rpc_request', {
         method: 'approval.resolve',
-        params: { approval_id: id, decision: 'rejected', company_id: companyId! },
+        params: { approval_id: id, decision: 'deny', expected_version: 1, company_id: companyId! },
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {

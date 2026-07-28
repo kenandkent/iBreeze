@@ -15,6 +15,12 @@ pub struct RpcMeta {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RpcRegistry {
+    pub methods: Vec<ItemStruct>,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Catalog {
     pub company_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -24,7 +30,14 @@ pub struct Catalog {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub created_at: String,
+    pub status: StatusEnum,
+    pub task_id: String,
+    pub title: String,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -33,7 +46,9 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Backup {
@@ -61,7 +76,9 @@ pub struct Department {
 pub struct Auth {}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub employees: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Review {
@@ -94,16 +111,32 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub assignment_id: String,
+    pub company_id: String,
+    pub expected_assignment_version: i64,
+    pub issues: Vec<ItemStruct>,
+    pub report_artifact_id: String,
+    pub reviewed_artifact_id: String,
+    pub reviewed_sha256: String,
+    pub reviewer_run_id: String,
+    pub verdict: VerdictEnum,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Conversation {}
+pub struct Conversation {
+    pub conversations: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Workspace {}
+pub struct Workspace {
+    pub workspaces: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub new_task_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -111,7 +144,9 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Approval {}
+pub struct Approval {
+    pub approvals: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
@@ -119,7 +154,9 @@ pub struct Runtime {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {}
+pub struct Run {
+    pub runs: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DepartmentTask {
@@ -138,7 +175,9 @@ pub struct DepartmentTask {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Employee {
@@ -153,7 +192,9 @@ pub struct Artifact {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {}
+pub struct Report {
+    pub report_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Approval {
@@ -185,7 +226,13 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {}
+pub struct Knowledge {
+    pub company_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub knowledge_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workspace {
@@ -247,7 +294,10 @@ pub struct Workspace {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub edges: Vec<ItemStruct>,
+    pub nodes: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workspace {
@@ -262,10 +312,14 @@ pub struct Artifact {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub skills: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Conversation {}
+pub struct Conversation {
+    pub messages: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
@@ -283,7 +337,13 @@ pub struct Employee {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Artifact {}
+pub struct Artifact {
+    pub artifact_id: String,
+    pub created_at: String,
+    pub sha256: String,
+    pub status: StatusEnum,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Task {
@@ -298,7 +358,9 @@ pub struct Task {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Backup {}
+pub struct Backup {
+    pub backups: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Auth {
@@ -323,7 +385,12 @@ pub struct Backup {
 pub struct Auth {}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Conversation {}
+pub struct Conversation {
+    pub department_id: String,
+    pub description: String,
+    pub name: String,
+    pub status: StatusEnum,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
@@ -349,7 +416,9 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Department {}
+pub struct Department {
+    pub departments: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
@@ -373,7 +442,10 @@ pub struct Auth {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {}
+pub struct Report {
+    pub company_id: String,
+    pub department_task_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Task {
@@ -388,13 +460,24 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EmployeeTask {}
+pub struct EmployeeTask {
+    pub created_at: String,
+    pub status: String,
+    pub task_id: String,
+    pub title: String,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
@@ -408,7 +491,9 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {}
+pub struct Knowledge {
+    pub results: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
@@ -432,13 +517,25 @@ pub struct Task {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub created_at: String,
+    pub department_id: String,
+    pub display_name: String,
+    pub employee_id: String,
+    pub status: StatusEnum,
+    pub updated_at: String,
+    pub work_role: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub catalogs: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub review_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
@@ -529,16 +626,34 @@ pub struct Task {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {}
+pub struct Run {
+    pub events: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {}
+pub struct Knowledge {
+    pub items: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {}
+pub struct Run {
+    pub agent_id: String,
+    pub created_at: String,
+    pub progress: f64,
+    pub run_id: String,
+    pub status: StatusEnum,
+    pub updated_at: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {}
+pub struct Knowledge {
+    pub content: String,
+    pub content_hash: String,
+    pub created_at: String,
+    pub item_id: String,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -601,10 +716,20 @@ pub struct Conversation {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DepartmentTask {}
+pub struct DepartmentTask {
+    pub assigned_employee_ids: Vec<String>,
+    pub created_at: String,
+    pub status: String,
+    pub task_id: String,
+    pub title: String,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Artifact {}
+pub struct Artifact {
+    pub artifacts: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -612,7 +737,9 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Event {}
+pub struct Event {
+    pub replayed_event_ids: Vec<String>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Review {
@@ -633,10 +760,19 @@ pub struct Company {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Workspace {}
+pub struct Workspace {
+    pub created_at: String,
+    pub name: String,
+    pub status: String,
+    pub updated_at: String,
+    pub version: i64,
+    pub workspace_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub agents: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -648,7 +784,9 @@ pub struct Conversation {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EmployeeTask {}
+pub struct EmployeeTask {
+    pub tasks: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
@@ -661,10 +799,17 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Artifact {}
+pub struct Artifact {
+    pub artifact_id: String,
+    pub content: String,
+    pub snapshot_at: String,
+    pub snapshot_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub issues: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -684,7 +829,11 @@ pub struct Catalog {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub base_profile: BaseProfileStruct,
+    pub company_id: String,
+    pub employee_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -723,7 +872,9 @@ pub struct Catalog {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Runtime {}
+pub struct Runtime {
+    pub models: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workspace {
@@ -744,7 +895,11 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub company_id: String,
+    pub reason: String,
+    pub task_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Employee {
@@ -774,7 +929,14 @@ pub struct Backend {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Profile {}
+pub struct Profile {
+    pub created_at: String,
+    pub display_name: String,
+    pub profile_id: String,
+    pub status: StatusEnum,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
@@ -811,7 +973,12 @@ pub struct Company {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub release_id: String,
+    pub released_at: String,
+    pub sequence: i64,
+    pub status: StatusEnum,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Run {
@@ -831,7 +998,9 @@ pub struct Employee {
 pub struct Runtime {}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub models: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Auth {
@@ -842,7 +1011,9 @@ pub struct Auth {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {}
+pub struct Report {
+    pub report_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Knowledge {
@@ -920,7 +1091,11 @@ pub struct Conversation {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub company_id: String,
+    pub employee_id: String,
+    pub work_role: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Auth {
@@ -929,7 +1104,11 @@ pub struct Auth {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub company_id: String,
+    pub issue_id: String,
+    pub resolution: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -962,10 +1141,16 @@ pub struct Task {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub assignment_id: String,
+    pub company_id: String,
+    pub reviewer_employee_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {}
+pub struct Knowledge {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
@@ -1007,7 +1192,11 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub company_id: String,
+    pub display_name: String,
+    pub employee_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
@@ -1036,10 +1225,14 @@ pub struct Company {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Profile {}
+pub struct Profile {
+    pub profiles: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub tasks: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
@@ -1058,13 +1251,26 @@ pub struct Company {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub assignment_id: String,
+    pub created_at: String,
+    pub review_id: String,
+    pub reviewer_employee_id: String,
+    pub status: StatusEnum,
+    pub updated_at: String,
+    pub verdict: VerdictEnum,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {}
+pub struct Employee {
+    pub success: bool,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {}
+pub struct Report {
+    pub company_id: String,
+    pub company_task_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Employee {
@@ -1100,7 +1306,12 @@ pub struct Profile {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Backup {}
+pub struct Backup {
+    pub backup_id: String,
+    pub created_at: String,
+    pub status: StatusEnum,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Task {
@@ -1119,7 +1330,13 @@ pub struct Settings {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Catalog {}
+pub struct Catalog {
+    pub catalog_id: String,
+    pub description: String,
+    pub name: String,
+    pub updated_at: String,
+    pub version: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -1128,10 +1345,17 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Settings {}
+pub struct Settings {
+    pub settings: SettingsStruct,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Conversation {}
+pub struct Conversation {
+    pub company_id: String,
+    pub description: String,
+    pub name: String,
+    pub status: StatusEnum,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
@@ -1182,10 +1406,14 @@ pub struct Task {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Task {}
+pub struct Task {
+    pub evidences: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {}
+pub struct Review {
+    pub reviews: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -1202,7 +1430,15 @@ pub struct EmployeeTask {
 pub struct Runtime {}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Department {}
+pub struct Department {
+    pub created_at: String,
+    pub department_id: String,
+    pub description: String,
+    pub name: String,
+    pub status: StatusEnum,
+    pub updated_at: String,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Auth {
@@ -1211,7 +1447,12 @@ pub struct Auth {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DepartmentTask {}
+pub struct DepartmentTask {
+    pub content: String,
+    pub generated_at: String,
+    pub report_id: String,
+    pub task_id: String,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -1220,7 +1461,9 @@ pub struct Conversation {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DepartmentTask {}
+pub struct DepartmentTask {
+    pub tasks: Vec<ItemStruct>,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
@@ -1298,7 +1541,18 @@ pub struct Catalog {
     pub status: String,
     pub synced_at: String,
 }
-pub type ReverseMethods = Vec<String>;
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReverseMethods {
+    pub rust_to_sidecar: Vec<String>,
+    pub sidecar_to_rust: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ErrorCodes {
+    pub error_codes: Vec<ItemStruct>,
+    pub version: i64,
+}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RpcOwnership {

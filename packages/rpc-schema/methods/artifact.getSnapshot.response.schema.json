@@ -3,6 +3,28 @@
   "$id": "https://ibreeze.ai/schemas/artifact.getSnapshot.response.v1",
   "title": "ArtifactGetsnapshotResponse",
   "type": "object",
-  "properties": {},
-  "additionalProperties": false
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "content": {
+      "type": "string"
+    },
+    "snapshot_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "snapshot_id",
+    "artifact_id",
+    "content",
+    "snapshot_at"
+  ]
 }

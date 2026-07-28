@@ -5,4 +5,9 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ConversationGetcompanyResponse {}
+export interface ConversationGetcompanyResponse {
+  company_id: string;
+  name: string;
+  description: string;
+  status: "active" | "archived";
+}

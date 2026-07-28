@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface TaskGetevidenceResponse {}
+export interface TaskGetevidenceResponse {
+  evidences: {
+    evidence_id: string;
+    artifact_id: string;
+    description: string;
+    created_at: string;
+  }[];
+}

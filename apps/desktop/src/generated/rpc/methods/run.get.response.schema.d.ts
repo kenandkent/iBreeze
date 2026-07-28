@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface RunGetResponse {}
+export interface RunGetResponse {
+  run_id: string;
+  status: "queued" | "leased" | "started" | "checkpointed" | "completed" | "failed" | "cancelled";
+  agent_id: string;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+}

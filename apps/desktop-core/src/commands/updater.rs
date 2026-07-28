@@ -147,9 +147,8 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
             match validate_manifest(&manifest, &current_version, &trusted_keys, &package_bytes) {
                 Ok(()) => {
                     let install_path = &base_path;
-                    let backup_sha =
+                    let (backup_id, backup_sha) =
                         update_store.cache_current_install(install_path, &current_version)?;
-                    let backup_id = Uuid::new_v4().to_string();
 
                     update_store.create_pending_marker(
                         &current_version,
@@ -158,20 +157,7 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
                         &backup_sha,
                     )?;
 
-                    let target_dir = base_path.parent().unwrap();
-                    let status = std::process::Command::new("tar")
-                        .arg("-xzf")
-                        .arg(&package_path)
-                        .arg("-C")
-                        .arg(target_dir)
-                        .status()
-                        .map_err(|e| AppError::Io(format!("extract package: {e}")))?;
-
-                    if !status.success() {
-                        update_store.delete_pending_marker()?;
-                        update_store.cleanup_staging(&package_path);
-                        return Err(AppError::Io("UPDATE_EXTRACT_FAILED".to_owned()));
-                    }
+                    UpdateStore::safe_extract(&package_path, install_path)?;
 
                     update_store.cleanup_staging(&package_path);
                     info!(

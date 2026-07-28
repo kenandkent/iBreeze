@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ApprovalListpendingResponse {}
+export interface ApprovalListpendingResponse {
+  approvals: {
+    approval_id: string;
+    status: "pending" | "resolved" | "consumed" | "expired";
+    requested_by_employee_id: string;
+    created_at: string;
+  }[];
+}

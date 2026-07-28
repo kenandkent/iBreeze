@@ -57,13 +57,51 @@ async def create_artifact(
                 "deduplicated": True,
             }
 
+        if supersedes_artifact_id:
+            await db.execute(
+                """UPDATE artifacts
+                   SET is_current=0
+                   WHERE id=? AND company_id=?""",
+                (supersedes_artifact_id, company_id),
+            )
+
+            old_cursor = await db.execute(
+                """SELECT object_sha256 FROM artifacts
+                   WHERE id=? AND company_id=?""",
+                (supersedes_artifact_id, company_id),
+            )
+            old_row = await old_cursor.fetchone()
+            old_sha256 = dict(old_row)["object_sha256"] if old_row else None
+
+            if old_sha256:
+                await db.execute(
+                    """UPDATE review_assignments
+                       SET status='stale'
+                       WHERE company_id=? AND reviewed_sha256=?
+                       AND status NOT IN ('stale','cancelled')""",
+                    (company_id, old_sha256),
+                )
+
+                await db.execute(
+                    """UPDATE review_issues
+                       SET superseded_by_artifact_id=?
+                       WHERE company_id=? AND id IN (
+                           SELECT ri.id FROM review_issues ri
+                           JOIN review_reports rr ON rr.id=ri.review_report_id
+                           JOIN review_assignments ra ON ra.id=rr.assignment_id
+                           WHERE ra.reviewed_sha256=?
+                           AND ri.superseded_by_artifact_id IS NULL
+                       )""",
+                    (artifact_id, company_id, old_sha256),
+                )
+
         await db.execute(
             """INSERT INTO artifacts
                (id, company_id, company_task_id, artifact_type,
                 logical_name, media_type, object_sha256, object_size,
-                metadata_json, supersedes_artifact_id,
+                metadata_json, supersedes_artifact_id, is_current,
                 created_by_type, created_by_run_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
             (
                 artifact_id,
                 company_id,
@@ -93,6 +131,7 @@ async def create_artifact(
             "id": artifact_id,
             "content_sha256": content_hash,
             "deduplicated": False,
+            "superseded": supersedes_artifact_id is not None,
         }
     except Exception:
         await db.rollback()
@@ -193,6 +232,7 @@ async def create_artifact_with_manifest(
     relative_path: str,
     content: bytes,
     created_by_employee_id: str,
+    supersedes_artifact_id: str | None = None,
     manifest: Any | None = None,
 ) -> dict[str, object]:
     """Create an artifact with CAS storage and manifest."""
@@ -220,13 +260,51 @@ async def create_artifact_with_manifest(
                 "deduplicated": True,
             }
 
+        if supersedes_artifact_id:
+            await db.execute(
+                """UPDATE artifacts
+                   SET is_current=0
+                   WHERE id=? AND company_id=?""",
+                (supersedes_artifact_id, company_id),
+            )
+
+            old_cursor = await db.execute(
+                """SELECT object_sha256 FROM artifacts
+                   WHERE id=? AND company_id=?""",
+                (supersedes_artifact_id, company_id),
+            )
+            old_row = await old_cursor.fetchone()
+            old_sha256 = dict(old_row)["object_sha256"] if old_row else None
+
+            if old_sha256:
+                await db.execute(
+                    """UPDATE review_assignments
+                       SET status='stale'
+                       WHERE company_id=? AND reviewed_sha256=?
+                       AND status NOT IN ('stale','cancelled')""",
+                    (company_id, old_sha256),
+                )
+
+                await db.execute(
+                    """UPDATE review_issues
+                       SET superseded_by_artifact_id=?
+                       WHERE company_id=? AND id IN (
+                           SELECT ri.id FROM review_issues ri
+                           JOIN review_reports rr ON rr.id=ri.review_report_id
+                           JOIN review_assignments ra ON ra.id=rr.assignment_id
+                           WHERE ra.reviewed_sha256=?
+                           AND ri.superseded_by_artifact_id IS NULL
+                       )""",
+                    (artifact_id, company_id, old_sha256),
+                )
+
         await db.execute(
             """INSERT INTO artifacts
                (id, company_id, company_task_id, artifact_type,
                 logical_name, media_type, object_sha256, object_size,
-                metadata_json, supersedes_artifact_id,
+                metadata_json, supersedes_artifact_id, is_current,
                 created_by_type, created_by_run_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
             (
                 artifact_id,
                 company_id,
@@ -237,7 +315,7 @@ async def create_artifact_with_manifest(
                 result["sha256"],
                 len(content),
                 "{}",
-                None,
+                supersedes_artifact_id,
                 "user",
                 None,
                 now,
@@ -256,6 +334,7 @@ async def create_artifact_with_manifest(
             "id": artifact_id,
             "content_sha256": result["sha256"],
             "deduplicated": False,
+            "superseded": supersedes_artifact_id is not None,
         }
     except Exception:
         await db.rollback()

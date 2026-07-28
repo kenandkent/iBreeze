@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -24,8 +24,8 @@ class EmbeddingService:
         if self._session is not None or self._session == "fallback":
             return
         try:
-            import onnxruntime as ort  # type: ignore[import-untyped]
-            from transformers import AutoTokenizer  # type: ignore[import-not-found]
+            import onnxruntime as ort
+            from transformers import AutoTokenizer
 
             model_path = self._model_path or os.path.expanduser(
                 "~/.ibreeze/models/multilingual-e5-small.onnx"
@@ -69,7 +69,7 @@ class EmbeddingService:
         # L2 normalize
         norms = np.linalg.norm(pooled, axis=1, keepdims=True)
         pooled = pooled / np.clip(norms, 1e-9, None)
-        return pooled.tolist()  # type: ignore[no-any-return]
+        return cast("list[list[float]]", pooled.tolist())
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts."""

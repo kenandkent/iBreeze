@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
-from ibreeze.local_db import LocalDB
 from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.workers.spec import BaseWorker
 
 logger = logging.getLogger(__name__)
 
@@ -14,39 +16,22 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-class AnalysisWorker:
-    def __init__(self, database: LocalDB, write_queue: WriteQueue) -> None:
-        self._database = database
+class AnalysisWorker(BaseWorker):
+    name = "AnalysisWorker"
+
+    def __init__(self, write_queue: WriteQueue | None = None) -> None:
+        super().__init__()
         self._write_queue = write_queue
-        self._alive = False
-        self._last_beat: float = 0.0
 
-    @property
-    def alive(self) -> bool:
-        return self._alive
+    async def work(self) -> None:
+        wq = self._write_queue
+        if wq is None:
+            await asyncio.sleep(1)
+            return
 
-    @property
-    def last_beat(self) -> float:
-        return self._last_beat
-
-    async def run(self) -> None:
-        logger.info("AnalysisWorker started")
-        self._alive = True
-        try:
-            while True:
-                await self._cleanup_expired_leases()
-                self._last_beat = time.time()
-                await asyncio.sleep(60)
-        except asyncio.CancelledError:
-            logger.info("AnalysisWorker stopped")
-        finally:
-            self._alive = False
-
-    async def _cleanup_expired_leases(self) -> None:
-        now = _now()
-
-        async def _do_cleanup(db: Any) -> int:
-            expired = await (await db.execute(
+        async def _cleanup(conn: Any) -> int:
+            now = _now()
+            expired = await (await conn.execute(
                 """SELECT id, queue_id, job_id, run_id, company_id
                    FROM runtime_leases WHERE expires_at < ?""",
                 (now,),
@@ -54,18 +39,18 @@ class AnalysisWorker:
             if not expired:
                 return 0
             for row in expired:
-                await db.execute(
+                await conn.execute(
                     """UPDATE runtime_queue
                        SET status='ready'
                        WHERE id=? AND status='leased'""",
                     (row["queue_id"],),
                 )
-                await db.execute(
+                await conn.execute(
                     "DELETE FROM runtime_leases WHERE id=?",
                     (row["id"],),
                 )
                 if row["run_id"]:
-                    await db.execute(
+                    await conn.execute(
                         """UPDATE agent_runs
                            SET status='lost', updated_at=?, version=version+1
                            WHERE id=? AND company_id=?""",
@@ -74,8 +59,9 @@ class AnalysisWorker:
             return len(expired)
 
         try:
-            count = await self._write_queue.execute(_do_cleanup)
+            deadline = datetime.now(UTC) + timedelta(seconds=295)
+            count = await wq.submit("analysis.cleanup_leases", UUID(int=0), deadline, _cleanup)
             if count:
                 logger.info("Cleaned up %d expired runtime leases", count)
         except Exception:
-            logger.exception("Failed to cleanup expired leases")
+            logger.exception("AnalysisWorker cleanup failed")

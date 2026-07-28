@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/events/approval.expired.v1.schema.json",
+  "title": "Approval.expired Event",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "from_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "resolved",
+        "consumed",
+        "expired"
+      ]
+    },
+    "to_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "resolved",
+        "consumed",
+        "expired"
+      ]
+    },
+    "decision": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "aggregate_id",
+    "version",
+    "from_state",
+    "to_state",
+    "decision"
+  ]
+}

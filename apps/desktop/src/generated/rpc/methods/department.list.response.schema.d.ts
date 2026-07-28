@@ -5,4 +5,11 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface DepartmentListResponse {}
+export interface DepartmentListResponse {
+  departments: {
+    department_id: string;
+    name: string;
+    status: "active" | "archived";
+    created_at: string;
+  }[];
+}

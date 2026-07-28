@@ -5,4 +5,12 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ReviewGetResponse {}
+export interface ReviewGetResponse {
+  review_id: string;
+  assignment_id: string;
+  reviewer_employee_id: string;
+  status: "assigned" | "in_progress" | "submitted" | "staled";
+  verdict: "pass" | "needs_changes" | "failed";
+  created_at: string;
+  updated_at: string;
+}

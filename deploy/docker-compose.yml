@@ -1,5 +1,5 @@
 # =============================================================================
-# iBreeze 开发环境 Docker Compose
+# iBreeze Docker Compose（开发环境默认，生产叠加 docker-compose.prod.yml）
 # =============================================================================
 # 使用方式：
 #   创建 .env 文件并填写所有必填变量：
@@ -7,16 +7,19 @@
 #     MINIO_ROOT_USER=minioadmin
 #     MINIO_ROOT_PASSWORD=your_minio_password_here
 #   然后运行：
-#     docker compose -f deploy/docker-compose.yml up
+#     docker compose -f deploy/docker-compose.yml up -d
 #
-# 生产部署安全要求（当前文件仅供开发使用）：
+# 生产部署：
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d
+#
+# 生产安全要求：
 #   - 所有镜像使用摘要引用（image@sha256:...）而非标签
 #   - 使用只读根文件系统，配合 tmpfs 用于临时写入
 #   - 删除所有非必要 Linux capabilities（cap_drop: ALL）
 #   - 所有网络通信启用 TLS
 #   - 实施自动化数据库备份并加密存储
 #   - 使用加密卷或文件系统级加密
-#   - 所有服务设置资源限制（memory、CPU）
+#   - 所有服务设置资源限制（memory、CPU）— 参见 docker-compose.prod.yml
 #   - 使用密钥管理服务或外部 vault 管理凭证
 # =============================================================================
 

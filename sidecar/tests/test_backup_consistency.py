@@ -13,6 +13,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+import aiosqlite
 import pytest
 
 from ibreeze.backup.service import create_backup
@@ -75,10 +76,12 @@ class TestWriteQueueBarrier:
     """BACK-007: WriteQueue barrier pauses writes during snapshot."""
 
     async def test_barrier_waits_for_pending_writes(self, db_with_data, tmp_dir):
-        wq = WriteQueue(capacity=32)
-        backup_dir = tmp_dir / "backups"
-        result = await create_backup(db_with_data, backup_dir, write_queue=wq)
-        assert result["backup_id"] is not None
+        async with aiosqlite.connect(str(db_with_data)) as conn:
+            wq = WriteQueue(connection=conn, capacity=32)
+            backup_dir = tmp_dir / "backups"
+            result = await create_backup(db_with_data, backup_dir, write_queue=wq)
+            assert result["backup_id"] is not None
+            await wq.stop()
 
     async def test_barrier_without_queue_still_works(self, db_with_data, tmp_dir):
         result = await create_backup(db_with_data, tmp_dir / "backups", write_queue=None)

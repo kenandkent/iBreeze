@@ -5,4 +5,10 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ArtifactGetResponse {}
+export interface ArtifactGetResponse {
+  artifact_id: string;
+  version: number;
+  sha256: string;
+  status: "active" | "superseded" | "verified";
+  created_at: string;
+}

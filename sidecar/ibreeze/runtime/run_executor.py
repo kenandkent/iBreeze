@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 from typing import Any
+from uuid import UUID
 
 from ibreeze.runtime.adapters.claude_code import ClaudeCodeAdapter
 from ibreeze.runtime.adapters.codex import CodexAdapter
@@ -243,7 +244,7 @@ async def _feedback_to_tasks(
     Run exit codes only end runs, not business tasks.
     Task completion is gated by actual evidence through CompletionGate.
     """
-    from ibreeze.orchestration.completion_gate import CompletionGate
+    from ibreeze.orchestration.completion_gate import CompanyGate, EmployeeGate
 
     now = _now()
 
@@ -257,13 +258,12 @@ async def _feedback_to_tasks(
     run = dict(run_row)
 
     if run.get("employee_task_id"):
-        gate = CompletionGate()
-        result = await gate.evaluate_employee_task(db, run["employee_task_id"], company_id)
-        if result.allowed:
+        gate = EmployeeGate()
+        blockers = await gate.blockers(db, UUID(run["employee_task_id"]), UUID(company_id))
+        if not blockers:
             new_emp_status = "submitted"
         else:
-            codes = {b.code for b in result.blockers}
-            if "MISSING_ARTIFACT" in codes or "MISSING_CONTRIBUTORS" in codes:
+            if "missing_required_artifact" in blockers or "employee_not_contributor" in blockers:
                 new_emp_status = "needs_rework"
             else:
                 new_emp_status = "needs_review"
@@ -335,16 +335,16 @@ async def _feedback_to_tasks(
             if any_dept_failed and any_dept_failed["cnt"] > 0:
                 ct_status = "failed"
             else:
-                company_gate = CompletionGate()
-                gate_result = await company_gate.evaluate_company_task(
-                    db, run["company_task_id"], company_id,
+                company_gate = CompanyGate()
+                blockers = await company_gate.blockers(
+                    db, UUID(run["company_task_id"]), UUID(company_id),
                 )
-                ct_status = "reviewing" if gate_result.allowed else "needs_rework"
-                if not gate_result.allowed:
+                ct_status = "reviewing" if not blockers else "needs_rework"
+                if blockers:
                     logger.warning(
                         "Company gate blocked for task %s: %s",
                         run["company_task_id"],
-                        [b.code for b in gate_result.blockers],
+                        list(blockers),
                     )
             await db.execute(
                 """UPDATE company_tasks

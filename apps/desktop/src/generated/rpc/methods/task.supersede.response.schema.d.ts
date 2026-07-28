@@ -5,4 +5,6 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface TaskSupersedeResponse {}
+export interface TaskSupersedeResponse {
+  new_task_id: string;
+}

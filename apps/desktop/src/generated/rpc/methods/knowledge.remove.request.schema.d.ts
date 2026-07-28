@@ -5,4 +5,10 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface KnowledgeRemoveRequest {}
+export type KnowledgeRemoveRequest = {
+  company_id: string;
+  knowledge_id?: string;
+  source_id?: string;
+} & {
+  [k: string]: any | undefined;
+};

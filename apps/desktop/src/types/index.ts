@@ -283,7 +283,7 @@ export interface ReviewReport {
   company_id: string;
   artifact_id: string;
   reviewer_employee_id: string;
-  verdict: 'approved' | 'rejected' | 'needs_changes';
+  verdict: 'pass' | 'needs_changes' | 'failed';
   summary: string;
   created_at: string;
 }
@@ -376,6 +376,18 @@ export interface RunEvent {
   created_at: string;
 }
 
+// Run types
+export interface Run {
+  id: string;
+  company_id: string;
+  task_id: string;
+  status: 'queued' | 'leased' | 'running' | 'completed' | 'failed' | 'cancelled';
+  employee_id?: string;
+  started_at?: string;
+  ended_at?: string;
+  created_at: string;
+}
+
 // Approval types
 export interface HumanApproval {
   id: string;
@@ -383,7 +395,7 @@ export interface HumanApproval {
   run_id: string;
   tool_name: string;
   parameters_json: string;
-  status: 'pending' | 'approved' | 'denied' | 'expired';
+  status: 'pending' | 'allow' | 'deny' | 'expired';
   requested_at: string;
   resolved_at?: string;
   created_at: string;

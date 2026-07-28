@@ -21,9 +21,16 @@ use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::broker::credential::CredentialStore;
+use crate::broker::dns_policy::DnsPolicy;
+use crate::broker::http::HttpBroker;
+use crate::broker::http_stream::HttpStreamManager;
+use crate::broker::lease::CredentialLeaseManager;
 use crate::error::AppError;
+use crate::ipc::dispatcher::ReverseMethodTable;
 use crate::keyring::{SecureKeyring, SessionBundle};
 use crate::rpc::api_client::ApiClient;
+use crate::rpc::reverse::register_reverse_handlers;
 use crate::security::grant_store::GrantStore;
 use crate::sidecar::{SidecarProfile, SidecarSupervisor};
 use crate::store::{profile_directory_id, LocalStore, ProfileMeta};
@@ -51,6 +58,9 @@ pub struct AppState {
     pub sidecar_executable: PathBuf,
     pub app_version: String,
     pub development_mode: bool,
+    pub http_broker: Arc<HttpBroker>,
+    pub credential_store: Arc<CredentialStore>,
+    pub reverse_table: ReverseMethodTable,
 }
 
 impl AppState {
@@ -61,6 +71,18 @@ impl AppState {
         app_version: String,
         development_mode: bool,
     ) -> Self {
+        let credential_store = Arc::new(CredentialStore::new());
+        let dns_policy = Arc::new(DnsPolicy::new());
+        let stream_manager = Arc::new(HttpStreamManager::new());
+        let lease_manager = Arc::new(CredentialLeaseManager::new(300));
+        let http_broker = Arc::new(HttpBroker::new(
+            credential_store.clone(),
+            dns_policy,
+            stream_manager,
+            lease_manager,
+        ));
+        let mut reverse_table = ReverseMethodTable::new();
+        register_reverse_handlers(&mut reverse_table, http_broker.clone(), credential_store.clone());
         Self {
             backend: RwLock::new(None),
             auth: RwLock::new(AuthState::default()),
@@ -72,6 +94,9 @@ impl AppState {
             sidecar_executable,
             app_version,
             development_mode,
+            http_broker,
+            credential_store,
+            reverse_table,
         }
     }
 
