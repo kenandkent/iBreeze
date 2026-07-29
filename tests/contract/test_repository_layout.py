@@ -59,14 +59,6 @@ def test_backend_api_main():
     assert (ROOT / "apps" / "backend-api" / "src" / "ibreeze_backend" / "main.py").exists()
 
 
-def test_e2e_package_json():
-    assert (ROOT / "tests" / "e2e" / "package.json").exists()
-
-
-def test_e2e_playwright_config():
-    assert (ROOT / "tests" / "e2e" / "playwright.config.ts").exists()
-
-
 def test_gitignore():
     assert (ROOT / ".gitignore").exists()
 

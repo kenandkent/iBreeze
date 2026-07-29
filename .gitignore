@@ -61,7 +61,7 @@ temp/
 *.tmp
 # CI workflow files are tracked
 tsconfig.tsbuildinfo
-tests/e2e/test-results/
+# tests/e2e/test-results/ removed along with Playwright e2e suite
 
 # Prevent cross-contamination in generated directories
 # Desktop (TypeScript only: .d.ts)

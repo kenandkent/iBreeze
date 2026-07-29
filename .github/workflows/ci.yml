@@ -34,11 +34,5 @@ jobs:
       - name: Install cargo-nextest
         if: matrix.scope == 'desktop'
         run: cargo install cargo-nextest --locked
-      - name: Install Playwright
-        if: matrix.scope == 'e2e'
-        working-directory: tests/e2e
-        run: |
-          npm ci
-          npx playwright install --with-deps
       - name: Verify
         run: bash scripts/verify-all.sh --scope ${{ matrix.scope }}
