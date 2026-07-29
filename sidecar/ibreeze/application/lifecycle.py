@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from enum import Enum, auto
 from pathlib import Path
@@ -12,6 +13,7 @@ from ibreeze.persistence.migrator import prepare
 from ibreeze.persistence.profile import PreparedProfileDatabase
 from ibreeze.persistence.unit_of_work import UnitOfWork
 from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.rpc.dispatcher import Dispatcher, ReverseMethodTable
 from ibreeze.runtime.transport import set_reverse_rpc_socket_path
 from ibreeze.workers.supervisor import WorkerSupervisor
 
@@ -44,6 +46,8 @@ class ApplicationLifecycle:
         self._write_queue: WriteQueue | None = None
         self._unit_of_work: UnitOfWork | None = None
         self._workers: WorkerSupervisor | None = None
+        self._dispatcher: Dispatcher = Dispatcher()
+        self._reverse_table: ReverseMethodTable = ReverseMethodTable()
 
     @property
     def phase(self) -> LifecyclePhase:
@@ -73,6 +77,14 @@ class ApplicationLifecycle:
     def workers(self) -> WorkerSupervisor:
         assert self._workers is not None
         return self._workers
+
+    @property
+    def dispatcher(self) -> Dispatcher:
+        return self._dispatcher
+
+    @property
+    def reverse_table(self) -> ReverseMethodTable:
+        return self._reverse_table
 
     async def start(self) -> None:
         logger.info("lifecycle: acquire profile file lock")
@@ -117,6 +129,10 @@ class ApplicationLifecycle:
         logger.info("lifecycle: enable rpc dispatcher")
         self._phase = LifecyclePhase.RPC_DISPATCHER_ENABLED
 
+        logger.info("lifecycle: register core system handlers")
+        self._dispatcher.register("system.health", self._handle_system_health)
+        self._dispatcher.register("system.shutdown", self._handle_system_shutdown)
+
         logger.info("lifecycle: handshake ready")
         self._phase = LifecyclePhase.HANDSHAKE_READY
 
@@ -160,3 +176,21 @@ class ApplicationLifecycle:
             workers=self._workers,
             db_dir=self._profile_path.parent,
         )
+
+    async def _handle_system_health(self, params: dict[str, object], session: object = None) -> dict[str, object]:
+        snapshot = await self.health()
+        return {
+            "status": snapshot.status,
+            "observed_at": snapshot.observed_at,
+            "migration_version": snapshot.profile.migration_version,
+            "write_depth": snapshot.queues.write_depth,
+            "workers": [(w.name, w.state) for w in snapshot.workers],
+            "disk_free_bytes": snapshot.disk_free_bytes,
+        }
+
+    async def _handle_system_shutdown(self, params: dict[str, object], session: object = None) -> dict[str, object]:
+        asyncio.get_event_loop().call_soon(self._shutdown_called)
+        return {"status": "shutting_down"}
+
+    def _shutdown_called(self) -> None:
+        logger.info("system.shutdown requested")

@@ -95,7 +95,7 @@ run_sidecar() {
     echo "--- sidecar typecheck ---"
     uv run --directory sidecar mypy ibreeze
     echo "--- sidecar test ---"
-    uv run --directory sidecar pytest tests/ -v --cov=ibreeze --cov-branch --cov-fail-under=60
+    uv run --directory sidecar pytest tests/ -v --cov=ibreeze --cov-branch --cov-fail-under=100
 }
 
 run_backend() {
@@ -104,7 +104,7 @@ run_backend() {
     echo "--- backend-api typecheck ---"
     uv run --directory apps/backend-api mypy src
     echo "--- backend-api test ---"
-    uv run --directory apps/backend-api pytest tests/ -v --cov=ibreeze_backend --cov-branch --cov-fail-under=60
+    uv run --directory apps/backend-api pytest tests/ -v --cov=ibreeze_backend --cov-branch --cov-fail-under=100
 }
 
 run_e2e() {

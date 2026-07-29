@@ -79,6 +79,7 @@ logger = get_logger("ibreeze.rpc_server")
 
 MAX_FRAME_BYTES = 16 * 1024 * 1024
 PROTOCOL_VERSION = 1
+# DEPRECATED: REPLACE with generated registry method metadata
 READ_METHODS = frozenset(
     {
         "company.get",
@@ -126,7 +127,9 @@ Handler = Callable[[dict[str, Any]], Awaitable[object]]
 
 
 class _NestedTransactionConnection:
-    """Suppress domain-service transaction boundaries inside an RPC command."""
+    """DEPRECATED: compatibility shim for old service self-managed transactions.
+    Remove once all services are migrated to UoW/CommandBus pattern.
+    """
 
     def __init__(self, connection: Any) -> None:
         self._connection = connection
@@ -207,6 +210,8 @@ class RPCServer:
         self._cursor_key = self._load_cursor_key()
         self._transaction_connection: _NestedTransactionConnection | None = None
         self._write_queue = write_queue
+        # DEPRECATED: self.methods should come from Registry/generated Dispatcher
+        # See sidecar/ibreeze/rpc/bridge.py for the new registration path
         self.methods: dict[str, Handler] = {
             "company.create": self._company_create,
             "company.get": self._company_get,

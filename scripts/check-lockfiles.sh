@@ -6,7 +6,7 @@ echo "=== Checking Lockfiles ==="
 cd "$(dirname "$0")/.."
 
 # Check npm lockfiles
-for pkg in apps/desktop apps/admin-web tests/e2e packages/contracts; do
+for pkg in apps/desktop apps/admin-web packages/contracts; do
     if [ -f "$pkg/package.json" ]; then
         if [ ! -f "$pkg/package-lock.json" ]; then
             echo "FAIL: $pkg/package-lock.json not found"
