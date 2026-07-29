@@ -110,6 +110,8 @@ run_backend() {
 run_e2e() {
     echo "--- e2e install ---"
     npm --prefix tests/e2e ci
+    echo "--- admin-web install (e2e dependency) ---"
+    npm --prefix apps/admin-web ci
     echo "--- e2e playwright browsers ---"
     npx playwright install --with-deps 2>&1 || echo "Playwright binary install skipped"
     echo "--- e2e tests ---"

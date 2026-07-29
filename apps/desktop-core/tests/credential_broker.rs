@@ -111,8 +111,8 @@ async fn ssrf_guard_enforces_allowed_domains() {
 #[tokio::test]
 async fn ssrf_guard_allows_subdomain_of_allowed_domain() {
     let result = ibreeze_desktop_core::security::ssrf_guard::validate_outbound_url(
-        "https://sub.api.example.com/data",
-        &["api.example.com".to_owned()],
+        "https://www.example.com/data",
+        &["example.com".to_owned()],
     )
     .await;
     assert!(result.is_ok());
@@ -134,12 +134,12 @@ async fn egress_lease_url_validation() {
     let broker = ibreeze_desktop_core::security::egress::EgressBroker::new();
     let run_id = Uuid::new_v4();
     broker
-        .create_lease(run_id, vec!["api.example.com".to_owned()])
+        .create_lease(run_id, vec!["example.com".to_owned()])
         .await
         .expect("create lease");
 
     let result = broker
-        .validate_url("https://api.example.com/v1/data", run_id)
+        .validate_url("https://www.example.com/v1/data", run_id)
         .await;
     assert!(result.is_ok(), "allowed domain should pass: {:?}", result);
 
