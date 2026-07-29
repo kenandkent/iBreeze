@@ -25,6 +25,6 @@ jobs:
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Install Playwright
-        run: npx playwright install chromium --with-deps 2>&1 || echo "Playwright install skipped or failed"
+        run: npx playwright install --with-deps 2>&1 || echo "Playwright install skipped or failed"
       - name: Run e2e verification
         run: bash scripts/verify-all.sh --scope e2e

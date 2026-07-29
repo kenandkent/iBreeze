@@ -109,7 +109,7 @@ run_e2e() {
     echo "--- e2e install ---"
     npm --prefix tests/e2e ci
     echo "--- e2e playwright browsers ---"
-    npx playwright install chromium --with-deps 2>&1 || echo "Playwright binary install skipped"
+    npx playwright install --with-deps 2>&1 || echo "Playwright binary install skipped"
     echo "--- e2e tests ---"
     if ls tests/e2e/*.spec.ts 2>/dev/null | head -1 >/dev/null 2>&1; then
         npm --prefix tests/e2e run test
