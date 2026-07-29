@@ -193,7 +193,7 @@ impl ConnectHandler {
                 .to_ascii_lowercase()
                 .starts_with("proxy-authorization:")
             {
-                if let Some(value) = line.splitn(2, ':').nth(1) {
+                if let Some(value) = line.split_once(':').map(|x| x.1) {
                     let value = value.trim();
                     if let Some(basic) = value.strip_prefix("Basic ") {
                         let decoded = base64::engine::general_purpose::STANDARD

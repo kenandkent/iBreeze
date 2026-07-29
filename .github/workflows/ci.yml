@@ -22,7 +22,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install uv
-        if: matrix.scope != 'contracts'
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Install system dependencies
         if: matrix.scope == 'desktop'
@@ -37,6 +36,9 @@ jobs:
         run: cargo install cargo-nextest --locked
       - name: Install Playwright
         if: matrix.scope == 'e2e'
-        run: npx playwright install --with-deps 2>&1 || true
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps
       - name: Verify
         run: bash scripts/verify-all.sh --scope ${{ matrix.scope }}

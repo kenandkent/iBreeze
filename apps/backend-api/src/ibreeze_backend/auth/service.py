@@ -11,7 +11,7 @@ from typing import Any
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from passlib.hash import argon2  # type: ignore[import-untyped]
+from passlib.hash import argon2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,7 @@ RESTRICTED_ACCESS_TOKEN_SECONDS = 5 * 60
 SESSION_SECONDS = 30 * 24 * 60 * 60
 MAX_ACTIVE_FAMILIES = 20
 
-password_hasher = argon2.using(
+password_hasher = argon2.using(  # type: ignore[no-untyped-call]
     type="ID",
     memory_cost=65536,
     rounds=3,

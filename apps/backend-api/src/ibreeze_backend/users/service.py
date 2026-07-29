@@ -5,7 +5,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from passlib.hash import argon2  # type: ignore[import-untyped]
+from passlib.hash import argon2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from ibreeze_backend.observability.logging_config import get_logger
 
 logger = get_logger("ibreeze.users.service")
 
-password_hasher = argon2.using(
+password_hasher = argon2.using(  # type: ignore[no-untyped-call]
     type="ID",
     memory_cost=65536,
     rounds=3,

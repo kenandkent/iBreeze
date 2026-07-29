@@ -61,4 +61,7 @@ export const queryKeys = {
 
   reviewIssueList: (ctx: QueryCtx, companyId: string, artifactId: string) =>
     [...queryKeys.all(ctx), companyId, 'reviewIssues', artifactId] as const,
+
+  orchestrationList: (ctx: QueryCtx) =>
+    [...queryKeys.all(ctx), 'orchestrations'] as const,
 };

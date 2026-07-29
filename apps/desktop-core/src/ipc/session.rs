@@ -208,7 +208,7 @@ mod tests {
     fn cancel_sets_flag() {
         let (tx, _rx) = mpsc::unbounded_channel();
         let mux = Arc::new(Mutex::new(Multiplexer::new(tx)));
-        let (cancel_tx, _) = tokio::sync::watch::channel(false);
+        let (cancel_tx, _cancel_rx) = tokio::sync::watch::channel(false);
         let session = IpcSession::new(mux, cancel_tx);
         session.cancel();
         assert!(session.is_cancelled());

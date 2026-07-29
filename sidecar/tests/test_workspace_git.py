@@ -22,7 +22,7 @@ from ibreeze.workspace.git_ops import (
 
 async def _init_git_repo(path: Path) -> None:
     """Initialize a git repo with an initial commit."""
-    await git_command("init", cwd=str(path))
+    await git_command("-c", "init.defaultBranch=main", "init", cwd=str(path))
     await git_command("config", "user.email", "test@test.com", cwd=str(path))
     await git_command("config", "user.name", "Test", cwd=str(path))
     (path / "README.md").write_text("initial", encoding="utf-8")

@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+from uuid import UUID
+
+import pytest
+
+from ibreeze.workers.runtime import RuntimeWorker
+
+
+class TestRuntimeWorkerInit:
+    def test_name(self):
+        w = RuntimeWorker()
+        assert w.name == "RuntimeWorker"
+
+    def test_health_initial(self):
+        w = RuntimeWorker()
+        h = w.health()
+        assert h.name == "RuntimeWorker"
+        assert h.state == "stopped"
+
+    def test_write_queue_default_none(self):
+        w = RuntimeWorker()
+        assert w._write_queue is None
+
+
+class TestRuntimeWorkerWorkNoWriteQueue:
+    async def test_sleeps_when_no_wq(self):
+        w = RuntimeWorker()
+        start = datetime.now(UTC)
+        await w.work()
+        elapsed = (datetime.now(UTC) - start).total_seconds()
+        assert elapsed >= 0.9
+
+
+class TestRuntimeWorkerWorkSuccess:
+    @patch("ibreeze.workers.runtime.logger")
+    async def test_submits_tick_task(self, mock_logger):
+        wq = AsyncMock()
+        wq.submit = AsyncMock()
+        w = RuntimeWorker(write_queue=wq)
+        await w.work()
+
+        wq.submit.assert_awaited_once()
+        args, _ = wq.submit.await_args
+        assert args[0] == "runtime.tick"
+        assert isinstance(args[1], UUID)
+        assert args[1].int == 0
+
+    @patch("ibreeze.workers.runtime.logger")
+    async def test_inner_tick_is_callable_and_does_nothing(self, mock_logger):
+        conn = AsyncMock()
+
+        captured_fn = None
+
+        async def submit_side_effect(*args, **_kwargs):
+            nonlocal captured_fn
+            captured_fn = args[3]
+            return await captured_fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = RuntimeWorker(write_queue=wq)
+        await w.work()
+
+        # _tick should be callable and accept a connection
+        assert captured_fn is not None
+        result = await captured_fn(conn)
+        assert result is None
+
+    @patch("ibreeze.workers.runtime.logger")
+    async def test_deadline_is_about_30_seconds(self, mock_logger):
+        wq = AsyncMock()
+        wq.submit = AsyncMock()
+        w = RuntimeWorker(write_queue=wq)
+        await w.work()
+
+        args, _ = wq.submit.await_args
+        deadline = args[2]
+        now = datetime.now(UTC)
+        assert deadline > now
+        assert (deadline - now).total_seconds() > 25
+        assert (deadline - now).total_seconds() < 35
+
+
+class TestRuntimeWorkerWorkException:
+    @patch("ibreeze.workers.runtime.logger")
+    async def test_logs_exception_on_failure(self, mock_logger):
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=RuntimeError("db down"))
+        w = RuntimeWorker(write_queue=wq)
+        await w.work()
+        mock_logger.exception.assert_called_once_with(
+            "RuntimeWorker tick failed"
+        )
+
+    @patch("ibreeze.workers.runtime.logger")
+    async def test_does_not_re_raise(self, mock_logger):
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=RuntimeError("db down"))
+        w = RuntimeWorker(write_queue=wq)
+        try:
+            await w.work()
+        except Exception:
+            pytest.fail("work() should not re-raise exceptions")

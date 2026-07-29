@@ -52,10 +52,12 @@ pub struct Multiplexer {
     generation: u64,
     pending: HashMap<RpcId, PendingRequest>,
     streams: HashMap<Uuid, ActiveStream>,
+    #[allow(clippy::type_complexity)]
     writer: mpsc::UnboundedSender<(Vec<u8>, oneshot::Sender<Result<(), IpcError>>)>,
 }
 
 impl Multiplexer {
+    #[allow(clippy::type_complexity)]
     pub fn new(
         writer: mpsc::UnboundedSender<(Vec<u8>, oneshot::Sender<Result<(), IpcError>>)>,
     ) -> Self {
@@ -131,7 +133,7 @@ impl Multiplexer {
         let stream = self
             .streams
             .get_mut(request_id)
-            .ok_or_else(|| IpcError::ConnectionLost)?;
+            .ok_or(IpcError::ConnectionLost)?;
         stream
             .stream_tx
             .try_send(value)

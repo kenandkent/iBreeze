@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import aiosqlite
 
@@ -26,6 +27,7 @@ class ReadPool:
             await conn.close()
         self._connections.clear()
 
+    @asynccontextmanager
     async def acquire(self) -> AsyncIterator[aiosqlite.Connection]:
         conn = await self._pool.get()
         try:

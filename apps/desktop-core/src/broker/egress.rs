@@ -29,7 +29,7 @@ impl EgressLease {
     pub fn proxy_url(&self) -> Zeroizing<String> {
         Zeroizing::new(format!(
             "http://ibreeze:{}@127.0.0.1:{}",
-            &*self.token_b64, self.port
+            *self.token_b64, self.port
         ))
     }
 }
@@ -61,7 +61,7 @@ impl EgressBroker {
 
         let mut token_bytes = Zeroizing::new([0u8; 32]);
         rand::thread_rng().fill_bytes(&mut *token_bytes);
-        let token_b64 = Zeroizing::new(URL_SAFE_NO_PAD.encode(&*token_bytes));
+        let token_b64 = Zeroizing::new(URL_SAFE_NO_PAD.encode(*token_bytes));
 
         let (cancel_tx, _) = oneshot::channel::<()>();
 
@@ -177,7 +177,7 @@ mod tests {
         let lease = broker.create_lease(run_id, domains).await.unwrap();
         assert_eq!(lease.run_id, run_id);
         assert!(lease.port > 0);
-        assert_eq!(lease.token_b64.len(), 44);
+        assert_eq!(lease.token_b64.len(), 43);
         assert!(broker.active_count().await == 1);
     }
 

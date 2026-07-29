@@ -48,6 +48,7 @@ impl HttpBroker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
         &self,
         profile_directory_id: &str,
@@ -103,7 +104,7 @@ impl HttpBroker {
             .await
             {
                 error!(%request_id, error = %e, "credential.http.request failed");
-                let _ = stream_manager.push_event(
+                stream_manager.push_event(
                     request_id,
                     BrokerEventKind::Failed,
                     serde_json::json!({"error": e.to_string()}),
@@ -115,6 +116,7 @@ impl HttpBroker {
         Ok((request_id, cancel_tx))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_request(
         client: &Client,
         dns_policy: &DnsPolicy,
@@ -137,7 +139,7 @@ impl HttpBroker {
         dns_policy.resolve_and_validate(&host).await?;
 
         let auth_value = match credential.auth_type {
-            CredentialAuthType::Bearer => format!("Bearer {}", &*credential.secret),
+            CredentialAuthType::Bearer => format!("Bearer {}", *credential.secret),
             CredentialAuthType::XApiKey => credential.secret.to_string(),
         };
 
@@ -224,14 +226,12 @@ impl HttpBroker {
             .headers()
             .get(reqwest::header::TRANSFER_ENCODING)
             .and_then(|v| v.to_str().ok())
-            .map_or(false, |v| v.contains("chunked"))
+            .is_some_and(|v| v.contains("chunked"))
             || response
                 .headers()
                 .get(reqwest::header::CONTENT_TYPE)
                 .and_then(|v| v.to_str().ok())
-                .map_or(false, |v| {
-                    v.contains("text/event-stream") || v.contains("text/plain")
-                });
+                .is_some_and(|v| v.contains("text/event-stream") || v.contains("text/plain"));
 
         if is_streaming {
             let mut stream = response.bytes_stream();

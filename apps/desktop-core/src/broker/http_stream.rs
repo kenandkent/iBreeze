@@ -165,7 +165,7 @@ impl HttpStreamManager {
 
     pub async fn is_completed(&self, request_id: Uuid) -> bool {
         let streams = self.streams.read().await;
-        streams.get(&request_id).map_or(true, |s| s.completed)
+        streams.get(&request_id).is_none_or(|s| s.completed)
     }
 
     pub async fn drop_stream(&self, request_id: Uuid) {

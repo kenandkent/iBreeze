@@ -124,13 +124,20 @@ pub async fn handle_frame(
                 return if is_notification {
                     Ok(None)
                 } else {
-                    Err(IpcError::DeadlineExceeded)
+                    Ok(Some(serde_json::json!({
+                        "jsonrpc": jsonrpc,
+                        "id": id,
+                        "error": {
+                            "code": -32000,
+                            "message": "IPC_DEADLINE_EXCEEDED",
+                        },
+                    })))
                 };
             }
         }
     }
 
-    let is_reverse = id.as_deref().map_or(false, |id| id.starts_with("sidecar:"));
+    let is_reverse = id.as_deref().is_some_and(|id| id.starts_with("sidecar:"));
 
     let result = if is_reverse {
         reverse_table.dispatch(method, params).await

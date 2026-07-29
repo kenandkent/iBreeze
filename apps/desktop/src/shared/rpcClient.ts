@@ -24,6 +24,7 @@ const READ_OPERATIONS = new Set([
   'departmentTask.get',
   'departmentTask.getReport',
   'departmentTask.list',
+  'event.replay',
   'employee.get',
   'employee.list',
   'employeeTask.get',

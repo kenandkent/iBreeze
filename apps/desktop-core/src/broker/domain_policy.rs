@@ -86,7 +86,7 @@ pub fn matches_domain(host: &str, pattern: &str) -> bool {
         let dot_pos = host.find('.');
         match dot_pos {
             Some(pos) => {
-                let suffix = &host[pos..];
+                let suffix = &host[pos + 1..];
                 suffix == wildcard_suffix
                     && host.len() > suffix.len() + 1
                     && !host[..pos].contains('.')
