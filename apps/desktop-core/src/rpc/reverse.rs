@@ -164,7 +164,9 @@ impl ReverseBroker {
             let _ = cancel_tx.send(());
             Ok(serde_json::json!({"status": "cancelled"}))
         } else {
-            Err(AppError::NotFound("Request not found or already completed".to_owned()))
+            Err(AppError::NotFound(
+                "Request not found or already completed".to_owned(),
+            ))
         }
     }
 
@@ -197,25 +199,31 @@ pub fn register_reverse_handlers(
 ) {
     let broker = Arc::new(ReverseBroker::new(http_broker, credential_store));
     let broker_clone = broker.clone();
-    table.register("credential.http.start", Arc::new(move |params| {
-        let broker = broker_clone.clone();
-        Box::pin(async move {
-            let request: CredentialHttpStart =
-                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
-            let result = broker.handle_credential_http_start(request).await;
-            result.map_err(|e| IpcError::Internal(e.to_string()))
-        })
-    }));
+    table.register(
+        "credential.http.start",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: CredentialHttpStart = serde_json::from_value(params)
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                let result = broker.handle_credential_http_start(request).await;
+                result.map_err(|e| IpcError::Internal(e.to_string()))
+            })
+        }),
+    );
     let broker_clone = broker.clone();
-    table.register("credential.http.cancel", Arc::new(move |params| {
-        let broker = broker_clone.clone();
-        Box::pin(async move {
-            let request: CredentialHttpCancel =
-                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
-            let result = broker.handle_credential_http_cancel(request).await;
-            result.map_err(|e| IpcError::Internal(e.to_string()))
-        })
-    }));
+    table.register(
+        "credential.http.cancel",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: CredentialHttpCancel = serde_json::from_value(params)
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                let result = broker.handle_credential_http_cancel(request).await;
+                result.map_err(|e| IpcError::Internal(e.to_string()))
+            })
+        }),
+    );
     // probe handler — needs profile_directory_id; stored in credential_ref field for lookup
     table.register("credential.probe", Arc::new(move |params| {
         Box::pin(async move {

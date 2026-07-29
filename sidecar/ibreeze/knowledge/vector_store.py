@@ -22,7 +22,7 @@ class VectorStore:
         if self._table is not None:
             return self._table
         try:
-            import lancedb
+            import lancedb  # type: ignore[import-untyped]
 
             db = lancedb.connect(self._db_path)
             try:
@@ -55,7 +55,7 @@ class VectorStore:
         if table is None:
             return False
         try:
-            import pyarrow as pa
+            import pyarrow as pa  # type: ignore[import-untyped]
 
             safe_id = _escape_sql_literal(id)
 

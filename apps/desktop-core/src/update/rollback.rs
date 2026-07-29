@@ -157,7 +157,10 @@ impl UpdateStore {
 
             let path_str = line.trim_end_matches('/');
             let path = std::path::Path::new(path_str);
-            if path.components().any(|c| c == std::path::Component::ParentDir) {
+            if path
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+            {
                 return Err(AppError::Io("UPDATE_PATH_TRAVERSAL_DETECTED".to_owned()));
             }
 
@@ -176,8 +179,8 @@ impl UpdateStore {
     }
 
     fn validate_entry(canonical_base: &Path, path: &Path) -> Result<(), AppError> {
-        let metadata = std::fs::symlink_metadata(path)
-            .map_err(|e| AppError::Io(format!("metadata: {e}")))?;
+        let metadata =
+            std::fs::symlink_metadata(path).map_err(|e| AppError::Io(format!("metadata: {e}")))?;
 
         if metadata.file_type().is_symlink() {
             return Err(AppError::Io("UPDATE_SYMLINK_REJECTED".to_owned()));
@@ -200,7 +203,7 @@ impl UpdateStore {
             }
 
             for entry in
-                std::fs::read_dir(path).map_err(|e| AppError::Io(format!("read_dir: {e}")))? 
+                std::fs::read_dir(path).map_err(|e| AppError::Io(format!("read_dir: {e}")))?
             {
                 let entry = entry.map_err(|e| AppError::Io(e.to_string()))?;
                 Self::validate_entry(canonical_base, &entry.path())?;
@@ -339,8 +342,7 @@ impl UpdateStore {
             let obs = HealthObservation {
                 started_at: chrono::Utc::now().to_rfc3339(),
             };
-            let bytes =
-                serde_json::to_vec(&obs).map_err(|e| AppError::Internal(e.to_string()))?;
+            let bytes = serde_json::to_vec(&obs).map_err(|e| AppError::Internal(e.to_string()))?;
             std::fs::write(&obs_path, &bytes)
                 .map_err(|e| AppError::Storage(format!("write health observation: {e}")))?;
             info!("UPDATE_HEALTH_OBSERVATION_STARTED");

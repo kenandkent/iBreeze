@@ -25,7 +25,7 @@ jobs:
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Contracts lint
-        run: npm --prefix packages/contracts run lint
+        run: npm --prefix packages/contracts install && npm --prefix packages/contracts run lint
       - name: Rust check
         run: |
           cargo fmt --manifest-path apps/desktop-core/Cargo.toml --all -- --check

@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-
-
 use keyring::Entry;
 
 use crate::error::AppError;
@@ -52,18 +50,15 @@ impl CredentialStore {
         let account = format!("{profile_directory_id}/provider/{credential_ref}");
         let entry = Entry::new(KEYCHAIN_SERVICE, &account)
             .map_err(|e| AppError::Storage(format!("Keychain entry failed: {e}")))?;
-        let serialized = entry
-            .get_password()
-            .map_err(|e| match e {
-                keyring::Error::NoEntry => {
-                    AppError::NotFound(format!("Credential not found: {credential_ref}"))
-                }
-                _ => AppError::Storage(format!("Keychain read failed: {e}")),
-            })?;
-        let serialized = Zeroizing::new(serialized);
-        let credential: KeychainCredential = serde_json::from_str(&serialized).map_err(|_| {
-            AppError::Security("KEYCHAIN_CREDENTIAL_CORRUPT".to_owned())
+        let serialized = entry.get_password().map_err(|e| match e {
+            keyring::Error::NoEntry => {
+                AppError::NotFound(format!("Credential not found: {credential_ref}"))
+            }
+            _ => AppError::Storage(format!("Keychain read failed: {e}")),
         })?;
+        let serialized = Zeroizing::new(serialized);
+        let credential: KeychainCredential = serde_json::from_str(&serialized)
+            .map_err(|_| AppError::Security("KEYCHAIN_CREDENTIAL_CORRUPT".to_owned()))?;
         if credential.schema_version != 1 {
             return Err(AppError::Security(format!(
                 "Unsupported credential schema version: {}",

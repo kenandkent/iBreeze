@@ -9,8 +9,7 @@ use serde_json::Value;
 use super::multiplexer::IpcError;
 use super::session::IpcSession;
 
-pub type HandlerFn =
-    Arc<dyn Fn(Value, IpcSession) -> Result<Value, IpcError> + Send + Sync>;
+pub type HandlerFn = Arc<dyn Fn(Value, IpcSession) -> Result<Value, IpcError> + Send + Sync>;
 
 pub struct GeneratedDispatcher {
     handlers: HashMap<String, HandlerFn>,
@@ -27,7 +26,12 @@ impl GeneratedDispatcher {
         self.handlers.insert(method.to_owned(), handler);
     }
 
-    pub fn dispatch(&self, method: &str, params: Value, session: IpcSession) -> Result<Value, IpcError> {
+    pub fn dispatch(
+        &self,
+        method: &str,
+        params: Value,
+        session: IpcSession,
+    ) -> Result<Value, IpcError> {
         match self.handlers.get(method) {
             Some(handler) => handler(params, session),
             None => Err(IpcError::MethodNotAllowed),
@@ -53,8 +57,9 @@ pub struct ReverseMethodTable {
     methods: HashMap<String, ReverseHandler>,
 }
 
-type ReverseHandler =
-    Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, IpcError>> + Send>> + Send + Sync>;
+type ReverseHandler = Arc<
+    dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, IpcError>> + Send>> + Send + Sync,
+>;
 
 impl ReverseMethodTable {
     pub fn new() -> Self {
@@ -103,7 +108,10 @@ pub async fn handle_frame(
 
     let params = value.get("params").cloned().unwrap_or(Value::Null);
     let is_notification = value.get("id").is_none();
-    let id = value.get("id").and_then(|v| v.as_str()).map(|s| s.to_owned());
+    let id = value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_owned());
 
     let deadline_str = value
         .get("meta")
@@ -158,7 +166,7 @@ pub async fn handle_frame(
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use tokio::sync::{Mutex, mpsc};
+    use tokio::sync::{mpsc, Mutex};
     use uuid::Uuid;
 
     use super::super::multiplexer::Multiplexer;
@@ -242,11 +250,12 @@ mod tests {
     fn reverse_method_routes_to_reverse_table() {
         let dispatcher = GeneratedDispatcher::new();
         let mut reverse = ReverseMethodTable::new();
-        reverse.register("runtime.process.status", Arc::new(|_params| {
-            Box::pin(async move {
-                Ok(serde_json::json!({"state": "running"}))
-            })
-        }));
+        reverse.register(
+            "runtime.process.status",
+            Arc::new(|_params| {
+                Box::pin(async move { Ok(serde_json::json!({"state": "running"})) })
+            }),
+        );
 
         let (tx, _rx) = mpsc::unbounded_channel();
         let mux = Arc::new(Mutex::new(Multiplexer::new(tx)));

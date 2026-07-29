@@ -183,14 +183,17 @@ impl HttpBroker {
                 Ok(resp) => {
                     let status = resp.status();
                     if status.is_success() {
-                        return Self::consume_response(
-                            stream_manager, resp, request_id,
-                        )
-                        .await;
+                        return Self::consume_response(stream_manager, resp, request_id).await;
                     }
                     match status.as_u16() {
-                        401 | 403 => return Err(AppError::Unauthorized("CREDENTIAL_UNAVAILABLE".to_owned())),
-                        400 | 404 => return Err(AppError::Validation("PROVIDER_CONFIGURATION_INVALID".to_owned())),
+                        401 | 403 => {
+                            return Err(AppError::Unauthorized("CREDENTIAL_UNAVAILABLE".to_owned()))
+                        }
+                        400 | 404 => {
+                            return Err(AppError::Validation(
+                                "PROVIDER_CONFIGURATION_INVALID".to_owned(),
+                            ))
+                        }
                         408 | 429 | 500..=599 => {
                             last_error = Some(AppError::Network(format!("HTTP {status}")));
                             continue;
@@ -226,7 +229,9 @@ impl HttpBroker {
                 .headers()
                 .get(reqwest::header::CONTENT_TYPE)
                 .and_then(|v| v.to_str().ok())
-                .map_or(false, |v| v.contains("text/event-stream") || v.contains("text/plain"));
+                .map_or(false, |v| {
+                    v.contains("text/event-stream") || v.contains("text/plain")
+                });
 
         if is_streaming {
             let mut stream = response.bytes_stream();
@@ -251,7 +256,10 @@ impl HttpBroker {
                 }
             }
         } else {
-            let body = response.bytes().await.map_err(|e| AppError::Network(e.to_string()))?;
+            let body = response
+                .bytes()
+                .await
+                .map_err(|e| AppError::Network(e.to_string()))?;
             if body.len() > MAX_STREAM_PAYLOAD_BYTES {
                 return Err(AppError::Network("Response too large".to_owned()));
             }

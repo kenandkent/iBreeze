@@ -5,7 +5,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from passlib.hash import argon2
+from passlib.hash import argon2  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

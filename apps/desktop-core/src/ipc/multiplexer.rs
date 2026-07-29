@@ -112,10 +112,7 @@ impl Multiplexer {
         }
     }
 
-    pub fn register_stream(
-        &mut self,
-        request_id: Uuid,
-    ) -> Result<mpsc::Receiver<Value>, IpcError> {
+    pub fn register_stream(&mut self, request_id: Uuid) -> Result<mpsc::Receiver<Value>, IpcError> {
         if self.streams.len() >= MAX_PENDING_PER_DIRECTION {
             return Err(IpcError::Backpressure);
         }
@@ -161,28 +158,19 @@ impl Multiplexer {
         self.generation
     }
 
-    pub async fn send_frame(
-        &self,
-        frame: Vec<u8>,
-    ) -> Result<(), IpcError> {
+    pub async fn send_frame(&self, frame: Vec<u8>) -> Result<(), IpcError> {
         let (tx, rx) = oneshot::channel();
         self.writer
             .send((frame, tx))
             .map_err(|_| IpcError::ConnectionLost)?;
-        timeout_at(
-            Instant::now() + SEND_TIMEOUT,
-            rx,
-        )
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .unwrap_or(Err(IpcError::ConnectionLost))
+        timeout_at(Instant::now() + SEND_TIMEOUT, rx)
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or(Err(IpcError::ConnectionLost))
     }
 
-    pub async fn send_json(
-        &self,
-        obj: &Value,
-    ) -> Result<(), IpcError> {
+    pub async fn send_json(&self, obj: &Value) -> Result<(), IpcError> {
         let frame = encode_frame(obj).map_err(|e| IpcError::Internal(e.to_string()))?;
         self.send_frame(frame).await
     }
@@ -202,12 +190,18 @@ mod tests {
         let (tx, _rx) = mpsc::unbounded_channel();
         let mut mux = Multiplexer::new(tx);
         for i in 0..MAX_PENDING_PER_DIRECTION {
-            let result = mux.register_pending(format!("core:{i}"), Instant::now() + Duration::from_secs(30));
+            let result = mux.register_pending(
+                format!("core:{i}"),
+                Instant::now() + Duration::from_secs(30),
+            );
             assert!(result.is_ok(), "failed at {i}");
         }
         assert_eq!(mux.pending_count(), MAX_PENDING_PER_DIRECTION);
         assert!(matches!(
-            mux.register_pending("core:extra".to_owned(), Instant::now() + Duration::from_secs(30)),
+            mux.register_pending(
+                "core:extra".to_owned(),
+                Instant::now() + Duration::from_secs(30)
+            ),
             Err(IpcError::Backpressure)
         ));
     }
@@ -231,7 +225,10 @@ mod tests {
         let (tx, _rx) = mpsc::unbounded_channel();
         let mut mux = Multiplexer::new(tx);
         let mut rx = mux
-            .register_pending("core:test".to_owned(), Instant::now() + Duration::from_secs(30))
+            .register_pending(
+                "core:test".to_owned(),
+                Instant::now() + Duration::from_secs(30),
+            )
             .unwrap();
         let stream_id = Uuid::new_v4();
         assert!(mux.register_stream(stream_id).is_ok());
@@ -247,7 +244,10 @@ mod tests {
         let (tx, _rx) = mpsc::unbounded_channel();
         let mut mux = Multiplexer::new(tx);
         let mut rx = mux
-            .register_pending("core:test".to_owned(), Instant::now() + Duration::from_secs(30))
+            .register_pending(
+                "core:test".to_owned(),
+                Instant::now() + Duration::from_secs(30),
+            )
             .unwrap();
         let response = serde_json::json!({"result": "ok"});
         mux.resolve_pending(&"core:test".to_owned(), Ok(response.clone()));

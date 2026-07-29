@@ -95,11 +95,7 @@ impl IpcSession {
             .unwrap_or(Err(IpcError::DeadlineExceeded))
     }
 
-    pub async fn notify(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<(), IpcError> {
+    pub async fn notify(&self, method: &str, params: Value) -> Result<(), IpcError> {
         let notification = serde_json::json!({
             "jsonrpc": "2.0",
             "method": method,
@@ -109,11 +105,7 @@ impl IpcSession {
         mux.send_json(&notification).await
     }
 
-    pub async fn respond(
-        &self,
-        id: &str,
-        result: Result<Value, IpcError>,
-    ) -> Result<(), IpcError> {
+    pub async fn respond(&self, id: &str, result: Result<Value, IpcError>) -> Result<(), IpcError> {
         let response = match result {
             Ok(value) => serde_json::json!({
                 "jsonrpc": "2.0",

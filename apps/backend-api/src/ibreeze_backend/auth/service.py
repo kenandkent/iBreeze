@@ -11,7 +11,7 @@ from typing import Any
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from passlib.hash import argon2
+from passlib.hash import argon2  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

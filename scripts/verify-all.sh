@@ -40,6 +40,8 @@ if ! command -v cargo-llvm-cov &>/dev/null; then
 fi
 
 run_contracts() {
+    echo "--- packages/contracts install ---"
+    npm --prefix packages/contracts ci
     echo "--- packages/contracts lint ---"
     npm --prefix packages/contracts run lint
     echo "--- contract drift ---"
@@ -67,6 +69,10 @@ run_desktop_rust() {
 }
 
 run_desktop_ui() {
+    echo "--- desktop install ---"
+    npm --prefix apps/desktop ci
+    echo "--- admin-web install ---"
+    npm --prefix apps/admin-web ci
     echo "--- desktop lint ---"
     npm --prefix apps/desktop run lint
     echo "--- desktop typecheck ---"
@@ -100,6 +106,10 @@ run_backend() {
 }
 
 run_e2e() {
+    echo "--- e2e install ---"
+    npm --prefix tests/e2e ci
+    echo "--- e2e playwright browsers ---"
+    npx playwright install chromium --with-deps 2>&1 || echo "Playwright binary install skipped"
     echo "--- e2e tests ---"
     if ls tests/e2e/*.spec.ts 2>/dev/null | head -1 >/dev/null 2>&1; then
         npm --prefix tests/e2e run test

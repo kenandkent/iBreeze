@@ -51,19 +51,19 @@ impl ConnectHandler {
                 Self::send_response(stream, "400", "Bad Request: headers too large").await?;
                 return Err(AppError::Validation("Headers too large".to_owned()));
             }
-            let n = stream
-                .read(&mut buffer[total_read..])
-                .await
-                .map_err(|e| {
-                    error!("read connect headers: {e}");
-                    AppError::Network("CONNECT header read failed".to_owned())
-                })?;
+            let n = stream.read(&mut buffer[total_read..]).await.map_err(|e| {
+                error!("read connect headers: {e}");
+                AppError::Network("CONNECT header read failed".to_owned())
+            })?;
             if n == 0 {
                 return Err(AppError::Network("Connection closed".to_owned()));
             }
             total_read += n;
 
-            if let Some(pos) = buffer[..total_read].windows(4).position(|w| w == b"\r\n\r\n") {
+            if let Some(pos) = buffer[..total_read]
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+            {
                 let header_bytes = &buffer[..pos + 4];
 
                 let request_line_end = header_bytes
@@ -78,7 +78,9 @@ impl ConnectHandler {
                 let parts: Vec<&str> = request_line.split(' ').collect();
                 if parts.len() < 3 || parts[0] != "CONNECT" {
                     Self::send_response(stream, "405", "Method Not Allowed").await?;
-                    return Err(AppError::Validation("Only CONNECT method allowed".to_owned()));
+                    return Err(AppError::Validation(
+                        "Only CONNECT method allowed".to_owned(),
+                    ));
                 }
 
                 let authority = parts[1];
@@ -89,23 +91,21 @@ impl ConnectHandler {
                 }
 
                 let host = host_port[0].to_ascii_lowercase();
-                let port: u16 = host_port[1].parse().map_err(|_| {
-                    AppError::Validation("Invalid port".to_owned())
-                })?;
+                let port: u16 = host_port[1]
+                    .parse()
+                    .map_err(|_| AppError::Validation("Invalid port".to_owned()))?;
 
                 if port != 443 {
                     Self::send_response(stream, "403", "Forbidden: only port 443 allowed").await?;
                     return Err(AppError::Validation("Only port 443 allowed".to_owned()));
                 }
 
-                let headers = std::str::from_utf8(header_bytes).map_err(|_| {
-                    AppError::Validation("Invalid UTF-8 in headers".to_owned())
-                })?;
+                let headers = std::str::from_utf8(header_bytes)
+                    .map_err(|_| AppError::Validation("Invalid UTF-8 in headers".to_owned()))?;
 
-                let token = Self::extract_proxy_authorization(headers)
-                    .ok_or_else(|| {
-                        AppError::Unauthorized("Missing Proxy-Authorization".to_owned())
-                    })?;
+                let token = Self::extract_proxy_authorization(headers).ok_or_else(|| {
+                    AppError::Unauthorized("Missing Proxy-Authorization".to_owned())
+                })?;
 
                 let rate_ok = {
                     let mut metrics = self.metrics.write().await;
@@ -128,7 +128,11 @@ impl ConnectHandler {
                     return Err(AppError::Validation("Rate limit exceeded".to_owned()));
                 }
 
-                let lease = match self.egress_broker.validate_token_by_port(port, &token).await {
+                let lease = match self
+                    .egress_broker
+                    .validate_token_by_port(port, &token)
+                    .await
+                {
                     Ok(l) => l,
                     Err(_) => {
                         Self::send_response(stream, "407", "Proxy Authentication Required").await?;
@@ -150,13 +154,11 @@ impl ConnectHandler {
                 Self::send_response(stream, "200", "Connection established").await?;
                 stream.flush().await.ok();
 
-                let mut remote_stream = tokio::time::timeout(
-                    CONNECT_TIMEOUT,
-                    TcpStream::connect(&remote),
-                )
-                .await
-                .map_err(|_| AppError::Network("Connect timeout".to_owned()))?
-                .map_err(|e| AppError::Network(format!("Connect failed: {e}")))?;
+                let mut remote_stream =
+                    tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&remote))
+                        .await
+                        .map_err(|_| AppError::Network("Connect timeout".to_owned()))?
+                        .map_err(|e| AppError::Network(format!("Connect failed: {e}")))?;
 
                 info!(%host, port, "CONNECT tunnel established");
 
@@ -187,7 +189,10 @@ impl ConnectHandler {
 
     fn extract_proxy_authorization(headers: &str) -> Option<String> {
         for line in headers.lines() {
-            if line.to_ascii_lowercase().starts_with("proxy-authorization:") {
+            if line
+                .to_ascii_lowercase()
+                .starts_with("proxy-authorization:")
+            {
                 if let Some(value) = line.splitn(2, ':').nth(1) {
                     let value = value.trim();
                     if let Some(basic) = value.strip_prefix("Basic ") {
@@ -247,7 +252,8 @@ mod tests {
 
     #[test]
     fn extract_proxy_authorization_wrong_scheme() {
-        let headers = "CONNECT api.example.com:443 HTTP/1.1\r\nProxy-Authorization: Bearer token\r\n\r\n";
+        let headers =
+            "CONNECT api.example.com:443 HTTP/1.1\r\nProxy-Authorization: Bearer token\r\n\r\n";
         assert!(ConnectHandler::extract_proxy_authorization(headers).is_none());
     }
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -99,12 +99,7 @@ impl HttpStreamManager {
         Ok(rx)
     }
 
-    pub fn push_event(
-        &self,
-        request_id: Uuid,
-        event: BrokerEventKind,
-        payload: Value,
-    ) {
+    pub fn push_event(&self, request_id: Uuid, event: BrokerEventKind, payload: Value) {
         let mut streams = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.streams.write())
         });
@@ -118,16 +113,13 @@ impl HttpStreamManager {
             };
             state.next_sequence += 1;
             state.events.push(broker_event.clone());
-            state.subscribers.retain(|tx| tx.send(broker_event.clone()).is_ok());
+            state
+                .subscribers
+                .retain(|tx| tx.send(broker_event.clone()).is_ok());
         }
     }
 
-    pub async fn push_event_async(
-        &self,
-        request_id: Uuid,
-        event: BrokerEventKind,
-        payload: Value,
-    ) {
+    pub async fn push_event_async(&self, request_id: Uuid, event: BrokerEventKind, payload: Value) {
         let mut streams = self.streams.write().await;
         if let Some(state) = streams.get_mut(&request_id) {
             let broker_event = BrokerEvent {
@@ -139,14 +131,13 @@ impl HttpStreamManager {
             };
             state.next_sequence += 1;
             state.events.push(broker_event.clone());
-            state.subscribers.retain(|tx| tx.send(broker_event.clone()).is_ok());
+            state
+                .subscribers
+                .retain(|tx| tx.send(broker_event.clone()).is_ok());
         }
     }
 
-    pub async fn get_events(
-        &self,
-        request_id: Uuid,
-    ) -> Result<Vec<BrokerEvent>, AppError> {
+    pub async fn get_events(&self, request_id: Uuid) -> Result<Vec<BrokerEvent>, AppError> {
         let streams = self.streams.read().await;
         let state = streams
             .get(&request_id)
@@ -174,9 +165,7 @@ impl HttpStreamManager {
 
     pub async fn is_completed(&self, request_id: Uuid) -> bool {
         let streams = self.streams.read().await;
-        streams
-            .get(&request_id)
-            .map_or(true, |s| s.completed)
+        streams.get(&request_id).map_or(true, |s| s.completed)
     }
 
     pub async fn drop_stream(&self, request_id: Uuid) {
@@ -206,10 +195,18 @@ mod tests {
         let _rx = manager.create_stream(request_id).await;
 
         manager
-            .push_event_async(request_id, BrokerEventKind::OutputTextDelta, serde_json::json!({"text": "Hello"}))
+            .push_event_async(
+                request_id,
+                BrokerEventKind::OutputTextDelta,
+                serde_json::json!({"text": "Hello"}),
+            )
             .await;
         manager
-            .push_event_async(request_id, BrokerEventKind::Completed, serde_json::json!({"status": "ok"}))
+            .push_event_async(
+                request_id,
+                BrokerEventKind::Completed,
+                serde_json::json!({"status": "ok"}),
+            )
             .await;
 
         let events = manager.get_events(request_id).await.unwrap();
@@ -227,7 +224,11 @@ mod tests {
         let mut rx = manager.create_stream(request_id).await;
 
         manager
-            .push_event_async(request_id, BrokerEventKind::Usage, serde_json::json!({"tokens": 10}))
+            .push_event_async(
+                request_id,
+                BrokerEventKind::Usage,
+                serde_json::json!({"tokens": 10}),
+            )
             .await;
 
         let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
@@ -264,7 +265,11 @@ mod tests {
         let _rx = manager.create_stream(request_id).await;
 
         manager
-            .push_event_async(request_id, BrokerEventKind::OutputTextDelta, serde_json::json!({"text": "past"}))
+            .push_event_async(
+                request_id,
+                BrokerEventKind::OutputTextDelta,
+                serde_json::json!({"text": "past"}),
+            )
             .await;
 
         let mut rx = manager.subscribe(request_id).await.unwrap();
@@ -277,7 +282,10 @@ mod tests {
 
     #[test]
     fn broker_event_kind_as_str() {
-        assert_eq!(BrokerEventKind::OutputTextDelta.as_str(), "output_text_delta");
+        assert_eq!(
+            BrokerEventKind::OutputTextDelta.as_str(),
+            "output_text_delta"
+        );
         assert_eq!(BrokerEventKind::ToolCallDelta.as_str(), "tool_call_delta");
         assert_eq!(BrokerEventKind::Usage.as_str(), "usage");
         assert_eq!(BrokerEventKind::Completed.as_str(), "completed");

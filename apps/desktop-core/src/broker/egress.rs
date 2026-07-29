@@ -5,7 +5,7 @@ use std::time::Instant;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::RngCore;
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, RwLock, oneshot};
+use tokio::sync::{oneshot, Mutex, RwLock};
 use tracing::info;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -108,7 +108,11 @@ impl EgressBroker {
         Ok(())
     }
 
-    pub async fn validate_token(&self, run_id: Uuid, token_b64: &str) -> Result<Arc<EgressLease>, AppError> {
+    pub async fn validate_token(
+        &self,
+        run_id: Uuid,
+        token_b64: &str,
+    ) -> Result<Arc<EgressLease>, AppError> {
         let leases = self.leases.read().await;
         leases
             .iter()
@@ -117,7 +121,11 @@ impl EgressBroker {
             .ok_or_else(|| AppError::Unauthorized("EGRESS_TOKEN_INVALID".to_owned()))
     }
 
-    pub async fn validate_token_by_port(&self, port: u16, token_b64: &str) -> Result<Arc<EgressLease>, AppError> {
+    pub async fn validate_token_by_port(
+        &self,
+        port: u16,
+        token_b64: &str,
+    ) -> Result<Arc<EgressLease>, AppError> {
         let leases = self.leases.read().await;
         leases
             .iter()
@@ -177,10 +185,7 @@ mod tests {
     async fn get_lease_by_port() {
         let broker = EgressBroker::new();
         let run_id = Uuid::new_v4();
-        let lease = broker
-            .create_lease(run_id, BTreeSet::new())
-            .await
-            .unwrap();
+        let lease = broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
         let found = broker.get_lease_by_port(lease.port).await;
         assert!(found.is_some());
         assert_eq!(found.unwrap().run_id, run_id);
@@ -190,10 +195,7 @@ mod tests {
     async fn revoke_lease_removes_it() {
         let broker = EgressBroker::new();
         let run_id = Uuid::new_v4();
-        broker
-            .create_lease(run_id, BTreeSet::new())
-            .await
-            .unwrap();
+        broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
         assert!(broker.revoke_lease(run_id).await.is_ok());
         assert!(broker.active_count().await == 0);
     }
@@ -208,13 +210,8 @@ mod tests {
     async fn validate_token_ok() {
         let broker = EgressBroker::new();
         let run_id = Uuid::new_v4();
-        let lease = broker
-            .create_lease(run_id, BTreeSet::new())
-            .await
-            .unwrap();
-        let result = broker
-            .validate_token(run_id, &lease.token_b64)
-            .await;
+        let lease = broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
+        let result = broker.validate_token(run_id, &lease.token_b64).await;
         assert!(result.is_ok());
     }
 
@@ -222,10 +219,7 @@ mod tests {
     async fn validate_token_wrong() {
         let broker = EgressBroker::new();
         let run_id = Uuid::new_v4();
-        broker
-            .create_lease(run_id, BTreeSet::new())
-            .await
-            .unwrap();
+        broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
         assert!(broker.validate_token(run_id, "wrong-token").await.is_err());
     }
 
@@ -234,7 +228,9 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let broker = EgressBroker::new();
         let run_id = Uuid::new_v4();
-        let lease = rt.block_on(broker.create_lease(run_id, BTreeSet::new())).unwrap();
+        let lease = rt
+            .block_on(broker.create_lease(run_id, BTreeSet::new()))
+            .unwrap();
         let url = lease.proxy_url();
         assert!(url.contains("ibreeze:"));
         assert!(url.contains("127.0.0.1"));

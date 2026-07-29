@@ -82,7 +82,11 @@ impl AppState {
             lease_manager,
         ));
         let mut reverse_table = ReverseMethodTable::new();
-        register_reverse_handlers(&mut reverse_table, http_broker.clone(), credential_store.clone());
+        register_reverse_handlers(
+            &mut reverse_table,
+            http_broker.clone(),
+            credential_store.clone(),
+        );
         Self {
             backend: RwLock::new(None),
             auth: RwLock::new(AuthState::default()),

@@ -24,5 +24,8 @@ jobs:
           components: clippy, rustfmt
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
+      - name: Install Contracts dependencies
+        run: npm ci
+        working-directory: packages/contracts
       - name: Run contracts verification
         run: bash scripts/verify-all.sh --scope contracts

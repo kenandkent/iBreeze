@@ -35,11 +35,15 @@ impl DnsPolicy {
         }
 
         if url.username() != "" || url.password().is_some() {
-            return Err(AppError::Security("SSRF guard: userinfo is not allowed".to_owned()));
+            return Err(AppError::Security(
+                "SSRF guard: userinfo is not allowed".to_owned(),
+            ));
         }
 
         if url.fragment().is_some() {
-            return Err(AppError::Security("SSRF guard: fragment is not allowed".to_owned()));
+            return Err(AppError::Security(
+                "SSRF guard: fragment is not allowed".to_owned(),
+            ));
         }
 
         let host = url
@@ -78,10 +82,7 @@ impl DnsPolicy {
             || ip.is_unspecified()
     }
 
-    pub async fn resolve_and_validate(
-        &self,
-        host: &str,
-    ) -> Result<Vec<IpAddr>, AppError> {
+    pub async fn resolve_and_validate(&self, host: &str) -> Result<Vec<IpAddr>, AppError> {
         if let Ok(ip) = host.parse::<IpAddr>() {
             if self.is_forbidden_address(&ip) {
                 return Err(AppError::Security(format!(
@@ -120,9 +121,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let o = v4.octets();
-            o[0] == 10
-                || (o[0] == 172 && o[1] >= 16 && o[1] <= 31)
-                || (o[0] == 192 && o[1] == 168)
+            o[0] == 10 || (o[0] == 172 && o[1] >= 16 && o[1] <= 31) || (o[0] == 192 && o[1] == 168)
         }
         IpAddr::V6(v6) => v6.octets()[0] == 0xfc || v6.octets()[0] == 0xfd,
     }
@@ -186,31 +185,41 @@ mod tests {
     #[test]
     fn accepts_https() {
         let policy = DnsPolicy::new();
-        assert!(policy.validate_url("https://api.example.com/v1/chat").is_ok());
+        assert!(policy
+            .validate_url("https://api.example.com/v1/chat")
+            .is_ok());
     }
 
     #[test]
     fn rejects_userinfo() {
         let policy = DnsPolicy::new();
-        assert!(policy.validate_url("https://user:pass@api.example.com/").is_err());
+        assert!(policy
+            .validate_url("https://user:pass@api.example.com/")
+            .is_err());
     }
 
     #[test]
     fn rejects_fragment() {
         let policy = DnsPolicy::new();
-        assert!(policy.validate_url("https://api.example.com/path#frag").is_err());
+        assert!(policy
+            .validate_url("https://api.example.com/path#frag")
+            .is_err());
     }
 
     #[test]
     fn rejects_non_standard_port() {
         let policy = DnsPolicy::new();
-        assert!(policy.validate_url("https://api.example.com:8080/path").is_err());
+        assert!(policy
+            .validate_url("https://api.example.com:8080/path")
+            .is_err());
     }
 
     #[test]
     fn accepts_standard_port() {
         let policy = DnsPolicy::new();
-        assert!(policy.validate_url("https://api.example.com:443/path").is_ok());
+        assert!(policy
+            .validate_url("https://api.example.com:443/path")
+            .is_ok());
     }
 
     #[test]
@@ -237,7 +246,9 @@ mod tests {
     #[test]
     fn forbids_multicast() {
         assert!(is_multicast(&IpAddr::V4(Ipv4Addr::new(224, 0, 0, 1))));
-        assert!(is_multicast(&IpAddr::V6(Ipv6Addr::new(0xff00, 0, 0, 0, 0, 0, 0, 0))));
+        assert!(is_multicast(&IpAddr::V6(Ipv6Addr::new(
+            0xff00, 0, 0, 0, 0, 0, 0, 0
+        ))));
     }
 
     #[test]
