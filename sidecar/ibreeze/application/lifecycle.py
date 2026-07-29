@@ -6,7 +6,7 @@ from pathlib import Path
 
 import aiosqlite
 
-from ibreeze.observability.health import HealthSnapshot, health_snapshot
+from ibreeze.observability.health import HealthSnapshot, health_snapshot_async, tick_heartbeat
 from ibreeze.persistence.connection import ReadPool, open_writer
 from ibreeze.persistence.migrator import prepare
 from ibreeze.persistence.profile import PreparedProfileDatabase
@@ -87,7 +87,6 @@ class ApplicationLifecycle:
             logger.info("lifecycle: no reverse RPC socket path (stub mode)")
         self._phase = LifecyclePhase.UDS_HANDSHAKE_ONLY
 
-        # Phase: bootstrap complete via prepare()
         self._phase = LifecyclePhase.BOOTSTRAP_DB
         self._phase = LifecyclePhase.MIGRATION
 
@@ -104,7 +103,6 @@ class ApplicationLifecycle:
         self._unit_of_work = UnitOfWork(connection=self._writer)
         self._phase = LifecyclePhase.WRITE_QUEUE_STARTED
 
-        # Phase: identity verification (placeholder)
         logger.info("lifecycle: verify profile identity")
         self._phase = LifecyclePhase.IDENTITY_VERIFIED
 
@@ -116,7 +114,6 @@ class ApplicationLifecycle:
         await self._workers.start()
         self._phase = LifecyclePhase.WORKER_SUPERVISOR_STARTED
 
-        # Phase: RPC dispatcher enabled (placeholder - actual RPC is external)
         logger.info("lifecycle: enable rpc dispatcher")
         self._phase = LifecyclePhase.RPC_DISPATCHER_ENABLED
 
@@ -155,10 +152,11 @@ class ApplicationLifecycle:
             logger.info("lifecycle: release profile lock")
             await self._prepared.release_lock()
 
-    def health(self) -> HealthSnapshot:
-        return health_snapshot(
+    async def health(self) -> HealthSnapshot:
+        tick_heartbeat()
+        return await health_snapshot_async(
             writer=self._writer,
             write_queue=self._write_queue,
             workers=self._workers,
-            profile_path=self._profile_path,
+            db_dir=self._profile_path.parent,
         )

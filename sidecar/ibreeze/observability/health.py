@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import shutil
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +10,13 @@ import aiosqlite
 from ibreeze.persistence.write_queue import WriteQueue
 from ibreeze.workers.spec import WorkerHealth
 from ibreeze.workers.supervisor import WorkerSupervisor
+
+_last_heartbeat: float = 0.0
+
+
+def tick_heartbeat() -> None:
+    global _last_heartbeat
+    _last_heartbeat = time.monotonic()
 
 
 @dataclass
@@ -38,53 +45,44 @@ class HealthSnapshot:
 
 
 def _get_loop_lag_ms() -> int:
-    import asyncio
-    import time
-
-    loop = asyncio.get_event_loop()
-    if hasattr(loop, "_clock") and loop._clock is not None:
-        return int((time.monotonic() - loop._clock()) * 1000)
-    return 0
+    global _last_heartbeat
+    if _last_heartbeat == 0:
+        return 0
+    return int((time.monotonic() - _last_heartbeat) * 1000)
 
 
 def _get_disk_free(path: Path) -> int:
+    db_dir = path if path.is_dir() else path.parent
     try:
-        usage = shutil.disk_usage(path)
-        return usage.free
+        usage = db_dir.stat() if False else None
+        import shutil
+        total, used, free = shutil.disk_usage(db_dir)
+        return free
     except OSError:
         return 0
 
 
-def _get_migration_version(writer: aiosqlite.Connection | None) -> int:
+async def _get_migration_version_async(writer: aiosqlite.Connection | None) -> int:
     if writer is None:
         return 0
     try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        cursor = asyncio.run_coroutine_threadsafe(
-            writer.execute(
-                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE status='completed'"
-            ),
-            loop,
-        ).result(timeout=2)
-        if cursor is None:
-            return 0
-        row = asyncio.run_coroutine_threadsafe(
-            cursor.fetchone(), loop
-        ).result(timeout=2)
+        cursor = await writer.execute(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE status='completed'"
+        )
+        row = await cursor.fetchone()
         return int(row[0]) if row else 0
     except Exception:
         return 0
 
 
-def health_snapshot(
+async def health_snapshot_async(
     writer: aiosqlite.Connection | None,
     write_queue: WriteQueue | None,
     workers: WorkerSupervisor | None,
-    profile_path: Path,
+    db_dir: Path,
 ) -> HealthSnapshot:
     profile_health = ProfileHealth(database_status="ready" if writer is not None else "unknown")
-    profile_health.migration_version = _get_migration_version(writer)
+    profile_health.migration_version = await _get_migration_version_async(writer)
     queue_health = QueueHealth(write_depth=write_queue.depth if write_queue else 0)
     worker_health_list: list[WorkerHealth] = []
     if workers is not None:
@@ -112,5 +110,5 @@ def health_snapshot(
         queues=queue_health,
         workers=tuple(worker_health_list),
         event_loop_lag_ms=_get_loop_lag_ms(),
-        disk_free_bytes=_get_disk_free(profile_path),
+        disk_free_bytes=_get_disk_free(db_dir),
     )

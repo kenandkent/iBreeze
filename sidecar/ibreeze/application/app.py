@@ -13,14 +13,33 @@ logger = logging.getLogger(__name__)
 
 
 class SidecarApplication:
-    def __init__(self, profile_path: Path | None = None, profile_root: Path | None = None, **kwargs: object) -> None:
-        self._profile_path = profile_path or profile_root or Path()
-        raw_socket = kwargs.get("socket_path")
-        self._socket_path: str | None = str(raw_socket) if raw_socket is not None else None
+    def __init__(
+        self,
+        *,
+        socket_path: Path,
+        profile_root: Path,
+        app_version: str,
+        startup_token: bytes,
+        backend_origin: str,
+        app_user_id: str,
+        masked_identifier: str,
+        device_id: str,
+        profile_mode: str,
+    ) -> None:
+        database_path = profile_root / "profile.db"
+        self._database_path = database_path
+        self._socket_path = str(socket_path)
+        self._app_version = app_version
+        self._startup_token = startup_token
+        self._backend_origin = backend_origin
+        self._app_user_id = app_user_id
+        self._masked_identifier = masked_identifier
+        self._device_id = device_id
+        self._profile_mode = profile_mode
         self._lifecycle: ApplicationLifecycle | None = None
 
     async def start(self) -> None:
-        self._lifecycle = ApplicationLifecycle(self._profile_path, socket_path=self._socket_path)
+        self._lifecycle = ApplicationLifecycle(self._database_path, socket_path=self._socket_path)
         await self._lifecycle.start()
 
     async def stop(self) -> None:
@@ -35,7 +54,7 @@ class SidecarApplication:
                 event_loop_lag_ms=0,
                 disk_free_bytes=0,
             )
-        return self._lifecycle.health()
+        return await self._lifecycle.health()
 
     @property
     def lifecycle(self) -> ApplicationLifecycle:

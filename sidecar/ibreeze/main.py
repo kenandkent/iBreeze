@@ -37,7 +37,10 @@ async def _run(
         device_id=device_id,
         profile_mode=profile_mode,
     )
-    await app.start()
+    try:
+        await app.start()
+    finally:
+        await app.stop()
 
 
 @click.command()

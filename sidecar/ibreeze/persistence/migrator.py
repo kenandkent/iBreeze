@@ -24,8 +24,9 @@ async def verify_sqlite_capabilities(db: aiosqlite.Connection) -> None:
     parts = [int(x) for x in version.split(".")]
     if not (parts[0] > 3 or (parts[0] == 3 and parts[1] > 45) or (parts[0] == 3 and parts[1] == 45)):
         raise RuntimeError(f"SQLite version >=3.45 required, got {version}")
-    for ext in ("json1",):
-        await db.execute(f"SELECT {ext}()")
+    cursor = await db.execute("SELECT json_valid('{}')")
+    row = await cursor.fetchone()
+    assert row is not None and row[0] == 1
     cursor = await db.execute("PRAGMA compile_options")
     options = {row[0] async for row in cursor}
     if "ENABLE_FTS5" not in options:
@@ -38,7 +39,7 @@ class MigrationRunner:
 
     async def _ensure_ledger(self) -> None:
         await self._db.execute("""
-            CREATE TABLE schema_migrations (
+            CREATE TABLE IF NOT EXISTS schema_migrations (
                 version INTEGER PRIMARY KEY,
                 filename TEXT NOT NULL UNIQUE,
                 script_sha256 TEXT NOT NULL CHECK(length(script_sha256)=64),

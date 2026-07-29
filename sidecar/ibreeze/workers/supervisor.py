@@ -49,10 +49,7 @@ class WorkerSupervisor:
             EventCompactionWorker,
         ]
         for cls in worker_defs:
-            kwargs = {}
-            if cls in (RuntimeWorker, AnalysisWorker, OutboxWorker):
-                kwargs["write_queue"] = self._write_queue
-            entry = WorkerEntry(worker=cls(**kwargs))
+            entry = WorkerEntry(worker=cls(write_queue=self._write_queue))
             self._workers.append(entry)
             task = asyncio.create_task(self._run_worker(entry))
             self._tasks.append(task)

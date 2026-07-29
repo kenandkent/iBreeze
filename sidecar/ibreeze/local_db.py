@@ -1,9 +1,7 @@
-"""本地 SQLite 数据库，WAL 模式，单写多读连接池。
+"""DEPRECATED - 请使用 ibreeze.persistence 模块。
 
-对齐设计文档附录 H.1–H.14 的全部 DDL。
-
-已废弃：请使用 ibreeze.persistence 模块替代。LocalDB 保留为向后兼容的薄包装层，
-所有连接管理委托给 persistence.connection 和 persistence.migrator。
+此文件将在此次架构重构中删除。所有新代码必须通过 ApplicationLifecycle
+(writer/read_pool/write_queue/unit_of_work) 访问数据库，禁止导入 LocalDB。
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ from ibreeze.persistence.connection import ReadPool, open_writer
 
 logger = logging.getLogger("ibreeze.local_db")
 warnings.warn(
-    "LocalDB is deprecated, use ibreeze.persistence instead",
+    "LocalDB is DEPRECATED and will be removed. Use ApplicationLifecycle.persistence instead.",
     DeprecationWarning,
     stacklevel=2,
 )
