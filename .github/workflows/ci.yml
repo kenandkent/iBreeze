@@ -6,7 +6,11 @@ on:
     branches: [dev, main]
 
 jobs:
-  lint-test:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [contracts, desktop, sidecar, backend, e2e, security, drift]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,29 +18,25 @@ jobs:
         with:
           node-version: 20
       - uses: actions/setup-python@v5
+        if: matrix.scope != 'contracts'
         with:
           python-version: "3.12"
       - name: Install uv
+        if: matrix.scope != 'contracts'
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Install system dependencies
+        if: matrix.scope == 'desktop'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libglib2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - name: Install Rust
+        if: matrix.scope == 'desktop'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
       - name: Install cargo-nextest
+        if: matrix.scope == 'desktop'
         run: cargo install cargo-nextest --locked
-      - name: Contracts lint
-        run: npm --prefix packages/contracts install && npm --prefix packages/contracts run lint
-      - name: Rust check
-        run: |
-          cargo fmt --manifest-path apps/desktop-core/Cargo.toml --all -- --check
-          cargo clippy --manifest-path apps/desktop-core/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: Sidecar lint
-        run: uv run --directory sidecar ruff check ibreeze tests
-      - name: Sidecar typecheck
-        run: uv run --directory sidecar mypy ibreeze
-      - name: Backend lint
-        run: uv run --directory apps/backend-api ruff check src tests
-      - name: Contract drift
-        run: bash scripts/check-contract-drift.sh
+      - name: Install Playwright
+        if: matrix.scope == 'e2e'
+        run: npx playwright install --with-deps 2>&1 || true
+      - name: Verify
+        run: bash scripts/verify-all.sh --scope ${{ matrix.scope }}

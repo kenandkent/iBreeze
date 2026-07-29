@@ -167,7 +167,6 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::{mpsc, Mutex};
-    use uuid::Uuid;
 
     use super::super::multiplexer::Multiplexer;
     use super::super::session::IpcSession;

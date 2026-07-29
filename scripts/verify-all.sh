@@ -49,6 +49,8 @@ run_contracts() {
 }
 
 run_desktop_rust() {
+    echo "--- desktop-core frontend dist ---"
+    mkdir -p apps/desktop/dist
     echo "--- desktop-core fmt ---"
     cargo fmt --manifest-path apps/desktop-core/Cargo.toml --all -- --check
     echo "--- desktop-core clippy ---"
