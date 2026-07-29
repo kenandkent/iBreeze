@@ -32,7 +32,7 @@ RESTRICTED_ACCESS_TOKEN_SECONDS = 5 * 60
 SESSION_SECONDS = 30 * 24 * 60 * 60
 MAX_ACTIVE_FAMILIES = 20
 
-password_hasher = argon2.using(  # type: ignore[no-untyped-call]
+password_hasher = argon2.using(
     type="ID",
     memory_cost=65536,
     rounds=3,

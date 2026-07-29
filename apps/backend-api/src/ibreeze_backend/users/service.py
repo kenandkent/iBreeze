@@ -15,7 +15,7 @@ from ibreeze_backend.observability.logging_config import get_logger
 
 logger = get_logger("ibreeze.users.service")
 
-password_hasher = argon2.using(  # type: ignore[no-untyped-call]
+password_hasher = argon2.using(
     type="ID",
     memory_cost=65536,
     rounds=3,
