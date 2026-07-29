@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 cd "$ROOT_DIR"
 
 echo "--- Step 1: Generate fresh contracts to temp directory ---"
-IBREEZE_OUTPUT_ROOT="$TMP_DIR/out" bash "$ROOT_DIR/scripts/generate-contracts.sh" >/dev/null 2>&1
+IBREEZE_OUTPUT_ROOT="$TMP_DIR/out" bash "$ROOT_DIR/scripts/generate-contracts.sh" 2>&1
 
 echo "--- Step 2: Compare generated files ---"
 HAS_DRIFT=0
