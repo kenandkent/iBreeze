@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
+
+from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
@@ -36,11 +39,19 @@ from ibreeze.runtime.gateway import (
     resume,
     start,
 )
+from ibreeze.runtime.model_loop import ModelTurn
 from ibreeze.runtime.transport import (
+    MAX_FRAME_BYTES,
     ReverseRpcClient,
     ReverseRpcTransport,
+    UdsConnection,
     UsageStats,
+    _encode_frame,
+    _read_frame,
     create_transport,
+    get_reverse_rpc_socket_path,
+    mark_sidecar_own_socket,
+    set_reverse_rpc_socket_path,
 )
 
 
@@ -354,6 +365,130 @@ class TestTransport:
         assert client.last_params == {"key": "val"}
 
 
+# ── transport extended (new features) ───────────────────────────────
+class TestMarkSidecarOwnSocket:
+    def test_mark_and_clear(self):
+        mark_sidecar_own_socket("/tmp/sidecar.sock")
+        assert get_reverse_rpc_socket_path() is None  # separate global
+        mark_sidecar_own_socket(None)
+        assert get_reverse_rpc_socket_path() is None
+
+    def test_mark_none_clears(self):
+        mark_sidecar_own_socket("/tmp/s.sock")
+        mark_sidecar_own_socket(None)
+
+
+class TestReverseRpcClientSelfConnectionGuard:
+    @pytest.mark.asyncio
+    async def test_raises_when_socket_matches_own(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        with patch.object(transport_mod, "_sidecar_own_socket", "/tmp/own.sock"):
+            client = ReverseRpcClient(socket_path="/tmp/own.sock")
+            with pytest.raises(RuntimeError, match="cannot connect to Sidecar's own"):
+                await client.call("test.method", {})
+
+    @pytest.mark.asyncio
+    async def test_raises_when_default_socket_matches_own(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mark_sidecar_own_socket("/tmp/default.sock")
+        try:
+            with patch.object(transport_mod, "_default_socket_path", "/tmp/default.sock"):
+                client = ReverseRpcClient()
+                with pytest.raises(RuntimeError, match="cannot connect to Sidecar's own"):
+                    await client.call("test.method", {})
+        finally:
+            mark_sidecar_own_socket(None)
+
+    @pytest.mark.asyncio
+    async def test_stores_last_method_on_self_connection_error(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        with patch.object(transport_mod, "_sidecar_own_socket", "/tmp/own.sock"):
+            client = ReverseRpcClient(socket_path="/tmp/own.sock")
+            with pytest.raises(RuntimeError, match="cannot connect to Sidecar's own"):
+                await client.call("self.check", {"x": 1})
+            assert client.last_method == "self.check"
+            assert client.last_params == {"x": 1}
+
+    @pytest.mark.asyncio
+    async def test_does_not_block_stub_mode(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        with patch.object(transport_mod, "_sidecar_own_socket", "/tmp/own.sock"):
+            client = ReverseRpcClient()  # no socket_path -> stub mode
+            with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+                await client.call("test.method", {})
+
+
+class TestReverseRpcTransportProfileDirectoryId:
+    @pytest.mark.asyncio
+    async def test_probe_passes_profile_directory_id(self):
+        t = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            profile_directory_id="dir-abc-123",
+        )
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
+        params = t._rpc.last_params
+        assert params.get("profile_directory_id") == "dir-abc-123"
+        assert params.get("credential_ref") == "cred-1"
+
+    @pytest.mark.asyncio
+    async def test_probe_defaults_profile_directory_id_to_empty(self):
+        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.probe()
+        params = t._rpc.last_params
+        assert params.get("profile_directory_id") == ""
+
+    @pytest.mark.asyncio
+    async def test_complete_passes_profile_directory_id(self):
+        t = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            profile_directory_id="dir-xyz",
+        )
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(
+                messages=({"role": "user", "content": "hi"},),
+                tool_names=("bash",),
+            )
+        params = t._rpc.last_params
+        assert params.get("profile_directory_id") == "dir-xyz"
+        assert params.get("credential_ref") == "cred-1"
+        assert params.get("protocol") == "https"
+
+    @pytest.mark.asyncio
+    async def test_complete_defaults_profile_directory_id_to_empty(self):
+        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
+            await t.complete(
+                messages=({"role": "user", "content": "hi"},),
+                tool_names=("bash",),
+            )
+        params = t._rpc.last_params
+        assert params.get("profile_directory_id") == ""
+
+    def test_create_transport_passes_profile_directory_id(self):
+        t = create_transport(
+            credential_ref="c",
+            model="m",
+            profile_directory_id="dir-789",
+        )
+        assert t._profile_directory_id == "dir-789"
+
+    def test_reverse_rpc_transport_init_stores_profile_directory_id(self):
+        t = ReverseRpcTransport(
+            credential_ref="c",
+            model="m",
+            profile_directory_id="dir-000",
+        )
+        assert t._profile_directory_id == "dir-000"
+
+
 # ── event_normalizer ─────────────────────────────────────────────────
 class TestEventNormalizer:
     def test_normalize_event(self):
@@ -459,3 +594,324 @@ class TestEventNormalizer:
         cursor = await db.execute("SELECT event_type FROM agent_run_events WHERE run_id=?", (run_id,))
         row = await cursor.fetchone()
         assert row["event_type"] == "run.started"
+
+
+# ── UdsConnection ────────────────────────────────────────────────────
+@pytest.mark.asyncio
+class TestUdsConnection:
+    async def test_connect_and_close(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_task = AsyncMock()
+
+        with patch("asyncio.open_unix_connection", return_value=(mock_reader, mock_writer)):
+            with patch("asyncio.create_task", return_value=mock_task):
+                conn = UdsConnection("/tmp/test.sock")
+                await conn.connect()
+
+        assert conn._reader is mock_reader
+        assert conn._writer is mock_writer
+
+        await conn.close()
+        mock_writer.close.assert_called_once()
+        mock_writer.wait_closed.assert_awaited_once()
+        assert conn._writer is None
+
+    async def test_call_success(self):
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.drain = AsyncMock()
+        conn = UdsConnection("/tmp/test.sock")
+        conn._writer = mock_writer
+
+        fixed_uuid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        with patch("ibreeze.runtime.transport.uuid4", return_value=fixed_uuid):
+            req_id = f"sidecar:{fixed_uuid}"
+            call_task = asyncio.create_task(conn.call("test.method", {"key": "val"}))
+            await asyncio.sleep(0)
+            conn._pending[req_id].set_result({"result": {"status": "ok"}})
+            result = await call_task
+
+        assert result == {"status": "ok"}
+        mock_writer.write.assert_called_once()
+        mock_writer.drain.assert_awaited_once()
+
+    async def test_call_error_response(self):
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.drain = AsyncMock()
+        conn = UdsConnection("/tmp/test.sock")
+        conn._writer = mock_writer
+
+        fixed_uuid = uuid.UUID("00000000-0000-0000-0000-000000000002")
+        with patch("ibreeze.runtime.transport.uuid4", return_value=fixed_uuid):
+            req_id = f"sidecar:{fixed_uuid}"
+            call_task = asyncio.create_task(conn.call("test.method", {}))
+            await asyncio.sleep(0)
+            conn._pending[req_id].set_result({"error": {"code": -32601, "message": "Method not found"}})
+            with pytest.raises(RuntimeError, match="RPC error"):
+                await call_task
+
+    async def test_call_not_connected(self):
+        conn = UdsConnection("/tmp/test.sock")
+        with pytest.raises(RuntimeError, match="UDS connection not established"):
+            await conn.call("test.method", {})
+
+    async def test_call_error_non_dict_response(self):
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.drain = AsyncMock()
+        conn = UdsConnection("/tmp/test.sock")
+        conn._writer = mock_writer
+
+        fixed_uuid = uuid.UUID("00000000-0000-0000-0000-000000000003")
+        with patch("ibreeze.runtime.transport.uuid4", return_value=fixed_uuid):
+            req_id = f"sidecar:{fixed_uuid}"
+            call_task = asyncio.create_task(conn.call("test.method", {}))
+            await asyncio.sleep(0)
+            conn._pending[req_id].set_result({"error": "something went wrong"})
+            with pytest.raises(RuntimeError, match="RPC error: something went wrong"):
+                await call_task
+
+    async def test_call_result_not_dict(self):
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.drain = AsyncMock()
+        conn = UdsConnection("/tmp/test.sock")
+        conn._writer = mock_writer
+
+        fixed_uuid = uuid.UUID("00000000-0000-0000-0000-000000000004")
+        with patch("ibreeze.runtime.transport.uuid4", return_value=fixed_uuid):
+            req_id = f"sidecar:{fixed_uuid}"
+            call_task = asyncio.create_task(conn.call("test.method", {}))
+            await asyncio.sleep(0)
+            conn._pending[req_id].set_result({"result": "just a string"})
+            result = await call_task
+
+        assert result == {}
+
+    async def test_close_exception(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_writer = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer.wait_closed = AsyncMock(side_effect=RuntimeError("connection reset"))
+        mock_task = AsyncMock()
+
+        with patch("asyncio.open_unix_connection", return_value=(mock_reader, mock_writer)):
+            with patch("asyncio.create_task", return_value=mock_task):
+                conn = UdsConnection("/tmp/test.sock")
+                await conn.connect()
+
+        await conn.close()
+        mock_writer.close.assert_called_once()
+        assert conn._writer is None
+
+    async def test_read_loop_resolves_pending(self):
+        conn = UdsConnection("/tmp/test.sock")
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        conn._reader = mock_reader
+
+        req_id = "sidecar:read-loop-test"
+        frame = {"jsonrpc": "2.0", "id": req_id, "result": {"done": True}}
+        payload = json.dumps(frame, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        length_prefix = len(payload).to_bytes(4, "big")
+
+        mock_reader.readexactly = AsyncMock(side_effect=[
+            length_prefix,
+            payload,
+            asyncio.IncompleteReadError(b"", 4),
+        ])
+
+        fut = asyncio.get_event_loop().create_future()
+        conn._pending[req_id] = fut
+
+        assert not fut.done()
+        await conn._read_loop()
+
+        assert fut.done()
+        assert fut.result() == frame
+        assert conn._pending == {}
+
+    async def test_read_loop_connection_lost(self):
+        conn = UdsConnection("/tmp/test.sock")
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        conn._reader = mock_reader
+        mock_reader.readexactly = AsyncMock(side_effect=ConnectionError("pipe broken"))
+
+        fut = asyncio.get_event_loop().create_future()
+        conn._pending["req-1"] = fut
+
+        await conn._read_loop()
+
+        assert fut.done()
+        assert isinstance(fut.exception(), RuntimeError)
+        assert "IPC_CONNECTION_LOST" in str(fut.exception())
+        assert conn._pending == {}
+
+
+# ── encode/decode frame ──────────────────────────────────────────────
+class TestEncodeDecodeFrame:
+    def test_encode_frame_success(self):
+        obj: dict[str, object] = {"jsonrpc": "2.0", "method": "test", "params": {}}
+        result = _encode_frame(obj)
+        payload = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        expected = len(payload).to_bytes(4, "big") + payload
+        assert result == expected
+
+    def test_encode_frame_oversize(self):
+        large_obj: dict[str, object] = {"data": "x" * (MAX_FRAME_BYTES + 1)}
+        with pytest.raises(RuntimeError, match="Frame exceeds max size"):
+            _encode_frame(large_obj)
+
+    @pytest.mark.asyncio
+    async def test_read_frame_success(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        frame: dict[str, object] = {"jsonrpc": "2.0", "method": "ping", "params": {}}
+        payload = json.dumps(frame, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        length = len(payload)
+        mock_reader.readexactly = AsyncMock(side_effect=[length.to_bytes(4, "big"), payload])
+        result = await _read_frame(mock_reader)
+        assert result == frame
+
+    @pytest.mark.asyncio
+    async def test_read_frame_invalid_length_zero(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_reader.readexactly = AsyncMock(return_value=(0).to_bytes(4, "big"))
+        with pytest.raises(RuntimeError, match="Invalid frame length"):
+            await _read_frame(mock_reader)
+
+    @pytest.mark.asyncio
+    async def test_read_frame_invalid_length_oversize(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        mock_reader.readexactly = AsyncMock(return_value=(MAX_FRAME_BYTES + 1).to_bytes(4, "big"))
+        with pytest.raises(RuntimeError, match="Invalid frame length"):
+            await _read_frame(mock_reader)
+
+
+# ── global state helpers ──────────────────────────────────────────────
+class TestSetReverseRpcSocketPath:
+    def test_set_and_get(self):
+        set_reverse_rpc_socket_path("/tmp/rpc.sock")
+        assert get_reverse_rpc_socket_path() == "/tmp/rpc.sock"
+        set_reverse_rpc_socket_path(None)
+        assert get_reverse_rpc_socket_path() is None
+
+    def test_set_none_clears(self):
+        set_reverse_rpc_socket_path("/tmp/other.sock")
+        set_reverse_rpc_socket_path(None)
+        assert get_reverse_rpc_socket_path() is None
+
+
+class TestReverseRpcClientEnsureConnected:
+    @pytest.mark.asyncio
+    async def test_ensure_connected_and_call(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mock_conn = AsyncMock(spec=UdsConnection)
+        mock_conn.call = AsyncMock(return_value={"status": "ok"})
+
+        with patch.object(transport_mod, "_default_socket_path", "/tmp/real.sock"):
+            with patch.object(transport_mod, "_sidecar_own_socket", None):
+                with patch.object(transport_mod, "UdsConnection", return_value=mock_conn):
+                    client = ReverseRpcClient()
+                    result = await client.call("test.method", {"key": "val"})
+                    assert result == {"status": "ok"}
+                    mock_conn.connect.assert_awaited_once()
+                    mock_conn.call.assert_awaited_once_with("test.method", {"key": "val"})
+
+    @pytest.mark.asyncio
+    async def test_ensure_connected_reuses_connection(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mock_conn = AsyncMock(spec=UdsConnection)
+        mock_conn.call = AsyncMock(return_value={"result": {"ok": True}})
+
+        with patch.object(transport_mod, "_default_socket_path", "/tmp/real.sock"):
+            with patch.object(transport_mod, "_sidecar_own_socket", None):
+                with patch.object(transport_mod, "UdsConnection", return_value=mock_conn):
+                    client = ReverseRpcClient()
+                    await client.call("m1", {})
+                    await client.call("m2", {})
+                    assert mock_conn.connect.await_count == 1
+                    assert mock_conn.call.await_count == 2
+
+
+class TestReverseRpcTransportWithConnection:
+    @pytest.mark.asyncio
+    async def test_complete_with_connection(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mock_conn = AsyncMock(spec=UdsConnection)
+        mock_conn.call = AsyncMock(return_value={
+            "content": "Hello", "tool_calls": [], "usage": {"total_tokens": 5},
+        })
+
+        with patch.object(transport_mod, "_default_socket_path", "/tmp/real.sock"):
+            with patch.object(transport_mod, "_sidecar_own_socket", None):
+                with patch.object(transport_mod, "UdsConnection", return_value=mock_conn):
+                    t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+                    result = await t.complete(
+                        messages=({"role": "user", "content": "hi"},),
+                        tool_names=("bash",),
+                    )
+                    assert isinstance(result, ModelTurn)
+                    assert result.content == "Hello"
+
+    @pytest.mark.asyncio
+    async def test_probe_with_connection(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mock_conn = AsyncMock(spec=UdsConnection)
+        mock_conn.call = AsyncMock(return_value={"status": "ok"})
+
+        with patch.object(transport_mod, "_default_socket_path", "/tmp/real.sock"):
+            with patch.object(transport_mod, "_sidecar_own_socket", None):
+                with patch.object(transport_mod, "UdsConnection", return_value=mock_conn):
+                    t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+                    assert await t.probe() is True
+
+    @pytest.mark.asyncio
+    async def test_probe_with_connection_not_ok(self):
+        import ibreeze.runtime.transport as transport_mod
+
+        mock_conn = AsyncMock(spec=UdsConnection)
+        mock_conn.call = AsyncMock(return_value={"status": "error"})
+
+        with patch.object(transport_mod, "_default_socket_path", "/tmp/real.sock"):
+            with patch.object(transport_mod, "_sidecar_own_socket", None):
+                with patch.object(transport_mod, "UdsConnection", return_value=mock_conn):
+                    t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
+                    assert await t.probe() is False
+
+
+class TestUdsConnectionRemaining:
+    @pytest.mark.asyncio
+    async def test_read_loop_reader_none(self):
+        conn = UdsConnection("/tmp/test.sock")
+        await conn._read_loop()
+
+    @pytest.mark.asyncio
+    async def test_read_loop_generic_exception(self):
+        conn = UdsConnection("/tmp/test.sock")
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        conn._reader = mock_reader
+
+        payload = b"not valid json"
+        mock_reader.readexactly = AsyncMock(side_effect=[
+            len(payload).to_bytes(4, "big"),
+            payload,
+        ])
+        await conn._read_loop()
+
+    @pytest.mark.asyncio
+    async def test_close_no_writer(self):
+        conn = UdsConnection("/tmp/test.sock")
+        await conn.close()
+
+
+class TestReadFrameNotADict:
+    @pytest.mark.asyncio
+    async def test_read_frame_not_a_dict(self):
+        mock_reader = AsyncMock(spec=asyncio.StreamReader)
+        payload = json.dumps(["not", "a", "dict"]).encode("utf-8")
+        mock_reader.readexactly = AsyncMock(side_effect=[
+            len(payload).to_bytes(4, "big"),
+            payload,
+        ])
+        with pytest.raises(RuntimeError, match="Top-level frame must be a JSON object"):
+            await _read_frame(mock_reader)

@@ -1,14 +1,7 @@
 import { useAuthStore } from '../stores/authStore';
+import type { components } from '../generated/openapi/api';
 
-interface ProblemDetails {
-  type?: string;
-  title?: string;
-  status?: number;
-  detail?: string;
-  code?: string;
-  reference_id?: string;
-  [key: string]: unknown;
-}
+type SessionData = components['schemas']['SessionResponse'];
 
 const API_BASE = '/admin/api/v1';
 
@@ -20,7 +13,7 @@ export class ApiError extends Error {
   detail?: string;
   reference_id?: string;
 
-  constructor(status: number, problem?: ProblemDetails) {
+  constructor(status: number, problem?: { code?: string; detail?: string; title?: string; reference_id?: string }) {
     super(problem?.detail || problem?.title || `HTTP ${status}`);
     this.name = 'ApiError';
     this.status = status;
@@ -58,12 +51,25 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   return apiFetch<T>(path, { method: 'POST', body: formData, headers: {} });
 }
 
+export async function apiLogin(identifier: string, password: string, deviceId: string): Promise<SessionData> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, password, device_id: deviceId }),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    let problem: { code?: string; detail?: string } | undefined;
+    try { problem = await res.json(); } catch { /* ignore */ }
+    throw new ApiError(res.status, problem);
+  }
+  return res.json();
+}
+
 let refreshing: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {
   if (refreshing) return refreshing;
-  const token = useAuthStore.getState().token;
-  if (!token) return false;
   refreshing = (async () => {
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
@@ -71,7 +77,7 @@ async function tryRefreshToken(): Promise<boolean> {
         credentials: 'include',
       });
       if (!res.ok) return false;
-      const data = await res.json();
+      const data: SessionData = await res.json();
       useAuthStore.getState().login(data.data.access_token, data.data.user);
       return true;
     } catch {
@@ -114,10 +120,11 @@ async function apiFetch<T>(path: string, options?: RequestInit, version?: number
     if (res.status === 401 && attempt === 0) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
-        if (token) {
+        const newToken = useAuthStore.getState().token;
+        if (newToken) {
           mergedOptions.headers = {
             ...mergedOptions.headers,
-            'Authorization': `Bearer ${useAuthStore.getState().token}`,
+            'Authorization': `Bearer ${newToken}`,
           };
         }
         attempt++;
@@ -129,10 +136,10 @@ async function apiFetch<T>(path: string, options?: RequestInit, version?: number
     }
 
     if (!res.ok) {
-      let problem: ProblemDetails | undefined;
+      let problem: { code?: string; detail?: string; title?: string; reference_id?: string } | undefined;
       try {
         problem = await res.json();
-      } catch { /* ignore parse error, problem stays undefined */ }
+      } catch { /* ignore */ }
       throw new ApiError(res.status, problem);
     }
 
@@ -141,4 +148,16 @@ async function apiFetch<T>(path: string, options?: RequestInit, version?: number
   }
 
   throw new ApiError(401, { code: 'UNAUTHORIZED', detail: 'Session expired after refresh' });
+}
+
+export async function apiLogout(): Promise<void> {
+  const token = useAuthStore.getState().token;
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    });
+  } catch { /* best-effort */ }
 }

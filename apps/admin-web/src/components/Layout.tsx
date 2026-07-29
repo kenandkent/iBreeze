@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout as AntLayout, Menu } from 'antd';
+import { Layout as AntLayout, Menu, message } from 'antd';
 import {
   RobotOutlined,
   AppstoreOutlined,
@@ -14,6 +13,7 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
+import { apiLogout } from '../utils/apiClient';
 import { logger } from '../utils/logger';
 
 const { Sider, Content, Header } = AntLayout;
@@ -34,22 +34,19 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
 
   const handleMenuClick = ({ key }: { key: string }) => {
     logger.info('Layout', 'navigate', { from: location.pathname, to: key });
     navigate(key);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logger.info('Layout', 'logout');
+    try {
+      await apiLogout();
+    } catch { /* best-effort */ }
     logout();
+    message.success('已退出登录');
     navigate('/login', { replace: true });
   };
 

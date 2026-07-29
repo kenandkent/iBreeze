@@ -22,16 +22,23 @@ iBreeze 是一个以"模拟公司运作方式"组织多个 Agent 协作完成任
                            │ authenticated framed UDS (4B-length + JSON)
 ┌──────────────────────────▼───────────────────────────────────┐
 │ Python Sidecar Domain Kernel                                  │
-│ ├─ Application Lifecycle (11-phase startup / 9-step shutdown) │
-│ ├─ Generated RPC Dispatcher / Reverse Client                  │
+│ ├─ Application Lifecycle (11-phase startup incl. identity     │
+│ │  verification / 9-step shutdown)                            │
+│ ├─ Generated RPC Dispatcher / Reverse Client (with            │
+│ │  self-connection guard)                                     │
 │ ├─ Profile Persistence Kernel                                 │
 │ │  ├─ Migration Runner (001_initial.sql)                      │
 │ │  ├─ WriteQueue (cap 32) + Unit of Work + Idempotency        │
 │ │  └─ ReadPool (8 connections)                                 │
-│ ├─ Worker Supervisor (7 workers + heartbeat + backoff)         │
-│ ├─ Review/Completion State Machine (Command-driven)           │
+│ ├─ Worker Supervisor (7 workers + heartbeat + backoff +       │
+│ │  RuntimeWorker runtime_queue dispatch)                      │
+│ ├─ Review/Completion State Machine (Command-driven, opts out  │
+│ │  legacy review./completion./rework. handlers)               │
 │ ├─ CLI Adapter Protocol (Codex/Claude Code/OpenCode)          │
-│ └─ Built-in Model Runtime (via Credential HTTP Broker)        │
+│ ├─ Built-in Model Runtime (via Credential HTTP Broker,        │
+│ │  credential.probe with profile_directory_id)                │
+│ └─ Rework Attempt Lifecycle (RequestReworkHandler +           │
+│    AdvanceReworkAttemptHandler, optimistic lock)              │
 └───────────────────────────┬───────────────────────────────────┘
                            │ single-writer / read pool
 ┌──────────────────────────▼───────────────────────────────────┐
@@ -127,7 +134,11 @@ cd apps/desktop-core && cargo tauri dev
 - 本地知识库管理（SQLite + LanceDB 向量索引，ACL 预授权）
 - 工作区配置
 - 自动更新与回滚恢复（SQLite Online Backup 一致性快照 + tar.zst 打包）
-- 本地离线认证
+- 本地离线认证与 Profile 身份校验（`local_profile` 表 `backend_origin`/`app_user_id`/`masked_identifier`/`device_id` 四字段验证）
+- Runtime 队列调度（`runtime.dispatch_ready` 将 ready 项标记为 leased）
+- Reverse RPC 自连接防护（阻止 Sidecar 误连自身 UDS socket）
+- 凭据探测（`credential.probe` 支持 `profile_directory_id` 指定目录）
+- 返工尝试生命周期管理（`RequestReworkHandler` + `AdvanceReworkAttemptHandler`，乐观锁）
 
 ### 管理后台
 - 用户管理（应用用户、管理员）

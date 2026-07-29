@@ -44,13 +44,16 @@ class TestRuntimeWorkerWorkSuccess:
 
         wq.submit.assert_awaited_once()
         args, _ = wq.submit.await_args
-        assert args[0] == "runtime.tick"
+        assert args[0] == "runtime.dispatch_ready"
         assert isinstance(args[1], UUID)
         assert args[1].int == 0
 
     @patch("ibreeze.workers.runtime.logger")
-    async def test_inner_tick_is_callable_and_does_nothing(self, mock_logger):
+    async def test_inner_dispatch_ready_queries_db(self, mock_logger):
         conn = AsyncMock()
+        cursor = AsyncMock()
+        cursor.fetchall = AsyncMock(return_value=[])
+        conn.execute = AsyncMock(return_value=cursor)
 
         captured_fn = None
 
@@ -64,10 +67,13 @@ class TestRuntimeWorkerWorkSuccess:
         w = RuntimeWorker(write_queue=wq)
         await w.work()
 
-        # _tick should be callable and accept a connection
         assert captured_fn is not None
         result = await captured_fn(conn)
-        assert result is None
+        assert result == 0
+        assert conn.execute.call_count >= 1
+        sql = conn.execute.call_args[0][0]
+        assert "FROM runtime_queue" in sql
+        assert "status='ready'" in sql
 
     @patch("ibreeze.workers.runtime.logger")
     async def test_deadline_is_about_30_seconds(self, mock_logger):
@@ -80,8 +86,8 @@ class TestRuntimeWorkerWorkSuccess:
         deadline = args[2]
         now = datetime.now(UTC)
         assert deadline > now
-        assert (deadline - now).total_seconds() > 25
-        assert (deadline - now).total_seconds() < 35
+        assert (deadline - now).total_seconds() > 20
+        assert (deadline - now).total_seconds() < 30
 
 
 class TestRuntimeWorkerWorkException:
@@ -92,7 +98,7 @@ class TestRuntimeWorkerWorkException:
         w = RuntimeWorker(write_queue=wq)
         await w.work()
         mock_logger.exception.assert_called_once_with(
-            "RuntimeWorker tick failed"
+            "RuntimeWorker dispatch failed"
         )
 
     @patch("ibreeze.workers.runtime.logger")

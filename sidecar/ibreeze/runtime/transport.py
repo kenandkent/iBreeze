@@ -151,6 +151,14 @@ def get_reverse_rpc_socket_path() -> str | None:
     return _default_socket_path
 
 
+_sidecar_own_socket: str | None = None
+
+
+def mark_sidecar_own_socket(path: str | None) -> None:
+    global _sidecar_own_socket
+    _sidecar_own_socket = path
+
+
 class ReverseRpcClient:
     """RPC client that talks to the Rust Credential/Egress Broker via UDS.
 
@@ -165,7 +173,14 @@ class ReverseRpcClient:
         self.last_params: dict[str, Any] | None = None
 
     async def _ensure_connected(self) -> UdsConnection | None:
-        if self._conn is None and self._socket_path is not None:
+        if self._socket_path is None:
+            return None
+        if _sidecar_own_socket is not None and self._socket_path == _sidecar_own_socket:
+            raise RuntimeError(
+                "ReverseRpcClient cannot connect to Sidecar's own UDS socket. "
+                "The Rust Credential/Egress Broker must provide a separate reverse UDS endpoint."
+            )
+        if self._conn is None:
             self._conn = UdsConnection(self._socket_path)
             await self._conn.connect()
         return self._conn
@@ -261,6 +276,7 @@ class ReverseRpcTransport(ModelTransport):
     async def probe(self) -> bool:
         result = await self._rpc.call("credential.probe", {
             "credential_ref": self._credential_ref,
+            "profile_directory_id": self._profile_directory_id,
         })
         return result.get("status") == "ok"
 

@@ -57,6 +57,14 @@ pub struct ReverseMethodTable {
     methods: HashMap<String, ReverseHandler>,
 }
 
+impl std::fmt::Debug for ReverseMethodTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReverseMethodTable")
+            .field("method_count", &self.methods.len())
+            .finish()
+    }
+}
+
 type ReverseHandler = Arc<
     dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, IpcError>> + Send>> + Send + Sync,
 >;

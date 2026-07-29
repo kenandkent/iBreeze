@@ -1,26 +1,56 @@
 # =============================================================================
-# iBreeze 生产环境 Docker Compose
+# iBreeze 生产环境 Docker Compose（独立文件，不依赖 base compose）
 # =============================================================================
 # 使用方式：
 #   创建 .env 文件并填写所有必填变量：
 #     POSTGRES_PASSWORD=...
-#     MINIO_ROOT_USER=...
+#     MINIO_ROOT_USER=minioadmin
 #     MINIO_ROOT_PASSWORD=...
-#     IBREEZE_S3_SECRET_KEY=...   # 可选，与 MINIO_ROOT_PASSWORD 不同时设置
-#   然后运行：
-#     docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d
+#   docker compose -f deploy/docker-compose.prod.yml up -d
 #
-# 安全特性：
-#   - 内部服务（PostgreSQL、MinIO、Backend）不暴露对外端口
-#   - 外部入口仅通过 Nginx（8080）和 Admin Web（51421）
-#   - 所有服务设置 CPU/内存资源限制
-#   - 重启策略为 always（配合编排工具可进一步自动恢复）
+# 安全设计：
+#   - 内部服务不暴露对外端口，仅 nginx 暴露 8080
+#   - 三层网络隔离：data / backend / frontend
+#   - 所有服务使用只读根文件系统 + tmpfs
+#   - 删除所有非必要 Linux capabilities
 #   - 生产应配合 Caddy/Nginx/Traefik 配置 TLS
+#   - Secret 通过 Docker Secret 或 .env 注入
 # =============================================================================
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  minio_root_user:
+    file: ./secrets/minio_root_user.txt
+  minio_root_password:
+    file: ./secrets/minio_root_password.txt
 
 services:
   postgres:
-    ports: []
+    image: postgres:16-alpine@sha256:5ca3df04b5246ec0e79c3c22e1e4321a6e3e2b56a2fa22e61c55ee2b32e63b46
+    environment:
+      POSTGRES_DB: ibreeze
+      POSTGRES_USER: ibreeze
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ibreeze -d ibreeze"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - data
+    restart: always
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -31,7 +61,31 @@ services:
           memory: 512M
 
   minio:
-    ports: []
+    image: minio/minio:RELEASE.2024-10-13T13-34-42Z@sha256:2578f1aea4ff07f80e46e5b8c1e95d8f851b3e20e5457b3f8b5c8b5d8e4f6a7b
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    volumes:
+      - minio_data:/data
+    tmpfs:
+      - /tmp
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - data
+    restart: always
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -42,6 +96,25 @@ services:
           memory: 256M
 
   migration:
+    build:
+      context: ../apps/backend-api
+      dockerfile: Dockerfile
+    environment:
+      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:${POSTGRES_PASSWORD}@postgres:5432/ibreeze
+      IBREEZE_API_PORT: "51080"
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    command: ["/app/.venv/bin/alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -49,9 +122,35 @@ services:
           memory: 512M
 
   backend-api:
-    ports: []
+    build:
+      context: ../apps/backend-api
+      dockerfile: Dockerfile
     environment:
+      IBREEZE_DATABASE_URL: postgresql+asyncpg://ibreeze:${POSTGRES_PASSWORD}@postgres:5432/ibreeze
+      IBREEZE_API_PORT: "51080"
+      IBREEZE_S3_ENDPOINT_URL: http://minio:9000
+      IBREEZE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      IBREEZE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      IBREEZE_S3_BUCKET_NAME: ibreeze
       IBREEZE_LOG_LEVEL: WARNING
+    tmpfs:
+      - /tmp
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - data
+      - backend
+    restart: always
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -62,6 +161,19 @@ services:
           memory: 512M
 
   admin-web:
+    build:
+      context: ../apps/admin-web
+      dockerfile: Dockerfile
+    depends_on:
+      - backend-api
+    networks:
+      - frontend
+    restart: always
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -72,6 +184,22 @@ services:
           memory: 128M
 
   nginx:
+    image: nginx:1.26-alpine@sha256:186b743caa198a2c98440da82e8ec6f67e8c25551e6d6c7f4b32e7e4e0c8d5e2
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend-api
+      - admin-web
+    networks:
+      - frontend
+      - backend
+    restart: always
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
@@ -80,3 +208,17 @@ services:
         reservations:
           cpus: "0.1"
           memory: 64M
+
+networks:
+  data:
+    driver: bridge
+    internal: true
+  backend:
+    driver: bridge
+    internal: true
+  frontend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:

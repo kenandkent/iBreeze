@@ -130,7 +130,7 @@ class AdvanceReworkAttemptHandler:
                 """SELECT id, company_task_id, department_task_id, attempt_no,
                           status, version
                    FROM rework_attempts
-                   WHERE id=? AND company_id=? FOR UPDATE""",
+                   WHERE id=? AND company_id=?""",
                 (str(attempt_id), str(company_id)),
             )
             row = await cursor.fetchone()
@@ -141,8 +141,7 @@ class AdvanceReworkAttemptHandler:
             if target_status not in allowed:
                 raise ValueError("STATE_TRANSITION_INVALID")
 
-            completed_at = "datetime('now')" if target_status in ("completed", "cancelled", "failed") else None
-            if completed_at:
+            if target_status in ("completed", "cancelled", "failed"):
                 await session.execute(
                     """UPDATE rework_attempts
                        SET status=?, version=version+1, completed_at=datetime('now')

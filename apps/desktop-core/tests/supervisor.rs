@@ -1,8 +1,15 @@
+use std::sync::Arc;
+
+use ibreeze_desktop_core::ipc::dispatcher::ReverseMethodTable;
 use ibreeze_desktop_core::sidecar::SidecarSupervisor;
+
+fn test_supervisor() -> SidecarSupervisor {
+    SidecarSupervisor::new(Arc::new(ReverseMethodTable::new()))
+}
 
 #[tokio::test]
 async fn supervisor_initial_state() {
-    let supervisor = SidecarSupervisor::new();
+    let supervisor = test_supervisor();
     assert!(
         !supervisor.is_running().await,
         "supervisor must start not running"
@@ -12,7 +19,7 @@ async fn supervisor_initial_state() {
 
 #[tokio::test]
 async fn stop_empty_supervisor_returns_false() {
-    let supervisor = SidecarSupervisor::new();
+    let supervisor = test_supervisor();
     let result = supervisor
         .stop()
         .await
@@ -22,7 +29,7 @@ async fn stop_empty_supervisor_returns_false() {
 
 #[tokio::test]
 async fn restart_tracker_tracks_restarts() {
-    let supervisor = SidecarSupervisor::new();
+    let supervisor = test_supervisor();
     assert!(!supervisor.is_throttled().await, "not throttled initially");
     supervisor.record_restart().await;
     supervisor.record_restart().await;

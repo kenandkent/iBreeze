@@ -30,8 +30,6 @@ class ProfileHealth:
 @dataclass
 class QueueHealth:
     write_depth: int = 0
-    runtime_ready: int = 0
-    outbox_pending: int = 0
 
 
 @dataclass

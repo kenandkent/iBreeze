@@ -11,7 +11,7 @@ import click
 
 from ibreeze.application.app import SidecarApplication
 from ibreeze.logging_config import setup_logging
-from ibreeze.rpc_server import PROTOCOL_VERSION
+from ibreeze.rpc.production_server import PROTOCOL_VERSION
 
 
 async def _run(
@@ -39,6 +39,7 @@ async def _run(
     )
     try:
         await app.start()
+        await app.rpc_server.serve_forever()
     finally:
         await app.stop()
 

@@ -27,10 +27,11 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-antd-icons': ['@ant-design/icons'],
           'vendor-antd': ['antd'],
+          'vendor-query': ['@tanstack/react-query'],
         },
       },
     },
-    chunkSizeWarningLimit: 1100,
+    chunkSizeWarningLimit: 500,
   },
   test: {
     globals: true,

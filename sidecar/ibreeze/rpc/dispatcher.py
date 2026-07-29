@@ -10,7 +10,7 @@ from ibreeze.rpc.multiplexer import (
 )
 from ibreeze.rpc.session import IpcSession
 
-HandlerFn = Callable[[dict[str, Any], IpcSession], Coroutine[Any, Any, Any]]
+HandlerFn = Callable[[dict[str, Any], object], Coroutine[Any, Any, Any]]
 
 
 class Dispatcher:
@@ -31,7 +31,7 @@ class Dispatcher:
         self,
         method: str,
         params: dict[str, Any],
-        session: IpcSession,
+        session: object,
     ) -> Any:
         handler = self._handlers.get(method)
         if handler is None:
@@ -53,7 +53,7 @@ class ReverseMethodTable:
         handler = self._handlers.get(method)
         if handler is None:
             raise MethodNotAllowed(f"METHOD_NOT_ALLOWED: {method}")
-        return await handler(params, None)  # type: ignore[arg-type]
+        return await handler(params, None)
 
 
 async def handle_frame(

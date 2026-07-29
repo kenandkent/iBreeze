@@ -2,13 +2,12 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ibreeze.rpc.dispatcher import Dispatcher, HandlerFn
-from ibreeze.rpc.session import IpcSession
 
 OldHandler = Callable[[dict[str, Any]], Awaitable[object]]
 
 
 def wrap_handler(handler: OldHandler) -> HandlerFn:
-    async def wrapped(params: dict[str, Any], session: IpcSession) -> Any:
+    async def wrapped(params: dict[str, Any], session: object) -> Any:
         return await handler(params)
     return wrapped
 

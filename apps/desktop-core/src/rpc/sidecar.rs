@@ -1,6 +1,16 @@
 //! Authenticated, length-framed JSON-RPC client over a Unix domain socket.
+//!
+//! Uses a background reader task with a pending-map multiplexer so that
+//! multiple concurrent `call()`s can have their responses matched by ID
+//! rather than relying on serial request-response ordering.
+//!
+//! The reader task also handles reverse JSON-RPC requests from the sidecar
+//! (identified by a `"sidecar:"`-prefixed id), dispatches them through the
+//! reverse handler table, and writes the response frames back.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use hmac::{Hmac, Mac};
@@ -10,12 +20,15 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::Sha256;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixStream;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::AppError;
+use crate::ipc::dispatcher::ReverseMethodTable;
 use crate::rpc::protocol::{
     JsonRpcRequest, JsonRpcResponse, RpcMeta, MAX_FRAME_BYTES, PROTOCOL_VERSION,
 };
@@ -35,18 +48,24 @@ struct HandshakeResponse {
 #[derive(Debug)]
 pub struct SidecarClient {
     socket_path: PathBuf,
-    stream: Mutex<Option<UnixStream>>,
+    writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
     ipc_session_id: Mutex<Option<Uuid>>,
     window_session_id: Uuid,
+    pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>>>,
+    reader_task: Mutex<Option<JoinHandle<()>>>,
+    reverse_table: Arc<ReverseMethodTable>,
 }
 
 impl SidecarClient {
-    pub fn new(socket_path: impl Into<PathBuf>) -> Self {
+    pub fn new(socket_path: impl Into<PathBuf>, reverse_table: Arc<ReverseMethodTable>) -> Self {
         Self {
             socket_path: socket_path.into(),
-            stream: Mutex::new(None),
+            writer: Arc::new(Mutex::new(None)),
             ipc_session_id: Mutex::new(None),
             window_session_id: Uuid::new_v4(),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+            reader_task: Mutex::new(None),
+            reverse_table,
         }
     }
 
@@ -68,7 +87,20 @@ impl SidecarClient {
         let stream = UnixStream::connect(&self.socket_path)
             .await
             .map_err(|error| AppError::Sidecar(format!("connect UDS: {error}")))?;
-        *self.stream.lock().await = Some(stream);
+
+        let (reader, writer_half) = stream.into_split();
+        {
+            let mut w = self.writer.lock().await;
+            *w = Some(writer_half);
+        }
+        let reader_writer = self.writer.clone();
+
+        let pending = Arc::clone(&self.pending);
+        let rev_table = Arc::clone(&self.reverse_table);
+        let handle = tokio::spawn(async move {
+            Self::reader_loop(reader, reader_writer, pending, rev_table).await;
+        });
+        *self.reader_task.lock().await = Some(handle);
 
         let mut nonce = [0_u8; 32];
         rand::thread_rng().fill_bytes(&mut nonce);
@@ -133,7 +165,22 @@ impl SidecarClient {
     }
 
     pub async fn disconnect(&self) {
-        *self.stream.lock().await = None;
+        // Cancel the background reader task.
+        {
+            let mut task = self.reader_task.lock().await;
+            if let Some(handle) = task.take() {
+                handle.abort();
+            }
+        }
+        // Signal all pending callers with a disconnect error.
+        {
+            let mut pending = self.pending.lock().await;
+            for (_, tx) in pending.drain() {
+                let _ = tx.send(Err(AppError::Sidecar(
+                    "Sidecar disconnected".to_owned(),
+                )));
+            }
+        }
         *self.ipc_session_id.lock().await = None;
     }
 
@@ -146,39 +193,22 @@ impl SidecarClient {
                 "RPC request exceeds frame limit".to_owned(),
             ));
         }
-        let mut guard = self.stream.lock().await;
-        let stream = guard
-            .as_mut()
-            .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
-        stream
-            .write_all(&(payload.len() as u32).to_be_bytes())
-            .await
-            .map_err(|error| AppError::Sidecar(format!("write frame: {error}")))?;
-        stream
-            .write_all(&payload)
-            .await
-            .map_err(|error| AppError::Sidecar(format!("write payload: {error}")))?;
-        stream
-            .flush()
-            .await
-            .map_err(|error| AppError::Sidecar(format!("flush payload: {error}")))?;
-        let size = stream
-            .read_u32()
-            .await
-            .map_err(|error| AppError::Sidecar(format!("read frame: {error}")))?
-            as usize;
-        if size == 0 || size > MAX_FRAME_BYTES {
-            return Err(AppError::Sidecar(
-                "Sidecar returned an invalid frame length".to_owned(),
-            ));
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut pending = self.pending.lock().await;
+            pending.insert(request_id.clone(), tx);
         }
-        let mut response_payload = vec![0_u8; size];
-        stream
-            .read_exact(&mut response_payload)
+        {
+            let mut writer_guard = self.writer.lock().await;
+            let writer = writer_guard
+                .as_mut()
+                .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
+            Self::write_frame(writer, &payload).await?;
+        }
+        let response: JsonRpcResponse = rx
             .await
-            .map_err(|error| AppError::Sidecar(format!("read payload: {error}")))?;
-        let response: JsonRpcResponse = serde_json::from_slice(&response_payload)
-            .map_err(|error| AppError::Sidecar(format!("decode response: {error}")))?;
+            .map_err(|_| AppError::Sidecar("Sidecar reader task terminated".to_owned()))?
+            .map_err(|e| e)?;
         if response.jsonrpc != "2.0" || response.id != request_id {
             return Err(AppError::Sidecar(
                 "Sidecar response correlation failed".to_owned(),
@@ -197,5 +227,98 @@ impl SidecarClient {
         serde_json::from_value(value).map_err(|error| {
             AppError::Sidecar(format!("RPC result does not match contract: {error}"))
         })
+    }
+
+    async fn write_frame(
+        writer: &mut OwnedWriteHalf,
+        payload: &[u8],
+    ) -> Result<(), AppError> {
+        writer
+            .write_all(&(payload.len() as u32).to_be_bytes())
+            .await
+            .map_err(|error| AppError::Sidecar(format!("write frame: {error}")))?;
+        writer
+            .write_all(payload)
+            .await
+            .map_err(|error| AppError::Sidecar(format!("write payload: {error}")))?;
+        writer
+            .flush()
+            .await
+            .map_err(|error| AppError::Sidecar(format!("flush payload: {error}")))?;
+        Ok(())
+    }
+
+    async fn reader_loop(
+        mut reader: OwnedReadHalf,
+        writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
+        pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>>>,
+        reverse_table: Arc<ReverseMethodTable>,
+    ) {
+        loop {
+            let size = match reader.read_u32().await {
+                Ok(n) => n as usize,
+                Err(_) => break,
+            };
+            if size == 0 || size > MAX_FRAME_BYTES {
+                break;
+            }
+            let mut buf = vec![0_u8; size];
+            if reader.read_exact(&mut buf).await.is_err() {
+                break;
+            }
+            let response: JsonRpcResponse = match serde_json::from_slice(&buf) {
+                Ok(r) => r,
+                Err(_) => break,
+            };
+
+            if response.id.starts_with("sidecar:") {
+                let request: JsonRpcRequest = match serde_json::from_slice(&buf) {
+                    Ok(r) => r,
+                    Err(_) => break,
+                };
+                let result = reverse_table.dispatch(&request.method, request.params).await;
+                let response_payload = match result {
+                    Ok(value) => serde_json::to_vec(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request.id,
+                        "result": value,
+                    })),
+                    Err(error) => serde_json::to_vec(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request.id,
+                        "error": {
+                            "code": -32000,
+                            "message": error.to_string(),
+                        },
+                    })),
+                };
+                let payload = match response_payload {
+                    Ok(p) => p,
+                    Err(_) => break,
+                };
+                let mut writer_guard = writer.lock().await;
+                if let Some(w) = writer_guard.as_mut() {
+                    let _ = Self::write_frame(w, &payload).await;
+                }
+                continue;
+            }
+
+            let mut pending = pending.lock().await;
+            if let Some(tx) = pending.remove(&response.id) {
+                let _ = tx.send(Ok(response));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_defaults() {
+        let rev_table = Arc::new(ReverseMethodTable::new());
+        let client = SidecarClient::new("/tmp/test.sock", rev_table);
+        assert_eq!(client.socket_path(), Path::new("/tmp/test.sock"));
     }
 }

@@ -15,6 +15,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::AppError;
+use crate::ipc::dispatcher::ReverseMethodTable;
 use crate::rpc::protocol::PROTOCOL_VERSION;
 use crate::rpc::sidecar::SidecarClient;
 
@@ -69,13 +70,15 @@ impl RestartTracker {
 pub struct SidecarSupervisor {
     running: Mutex<Option<RunningSidecar>>,
     restart_tracker: Mutex<RestartTracker>,
+    reverse_table: Arc<ReverseMethodTable>,
 }
 
 impl SidecarSupervisor {
-    pub fn new() -> Self {
+    pub fn new(reverse_table: Arc<ReverseMethodTable>) -> Self {
         Self {
             running: Mutex::new(None),
             restart_tracker: Mutex::new(RestartTracker::new()),
+            reverse_table,
         }
     }
 
@@ -163,7 +166,7 @@ impl SidecarSupervisor {
             .map_err(|error| AppError::Sidecar(format!("close startup channel: {error}")))?;
 
         wait_for_socket(&mut child, &socket_path).await?;
-        let client = Arc::new(SidecarClient::new(&socket_path));
+        let client = Arc::new(SidecarClient::new(&socket_path, self.reverse_table.clone()));
         if let Err(error) = client
             .connect_and_handshake(token_bytes, app_version, launch_id)
             .await
@@ -266,7 +269,7 @@ impl SidecarSupervisor {
 
 impl Default for SidecarSupervisor {
     fn default() -> Self {
-        Self::new()
+        Self::new(Arc::new(ReverseMethodTable::new()))
     }
 }
 
@@ -313,9 +316,13 @@ fn send_signal(pid: nix::unistd::Pid, signal: nix::sys::signal::Signal) -> Resul
 mod tests {
     use super::*;
 
+    fn test_supervisor() -> SidecarSupervisor {
+        SidecarSupervisor::new(Arc::new(ReverseMethodTable::new()))
+    }
+
     #[tokio::test]
     async fn supervisor_starts_closed() {
-        let supervisor = SidecarSupervisor::new();
+        let supervisor = test_supervisor();
         assert!(!supervisor.is_running().await);
         assert!(!supervisor.stop().await.expect("stop empty supervisor"));
     }
@@ -332,7 +339,7 @@ mod tests {
 
     #[tokio::test]
     async fn start_rejects_when_throttled() {
-        let supervisor = SidecarSupervisor::new();
+        let supervisor = test_supervisor();
         for _ in 0..MAX_RESTARTS {
             supervisor.record_restart().await;
         }

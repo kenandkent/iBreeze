@@ -60,11 +60,17 @@ compare_dir "desktop-core/src/generated/contracts" \
   "$ROOT_DIR/apps/desktop-core/src/generated/contracts" \
   "$TMP_DIR/out/apps/desktop-core/src/generated/contracts"
 
-# Sidecar generated files are gitignored and not committed as baseline;
-# regeneration is done on-demand when sidecar code needs them.
-# compare_dir "sidecar/ibreeze/generated/rpc" ...
-# compare_dir "sidecar/ibreeze/generated/domain_events" ...
-# compare_dir "sidecar/ibreeze/generated/skills" ...
+compare_dir "sidecar/ibreeze/generated/rpc" \
+  "$ROOT_DIR/sidecar/ibreeze/generated/rpc" \
+  "$TMP_DIR/out/sidecar/ibreeze/generated/rpc"
+
+compare_dir "sidecar/ibreeze/generated/domain_events" \
+  "$ROOT_DIR/sidecar/ibreeze/generated/domain_events" \
+  "$TMP_DIR/out/sidecar/ibreeze/generated/domain_events"
+
+compare_dir "sidecar/ibreeze/generated/skills" \
+  "$ROOT_DIR/sidecar/ibreeze/generated/skills" \
+  "$TMP_DIR/out/sidecar/ibreeze/generated/skills"
 
 compare_dir "admin-web/src/generated/openapi" \
   "$ROOT_DIR/apps/admin-web/src/generated/openapi" \

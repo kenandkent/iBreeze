@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import { Form, Input, Button, Card, Alert, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { getDeviceId } from '../utils/deviceId';
+import { apiLogin, ApiError } from '../utils/apiClient';
 import { logger } from '../utils/logger';
 
 export default function LoginPage() {
@@ -18,31 +19,21 @@ export default function LoginPage() {
     try {
       const deviceId = getDeviceId();
       logger.info('LoginPage', 'login_start', { identifier: values.identifier });
-      const res = await fetch('/admin/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...values, device_id: deviceId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const code = body.code || body.detail;
-        logger.error('LoginPage', 'login_http_error', { identifier: values.identifier, status: res.status }, code);
-        if (code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
-          setError('首次登录需要修改密码');
-          return;
-        }
-        throw new Error(body.detail || '登录失败');
-      }
-      const data = await res.json();
-      if (data.data.pwd_change_required) {
+      const session = await apiLogin(values.identifier, values.password, deviceId);
+      if (session.data.pwd_change_required) {
+        logger.error('LoginPage', 'pwd_change_required', { identifier: values.identifier });
         setError('首次登录需要修改密码');
         return;
       }
-      login(data.data.access_token, data.data.user);
+      login(session.data.access_token, session.data.user);
       logger.info('LoginPage', 'login_success', { identifier: values.identifier });
       message.success('登录成功');
       navigate('/agents', { replace: true });
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
+        setError('首次登录需要修改密码');
+        return;
+      }
       const msg = e instanceof Error ? e.message : '用户名或密码错误';
       logger.error('LoginPage', 'login_failed', { identifier: values.identifier }, msg);
       setError(msg);

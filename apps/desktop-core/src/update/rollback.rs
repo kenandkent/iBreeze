@@ -127,12 +127,19 @@ impl UpdateStore {
             return Err(e);
         }
 
+        let old_dir = parent.join(format!(".old_{}", Uuid::new_v4()));
         if target_dir.exists() {
-            std::fs::remove_dir_all(target_dir)
-                .map_err(|e| AppError::Storage(format!("remove target: {e}")))?;
+            std::fs::rename(target_dir, &old_dir)
+                .map_err(|e| AppError::Storage(format!("rename old target: {e}")))?;
         }
-        std::fs::rename(&staging, target_dir)
-            .map_err(|e| AppError::Storage(format!("rename: {e}")))?;
+        if let Err(e) = std::fs::rename(&staging, target_dir) {
+            let _ = std::fs::remove_dir_all(&staging);
+            if old_dir.exists() {
+                let _ = std::fs::rename(&old_dir, target_dir);
+            }
+            return Err(AppError::Storage(format!("rename: {e}")));
+        }
+        let _ = std::fs::remove_dir_all(&old_dir);
 
         Ok(())
     }
@@ -295,17 +302,45 @@ impl UpdateStore {
         if !backup_archive.exists() {
             return Err(AppError::NotFound("UPDATE_BACKUP_NOT_FOUND".to_owned()));
         }
+        Self::validate_tar_entries(&backup_archive)?;
+
+        let parent = install_path.parent().unwrap_or(Path::new("."));
+        let staging = parent.join(format!(".restore_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&staging)
+            .map_err(|e| AppError::Storage(format!("create restore staging: {e}")))?;
+
         let status = std::process::Command::new("tar")
             .arg("-xzf")
             .arg(&backup_archive)
             .arg("-C")
-            .arg(install_path)
+            .arg(&staging)
             .status()
-            .map_err(|e| AppError::Io(format!("restore tar failed: {e}")))?;
+            .map_err(|e| AppError::Io(format!("restore extract: {e}")))?;
 
         if !status.success() {
-            return Err(AppError::Io("UPDATE_BACKUP_RESTORE_FAILED".to_owned()));
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(AppError::Io("UPDATE_BACKUP_RESTORE_EXTRACT_FAILED".to_owned()));
         }
+
+        if let Err(e) = Self::validate_extracted(&staging) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(e);
+        }
+
+        let old_dir = parent.join(format!(".old_restore_{}", Uuid::new_v4()));
+        if install_path.exists() {
+            std::fs::rename(install_path, &old_dir)
+                .map_err(|e| AppError::Storage(format!("rename old install: {e}")))?;
+        }
+        if let Err(e) = std::fs::rename(&staging, install_path) {
+            let _ = std::fs::remove_dir_all(&staging);
+            if old_dir.exists() {
+                let _ = std::fs::rename(&old_dir, install_path);
+            }
+            return Err(AppError::Storage(format!("rename restored: {e}")));
+        }
+        let _ = std::fs::remove_dir_all(&old_dir);
+
         info!(backup_id = %backup_id, "UPDATE_BACKUP_RESTORED");
         Ok(())
     }

@@ -1,0 +1,18 @@
+{
+  "advisories": [
+    {
+      "id": "GHSA-mh99-v99m-4gvg",
+      "package": "brace-expansion",
+      "severity": "high",
+      "reason": "Transitive via @redocly/openapi-core (openapi-typescript codegen devDep). Upstream must update before we can fix."
+    },
+    {
+      "id": "GHSA-52cp-r559-cp3m",
+      "package": "js-yaml",
+      "severity": "high",
+      "reason": "Transitive via @redocly/openapi-core (openapi-typescript codegen devDep). Upstream must update before we can fix."
+    }
+  ],
+  "expires": "2026-09-01",
+  "owner": "security-team"
+}

@@ -38,5 +38,8 @@ jobs:
       - name: Install cargo-nextest
         if: matrix.scope == 'desktop'
         run: cargo install cargo-nextest --locked
+      - name: Install cargo-llvm-cov
+        if: matrix.scope == 'desktop'
+        run: cargo install cargo-llvm-cov --locked
       - name: Verify
         run: bash scripts/verify-all.sh --scope ${{ matrix.scope }}

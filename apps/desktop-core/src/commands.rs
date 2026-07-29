@@ -60,7 +60,7 @@ pub struct AppState {
     pub development_mode: bool,
     pub http_broker: Arc<HttpBroker>,
     pub credential_store: Arc<CredentialStore>,
-    pub reverse_table: ReverseMethodTable,
+    pub reverse_table: Arc<ReverseMethodTable>,
 }
 
 impl AppState {
@@ -87,10 +87,11 @@ impl AppState {
             http_broker.clone(),
             credential_store.clone(),
         );
+        let rev_table_arc = Arc::new(reverse_table);
         Self {
             backend: RwLock::new(None),
             auth: RwLock::new(AuthState::default()),
-            supervisor: SidecarSupervisor::new(),
+            supervisor: SidecarSupervisor::new(rev_table_arc.clone()),
             store,
             keyring: SecureKeyring::new(),
             grant_store: GrantStore::new(),
@@ -100,7 +101,7 @@ impl AppState {
             development_mode,
             http_broker,
             credential_store,
-            reverse_table,
+            reverse_table: rev_table_arc.clone(),
         }
     }
 

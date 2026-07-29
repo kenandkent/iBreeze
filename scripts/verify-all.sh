@@ -20,24 +20,13 @@ done
 
 echo "=== iBreeze Verify All (scope: ${SCOPE}) ==="
 
-required_tools=(node npm uv cargo)
-missing_optional=()
+required_tools=(node npm uv cargo cargo-nextest cargo-llvm-cov)
 for tool in "${required_tools[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
         echo "FATAL: required tool '$tool' not found" >&2
         exit 1
     fi
 done
-
-if ! command -v cargo-nextest &>/dev/null; then
-    missing_optional+=("cargo-nextest")
-    echo "WARNING: cargo-nextest not found, will fallback to cargo test" >&2
-fi
-
-if ! command -v cargo-llvm-cov &>/dev/null; then
-    missing_optional+=("cargo-llvm-cov")
-    echo "WARNING: cargo-llvm-cov not found, will skip coverage checks" >&2
-fi
 
 run_contracts() {
     echo "--- packages/contracts install ---"
@@ -55,26 +44,64 @@ run_desktop_rust() {
     cargo fmt --manifest-path apps/desktop-core/Cargo.toml --all -- --check
     echo "--- desktop-core clippy ---"
     cargo clippy --manifest-path apps/desktop-core/Cargo.toml --all-targets --all-features -- -D warnings
-    if command -v cargo-nextest &>/dev/null; then
-        echo "--- desktop-core test (nextest) ---"
-        cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features --no-fail-fast
+    echo "--- desktop-core test (nextest) ---"
+    cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features --no-fail-fast
+    echo "--- desktop-core coverage ---"
+    cargo llvm-cov --manifest-path apps/desktop-core/Cargo.toml --all-features --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+}
+
+audit_app() {
+    local prefix="$1"
+    local exception_file="$2"
+    local audit_out
+    audit_out=$(npm audit --prefix "$prefix" --audit-level=high 2>&1) || true
+    if echo "$audit_out" | grep -q "found 0 vulnerabilities"; then
+        echo "--- npm audit $prefix: 0 vulnerabilities ---"
+    elif [ -n "$exception_file" ] && [ -f "$exception_file" ]; then
+        local exceptions
+        exceptions=$(python3 -c "
+import json, sys
+with open('$exception_file') as f:
+    data = json.load(f)
+for adv in data.get('advisories', []):
+    print(adv['id'])
+" 2>/dev/null)
+        local unfixed
+        unfixed=$(echo "$audit_out" | python3 -c "
+import sys, re
+for line in sys.stdin:
+    m = re.search(r'https://github.com/advisories/(\S+)', line)
+    if m:
+        print(m.group(1))
+" 2>/dev/null | sort -u)
+        local unknown=()
+        while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            if ! echo "$exceptions" | grep -qF "$id"; then
+                unknown+=("$id")
+            fi
+        done <<< "$unfixed"
+        if [ ${#unknown[@]} -gt 0 ]; then
+            echo "ERROR: audit found new (non-exempted) advisories: ${unknown[*]}" >&2
+            exit 1
+        fi
+        echo "--- npm audit $prefix: $(echo "$unfixed" | wc -l) exempted vulnerabilities ---"
     else
-        echo "--- desktop-core test (cargo test) ---"
-        cargo test --manifest-path apps/desktop-core/Cargo.toml --all-features
-    fi
-    if command -v cargo-llvm-cov &>/dev/null; then
-        echo "--- desktop-core coverage ---"
-        cargo llvm-cov --manifest-path apps/desktop-core/Cargo.toml --all-features --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
-    else
-        echo "--- desktop-core coverage (skipped, cargo-llvm-cov not found) ---"
+        echo "ERROR: npm audit $prefix failed:" >&2
+        echo "$audit_out" >&2
+        exit 1
     fi
 }
 
 run_desktop_ui() {
     echo "--- desktop install ---"
     npm --prefix apps/desktop ci
+    echo "--- desktop audit ---"
+    audit_app apps/desktop ""
     echo "--- admin-web install ---"
     npm --prefix apps/admin-web ci
+    echo "--- admin-web audit ---"
+    audit_app apps/admin-web "apps/admin-web/.audit-exceptions.json"
     echo "--- desktop lint ---"
     npm --prefix apps/desktop run lint
     echo "--- desktop typecheck ---"

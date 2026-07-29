@@ -224,15 +224,35 @@ pub fn register_reverse_handlers(
             })
         }),
     );
-    // probe handler — needs profile_directory_id; stored in credential_ref field for lookup
+    let broker_clone = broker.clone();
     table.register("credential.probe", Arc::new(move |params| {
+        let broker = broker_clone.clone();
         Box::pin(async move {
-            let _request: CredentialProbe =
-                serde_json::from_value(params).map_err(|e| IpcError::Internal(e.to_string()))?;
-            // probe needs profile_directory_id from context; not yet wired
-            Err(IpcError::Internal(
-                "CREDENTIAL_PROBE_REQUIRES_PROFILE: use credential.probe with a profile_directory_id param".to_owned(),
-            ))
+            let request: CredentialProbe =
+                serde_json::from_value(params.clone()).map_err(|e| IpcError::Internal(e.to_string()))?;
+            let profile_id = params.get("profile_directory_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
+            let result = broker.handle_credential_probe(request, profile_id).await;
+            result.map_err(|e| IpcError::Internal(e.to_string()))
+        })
+    }));
+    table.register("runtime.processRegistered", Arc::new(|params| {
+        Box::pin(async move {
+            let _event: ProcessEvent = serde_json::from_value(params)
+                .map_err(|e| IpcError::Internal(e.to_string()))?;
+            handle_process_registered(_event).await
+                .map_err(|e| IpcError::Internal(e.to_string()))?;
+            Ok(serde_json::json!({"status": "accepted"}))
+        })
+    }));
+    table.register("runtime.processExited", Arc::new(|params| {
+        Box::pin(async move {
+            let _event: ProcessEvent = serde_json::from_value(params)
+                .map_err(|e| IpcError::Internal(e.to_string()))?;
+            handle_process_exited(_event).await
+                .map_err(|e| IpcError::Internal(e.to_string()))?;
+            Ok(serde_json::json!({"status": "accepted"}))
         })
     }));
 }
@@ -243,11 +263,18 @@ pub const ALLOWED_REVERSE_METHODS: &[&str] = &[
     "credential.http.cancel",
     "credential.probe",
     "host.externalWrite.execute",
+    "runtime.process.start",
+    "runtime.process.cancel",
+    "runtime.process.status",
 ];
 
 /// Reverse notification methods (no id, no response)
-pub const ALLOWED_REVERSE_NOTIFICATIONS: &[&str] =
-    &["runtime.processRegistered", "runtime.processExited"];
+pub const ALLOWED_REVERSE_NOTIFICATIONS: &[&str] = &[
+    "credential.http.event",
+    "runtime.process.registered",
+    "runtime.process.output",
+    "runtime.process.exited",
+];
 
 pub fn validate_reverse_method(method: &str) -> Result<(), AppError> {
     if ALLOWED_REVERSE_METHODS.contains(&method) || ALLOWED_REVERSE_NOTIFICATIONS.contains(&method)

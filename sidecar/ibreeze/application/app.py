@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 
 from ibreeze.application.lifecycle import ApplicationLifecycle, LifecyclePhase
@@ -8,6 +9,7 @@ from ibreeze.observability.health import HealthSnapshot
 from ibreeze.persistence.connection import ReadPool
 from ibreeze.persistence.unit_of_work import UnitOfWork
 from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.rpc.production_server import ProductionRpcServer
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +39,31 @@ class SidecarApplication:
         self._device_id = device_id
         self._profile_mode = profile_mode
         self._lifecycle: ApplicationLifecycle | None = None
+        self._rpc_server: ProductionRpcServer | None = None
 
     async def start(self) -> None:
-        self._lifecycle = ApplicationLifecycle(self._database_path, socket_path=self._socket_path)
+        self._lifecycle = ApplicationLifecycle(
+            self._database_path,
+            socket_path=self._socket_path,
+            backend_origin=self._backend_origin,
+            app_user_id=self._app_user_id,
+            masked_identifier=self._masked_identifier,
+            device_id=self._device_id,
+            profile_mode=self._profile_mode,
+        )
         await self._lifecycle.start()
+        self._rpc_server = ProductionRpcServer(
+            lifecycle=self._lifecycle,
+            socket_path=Path(self._socket_path),
+            startup_token=self._startup_token,
+            app_version=self._app_version,
+            launch_id=str(uuid.uuid4()),
+        )
+        await self._rpc_server.start()
 
     async def stop(self) -> None:
+        if self._rpc_server is not None:
+            await self._rpc_server.stop()
         if self._lifecycle is not None:
             await self._lifecycle.stop()
 
@@ -55,6 +76,11 @@ class SidecarApplication:
                 disk_free_bytes=0,
             )
         return await self._lifecycle.health()
+
+    @property
+    def rpc_server(self) -> ProductionRpcServer:
+        assert self._rpc_server is not None
+        return self._rpc_server
 
     @property
     def lifecycle(self) -> ApplicationLifecycle:

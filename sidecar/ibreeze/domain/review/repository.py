@@ -20,7 +20,7 @@ class ReviewRepository:
             """SELECT id, company_id, artifact_id, reviewed_sha256,
                       reviewer_employee_id, status, version
                FROM review_assignments
-               WHERE id=? FOR UPDATE""",
+               WHERE id=?""",
             (str(assignment_id),),
         )
         row = await cursor.fetchone()
@@ -44,7 +44,7 @@ class ReviewRepository:
         cursor = await session.execute(
             """SELECT id, company_id, severity, category, status, version
                FROM review_issues
-               WHERE id=? FOR UPDATE""",
+               WHERE id=?""",
             (str(issue_id),),
         )
         row = await cursor.fetchone()
