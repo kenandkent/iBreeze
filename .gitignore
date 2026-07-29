@@ -80,12 +80,8 @@ apps/desktop-core/src/generated/**/*.d.ts
 apps/desktop-core/src/generated/**/*.py
 apps/desktop-core/src/generated/**/*.ts
 
-# Sidecar (Python only: .py)
-sidecar/ibreeze/generated/contracts/
-sidecar/ibreeze/generated/openapi/
-sidecar/ibreeze/generated/**/*.d.ts
-sidecar/ibreeze/generated/**/*.rs
-sidecar/ibreeze/generated/**/*.ts
+# Sidecar (generated from JSON Schema)
+sidecar/ibreeze/generated/
 
 # Admin Web (TypeScript only: .d.ts, .ts)
 apps/admin-web/src/generated/contracts/
