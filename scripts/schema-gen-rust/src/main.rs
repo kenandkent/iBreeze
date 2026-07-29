@@ -74,6 +74,9 @@ fn main() -> Result<()> {
         }
     }
     
+    // Sort deterministically for cross-platform consistency
+    schema_order.sort();
+    
     // Generate Rust code
     let mut type_defs: Vec<TypeDef> = Vec::new();
     let mut processed: HashMap<String, TypeDef> = HashMap::new();
@@ -238,7 +241,10 @@ fn generate_struct(
     let mut required_fields: Vec<String> = Vec::new();
     
     if let Some(object_val) = &obj.object {
-        for (prop_name, prop_schema) in &object_val.properties {
+        let mut prop_names: Vec<&String> = object_val.properties.keys().collect();
+        prop_names.sort();
+        for prop_name in prop_names {
+            let prop_schema = &object_val.properties[prop_name];
             let is_required = obj.object.as_ref()
                 .map(|o| o.required.contains(prop_name.as_str()))
                 .unwrap_or(false);

@@ -4,33 +4,6 @@
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReviewReport {
-    pub artifact_id: String,
-    pub artifact_sha256: String,
-    pub assignment_id: String,
-    pub conclusion: ConclusionEnum,
-    pub issues: Vec<ItemStruct>,
-    pub purpose: PurposeEnum,
-    pub report_artifact_id: String,
-    pub reviewer_employee_id: String,
-    pub run_id: String,
-    pub submitted_at: String,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExecutionReport {
-    pub artifacts: Vec<ItemStruct>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub completed_at: Option<String>,
-    pub employee_task_id: String,
-    pub exit_code: i64,
-    pub run_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub started_at: Option<String>,
-    pub status: StatusEnum,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ArtifactManifest {
     pub artifact_id: String,
     pub artifact_type: String,
@@ -53,6 +26,17 @@ pub struct BackupManifest {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct CatalogManifest {
+    pub created_at: String,
+    pub minimum_client_version: String,
+    pub release_id: String,
+    pub release_sequence: i64,
+    pub resources: Vec<ItemStruct>,
+    pub signature: String,
+    pub signature_algorithm: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CompanyPlan {
     pub company_id: String,
     pub company_task_id: String,
@@ -65,81 +49,68 @@ pub struct CompanyPlan {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CatalogManifest {
-    pub created_at: String,
-    pub minimum_client_version: String,
-    pub release_id: String,
-    pub release_sequence: i64,
-    pub resources: Vec<ItemStruct>,
-    pub signature: String,
-    pub signature_algorithm: String,
+pub struct ExecutionReport {
+    pub artifacts: Vec<ItemStruct>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+    pub employee_task_id: String,
+    pub exit_code: i64,
+    pub run_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
+    pub status: StatusEnum,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SkillManifest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    pub display_name: String,
-    pub entry_point: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub files: Option<Vec<ItemStruct>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub network_domains: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_tools: Option<Vec<String>>,
-    pub sha256: String,
-    pub skill_id: String,
-    pub supported_agents: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub supported_platforms: Option<Vec<String>>,
-    pub version: String,
+pub struct ReviewReport {
+    pub artifact_id: String,
+    pub artifact_sha256: String,
+    pub assignment_id: String,
+    pub conclusion: ConclusionEnum,
+    pub issues: Vec<ItemStruct>,
+    pub purpose: PurposeEnum,
+    pub report_artifact_id: String,
+    pub reviewer_employee_id: String,
+    pub run_id: String,
+    pub submitted_at: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {
+pub struct Approval {
     pub aggregate_id: String,
     pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
+    pub decision: String,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EmployeeTask {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregate_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_state: Option<FromStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_state: Option<ToStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<i64>,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Run {
+pub struct Approval {
     pub aggregate_id: String,
     pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
+    pub decision: String,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Knowledge {
+pub struct Approval {
+    pub aggregate_id: String,
     pub company_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_hash: Option<String>,
-    pub item_id: String,
+    pub decision: Option<String>,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {
+pub struct Approval {
     pub aggregate_id: String,
     pub company_id: String,
+    pub decision: String,
     pub from_state: FromStateEnum,
     pub to_state: ToStateEnum,
     pub version: i64,
@@ -153,59 +124,16 @@ pub struct Artifact {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Plan {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Department {
+pub struct Artifact {
     pub aggregate_id: String,
     pub company_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DepartmentTask {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregate_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_state: Option<FromStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_state: Option<ToStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<i64>,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Run {
+pub struct Artifact {
     pub aggregate_id: String,
     pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Plan {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Plan {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -238,11 +166,9 @@ pub struct Company {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {
+pub struct Company {
     pub aggregate_id: String,
     pub company_id: String,
-    pub from_department_id: String,
-    pub to_department_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -268,10 +194,25 @@ pub struct CompanyTask {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {
+pub struct Department {
     pub aggregate_id: String,
     pub company_id: String,
-    pub report_type: ReportTypeEnum,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Department {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Department {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_employee_id: String,
+    pub to_employee_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -284,13 +225,6 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Department {
     pub aggregate_id: String,
     pub company_id: String,
@@ -298,49 +232,85 @@ pub struct Department {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Approval {
+pub struct DepartmentTask {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggregate_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_state: Option<FromStateEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_state: Option<ToStateEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<i64>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Employee {
     pub aggregate_id: String,
     pub company_id: String,
-    pub decision: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Employee {
+    pub aggregate_id: String,
+    pub company_id: String,
     pub from_state: FromStateEnum,
     pub to_state: ToStateEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {
+pub struct Employee {
     pub aggregate_id: String,
     pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
+    pub from_department_id: String,
+    pub to_department_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Approval {
+pub struct Employee {
     pub aggregate_id: String,
     pub company_id: String,
-    pub decision: String,
-    pub from_state: FromStateEnum,
-    pub to_state: ToStateEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Review {
-    pub aggregate_id: String,
-    pub assignment_id: String,
+pub struct EmployeeTask {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggregate_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_state: Option<FromStateEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_state: Option<ToStateEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<i64>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Knowledge {
     pub company_id: String,
-    pub reviewer_employee_id: String,
-    pub verdict: VerdictEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    pub item_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Report {
+pub struct Knowledge {
     pub aggregate_id: String,
     pub company_id: String,
-    pub report_type: ReportTypeEnum,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Knowledge {
+    pub company_id: String,
+    pub item_id: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -354,27 +324,55 @@ pub struct Plan {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Run {
+pub struct Plan {
     pub aggregate_id: String,
     pub company_id: String,
-    pub evidence_artifact_ids: Vec<String>,
-    pub from_state: FromStateEnum,
-    pub status: String,
+    pub from_state: String,
     pub to_state: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Department {
+pub struct Plan {
     pub aggregate_id: String,
     pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Employee {
+pub struct Plan {
     pub aggregate_id: String,
     pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Report {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub report_type: ReportTypeEnum,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Report {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub report_type: ReportTypeEnum,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Review {
+    pub aggregate_id: String,
+    pub assignment_id: String,
+    pub company_id: String,
+    pub reviewer_employee_id: String,
+    pub verdict: VerdictEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -402,82 +400,6 @@ pub struct Review {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Approval {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub decision: String,
-    pub from_state: FromStateEnum,
-    pub to_state: ToStateEnum,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Knowledge {
-    pub company_id: String,
-    pub item_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Run {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Approval {
-    pub aggregate_id: String,
-    pub company_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub decision: Option<String>,
-    pub from_state: FromStateEnum,
-    pub to_state: ToStateEnum,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Company {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Artifact {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Run {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_state: String,
-    pub to_state: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Department {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub from_employee_id: String,
-    pub to_employee_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Knowledge {
-    pub aggregate_id: String,
-    pub company_id: String,
-    pub version: i64,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Review {
     pub aggregate_id: String,
     pub assignment_id: String,
@@ -488,8 +410,86 @@ pub struct Review {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Artifact {
+pub struct Run {
     pub aggregate_id: String,
     pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
     pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub evidence_artifact_ids: Vec<String>,
+    pub from_state: FromStateEnum,
+    pub status: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SkillManifest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub display_name: String,
+    pub entry_point: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<ItemStruct>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_domains: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_tools: Option<Vec<String>>,
+    pub sha256: String,
+    pub skill_id: String,
+    pub supported_agents: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supported_platforms: Option<Vec<String>>,
+    pub version: String,
 }
