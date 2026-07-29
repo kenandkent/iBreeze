@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -54,8 +55,6 @@ def _get_loop_lag_ms() -> int:
 def _get_disk_free(path: Path) -> int:
     db_dir = path if path.is_dir() else path.parent
     try:
-        usage = db_dir.stat() if False else None
-        import shutil
         total, used, free = shutil.disk_usage(db_dir)
         return free
     except OSError:
