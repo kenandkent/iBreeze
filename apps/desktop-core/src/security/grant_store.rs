@@ -226,7 +226,7 @@ mod tests {
     #[tokio::test]
     async fn grant_creation_and_verification() {
         let store = GrantStore::new();
-        let dir = TempDir::new().expect("temp dir");
+        let dir = TempDir::new_in(".").expect("temp dir");
         let grant = store
             .create_grant(dir.path(), GrantKind::Workspace)
             .await
@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn grant_consumption_is_one_shot() {
         let store = GrantStore::new();
-        let dir = TempDir::new().expect("temp dir");
+        let dir = TempDir::new_in(".").expect("temp dir");
         let grant = store
             .create_grant(dir.path(), GrantKind::ReadonlyFile)
             .await
@@ -267,7 +267,7 @@ mod tests {
     #[tokio::test]
     async fn stale_grant_is_rejected() {
         let store = GrantStore::new();
-        let dir = TempDir::new().expect("temp dir");
+        let dir = TempDir::new_in(".").expect("temp dir");
         let grant = store
             .create_grant(dir.path(), GrantKind::Workspace)
             .await

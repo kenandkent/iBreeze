@@ -8,7 +8,7 @@ while [[ $# -gt 0 ]]; do
         --scope) SCOPE="$2"; shift 2 ;;
         --help|-h)
             echo "Usage: $0 [--scope SCOPE|SCOPE]"
-            echo "Scopes: contracts desktop sidecar backend e2e security all"
+            echo "Scopes: contracts desktop sidecar backend e2e security drift all"
             echo ""
             echo "  --scope SCOPE   set verification scope"
             echo "  --help, -h      show this help"
@@ -57,7 +57,7 @@ run_desktop_rust() {
     cargo clippy --manifest-path apps/desktop-core/Cargo.toml --all-targets --all-features -- -D warnings
     if command -v cargo-nextest &>/dev/null; then
         echo "--- desktop-core test (nextest) ---"
-        cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features
+        cargo nextest run --manifest-path apps/desktop-core/Cargo.toml --all-features --no-fail-fast
     else
         echo "--- desktop-core test (cargo test) ---"
         cargo test --manifest-path apps/desktop-core/Cargo.toml --all-features

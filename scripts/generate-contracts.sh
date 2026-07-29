@@ -131,7 +131,7 @@ cp "$TMP_DIR/openapi.json" "$OUTPUT_ROOT/packages/contracts/openapi/openapi.json
 
 echo "=== Contract Generation Complete ==="
 echo "Generated files:"
-find "$OUTPUT_ROOT/apps/desktop/src/generated" -name "*.ts" 2>/dev/null | head -20
-find "$OUTPUT_ROOT/apps/desktop-core/src/generated" -name "*.rs" 2>/dev/null | head -20
-find "$OUTPUT_ROOT/sidecar/ibreeze/generated" -name "*.py" 2>/dev/null | head -20
-find "$OUTPUT_ROOT/apps/admin-web/src/generated" -name "*.ts" 2>/dev/null | head -10
+find "$OUTPUT_ROOT/apps/desktop/src/generated" -name "*.ts" 2>/dev/null | head -20 || true
+find "$OUTPUT_ROOT/apps/desktop-core/src/generated" -name "*.rs" 2>/dev/null | head -20 || true
+find "$OUTPUT_ROOT/sidecar/ibreeze/generated" -name "*.py" 2>/dev/null | head -20 || true
+find "$OUTPUT_ROOT/apps/admin-web/src/generated" -name "*.ts" 2>/dev/null | head -10 || true
