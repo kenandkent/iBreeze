@@ -6,6 +6,7 @@ use ibreeze_desktop_core::update::manifest::{
     is_newer_version, verify_manifest_signature, verify_package_sha256, verify_package_url,
     verify_version_constraints, UpdateManifest,
 };
+use ibreeze_desktop_core::update::rollback::UpdateStore;
 use sha2::Digest;
 
 fn encoded_standard(value: &[u8]) -> String {
@@ -210,4 +211,175 @@ fn is_newer_version_returns_false_for_equal() {
 #[test]
 fn is_newer_version_returns_false_for_older() {
     assert!(!is_newer_version("0.0.9", "0.1.0"));
+}
+
+#[tokio::test]
+async fn verify_pending_update_returns_true_when_no_marker() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+    let sidecar = temp.path().join("sidecar");
+    let socket = temp.path().join("sidecar.sock");
+
+    let result = store
+        .verify_pending_update(&sidecar, "0.2.0", &socket)
+        .await
+        .unwrap();
+    assert!(result);
+}
+
+#[tokio::test]
+async fn verify_pending_update_returns_false_when_sidecar_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+    let sidecar = temp.path().join("nonexistent_sidecar");
+    let socket = temp.path().join("sidecar.sock");
+
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+
+    let result = store
+        .verify_pending_update(&sidecar, "0.2.0", &socket)
+        .await
+        .unwrap();
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn verify_pending_update_returns_false_when_version_mismatch() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+    let sidecar = temp.path().join("sidecar");
+    let socket = temp.path().join("sidecar.sock");
+
+    std::fs::write(&sidecar, b"fake sidecar").unwrap();
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+
+    let result = store
+        .verify_pending_update(&sidecar, "0.3.0", &socket)
+        .await
+        .unwrap();
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn verify_pending_update_triggers_rollback_when_health_check_fails() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+    let sidecar = temp.path().join("sidecar");
+    let socket = temp.path().join("nonexistent.sock");
+
+    std::fs::write(&sidecar, b"fake sidecar").unwrap();
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+
+    let obs_path = store.health_observation_path();
+    let obs = serde_json::json!({
+        "started_at": (chrono::Utc::now() - chrono::Duration::seconds(31)).to_rfc3339()
+    });
+    std::fs::write(&obs_path, serde_json::to_vec(&obs).unwrap()).unwrap();
+
+    let result = store
+        .verify_pending_update(&sidecar, "0.2.0", &socket)
+        .await
+        .unwrap();
+
+    assert!(!result);
+    assert!(store.load_pending_marker().unwrap().is_none());
+    assert!(store.load_stable_version().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn verify_pending_update_in_progress_returns_true() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+    let sidecar = temp.path().join("sidecar");
+    let socket = temp.path().join("sidecar.sock");
+
+    std::fs::write(&sidecar, b"fake sidecar").unwrap();
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+
+    let obs_path = store.health_observation_path();
+    let obs = serde_json::json!({
+        "started_at": (chrono::Utc::now() - chrono::Duration::seconds(10)).to_rfc3339()
+    });
+    std::fs::write(&obs_path, serde_json::to_vec(&obs).unwrap()).unwrap();
+
+    let result = store
+        .verify_pending_update(&sidecar, "0.2.0", &socket)
+        .await
+        .unwrap();
+
+    assert!(result);
+    assert!(store.load_pending_marker().unwrap().is_some());
+    assert!(store.load_stable_version().unwrap().is_none());
+}
+
+#[test]
+fn create_and_load_pending_marker() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+
+    let marker = store.load_pending_marker().unwrap().unwrap();
+    assert_eq!(marker.old_version, "0.1.0");
+    assert_eq!(marker.new_version, "0.2.0");
+    assert_eq!(marker.backup_id, "backup-1");
+    assert_eq!(marker.stable_package_sha, "sha256hash");
+}
+
+#[test]
+fn delete_pending_marker_removes_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+
+    store
+        .create_pending_marker("0.1.0", "0.2.0", "backup-1", "sha256hash")
+        .unwrap();
+    assert!(store.load_pending_marker().unwrap().is_some());
+
+    store.delete_pending_marker().unwrap();
+    assert!(store.load_pending_marker().unwrap().is_none());
+}
+
+#[test]
+fn mark_stable_records_version() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+
+    store.mark_stable("0.2.0").unwrap();
+    assert_eq!(store.load_stable_version().unwrap(), Some("0.2.0".to_owned()));
+}
+
+#[test]
+fn restore_backup_uses_safe_extract() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = UpdateStore::new(temp.path().to_path_buf());
+
+    let backup_dir = store.backups_path().join("backup-1");
+    std::fs::create_dir_all(&backup_dir).unwrap();
+
+    let archive = backup_dir.join("bundle.tar.gz");
+    std::process::Command::new("tar")
+        .arg("-czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(temp.path())
+        .arg(".")
+        .status()
+        .unwrap();
+
+    let install_dir = temp.path().join("install");
+    std::fs::create_dir_all(&install_dir).unwrap();
+
+    store.restore_backup(&install_dir, "backup-1").unwrap();
+    assert!(install_dir.join("update").exists());
 }

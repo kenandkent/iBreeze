@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from ibreeze.local_db import LocalDB
 from ibreeze.rpc_server import RPCServer
 
 
@@ -60,15 +59,16 @@ async def _handshake(server: RPCServer, token: bytes, launch_id: str) -> str:
 
 
 @pytest.fixture
-def server_factory(local_db: LocalDB, tmp_path: Path):
+def server_factory(local_db, tmp_path: Path):
     servers: list[RPCServer] = []
 
     def factory() -> tuple[RPCServer, bytes, str]:
         token = b"s" * 32
         launch_id = _uuid()
         server = RPCServer(
-            local_db,
-            tmp_path / f"{launch_id}.sock",
+            writer=local_db,
+            profile_path=tmp_path / "profile.db",
+            socket_path=tmp_path / f"{launch_id}.sock",
             startup_token=token,
             launch_id=launch_id,
             app_version="1.0.0",
@@ -476,7 +476,7 @@ class TestMethodExistence:
             "run.cancel", "run.resume",
             "approval.resolve",
             "workspace.apply", "workspace.abandon", "workspace.cleanupTask",
-            "review.submit", "review.rerun", "review.resolveIssue",
+            "review.rerun", "review.resolveIssue",
             "catalog.sync", "catalog.installSkill", "catalog.removeSkill",
             "catalog.verifyCache",
             "knowledge.import", "knowledge.remove",

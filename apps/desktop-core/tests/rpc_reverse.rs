@@ -24,12 +24,12 @@ fn reverse_method_allowlist_coverage() {
 
     let notifications = ibreeze_desktop_core::rpc::reverse::ALLOWED_REVERSE_NOTIFICATIONS;
     assert!(
-        notifications.contains(&"runtime.processRegistered"),
-        "runtime.processRegistered must be a notification"
+        notifications.contains(&"runtime.process.registered"),
+        "runtime.process.registered must be a notification"
     );
     assert!(
-        notifications.contains(&"runtime.processExited"),
-        "runtime.processExited must be a notification"
+        notifications.contains(&"runtime.process.exited"),
+        "runtime.process.exited must be a notification"
     );
 }
 

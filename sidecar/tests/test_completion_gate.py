@@ -104,6 +104,61 @@ async def _make_emp_task(db, company_id: str, dept_task_id: str, employee_id: st
     return et_id
 
 
+async def _make_execution_report(db, company_id: str, company_task_id: str,
+                                 dept_task_id: str | None = None) -> str:
+    art_id = str(uuid.uuid4())
+    await db.execute("PRAGMA foreign_keys = OFF")
+    try:
+        await db.execute(
+            """INSERT INTO artifacts
+               (id, company_id, company_task_id, department_task_id, artifact_type,
+                logical_name, object_sha256, object_size, media_type, metadata_json,
+                supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (art_id, company_id, company_task_id, dept_task_id,
+             "execution_report", "exec-report.md", "b" * 64, 50, "text/markdown", "{}",
+             None, "agent", "run-1", "2026-01-01T00:00:00Z"),
+        )
+        await db.commit()
+    finally:
+        await db.execute("PRAGMA foreign_keys = ON")
+    return art_id
+
+
+async def _make_verification(db, company_id: str, artifact_id: str,
+                             company_task_id: str | None = None,
+                             status: str = "passed") -> str:
+    ver_id = str(uuid.uuid4())
+    run_id = str(uuid.uuid4())
+    await db.execute("PRAGMA foreign_keys = OFF")
+    try:
+        await db.execute(
+            """INSERT INTO agent_runs
+               (id, company_id, company_task_id, work_item_id, employee_id,
+                conversation_id, availability_snapshot_id, execution_snapshot_id,
+                run_purpose, adapter_type, run_spec_json, run_spec_sha256,
+                status, attempt, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (run_id, company_id, company_task_id or str(uuid.uuid4()),
+             str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()),
+             str(uuid.uuid4()), str(uuid.uuid4()),
+             "verification", "codex_cli", "{}", "a" * 64,
+             "succeeded", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+        )
+        await db.execute(
+            """INSERT INTO verifications
+               (id, company_id, run_id, artifact_id, verification_type,
+                status, completed_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (ver_id, company_id, run_id, artifact_id, "test", status,
+             "2026-01-01T00:00:00Z"),
+        )
+        await db.commit()
+    finally:
+        await db.execute("PRAGMA foreign_keys = ON")
+    return ver_id
+
+
 async def _make_artifact(db, company_id: str, company_task_id: str,
                          contributor_id: str | None = None,
                          dept_task_id: str | None = None,
@@ -156,13 +211,15 @@ class TestEmployeeTaskGate:
         blockers = await EmployeeGate().blockers(db, uuid.UUID(et_id), uuid.UUID(company.id))
         assert "employee_not_contributor" in blockers
 
-    @pytest.mark.xfail(reason="needs verification + execution_report setup to match handlers")
     async def test_artifact_with_contributors_passes(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         ct_id = await _make_company_task(db, company.id)
         dt_id = await _make_dept_task(db, company.id, dept.id, ct_id)
         et_id = await _make_emp_task(db, company.id, dt_id, employee.id)
-        await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
+        art_id = await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
+        await _make_verification(db, company.id, art_id)
+        exec_art = await _make_execution_report(db, company.id, ct_id)
+        await _make_verification(db, company.id, exec_art)
 
         blockers = await EmployeeGate().blockers(db, uuid.UUID(et_id), uuid.UUID(company.id))
         assert len(blockers) == 0
@@ -223,7 +280,6 @@ class TestEmployeeTaskGate:
         blockers = await EmployeeGate().blockers(db, uuid.UUID(et_id), uuid.UUID(company.id))
         assert "blocking_issue_open" in blockers
 
-    @pytest.mark.xfail(reason="needs review/verification setup to match handlers")
     async def test_rework_missing_version_blocked(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         reviewer = await create_employee(
@@ -238,6 +294,8 @@ class TestEmployeeTaskGate:
         dt_id = await _make_dept_task(db, company.id, dept.id, ct_id)
         et_id = await _make_emp_task(db, company.id, dt_id, employee.id)
         art_id = await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
+        await _make_verification(db, company.id, art_id)
+        await _make_execution_report(db, company.id, ct_id)
 
         assignment = await assign_reviewer(
             db, company.id,
@@ -257,12 +315,6 @@ class TestEmployeeTaskGate:
                 (report_id, company.id, assignment["id"], "run-review",
                  "needs_changes", "report-art-2", "2026-01-01T00:00:00Z"),
             )
-            await db.execute(
-                """UPDATE review_assignments
-                   SET status='submitted', submitted_at='2026-01-01T00:00:00Z'
-                   WHERE id=? AND company_id=?""",
-                (assignment["id"], company.id),
-            )
             await db.commit()
         finally:
             await db.execute("PRAGMA foreign_keys = ON")
@@ -270,13 +322,15 @@ class TestEmployeeTaskGate:
         blockers = await EmployeeGate().blockers(db, uuid.UUID(et_id), uuid.UUID(company.id))
         assert "review_not_submitted" in blockers
 
-    @pytest.mark.xfail(reason="needs full fixture setup to match all handlers")
     async def test_all_conditions_pass(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         ct_id = await _make_company_task(db, company.id)
         dt_id = await _make_dept_task(db, company.id, dept.id, ct_id)
         et_id = await _make_emp_task(db, company.id, dt_id, employee.id)
-        await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
+        art_id = await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
+        await _make_verification(db, company.id, art_id)
+        exec_art = await _make_execution_report(db, company.id, ct_id)
+        await _make_verification(db, company.id, exec_art)
 
         blockers = await EmployeeGate().blockers(db, uuid.UUID(et_id), uuid.UUID(company.id))
         assert len(blockers) == 0
@@ -353,7 +407,6 @@ class TestCompanyTaskGate:
         blockers = await CompanyGate().blockers(db, uuid.UUID(ct_id), uuid.UUID(company.id))
         assert len(blockers) > 0
 
-    @pytest.mark.xfail(reason="needs full company-level setup to match handlers")
     async def test_all_company_conditions_pass(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         ct_id = await _make_company_task(db, company.id)
@@ -402,6 +455,15 @@ class TestCompanyTaskGate:
                 (rev_id, company.id, art_id, employee.id, 1, "f" * 64,
                  "submitted", "2026-01-01T00:00:00Z"),
             )
+            report_id = str(uuid.uuid4())
+            await db.execute(
+                """INSERT INTO review_reports
+                   (id, company_id, assignment_id, reviewer_run_id,
+                    verdict, report_artifact_id, created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (report_id, company.id, rev_id, "run-review",
+                 "pass", "report-art-pass", "2026-01-01T00:00:00Z"),
+            )
             await db.execute(
                 """INSERT INTO artifacts
                    (id, company_id, company_task_id, artifact_type, logical_name,
@@ -411,6 +473,12 @@ class TestCompanyTaskGate:
                 (str(uuid.uuid4()), company.id, ct_id, "final_report", "final.md",
                  "g" * 64, 300, "text/markdown", "{}",
                  None, "agent", "run-final", "2026-01-01T00:00:00Z"),
+            )
+            await db.execute(
+                """UPDATE company_tasks
+                   SET ceo_confirmed_at='2026-01-01T00:00:00Z'
+                   WHERE id=? AND company_id=?""",
+                (ct_id, company.id),
             )
             await db.commit()
         finally:

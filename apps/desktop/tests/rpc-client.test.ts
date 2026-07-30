@@ -21,9 +21,9 @@ describe('isReadOperation', () => {
     expect(isReadOperation('knowledge.list')).toBe(true);
   });
 
-  it('returns true for search and replay', () => {
+  it('returns true for search and run operations', () => {
     expect(isReadOperation('knowledge.search')).toBe(true);
-    expect(isReadOperation('event.replay')).toBe(true);
+    expect(isReadOperation('run.listEvents')).toBe(true);
   });
 
   it('returns false for write operations', () => {

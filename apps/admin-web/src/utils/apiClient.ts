@@ -1,7 +1,8 @@
 import { useAuthStore } from '../stores/authStore';
 import type { components } from '../generated/openapi/api';
 
-type SessionData = components['schemas']['SessionResponse'];
+type SessionResponse = components['schemas']['SessionResponse'];
+type SessionData = SessionResponse['data'];
 
 const API_BASE = '/admin/api/v1';
 
@@ -52,10 +53,15 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
 }
 
 export async function apiLogin(identifier: string, password: string, deviceId: string): Promise<SessionData> {
+  const body: components['schemas']['LoginRequest'] = {
+    identifier,
+    password,
+    device_id: deviceId,
+  };
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier, password, device_id: deviceId }),
+    body: JSON.stringify(body),
     credentials: 'include',
   });
   if (!res.ok) {
@@ -63,7 +69,8 @@ export async function apiLogin(identifier: string, password: string, deviceId: s
     try { problem = await res.json(); } catch { /* ignore */ }
     throw new ApiError(res.status, problem);
   }
-  return res.json();
+  const response: SessionResponse = await res.json();
+  return response.data;
 }
 
 let refreshing: Promise<boolean> | null = null;
@@ -77,8 +84,8 @@ async function tryRefreshToken(): Promise<boolean> {
         credentials: 'include',
       });
       if (!res.ok) return false;
-      const data: SessionData = await res.json();
-      useAuthStore.getState().login(data.data.access_token, data.data.user);
+      const response: SessionResponse = await res.json();
+      useAuthStore.getState().login(response.data.access_token, response.data.user);
       return true;
     } catch {
       return false;

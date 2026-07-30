@@ -35,6 +35,8 @@ run_contracts() {
     npm --prefix packages/contracts run lint
     echo "--- contract drift ---"
     bash scripts/check-contract-drift.sh
+    echo "--- contract registry sync check ---"
+    python3 scripts/sync_contract_registry.py --check
 }
 
 run_desktop_rust() {
@@ -121,6 +123,8 @@ run_sidecar() {
     uv run --directory sidecar ruff check ibreeze tests
     echo "--- sidecar typecheck ---"
     uv run --directory sidecar mypy ibreeze
+    echo "--- sidecar single-writer check ---"
+    python3 scripts/check_single_writer.py
     echo "--- sidecar test ---"
     uv run --directory sidecar pytest tests/ -v --cov=ibreeze --cov-branch --cov-fail-under=100
 }

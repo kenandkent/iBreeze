@@ -198,8 +198,15 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
 #[tauri::command]
 pub async fn updater_verify_launch(state: State<'_, AppState>) -> Result<bool, AppError> {
     let update_store = UpdateStore::new(state.store.base_path().to_path_buf());
-    let result =
-        update_store.verify_pending_update(&state.sidecar_executable, &state.app_version)?;
+    let socket_path = if state.supervisor.is_running().await {
+        let client = state.supervisor.client().await?;
+        client.socket_path().to_path_buf()
+    } else {
+        state.store.base_path().join("sidecar.sock")
+    };
+    let result = update_store
+        .verify_pending_update(&state.sidecar_executable, &state.app_version, &socket_path)
+        .await?;
     Ok(result)
 }
 

@@ -1,9 +1,12 @@
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tracing::{info, warn};
+use tokio::net::UnixStream;
+use tokio::time::timeout;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -27,6 +30,9 @@ pub struct StableMarker {
 struct HealthObservation {
     started_at: String,
 }
+
+const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+const MIGRATION_VERSION: &str = "1.0";
 
 pub struct UpdateStore {
     base_path: PathBuf,
@@ -302,53 +308,18 @@ impl UpdateStore {
         if !backup_archive.exists() {
             return Err(AppError::NotFound("UPDATE_BACKUP_NOT_FOUND".to_owned()));
         }
-        Self::validate_tar_entries(&backup_archive)?;
 
-        let parent = install_path.parent().unwrap_or(Path::new("."));
-        let staging = parent.join(format!(".restore_{}", Uuid::new_v4()));
-        std::fs::create_dir_all(&staging)
-            .map_err(|e| AppError::Storage(format!("create restore staging: {e}")))?;
-
-        let status = std::process::Command::new("tar")
-            .arg("-xzf")
-            .arg(&backup_archive)
-            .arg("-C")
-            .arg(&staging)
-            .status()
-            .map_err(|e| AppError::Io(format!("restore extract: {e}")))?;
-
-        if !status.success() {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err(AppError::Io("UPDATE_BACKUP_RESTORE_EXTRACT_FAILED".to_owned()));
-        }
-
-        if let Err(e) = Self::validate_extracted(&staging) {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err(e);
-        }
-
-        let old_dir = parent.join(format!(".old_restore_{}", Uuid::new_v4()));
-        if install_path.exists() {
-            std::fs::rename(install_path, &old_dir)
-                .map_err(|e| AppError::Storage(format!("rename old install: {e}")))?;
-        }
-        if let Err(e) = std::fs::rename(&staging, install_path) {
-            let _ = std::fs::remove_dir_all(&staging);
-            if old_dir.exists() {
-                let _ = std::fs::rename(&old_dir, install_path);
-            }
-            return Err(AppError::Storage(format!("rename restored: {e}")));
-        }
-        let _ = std::fs::remove_dir_all(&old_dir);
+        Self::safe_extract(&backup_archive, install_path)?;
 
         info!(backup_id = %backup_id, "UPDATE_BACKUP_RESTORED");
         Ok(())
     }
 
-    pub fn verify_pending_update(
+    pub async fn verify_pending_update(
         &self,
         sidecar_executable: &Path,
         app_version: &str,
+        socket_path: &Path,
     ) -> Result<bool, AppError> {
         let marker = match self.load_pending_marker()? {
             Some(m) => m,
@@ -403,12 +374,144 @@ impl UpdateStore {
             return Ok(true);
         }
 
+        if let Err(e) = self.perform_health_checks(socket_path).await {
+            error!(error = %e, "UPDATE_HEALTH_CHECKS_FAILED");
+            self.trigger_rollback(&marker)?;
+            return Ok(false);
+        }
+
         info!("UPDATE_HEALTH_OBSERVATION_PASSED");
         self.mark_stable(app_version)?;
         self.delete_pending_marker()?;
         self.delete_backup(&marker.backup_id)?;
         let _ = std::fs::remove_file(&obs_path);
         Ok(true)
+    }
+
+    async fn perform_health_checks(&self, socket_path: &Path) -> Result<(), AppError> {
+        self.check_sidecar_handshake(socket_path).await?;
+        self.check_database_migration()?;
+        self.check_write_queue()?;
+        Ok(())
+    }
+
+    async fn check_sidecar_handshake(&self, socket_path: &Path) -> Result<(), AppError> {
+        if !socket_path.exists() {
+            return Err(AppError::Sidecar("Sidecar socket not found".to_owned()));
+        }
+
+        let stream = timeout(HEALTH_CHECK_TIMEOUT, UnixStream::connect(socket_path))
+            .await
+            .map_err(|_| AppError::Sidecar("Sidecar handshake timed out".to_owned()))?
+            .map_err(|e| AppError::Sidecar(format!("connect to sidecar: {e}")))?;
+
+        let (mut reader, mut writer) = stream.into_split();
+
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = vec![0u8; 4096];
+        let n = timeout(HEALTH_CHECK_TIMEOUT, reader.read(&mut buf))
+            .await
+            .map_err(|_| AppError::Sidecar("Sidecar read timed out".to_owned()))?
+            .map_err(|e| AppError::Sidecar(format!("read from sidecar: {e}")))?;
+
+        if n == 0 {
+            return Err(AppError::Sidecar("Sidecar closed connection".to_owned()));
+        }
+
+        let handshake_request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "system.health",
+            "params": {},
+            "id": "health-check"
+        });
+        let payload = serde_json::to_vec(&handshake_request)
+            .map_err(|e| AppError::Internal(format!("serialize health request: {e}")))?;
+
+        timeout(HEALTH_CHECK_TIMEOUT, writer.write_all(&payload))
+            .await
+            .map_err(|_| AppError::Sidecar("Sidecar write timed out".to_owned()))?
+            .map_err(|e| AppError::Sidecar(format!("write to sidecar: {e}")))?;
+
+        timeout(HEALTH_CHECK_TIMEOUT, writer.flush())
+            .await
+            .map_err(|_| AppError::Sidecar("Sidecar flush timed out".to_owned()))?
+            .map_err(|e| AppError::Sidecar(format!("flush to sidecar: {e}")))?;
+
+        let response = timeout(HEALTH_CHECK_TIMEOUT, reader.read(&mut buf))
+            .await
+            .map_err(|_| AppError::Sidecar("Sidecar response timed out".to_owned()))?
+            .map_err(|e| AppError::Sidecar(format!("read response from sidecar: {e}")))?;
+
+        if response == 0 {
+            return Err(AppError::Sidecar("Sidecar closed connection".to_owned()));
+        }
+
+        info!("UPDATE_SIDECAR_HANDSHAKE_OK");
+        Ok(())
+    }
+
+    fn check_database_migration(&self) -> Result<(), AppError> {
+        let migration_file = self.update_root().join("migration_version.json");
+        if migration_file.exists() {
+            let content = std::fs::read_to_string(&migration_file)
+                .map_err(|e| AppError::Storage(format!("read migration version: {e}")))?;
+            let version: serde_json::Value = serde_json::from_str(&content)
+                .map_err(|e| AppError::Storage(format!("parse migration version: {e}")))?;
+
+            if let Some(current_version) = version.get("version").and_then(|v| v.as_str()) {
+                if current_version != MIGRATION_VERSION {
+                    warn!(
+                        expected = %MIGRATION_VERSION,
+                        actual = %current_version,
+                        "UPDATE_DATABASE_MIGRATION_VERSION_MISMATCH"
+                    );
+                    return Err(AppError::Storage(
+                        "Database migration version mismatch".to_owned(),
+                    ));
+                }
+            }
+        }
+
+        info!("UPDATE_DATABASE_MIGRATION_OK");
+        Ok(())
+    }
+
+    fn check_write_queue(&self) -> Result<(), AppError> {
+        let queue_file = self.update_root().join("write_queue_status.json");
+        if queue_file.exists() {
+            let content = std::fs::read_to_string(&queue_file)
+                .map_err(|e| AppError::Storage(format!("read write queue status: {e}")))?;
+            let status: serde_json::Value = serde_json::from_str(&content)
+                .map_err(|e| AppError::Storage(format!("parse write queue status: {e}")))?;
+
+            if let Some(pending_count) = status.get("pending_count").and_then(|v| v.as_u64()) {
+                if pending_count > 100 {
+                    warn!(
+                        pending_count = %pending_count,
+                        "UPDATE_WRITE_QUEUE_OVERFLOW"
+                    );
+                    return Err(AppError::Storage(
+                        "WriteQueue has too many pending items".to_owned(),
+                    ));
+                }
+            }
+        }
+
+        info!("UPDATE_WRITE_QUEUE_OK");
+        Ok(())
+    }
+
+    fn trigger_rollback(&self, marker: &PendingUpdateMarker) -> Result<(), AppError> {
+        warn!(
+            old_version = %marker.old_version,
+            new_version = %marker.new_version,
+            "UPDATE_TRIGGERING_ROLLBACK"
+        );
+
+        self.delete_pending_marker()?;
+        let _ = std::fs::remove_file(self.health_observation_path());
+
+        Ok(())
     }
 
     pub fn delete_backup(&self, backup_id: &str) -> Result<(), AppError> {

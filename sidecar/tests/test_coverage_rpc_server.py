@@ -7,7 +7,6 @@ import uuid
 
 import pytest
 
-from ibreeze.local_db import LocalDB
 from ibreeze.rpc_server import (
     PROTOCOL_VERSION,
     DomainError,
@@ -81,15 +80,19 @@ async def _setup_company(server: RPCServer, session: str, published_profile: str
 
 
 @pytest.fixture
-def server_factory(local_db: LocalDB, tmp_path):
+def server_factory(local_db, tmp_path):
     servers: list[RPCServer] = []
 
     def factory() -> tuple[RPCServer, bytes, str]:
         token = b"s" * 32
         launch_id = _uid()
         server = RPCServer(
-            local_db, tmp_path / f"{launch_id}.sock",
-            startup_token=token, launch_id=launch_id, app_version="1.0.0",
+            writer=local_db,
+            profile_path=tmp_path / "profile.db",
+            socket_path=tmp_path / f"{launch_id}.sock",
+            startup_token=token,
+            launch_id=launch_id,
+            app_version="1.0.0",
         )
         servers.append(server)
         return server, token, launch_id
@@ -103,11 +106,19 @@ def server_factory(local_db: LocalDB, tmp_path):
 class TestServerInit:
     def test_startup_token_too_short(self, local_db, tmp_path):
         with pytest.raises(ValueError, match="startup token"):
-            RPCServer(local_db, tmp_path / "test.sock", startup_token=b"short", launch_id=_uid(), app_version="1.0.0")
+            RPCServer(
+                writer=local_db, profile_path=tmp_path / "profile.db",
+                socket_path=tmp_path / "test.sock",
+                startup_token=b"short", launch_id=_uid(), app_version="1.0.0",
+            )
 
     def test_startup_token_too_long(self, local_db, tmp_path):
         with pytest.raises(ValueError, match="startup token"):
-            RPCServer(local_db, tmp_path / "test.sock", startup_token=b"x" * 33, launch_id=_uid(), app_version="1.0.0")
+            RPCServer(
+                writer=local_db, profile_path=tmp_path / "profile.db",
+                socket_path=tmp_path / "test.sock",
+                startup_token=b"x" * 33, launch_id=_uid(), app_version="1.0.0",
+            )
 
 
 # ── Request validation ─────────────────────────────────────────────────
@@ -592,7 +603,7 @@ class TestKnowledgeImportRemove:
             _meta(ipc_session_id=session, idempotency_key=_uid()),
         ))
         if "result" not in conv_resp:
-            return _uid()
+            pytest.skip("conversation.create failed - cannot set up knowledge test")
         conv_id = conv_resp["result"]["id"]
         msg_resp = await server._handle_request(_request(
             "conversation.submitUserMessage",
@@ -600,7 +611,7 @@ class TestKnowledgeImportRemove:
             _meta(ipc_session_id=session, idempotency_key=_uid()),
         ))
         if "result" not in msg_resp:
-            return _uid()
+            pytest.skip("submitUserMessage failed - cannot set up knowledge test")
         # Query the domain_events table for the event_id
         task_id = msg_resp["result"]["company_task_id"]
         cursor = await server._connection.execute(
@@ -650,8 +661,7 @@ class TestKnowledgeImportRemove:
             },
             _meta(ipc_session_id=session, idempotency_key=_uid()),
         ))
-        if "result" not in import_resp:
-            pytest.skip("knowledge import failed")
+        assert "result" in import_resp, f"knowledge.import failed: {import_resp}"
         item_id = import_resp["result"]["id"]
         # Then remove
         resp = await server._handle_request(_request(
@@ -848,25 +858,25 @@ class TestDepartmentArchive:
         server, token, launch_id = server_factory()
         session = await _handshake(server, token, launch_id)
         company_id = await _setup_company(server, session, published_profile)
-        dept_resp = await server._handle_request(_request(
-            "department.list",
-            {"company_id": company_id},
-            _meta(ipc_session_id=session, idempotency_key=None),
+        # Create a non-root department to archive
+        create_resp = await server._handle_request(_request(
+            "department.create",
+            {
+                "company_id": company_id,
+                "name": "Engineering",
+                "function_description": "Software development",
+                "leader_name": "Tech Lead",
+                "base_profile_version_id": published_profile,
+            },
+            _meta(ipc_session_id=session, idempotency_key=_uid()),
         ))
-        # Skip root department (can't archive)
-        result_val = dept_resp.get("result", {})
-        items = result_val.get("items") if isinstance(result_val, dict) else result_val
-        if items:
-            found = False
-            for dept in items:
-                if dept["department_type"] != "general_manager_office":
-                    resp = await server._handle_request(_request(
-                        "department.archive",
-                        {"company_id": company_id, "department_id": dept["id"], "expected_version": dept["version"]},
-                        _meta(ipc_session_id=session, idempotency_key=_uid()),
-                    ))
-                    assert "result" in resp
-                    found = True
-                    break
-            if not found:
-                pytest.skip("no non-root department available to archive")
+        if "result" not in create_resp:
+            pytest.skip("department.create failed")
+        dept_id = create_resp["result"]["id"]
+        dept_version = create_resp["result"]["version"]
+        resp = await server._handle_request(_request(
+            "department.archive",
+            {"company_id": company_id, "department_id": dept_id, "expected_version": dept_version},
+            _meta(ipc_session_id=session, idempotency_key=_uid()),
+        ))
+        assert "result" in resp

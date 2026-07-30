@@ -2,76 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch, sentinel
-from uuid import UUID
 
 import aiosqlite
 import pytest
 
+from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.rpc.dispatcher import Dispatcher
 from ibreeze.rpc.handler_registry import (
     _LEGACY_SKIP_PREFIXES,
-    _LocalDBWrapper,
     _read_wrapper,
     _write_wrapper_factory,
     register_legacy_handlers,
 )
-from ibreeze.rpc.dispatcher import Dispatcher
-from ibreeze.persistence.write_queue import WriteQueue
-
-
-class TestLocalDBWrapper:
-    async def test_wraps_writer_connection(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        wrapper = _LocalDBWrapper(writer, "/path/to/profile.db")
-        assert wrapper.write_connection is writer
-        assert wrapper.db_path == Path("/path/to/profile.db")
-
-    async def test_fetch_val_returns_value(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        cursor = AsyncMock()
-        cursor.fetchone = AsyncMock(return_value=(42,))
-        writer.execute = AsyncMock(return_value=cursor)
-        wrapper = _LocalDBWrapper(writer, "/dev/null")
-        result = await wrapper.fetch_val("SELECT ?", (42,))
-        assert result == 42
-        writer.execute.assert_called_once_with("SELECT ?", (42,))
-
-    async def test_fetch_val_returns_none_when_no_row(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        cursor = AsyncMock()
-        cursor.fetchone = AsyncMock(return_value=None)
-        writer.execute = AsyncMock(return_value=cursor)
-        wrapper = _LocalDBWrapper(writer, "/dev/null")
-        result = await wrapper.fetch_val("SELECT 1", ())
-        assert result is None
-
-    async def test_fetch_one_returns_dict(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        cursor = AsyncMock()
-        cursor.description = [("val",)]
-        cursor.fetchone = AsyncMock(return_value=(42,))
-        writer.execute = AsyncMock(return_value=cursor)
-        wrapper = _LocalDBWrapper(writer, "/dev/null")
-        result = await wrapper.fetch_one("SELECT ? AS val", (42,))
-        assert result == {"val": 42}
-
-    async def test_fetch_one_returns_none_when_no_row(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        cursor = AsyncMock()
-        cursor.fetchone = AsyncMock(return_value=None)
-        writer.execute = AsyncMock(return_value=cursor)
-        wrapper = _LocalDBWrapper(writer, "/dev/null")
-        result = await wrapper.fetch_one("SELECT 1", ())
-        assert result is None
-
-    async def test_execute_write_commits(self):
-        writer = AsyncMock(spec=aiosqlite.Connection)
-        cursor = AsyncMock()
-        writer.execute = AsyncMock(return_value=cursor)
-        wrapper = _LocalDBWrapper(writer, "/dev/null")
-        result = await wrapper.execute_write("UPDATE t SET x=?", (1,))
-        assert result is cursor
-        writer.execute.assert_called_once_with("UPDATE t SET x=?", (1,))
-        writer.commit.assert_awaited_once()
 
 
 class TestReadWrapper:

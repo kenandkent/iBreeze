@@ -297,8 +297,12 @@ mod tests {
         assert!(validate_reverse_method("credential.http.cancel").is_ok());
         assert!(validate_reverse_method("credential.probe").is_ok());
         assert!(validate_reverse_method("host.externalWrite.execute").is_ok());
-        assert!(validate_reverse_method("runtime.processRegistered").is_ok());
-        assert!(validate_reverse_method("runtime.processExited").is_ok());
+        assert!(validate_reverse_method("runtime.process.start").is_ok());
+        assert!(validate_reverse_method("runtime.process.cancel").is_ok());
+        assert!(validate_reverse_method("runtime.process.status").is_ok());
+        assert!(validate_reverse_method("runtime.process.registered").is_ok());
+        assert!(validate_reverse_method("runtime.process.output").is_ok());
+        assert!(validate_reverse_method("runtime.process.exited").is_ok());
     }
 
     #[test]

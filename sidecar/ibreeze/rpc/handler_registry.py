@@ -16,36 +16,6 @@ logger = logging.getLogger(__name__)
 _TRACE_ID = UUID(int=0)
 
 
-class _LocalDBWrapper:
-    """Mimics the LocalDB interface needed by legacy RPCServer internals."""
-
-    def __init__(self, writer: aiosqlite.Connection, profile_path: str | Path) -> None:
-        self._writer = writer
-        self.db_path = Path(profile_path)
-
-    @property
-    def write_connection(self) -> aiosqlite.Connection:
-        return self._writer
-
-    async def fetch_val(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
-        cursor = await self._writer.execute(sql, params)
-        row = await cursor.fetchone()
-        return row[0] if row else None
-
-    async def fetch_one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        cursor = await self._writer.execute(sql, params)
-        row = await cursor.fetchone()
-        if row is None:
-            return None
-        columns = [desc[0] for desc in cursor.description]
-        return dict(zip(columns, row))
-
-    async def execute_write(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Cursor:
-        cursor = await self._writer.execute(sql, params)
-        await self._writer.commit()
-        return cursor
-
-
 def _read_wrapper(handler: Any) -> Any:
     async def wrapped(params: dict[str, Any], session: object) -> Any:
         return await handler(params)
@@ -80,9 +50,9 @@ def register_legacy_handlers(
 ) -> int:
     from ibreeze.rpc_server import READ_METHODS, RPCServer
 
-    db_wrapper = _LocalDBWrapper(writer, profile_path)
     old_server = RPCServer(
-        db=db_wrapper,  # type: ignore[arg-type]
+        writer=writer,
+        profile_path=profile_path,
         socket_path="/tmp/_ibreeze_legacy_bridge.sock",
         startup_token=b"\x00" * 32,
         launch_id="00000000-0000-0000-0000-000000000000",

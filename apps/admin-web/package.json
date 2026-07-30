@@ -24,7 +24,12 @@
     "zustand": "^5.0.0"
   },
   "overrides": {
-    "react-router": "8.3.0"
+    "react-router": "8.3.0",
+    "@redocly/openapi-core": {
+      "minimatch": {
+        "brace-expansion": "^5.0.8"
+      }
+    }
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.0",
@@ -33,10 +38,11 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "babel-plugin-import": "^1.13.8",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^25.0.0",
-    "openapi-typescript": "^6.7.6",
+    "openapi-typescript": "^7.13.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~5.7.0",
     "typescript-eslint": "^8.65.0",

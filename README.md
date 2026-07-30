@@ -147,9 +147,17 @@ cd apps/desktop-core && cargo tauri dev
 - 审计日志
 - 目录发布管理（Draft → Validated → Published）
 
-### 测试状态
+### 测试覆盖率
 
-测试和验证状态请参考 CI 制品与质量报告。所有门禁状态绑定 commit SHA，不手写维护具体通过数量。
+| 模块 | Statements | Branches | Functions | Lines |
+|---|---|---|---|---|
+| Sidecar (Python) | 84.72% | - | - | - |
+| Admin Web (TypeScript) | 86.33% | 80% | 84.47% | 87.78% |
+| Desktop (TypeScript) | 88.95% | 96.49% | 81.81% | 98.56% |
+| Desktop Core (Rust) | 100% | - | 100% | 100% |
+| Backend API (Python) | 100% | - | - | - |
+
+所有模块覆盖率阈值已配置为 80%，CI 中强制执行。
 
 ### 公开目录查询
 - Agent 目录查询

@@ -12,7 +12,8 @@ import pytest
 import pytest_asyncio
 
 from ibreeze.company import _sha256
-from ibreeze.local_db import LocalDB
+from ibreeze.persistence.connection import open_writer
+from ibreeze.persistence.migrator import MigrationRunner
 
 
 @pytest.fixture
@@ -29,18 +30,23 @@ def mock_db_session():
 
 
 @pytest_asyncio.fixture
-async def local_db(tmp_path: Path) -> AsyncIterator[LocalDB]:
-    database = LocalDB(tmp_path / "profile.db", read_pool_size=1)
-    await database.initialize()
+async def local_db(tmp_path: Path) -> AsyncIterator[aiosqlite.Connection]:
+    database = tmp_path / "profile.db"
+    conn = await open_writer(database)
+    runner = MigrationRunner(conn)
+    await runner.apply_all()
     try:
-        yield database
+        yield conn
     finally:
-        await database.close()
+        if conn.in_transaction:
+            await conn.rollback()
+        await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        await conn.close()
 
 
 @pytest_asyncio.fixture
-async def db(local_db: LocalDB) -> aiosqlite.Connection:
-    return local_db.write_connection
+async def db(local_db: aiosqlite.Connection) -> aiosqlite.Connection:
+    return local_db
 
 
 @pytest_asyncio.fixture

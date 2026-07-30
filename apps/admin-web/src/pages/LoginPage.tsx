@@ -20,12 +20,12 @@ export default function LoginPage() {
       const deviceId = getDeviceId();
       logger.info('LoginPage', 'login_start', { identifier: values.identifier });
       const session = await apiLogin(values.identifier, values.password, deviceId);
-      if (session.data.pwd_change_required) {
+      if (session.pwd_change_required) {
         logger.error('LoginPage', 'pwd_change_required', { identifier: values.identifier });
         setError('首次登录需要修改密码');
         return;
       }
-      login(session.data.access_token, session.data.user);
+      login(session.access_token, session.user);
       logger.info('LoginPage', 'login_success', { identifier: values.identifier });
       message.success('登录成功');
       navigate('/agents', { replace: true });

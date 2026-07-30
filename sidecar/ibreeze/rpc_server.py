@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import aiosqlite
 from pydantic import BaseModel, ValidationError
 
 from ibreeze.company import (
@@ -48,9 +49,7 @@ from ibreeze.employee import (
     update_employee_display_name,
     update_employee_status,
 )
-from ibreeze.local_db import LocalDB
 from ibreeze.logging_config import get_logger
-from ibreeze.review.service import submit_review_report
 from ibreeze.schemas import (
     CompanyArchiveRequest,
     CompanyCreate,
@@ -82,73 +81,50 @@ PROTOCOL_VERSION = 1
 # DEPRECATED: REPLACE with generated registry method metadata
 READ_METHODS = frozenset(
     {
-        "company.get",
-        "company.list",
-        "department.get",
-        "department.list",
-        "employee.get",
-        "employee.list",
-        "conversation.getCompany",
-        "conversation.getDepartment",
-        "conversation.list",
-        "conversation.listMessages",
-        "profile.get",
-        "profile.list",
-        "task.get",
-        "task.list",
-        "task.getGraph",
-        "task.getEvidence",
-        "runtime.listAvailableModels",
-        "runtime.getStatus",
-        "run.get",
-        "run.list",
-        "run.listEvents",
-        "artifact.list",
-        "artifact.getSnapshot",
-        "workspace.list",
-        "workspace.get",
-        "review.listIssues",
         "approval.listPending",
-        "knowledge.list",
-        "knowledge.search",
+        "artifact.getSnapshot",
+        "artifact.list",
         "backup.list",
-        "settings.get",
-        "event.replay",
-        "departmentTask.getReport",
         "catalog.getActiveRelease",
         "catalog.listAgents",
         "catalog.listModels",
         "catalog.listSkills",
         "catalog.verifyCache",
+        "company.get",
+        "company.list",
+        "conversation.getCompany",
+        "conversation.getDepartment",
+        "conversation.list",
+        "conversation.listMessages",
+        "department.get",
+        "department.list",
+        "departmentTask.getReport",
+        "employee.get",
+        "employee.list",
+        "event.replay",
+        "knowledge.list",
+        "knowledge.search",
+        "profile.get",
+        "profile.list",
+        "review.listIssues",
+        "run.get",
+        "run.list",
+        "run.listEvents",
+        "runtime.getStatus",
+        "runtime.listAvailableModels",
+        "runtime.probeAgent",
+        "runtime.probeProvider",
+        "settings.get",
+        "task.get",
+        "task.getEvidence",
+        "task.getGraph",
+        "task.list",
+        "workspace.get",
+        "workspace.list",
     }
 )
 
 Handler = Callable[[dict[str, Any]], Awaitable[object]]
-
-
-class _NestedTransactionConnection:
-    """DEPRECATED: compatibility shim for old service self-managed transactions.
-    Remove once all services are migrated to UoW/CommandBus pattern.
-    """
-
-    def __init__(self, connection: Any) -> None:
-        self._connection = connection
-
-    async def execute(
-        self,
-        sql: str,
-        params: tuple[Any, ...] = (),
-    ) -> Any:
-        command = sql.lstrip().upper()
-        if command.startswith("BEGIN") or command == "ROLLBACK":
-            return await self._connection.execute("SELECT 1")
-        return await self._connection.execute(sql, params)
-
-    async def commit(self) -> None:
-        await self._connection.execute("PRAGMA defer_foreign_keys = OFF")
-
-    async def rollback(self) -> None:
-        await self._connection.execute("PRAGMA defer_foreign_keys = OFF")
 
 
 class DomainError(Exception):
@@ -188,7 +164,8 @@ class RPCServer:
 
     def __init__(
         self,
-        db: LocalDB,
+        writer: aiosqlite.Connection,
+        profile_path: Path,
         socket_path: str | Path,
         *,
         startup_token: bytes,
@@ -196,7 +173,8 @@ class RPCServer:
         app_version: str,
         write_queue: Any | None = None,
     ) -> None:
-        self.db = db
+        self._writer = writer
+        self._profile_path = profile_path
         self.socket_path = Path(socket_path)
         self.launch_id = _uuid(launch_id)
         self.app_version = app_version
@@ -208,8 +186,8 @@ class RPCServer:
         self._client_connected = False
         self._shutdown = asyncio.Event()
         self._cursor_key = self._load_cursor_key()
-        self._transaction_connection: _NestedTransactionConnection | None = None
         self._write_queue = write_queue
+        self._active_connection: aiosqlite.Connection | None = None
         # DEPRECATED: self.methods should come from Registry/generated Dispatcher
         # See sidecar/ibreeze/rpc/bridge.py for the new registration path
         self.methods: dict[str, Handler] = {
@@ -292,7 +270,6 @@ class RPCServer:
             "workspace.abandon": self._workspace_abandon,
             "workspace.cleanupTask": self._workspace_cleanup_task,
             # Review
-            "review.submit": self._review_submit,
             "review.listIssues": self._review_list_issues,
             "review.rerun": self._review_rerun,
             "review.resolveIssue": self._review_resolve_issue,
@@ -327,7 +304,7 @@ class RPCServer:
         logger.info("rpc_server.initialized", extra={"method_count": len(self.methods)})
 
     def _load_cursor_key(self) -> bytes:
-        path = self.db.db_path.with_suffix(".cursor-key")
+        path = self._profile_path.with_suffix(".cursor-key")
         if path.exists():
             value = path.read_bytes()
             if len(value) != 32:
@@ -648,16 +625,19 @@ class RPCServer:
         # Real database connectivity check
         database_status = "ready"
         try:
-            await self.db.fetch_val("SELECT 1")
+            cursor = await self._writer.execute("SELECT 1")
+            await cursor.fetchone()
         except Exception:
             database_status = "degraded"
 
         # Get actual migration version from database
         migration_version = "unknown"
         try:
-            result = await self.db.fetch_val(
+            cursor = await self._writer.execute(
                 "SELECT MAX(version) FROM schema_migrations WHERE status='completed'"
             )
+            row = await cursor.fetchone()
+            result = row[0] if row else None
             if result:
                 migration_version = str(result)
         except Exception:
@@ -676,7 +656,7 @@ class RPCServer:
             "event_loop_lag_ms": event_loop_lag_ms,
             "write_queue_depth": write_queue_depth,
             "runtime_queue_depth": int(
-                await self.db.fetch_val("SELECT COUNT(*) FROM runtime_queue WHERE status='ready'") or 0
+                await self._fetch_val("SELECT COUNT(*) FROM runtime_queue WHERE status='ready'") or 0
             ),
             "process_pool_status": process_pool_status,
         }
@@ -696,7 +676,7 @@ class RPCServer:
                 separators=(",", ":"),
             ).encode("utf-8")
         ).hexdigest()
-        existing = await self.db.fetch_one(
+        existing = await self._fetch_one(
             """SELECT * FROM idempotency
                WHERE idempotency_key=?""",
             (key,),
@@ -727,12 +707,13 @@ class RPCServer:
                     _abandon,
                 )
             else:
-                await self.db.execute_write(
+                await self._writer.execute(
                     """UPDATE idempotency
                        SET status='failed',error_code='IDEMPOTENCY_PROCESSING_ABANDONED'
                        WHERE idempotency_key=?""",
                     (key,),
                 )
+                await self._writer.commit()
             raise DomainError("IDEMPOTENCY_PROCESSING_ABANDONED")
 
         now = _now()
@@ -748,7 +729,7 @@ class RPCServer:
                    VALUES (?,?,'processing',NULL,NULL,?,?)""",
                 (key, request_sha, now, expires_at),
             )
-            self._transaction_connection = _NestedTransactionConnection(conn)
+            self._active_connection = conn
             try:
                 result = await handler(params)
             except Exception:
@@ -760,7 +741,7 @@ class RPCServer:
                 )
                 raise
             finally:
-                self._transaction_connection = None
+                self._active_connection = None
             serialized = _serialize(result)
             await conn.execute(
                 """UPDATE idempotency
@@ -777,34 +758,30 @@ class RPCServer:
                 datetime.now(UTC) + timedelta(seconds=30),
                 _execute,
             )
-        connection = self.db.write_connection
-        await connection.execute("BEGIN IMMEDIATE")
-        await connection.execute(
+        await self._writer.execute(
             """INSERT INTO idempotency
                (idempotency_key,request_sha256,status,response_json,
                 error_code,created_at,expires_at)
                VALUES (?,?,'processing',NULL,NULL,?,?)""",
             (key, request_sha, now, expires_at),
         )
-        self._transaction_connection = _NestedTransactionConnection(connection)
+        await self._writer.commit()
         try:
             result = await handler(params)
         except Exception:
-            await connection.rollback()
+            await self._writer.rollback()
             raise
-        finally:
-            self._transaction_connection = None
         serialized = _serialize(result)
         try:
-            await connection.execute(
+            await self._writer.execute(
                 """UPDATE idempotency
                    SET status='completed',response_json=?
                    WHERE idempotency_key=?""",
                 (json.dumps(serialized, ensure_ascii=False, separators=(",", ":")), key),
             )
-            await connection.commit()
+            await self._writer.commit()
         except Exception:
-            await connection.rollback()
+            await self._writer.rollback()
             raise
         return serialized
 
@@ -836,7 +813,20 @@ class RPCServer:
 
     @property
     def _connection(self) -> Any:
-        return self._transaction_connection or self.db.write_connection
+        return self._active_connection or self._writer
+
+    async def _fetch_val(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
+        cursor = await self._writer.execute(sql, params)
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    async def _fetch_one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
+        cursor = await self._writer.execute(sql, params)
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        columns = [desc[0] for desc in cursor.description]
+        return dict(zip(columns, row))
 
     def _cursor(self, created_at: datetime, object_id: str) -> str:
         payload = json.dumps(
@@ -1656,21 +1646,6 @@ class RPCServer:
         return {"cleaned_at": now}
 
     # ── Review ────────────────────────────────────────────────────────
-
-    async def _review_submit(self, params: dict[str, Any]) -> object:
-        result = await submit_review_report(
-            self._connection,
-            params["company_id"],
-            assignment_id=params["assignment_id"],
-            artifact_id=params["artifact_id"],
-            artifact_sha256=params["artifact_sha256"],
-            report_artifact_id=params["report_artifact_id"],
-            reviewer_run_id=params["reviewer_run_id"],
-            verdict=params["verdict"],
-            summary=params.get("summary", ""),
-            issues=params.get("issues"),
-        )
-        return result
 
     async def _review_list_issues(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(

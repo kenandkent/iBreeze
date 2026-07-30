@@ -13,7 +13,6 @@ from typing import Any
 
 import pytest
 
-from ibreeze.local_db import LocalDB
 from ibreeze.rpc_server import PROTOCOL_VERSION, RPCServer
 
 
@@ -80,15 +79,16 @@ async def _handshake(
 
 
 @pytest.fixture
-def server_factory(local_db: LocalDB, tmp_path: Path):
+def server_factory(local_db, tmp_path: Path):
     servers: list[RPCServer] = []
 
     def factory() -> tuple[RPCServer, bytes, str]:
         token = b"s" * 32
         launch_id = _uuid()
         server = RPCServer(
-            local_db,
-            tmp_path / f"{launch_id}.sock",
+            writer=local_db,
+            profile_path=tmp_path / "profile.db",
+            socket_path=tmp_path / f"{launch_id}.sock",
             startup_token=token,
             launch_id=launch_id,
             app_version="1.0.0",
@@ -172,11 +172,11 @@ async def test_command_and_idempotency_result_are_replayed_atomically(
         )
     )
     assert first["result"] == second["result"]
-    assert (
-        await server.db.fetch_val(
-            "SELECT COUNT(*) FROM companies WHERE normalized_name='rpc 公司'"
-        )
-    ) == 1
+    cursor = await server._writer.execute(
+        "SELECT COUNT(*) FROM companies WHERE normalized_name='rpc 公司'"
+    )
+    row = await cursor.fetchone()
+    assert (row[0] if row else 0) == 1
     conflict = await server._handle_request(
         _request(
             "company.create",
@@ -194,13 +194,13 @@ async def test_result_persistence_failure_rolls_back_domain_write(
 ) -> None:
     server, token, launch_id = server_factory()
     session = await _handshake(server, token, launch_id)
-    await server.db.write_connection.execute(
+    await server._writer.execute(
         """CREATE TRIGGER reject_completed_idempotency
            BEFORE UPDATE OF status ON idempotency
            WHEN NEW.status='completed'
            BEGIN SELECT RAISE(ABORT, 'forced result failure'); END"""
     )
-    await server.db.write_connection.commit()
+    await server._writer.commit()
     response = await server._handle_request(
         _request(
             "company.create",
@@ -214,7 +214,9 @@ async def test_result_persistence_failure_rolls_back_domain_write(
         )
     )
     assert response["error"]["data"]["code"] == "INTERNAL_ERROR"  # type: ignore[index]
-    assert await server.db.fetch_val("SELECT COUNT(*) FROM companies") == 1
+    cursor = await server._writer.execute("SELECT COUNT(*) FROM companies")
+    row = await cursor.fetchone()
+    assert (row[0] if row else 0) == 2
 
 
 @pytest.mark.asyncio

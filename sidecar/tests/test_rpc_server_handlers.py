@@ -12,11 +12,9 @@ import hmac
 import json
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 
-from ibreeze.local_db import LocalDB
 from ibreeze.rpc_server import (
     PROTOCOL_VERSION,
     DomainError,
@@ -89,15 +87,19 @@ async def _setup_company(server: RPCServer, session: str, published_profile: str
 
 
 @pytest.fixture
-def server_factory(local_db: LocalDB, tmp_path):
+def server_factory(local_db, tmp_path):
     servers: list[RPCServer] = []
 
     def factory() -> tuple[RPCServer, bytes, str]:
         token = b"s" * 32
         launch_id = _uid()
         server = RPCServer(
-            local_db, tmp_path / f"{launch_id}.sock",
-            startup_token=token, launch_id=launch_id, app_version="1.0.0",
+            writer=local_db,
+            profile_path=tmp_path / "profile.db",
+            socket_path=tmp_path / f"{launch_id}.sock",
+            startup_token=token,
+            launch_id=launch_id,
+            app_version="1.0.0",
         )
         servers.append(server)
         return server, token, launch_id
@@ -133,44 +135,6 @@ class TestHelperFunctions:
 
     def test_serialize_plain(self):
         assert _serialize(42) == 42
-
-
-@pytest.mark.asyncio
-class TestNestedTransactionConnection:
-    async def test_begin_suppressed(self):
-        mock_conn = AsyncMock()
-        from ibreeze.rpc_server import _NestedTransactionConnection
-        ntc = _NestedTransactionConnection(mock_conn)
-        await ntc.execute("BEGIN IMMEDIATE")
-        mock_conn.execute.assert_called_with("SELECT 1")
-
-    async def test_rollback_suppressed(self):
-        mock_conn = AsyncMock()
-        from ibreeze.rpc_server import _NestedTransactionConnection
-        ntc = _NestedTransactionConnection(mock_conn)
-        await ntc.execute("ROLLBACK")
-        mock_conn.execute.assert_called_with("SELECT 1")
-
-    async def test_normal_execute_passes(self):
-        mock_conn = AsyncMock()
-        from ibreeze.rpc_server import _NestedTransactionConnection
-        ntc = _NestedTransactionConnection(mock_conn)
-        await ntc.execute("SELECT * FROM foo", ("a",))
-        mock_conn.execute.assert_called_with("SELECT * FROM foo", ("a",))
-
-    async def test_commit_calls_pragma(self):
-        mock_conn = AsyncMock()
-        from ibreeze.rpc_server import _NestedTransactionConnection
-        ntc = _NestedTransactionConnection(mock_conn)
-        await ntc.commit()
-        mock_conn.execute.assert_called_with("PRAGMA defer_foreign_keys = OFF")
-
-    async def test_rollback_calls_pragma(self):
-        mock_conn = AsyncMock()
-        from ibreeze.rpc_server import _NestedTransactionConnection
-        ntc = _NestedTransactionConnection(mock_conn)
-        await ntc.rollback()
-        mock_conn.execute.assert_called_with("PRAGMA defer_foreign_keys = OFF")
 
 
 @pytest.mark.asyncio

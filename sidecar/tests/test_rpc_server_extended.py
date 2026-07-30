@@ -9,7 +9,6 @@ import uuid
 
 import pytest
 
-from ibreeze.local_db import LocalDB
 from ibreeze.rpc_server import PROTOCOL_VERSION, RPCServer
 
 
@@ -92,15 +91,16 @@ async def _setup_company(server: RPCServer, session: str, published_profile: str
 
 
 @pytest.fixture
-def server_factory(local_db: LocalDB, tmp_path):
+def server_factory(local_db, tmp_path):
     servers: list[RPCServer] = []
 
     def factory() -> tuple[RPCServer, bytes, str]:
         token = b"s" * 32
         launch_id = _uuid()
         server = RPCServer(
-            local_db,
-            tmp_path / f"{launch_id}.sock",
+            writer=local_db,
+            profile_path=tmp_path / "profile.db",
+            socket_path=tmp_path / f"{launch_id}.sock",
             startup_token=token,
             launch_id=launch_id,
             app_version="1.0.0",
@@ -178,12 +178,13 @@ async def test_backup_list_with_seeded_data(server_factory, published_profile) -
     session = await _handshake(server, token, launch_id)
     sha = "a" * 64
     now = "2026-01-01T00:00:00Z"
-    await server.db.execute_write(
+    await server._writer.execute(
         "INSERT INTO backup_records "
         "(id, backup_type, archive_path, archive_size, archive_sha256, "
         "manifest_json, status, created_at) VALUES (?, 'manual', '/bak', 100, ?, '{}', 'completed', ?)",
         (_uuid(), sha, now),
     )
+    await server._writer.commit()
     resp = await server._handle_request(_request(
         "backup.list", {},
         _meta(ipc_session_id=session, idempotency_key=None),
@@ -198,12 +199,13 @@ async def test_backup_restore(server_factory, published_profile) -> None:
     sha = "b" * 64
     now = "2026-01-01T00:00:00Z"
     bid = _uuid()
-    await server.db.execute_write(
+    await server._writer.execute(
         "INSERT INTO backup_records "
         "(id, backup_type, archive_path, archive_size, archive_sha256, "
         "manifest_json, status, created_at) VALUES (?, 'manual', '/r', 50, ?, '{}', 'creating', ?)",
         (bid, sha, now),
     )
+    await server._writer.commit()
     restore_resp = await server._handle_request(_request(
         "backup.restore",
         {"backup_id": bid},
@@ -319,17 +321,19 @@ async def test_knowledge_import_via_direct_insert(server_factory, published_prof
     sha = "a" * 64
     now = "2026-01-01T00:00:00Z"
     kid = _uuid()
-    await server.db.execute_write("PRAGMA foreign_keys = OFF")
+    await server._writer.execute("PRAGMA foreign_keys = OFF")
     try:
-        await server.db.execute_write(
+        await server._writer.execute(
             "INSERT INTO knowledge_items "
             "(id, company_id, source_artifact_id, source_message_event_id, visibility, "
             "title, content, content_sha256, created_at) "
             "VALUES (?, ?, NULL, 'evt1', 'company', 'Test', 'Content', ?, ?)",
             (kid, company_id, sha, now),
         )
+        await server._writer.commit()
     finally:
-        await server.db.execute_write("PRAGMA foreign_keys = ON")
+        await server._writer.execute("PRAGMA foreign_keys = ON")
+        await server._writer.commit()
     list_resp = await server._handle_request(_request(
         "knowledge.list",
         {"company_id": company_id},
