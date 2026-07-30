@@ -121,7 +121,6 @@ async def log_audit(
             chain_hash, prev_hash,
         ),
     )
-    await db.commit()
     return log_id
 
 

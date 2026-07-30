@@ -22,15 +22,23 @@ from ibreeze.state_machine import can_transition, is_terminal
 
 
 async def _company(db: aiosqlite.Connection, profile_id: str, name: str):
-    return await create_company(
-        db,
-        CompanyCreate(
-            name=name,
-            introduction="调度测试公司",
-            general_manager_name="总经理",
-            base_profile_version_id=profile_id,
-        ),
-    )
+    # create_company requires an active transaction (defer_foreign_keys only works in txn)
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        result = await create_company(
+            db,
+            CompanyCreate(
+                name=name,
+                introduction="调度测试公司",
+                general_manager_name="总经理",
+                base_profile_version_id=profile_id,
+            ),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return result
 
 
 async def _enqueue_with_run(

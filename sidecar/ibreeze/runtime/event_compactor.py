@@ -81,8 +81,6 @@ async def compact_events(db: Any, run_id: str) -> dict[str, Any]:
             now,
         ),
     )
-    await db.commit()
-
     return {
         "transcript": transcript,
         "event_count": len(events),

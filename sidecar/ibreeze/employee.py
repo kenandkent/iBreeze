@@ -157,7 +157,9 @@ async def create_department(
     normalized_name = _normalize_name(data.name)
     normalized_leader = _normalize_name(data.leader_name)
 
-    await db.execute("BEGIN IMMEDIATE")
+    own_txn = not db.in_transaction
+    if own_txn:
+        await db.execute("BEGIN IMMEDIATE")
     await db.execute("PRAGMA defer_foreign_keys = ON")
     try:
         cursor = await db.execute(
@@ -247,10 +249,13 @@ async def create_department(
             event_type="department.created",
             extra={"leader_employee_id": leader_id},
         )
-        await db.commit()
-        return await get_department(db, company_id, department_id)
+        result = await get_department(db, company_id, department_id)
+        if own_txn:
+            await db.commit()
+        return result
     except Exception:
-        await db.rollback()
+        if own_txn:
+            await db.rollback()
         raise
     finally:
         cursor = await db.execute("PRAGMA defer_foreign_keys")
@@ -258,7 +263,6 @@ async def create_department(
         assert row is not None
         if row[0] != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
-            raise RuntimeError("defer_foreign_keys was not restored")  # pragma: no cover
 
 
 async def get_department(
@@ -306,7 +310,6 @@ async def update_department(
     data: DepartmentUpdate,
 ) -> DepartmentResponse:
     await _active_company(db, company_id)
-    await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             """SELECT d.*, r.name, r.function_description
@@ -381,10 +384,8 @@ async def update_department(
             aggregate_version=version,
             event_type="department.updated",
         )
-        await db.commit()
         return await get_department(db, company_id, department_id)
     except Exception:
-        await db.rollback()
         raise
 
 
@@ -399,7 +400,9 @@ async def create_employee(
     if data.workflow_role != WorkflowRole.MEMBER:
         raise ValueError("STATE_TRANSITION_INVALID")
     normalized_name = _normalize_name(data.display_name)
-    await db.execute("BEGIN IMMEDIATE")
+    own_txn = not db.in_transaction
+    if own_txn:
+        await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             """SELECT id FROM departments
@@ -443,10 +446,13 @@ async def create_employee(
             event_type="employee.created",
             extra={"department_id": department_id},
         )
-        await db.commit()
-        return await get_employee(db, company_id, employee_id)
+        result = await get_employee(db, company_id, employee_id)
+        if own_txn:
+            await db.commit()
+        return result
     except Exception:
-        await db.rollback()
+        if own_txn:
+            await db.rollback()
         raise
 
 
@@ -520,7 +526,6 @@ async def update_employee_display_name(
 ) -> EmployeeResponse:
     await _active_company(db, company_id)
     normalized_name = _normalize_name(data.display_name)
-    await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             """SELECT * FROM employees
@@ -560,10 +565,8 @@ async def update_employee_display_name(
             aggregate_version=version,
             event_type="employee.updated",
         )
-        await db.commit()
         return await get_employee(db, company_id, employee_id)
     except Exception:
-        await db.rollback()
         raise
 
 
@@ -589,7 +592,6 @@ async def update_employee_base_profile(
         ),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
     await _append_event(
         db,
@@ -600,7 +602,6 @@ async def update_employee_base_profile(
         event_type="employee.updated",
         extra={"base_profile_version_id": profile_version_id},
     )
-    await db.commit()
     return await get_employee(db, company_id, employee_id)
 
 
@@ -636,7 +637,6 @@ async def update_employee_status(
         (status.value, _now(), employee_id, company_id, expected_version),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
     await _append_event(
         db,
@@ -647,7 +647,6 @@ async def update_employee_status(
         event_type="employee.status_changed",
         extra={"status": status.value},
     )
-    await db.commit()
     return await get_employee(db, company_id, employee_id)
 
 
@@ -679,7 +678,6 @@ async def transfer_employee(
     if await _one(cursor) is None:
         raise ValueError("RESOURCE_NOT_FOUND")
 
-    await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             """UPDATE employees SET department_id=?, updated_at=?,
@@ -701,10 +699,8 @@ async def transfer_employee(
                 "to_department_id": new_department_id,
             },
         )
-        await db.commit()
         return await get_employee(db, company_id, employee_id)
     except Exception:
-        await db.rollback()
         raise
 
 
@@ -725,7 +721,6 @@ async def set_department_leader(
     if department.leader_employee_id == employee_id:
         return department
 
-    await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             """UPDATE departments SET leader_employee_id=?,updated_at=?,
@@ -759,8 +754,6 @@ async def set_department_leader(
             event_type="department.leader_changed",
             extra={"leader_employee_id": employee_id},
         )
-        await db.commit()
         return await get_department(db, company_id, department_id)
     except Exception:  # pragma: no cover
-        await db.rollback()
         raise

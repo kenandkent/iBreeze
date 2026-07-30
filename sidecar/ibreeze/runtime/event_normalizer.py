@@ -285,5 +285,4 @@ async def store_event(db: Any, event: dict[str, Any]) -> str:
             event["occurred_at"],
         ),
     )
-    await db.commit()
     return event["event_id"]  # type: ignore[no-any-return]

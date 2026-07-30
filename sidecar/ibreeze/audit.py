@@ -88,7 +88,6 @@ async def append_audit(
             now,
         ),
     )
-    await db.commit()
     return AuditLogResponse(
         row_sequence=cursor.lastrowid,
         id=audit_id,

@@ -83,9 +83,7 @@ async def abandon_workspace(
         (workspace_id, company_id, expected_version),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-    await db.commit()
     return await get_workspace(db, company_id, workspace_id)
 
 
@@ -107,9 +105,7 @@ async def cleanup_workspace(
         (workspace_id, company_id, expected_version),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("STATE_TRANSITION_INVALID")
-    await db.commit()
     return {
         "workspace_id": workspace_id,
         "cleaned": True,
@@ -166,7 +162,6 @@ async def create_workspace(
             now,
         ),
     )
-    await db.commit()
     return {
         "workspace_id": ws_id,
         "status": "preparing",
@@ -192,9 +187,7 @@ async def open_workspace(
         (workspace_id, company_id, expected_version),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("STATE_TRANSITION_INVALID")
-    await db.commit()
     return await get_workspace(db, company_id, workspace_id)
 
 
@@ -216,9 +209,7 @@ async def archive_workspace(
         (workspace_id, company_id, expected_version),
     )
     if cursor.rowcount != 1:
-        await db.rollback()
         raise ValueError("STATE_TRANSITION_INVALID")
-    await db.commit()
     return await get_workspace(db, company_id, workspace_id)
 
 
@@ -279,9 +270,7 @@ async def apply_workspace(
             (applied_sha, workspace_id, company_id, expected_version),
         )
         if cursor.rowcount != 1:
-            await db.rollback()
             raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-        await db.commit()
         return {
             "workspace_id": workspace_id,
             "status": "applied",
@@ -301,7 +290,6 @@ async def apply_workspace(
            WHERE id=? AND company_id=?""",
         (workspace_id, company_id),
     )
-    await db.commit()
     return {
         "workspace_id": workspace_id,
         "status": "ready_to_apply",

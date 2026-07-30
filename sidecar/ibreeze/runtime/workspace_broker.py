@@ -67,7 +67,6 @@ async def allocate_workspace(
             now,
         ),
     )
-    await db.commit()
 
     Path(integration_worktree_path).mkdir(parents=True, exist_ok=True)
 
@@ -86,7 +85,6 @@ async def activate_workspace(db: Any, workspace_id: str) -> dict[str, Any]:
         "UPDATE task_workspaces SET status = ?, updated_at = ?, version = version + 1 WHERE id = ?",
         (_STATUS_ACTIVE, now, workspace_id),
     )
-    await db.commit()
     return {"workspace_id": workspace_id, "status": _STATUS_ACTIVE, "activated_at": now}
 
 

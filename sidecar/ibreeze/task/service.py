@@ -28,60 +28,54 @@ async def submit_plan_for_review(
     """Submit generated plan for user review (analyzing/draft → awaiting_user_confirmation)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT * FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT * FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] not in ("analyzing", "draft"):
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] not in ("analyzing", "draft"):
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        plan = await _one(
-            await db.execute(
-                """SELECT id FROM company_plan_versions
-                   WHERE company_task_id=? AND company_id=?
-                   AND status='draft'
-                   ORDER BY version_number DESC LIMIT 1""",
-                (task_id, company_id),
-            )
+    plan = await _one(
+        await db.execute(
+            """SELECT id FROM company_plan_versions
+               WHERE company_task_id=? AND company_id=?
+               AND status='draft'
+               ORDER BY version_number DESC LIMIT 1""",
+            (task_id, company_id),
         )
-        if plan is None:
-            raise ValueError("NO_DRAFT_PLAN")
+    )
+    if plan is None:
+        raise ValueError("NO_DRAFT_PLAN")
 
-        cursor = await db.execute(
-            """UPDATE company_plan_versions
-               SET status='awaiting_user_confirmation'
-               WHERE id=? AND company_id=? AND status='draft'""",
-            (plan["id"], company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    cursor = await db.execute(
+        """UPDATE company_plan_versions
+           SET status='awaiting_user_confirmation'
+           WHERE id=? AND company_id=? AND status='draft'""",
+        (plan["id"], company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='awaiting_user_confirmation', updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status IN ('analyzing','draft')""",
-            (now, task_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='awaiting_user_confirmation', updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status IN ('analyzing','draft')""",
+        (now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "plan_version_id": plan["id"],
-            "status": "awaiting_user_confirmation",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "task_id": task_id,
+        "plan_version_id": plan["id"],
+        "status": "awaiting_user_confirmation",
+    }
 
 
 async def confirm_plan(
@@ -93,57 +87,51 @@ async def confirm_plan(
     """User confirms company plan (awaiting_user_confirmation → approved)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT * FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
-        )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] != "awaiting_user_confirmation":
-            raise ValueError("STATE_TRANSITION_INVALID")
-
-        plan = await _one(
-            await db.execute(
-                """SELECT id FROM company_plan_versions
-                   WHERE company_task_id=? AND company_id=?
-                   AND status='awaiting_user_confirmation'""",
-                (task_id, company_id),
-            )
-        )
-        if plan is None:
-            raise ValueError("NO_AWAITING_PLAN")
-
+    task = await _one(
         await db.execute(
-            """UPDATE company_plan_versions
-               SET status='approved', confirmed_at=?
+            """SELECT * FROM company_tasks
                WHERE id=? AND company_id=?""",
-            (now, plan["id"], company_id),
+            (task_id, company_id),
         )
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] != "awaiting_user_confirmation":
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='approved', updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
+    plan = await _one(
+        await db.execute(
+            """SELECT id FROM company_plan_versions
+               WHERE company_task_id=? AND company_id=?
                AND status='awaiting_user_confirmation'""",
-            (now, task_id, company_id),
+            (task_id, company_id),
         )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    )
+    if plan is None:
+        raise ValueError("NO_AWAITING_PLAN")
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "plan_version_id": plan["id"],
-            "status": "approved",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE company_plan_versions
+           SET status='approved', confirmed_at=?
+           WHERE id=? AND company_id=?""",
+        (now, plan["id"], company_id),
+    )
+
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='approved', updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status='awaiting_user_confirmation'""",
+        (now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+    return {
+        "task_id": task_id,
+        "plan_version_id": plan["id"],
+        "status": "approved",
+    }
 
 
 async def request_plan_revision(
@@ -157,55 +145,49 @@ async def request_plan_revision(
     """Request plan revision."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT * FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT * FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] != "awaiting_user_confirmation":
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] != "awaiting_user_confirmation":
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        plan = await _one(
-            await db.execute(
-                """SELECT id FROM company_plan_versions
-                   WHERE company_task_id=? AND company_id=?
-                   AND status='awaiting_user_confirmation'""",
-                (task_id, company_id),
-            )
-        )
-        if plan is not None:
-            await db.execute(
-                """UPDATE company_plan_versions
-                   SET status='superseded'
-                   WHERE id=? AND company_id=?""",
-                (plan["id"], company_id),
-            )
-
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='revision_requested', updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
+    plan = await _one(
+        await db.execute(
+            """SELECT id FROM company_plan_versions
+               WHERE company_task_id=? AND company_id=?
                AND status='awaiting_user_confirmation'""",
-            (now, task_id, company_id),
+            (task_id, company_id),
         )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    )
+    if plan is not None:
+        await db.execute(
+            """UPDATE company_plan_versions
+               SET status='superseded'
+               WHERE id=? AND company_id=?""",
+            (plan["id"], company_id),
+        )
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "status": "revision_requested",
-            "reason": reason,
-        }
-    except Exception:  # pragma: no cover
-        await db.rollback()
-        raise
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='revision_requested', updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status='awaiting_user_confirmation'""",
+        (now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+    return {
+        "task_id": task_id,
+        "status": "revision_requested",
+        "reason": reason,
+    }
 
 
 async def reject_plan(
@@ -219,55 +201,49 @@ async def reject_plan(
     """Reject plan."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT * FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT * FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] != "awaiting_user_confirmation":
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] != "awaiting_user_confirmation":
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        plan = await _one(
-            await db.execute(
-                """SELECT id FROM company_plan_versions
-                   WHERE company_task_id=? AND company_id=?
-                   AND status='awaiting_user_confirmation'""",
-                (task_id, company_id),
-            )
-        )
-        if plan is not None:
-            await db.execute(
-                """UPDATE company_plan_versions
-                   SET status='rejected'
-                   WHERE id=? AND company_id=?""",
-                (plan["id"], company_id),
-            )
-
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='rejected', updated_at=?, completed_at=?, version=version+1
-               WHERE id=? AND company_id=?
+    plan = await _one(
+        await db.execute(
+            """SELECT id FROM company_plan_versions
+               WHERE company_task_id=? AND company_id=?
                AND status='awaiting_user_confirmation'""",
-            (now, now, task_id, company_id),
+            (task_id, company_id),
         )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    )
+    if plan is not None:
+        await db.execute(
+            """UPDATE company_plan_versions
+               SET status='rejected'
+               WHERE id=? AND company_id=?""",
+            (plan["id"], company_id),
+        )
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "status": "rejected",
-            "reason": reason,
-        }
-    except Exception:  # pragma: no cover
-        await db.rollback()
-        raise
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='rejected', updated_at=?, completed_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status='awaiting_user_confirmation'""",
+        (now, now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+    return {
+        "task_id": task_id,
+        "status": "rejected",
+        "reason": reason,
+    }
 
 
 async def pause_task(
@@ -279,41 +255,35 @@ async def pause_task(
     """Pause a running task (executing, reviewing, or fixing)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT status FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT status FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] not in ("executing", "reviewing", "fixing"):
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] not in ("executing", "reviewing", "fixing"):
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        resume_state = task["status"]
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='paused', resume_state=?,
-                   updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status IN ('executing','reviewing','fixing')""",
-            (resume_state, now, task_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    resume_state = task["status"]
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='paused', resume_state=?,
+               updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status IN ('executing','reviewing','fixing')""",
+        (resume_state, now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "status": "paused",
-            "resume_state": resume_state,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "task_id": task_id,
+        "status": "paused",
+        "resume_state": resume_state,
+    }
 
 
 async def resume_task(
@@ -325,40 +295,34 @@ async def resume_task(
     """Resume a paused task."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT resume_state, status FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT resume_state, status FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if task["status"] != "paused":
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if task["status"] != "paused":
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        resume_to = task["resume_state"] or "executing"
+    resume_to = task["resume_state"] or "executing"
 
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status=?, resume_state=NULL, updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status='paused'""",
-            (resume_to, now, task_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status=?, resume_state=NULL, updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status='paused'""",
+        (resume_to, now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "status": resume_to,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "task_id": task_id,
+        "status": resume_to,
+    }
 
 
 async def cancel_task(
@@ -372,40 +336,34 @@ async def cancel_task(
     """Cancel a task."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT status FROM company_tasks
-                   WHERE id=? AND company_id=?""",
-                (task_id, company_id),
-            )
+    task = await _one(
+        await db.execute(
+            """SELECT status FROM company_tasks
+               WHERE id=? AND company_id=?""",
+            (task_id, company_id),
         )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        terminal = {"completed", "cancelled", "failed"}
-        if task["status"] in terminal:
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    terminal = {"completed", "cancelled", "failed"}
+    if task["status"] in terminal:
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        cursor = await db.execute(
-            """UPDATE company_tasks
-               SET status='cancelling', updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status NOT IN ('completed','cancelled','failed')""",
-            (now, task_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    cursor = await db.execute(
+        """UPDATE company_tasks
+           SET status='cancelling', updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status NOT IN ('completed','cancelled','failed')""",
+        (now, task_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        await db.commit()
-        return {
-            "task_id": task_id,
-            "status": "cancelling",
-            "reason": reason,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "task_id": task_id,
+        "status": "cancelling",
+        "reason": reason,
+    }
 
 
 async def get_company_task(
@@ -561,58 +519,52 @@ async def replace_employee(
     """Replace assigned employee on a department task."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        task = await _one(
-            await db.execute(
-                """SELECT * FROM employee_tasks
-                   WHERE department_task_id=? AND company_id=?
-                   AND employee_id=?""",
-                (dept_task_id, company_id, old_employee_id),
-            )
-        )
-        if task is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-
-        new_id = _id()
+    task = await _one(
         await db.execute(
-            """INSERT INTO employee_tasks
-               (id, company_id, department_task_id, employee_id, task_kind,
-                objective, acceptance_criteria_json, status, resume_state,
-                created_at, updated_at, version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                new_id,
-                company_id,
-                dept_task_id,
-                new_employee_id,
-                task["task_kind"],
-                task["objective"],
-                task["acceptance_criteria_json"],
-                "assigned",
-                None,
-                now,
-                now,
-                1,
-            ),
+            """SELECT * FROM employee_tasks
+               WHERE department_task_id=? AND company_id=?
+               AND employee_id=?""",
+            (dept_task_id, company_id, old_employee_id),
         )
+    )
+    if task is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
 
-        await db.execute(
-            """UPDATE employee_tasks
-               SET status='cancelled', updated_at=?
-               WHERE id=? AND company_id=?""",
-            (now, task["id"], company_id),
-        )
+    new_id = _id()
+    await db.execute(
+        """INSERT INTO employee_tasks
+           (id, company_id, department_task_id, employee_id, task_kind,
+            objective, acceptance_criteria_json, status, resume_state,
+            created_at, updated_at, version)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            new_id,
+            company_id,
+            dept_task_id,
+            new_employee_id,
+            task["task_kind"],
+            task["objective"],
+            task["acceptance_criteria_json"],
+            "assigned",
+            None,
+            now,
+            now,
+            1,
+        ),
+    )
 
-        await db.commit()
-        return {
-            "old_employee_id": old_employee_id,
-            "new_employee_id": new_employee_id,
-            "new_task_id": new_id,
-        }
-    except Exception:  # pragma: no cover
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE employee_tasks
+           SET status='cancelled', updated_at=?
+           WHERE id=? AND company_id=?""",
+        (now, task["id"], company_id),
+    )
+
+    return {
+        "old_employee_id": old_employee_id,
+        "new_employee_id": new_employee_id,
+        "new_task_id": new_id,
+    }
 
 
 async def get_department_task_report(

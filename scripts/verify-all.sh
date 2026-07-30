@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 trap 'code=$?; echo "verify-all failed at line ${LINENO} with exit code ${code}" >&2; exit "${code}"' ERR
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 SCOPE="all"
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -20,7 +23,8 @@ done
 
 echo "=== iBreeze Verify All (scope: ${SCOPE}) ==="
 
-required_tools=(node npm uv cargo cargo-nextest cargo-llvm-cov)
+# Global required tools (needed by every scope)
+required_tools=(node npm uv)
 for tool in "${required_tools[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
         echo "FATAL: required tool '$tool' not found" >&2
@@ -29,6 +33,11 @@ for tool in "${required_tools[@]}"; do
 done
 
 run_contracts() {
+    # Needs cargo for check-contract-drift.sh (schema-gen-rust compilation)
+    if ! command -v cargo &>/dev/null; then
+        echo "FATAL: required tool 'cargo' not found" >&2
+        exit 1
+    fi
     echo "--- packages/contracts install ---"
     npm --prefix packages/contracts ci
     echo "--- packages/contracts lint ---"
@@ -40,6 +49,13 @@ run_contracts() {
 }
 
 run_desktop_rust() {
+    # Rust-specific tool check
+    for tool in cargo cargo-nextest cargo-llvm-cov; do
+        if ! command -v "$tool" &>/dev/null; then
+            echo "FATAL: required Rust tool '$tool' not found" >&2
+            exit 1
+        fi
+    done
     echo "--- desktop-core frontend dist ---"
     mkdir -p apps/desktop/dist
     echo "--- desktop-core fmt ---"
@@ -139,7 +155,13 @@ run_backend() {
 }
 
 run_e2e() {
-    echo "--- e2e tests (skipped: no e2e test suite configured) ---"
+    echo "--- e2e tests ---"
+    e2e_dir="$ROOT_DIR/tests/e2e"
+    if [ -d "$e2e_dir" ] && ls "$e2e_dir"/*.py &>/dev/null 2>&1; then
+        uv run pytest "$e2e_dir" -v --tb=short
+    else
+        echo "(no e2e test files found in $e2e_dir)"
+    fi
 }
 
 run_security() {
@@ -148,6 +170,11 @@ run_security() {
 }
 
 run_drift() {
+    # Needs cargo for check-contract-drift.sh (schema-gen-rust compilation)
+    if ! command -v cargo &>/dev/null; then
+        echo "FATAL: required tool 'cargo' not found" >&2
+        exit 1
+    fi
     echo "--- python contract/integration tests ---"
     test_dirs=""
     for d in tests/contract tests/integration tests/scripts; do

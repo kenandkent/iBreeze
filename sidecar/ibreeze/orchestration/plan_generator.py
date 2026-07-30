@@ -101,8 +101,6 @@ async def generate_company_plan(
             now,
         ),
     )
-    await db.commit()
-
     return {
         "plan_id": plan_id,
         "version_id": version_id,

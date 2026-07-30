@@ -67,7 +67,6 @@ async def create_independent_subtasks(
              "independent", json.dumps(task_input), json.dumps([]),
              "pending", json.dumps({}), _now(), _now(), 1),
         )
-    await db.commit()
     return subtasks
 
 

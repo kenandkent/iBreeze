@@ -42,100 +42,94 @@ async def create_artifact(
     artifact_id = _id()
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        existing = await _one(
-            await db.execute(
-                "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
-                (company_id, content_hash),
-            )
-        )
-        if existing is not None:
-            return {
-                "id": existing["id"],
-                "content_sha256": content_hash,
-                "deduplicated": True,
-            }
-
-        if supersedes_artifact_id:
-            await db.execute(
-                """UPDATE artifacts
-                   SET is_current=0
-                   WHERE id=? AND company_id=?""",
-                (supersedes_artifact_id, company_id),
-            )
-
-            old_cursor = await db.execute(
-                """SELECT object_sha256 FROM artifacts
-                   WHERE id=? AND company_id=?""",
-                (supersedes_artifact_id, company_id),
-            )
-            old_row = await old_cursor.fetchone()
-            old_sha256 = dict(old_row)["object_sha256"] if old_row else None
-
-            if old_sha256:
-                await db.execute(
-                    """UPDATE review_assignments
-                       SET status='stale'
-                       WHERE company_id=? AND reviewed_sha256=?
-                       AND status NOT IN ('stale','cancelled')""",
-                    (company_id, old_sha256),
-                )
-
-                await db.execute(
-                    """UPDATE review_issues
-                       SET superseded_by_artifact_id=?
-                       WHERE company_id=? AND id IN (
-                           SELECT ri.id FROM review_issues ri
-                           JOIN review_reports rr ON rr.id=ri.review_report_id
-                           JOIN review_assignments ra ON ra.id=rr.assignment_id
-                           WHERE ra.reviewed_sha256=?
-                           AND ri.superseded_by_artifact_id IS NULL
-                       )""",
-                    (artifact_id, company_id, old_sha256),
-                )
-
+    existing = await _one(
         await db.execute(
-            """INSERT INTO artifacts
-               (id, company_id, company_task_id, artifact_type,
-                logical_name, media_type, object_sha256, object_size,
-                metadata_json, supersedes_artifact_id, is_current,
-                created_by_type, created_by_run_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
-            (
-                artifact_id,
-                company_id,
-                company_task_id,
-                artifact_type,
-                filename,
-                mime_type,
-                content_hash,
-                len(content),
-                "{}",
-                supersedes_artifact_id,
-                "user",
-                None,
-                now,
-            ),
+            "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
+            (company_id, content_hash),
         )
-
-        await db.execute(
-            """INSERT INTO artifact_contributors
-               (artifact_id, company_id, employee_id)
-               VALUES (?,?,?)""",
-            (artifact_id, company_id, created_by_employee_id),
-        )
-
-        await db.commit()
+    )
+    if existing is not None:
         return {
-            "id": artifact_id,
+            "id": existing["id"],
             "content_sha256": content_hash,
-            "deduplicated": False,
-            "superseded": supersedes_artifact_id is not None,
+            "deduplicated": True,
         }
-    except Exception:
-        await db.rollback()
-        raise
+
+    if supersedes_artifact_id:
+        await db.execute(
+            """UPDATE artifacts
+               SET is_current=0
+               WHERE id=? AND company_id=?""",
+            (supersedes_artifact_id, company_id),
+        )
+
+        old_cursor = await db.execute(
+            """SELECT object_sha256 FROM artifacts
+               WHERE id=? AND company_id=?""",
+            (supersedes_artifact_id, company_id),
+        )
+        old_row = await old_cursor.fetchone()
+        old_sha256 = dict(old_row)["object_sha256"] if old_row else None
+
+        if old_sha256:
+            await db.execute(
+                """UPDATE review_assignments
+                   SET status='stale'
+                   WHERE company_id=? AND reviewed_sha256=?
+                   AND status NOT IN ('stale','cancelled')""",
+                (company_id, old_sha256),
+            )
+
+            await db.execute(
+                """UPDATE review_issues
+                   SET superseded_by_artifact_id=?
+                   WHERE company_id=? AND id IN (
+                       SELECT ri.id FROM review_issues ri
+                       JOIN review_reports rr ON rr.id=ri.review_report_id
+                       JOIN review_assignments ra ON ra.id=rr.assignment_id
+                       WHERE ra.reviewed_sha256=?
+                       AND ri.superseded_by_artifact_id IS NULL
+                   )""",
+                (artifact_id, company_id, old_sha256),
+            )
+
+    await db.execute(
+        """INSERT INTO artifacts
+           (id, company_id, company_task_id, artifact_type,
+            logical_name, media_type, object_sha256, object_size,
+            metadata_json, supersedes_artifact_id, is_current,
+            created_by_type, created_by_run_id, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+        (
+            artifact_id,
+            company_id,
+            company_task_id,
+            artifact_type,
+            filename,
+            mime_type,
+            content_hash,
+            len(content),
+            "{}",
+            supersedes_artifact_id,
+            "user",
+            None,
+            now,
+        ),
+    )
+
+    await db.execute(
+        """INSERT INTO artifact_contributors
+           (artifact_id, company_id, employee_id)
+           VALUES (?,?,?)""",
+        (artifact_id, company_id, created_by_employee_id),
+    )
+
+    return {
+        "id": artifact_id,
+        "content_sha256": content_hash,
+        "deduplicated": False,
+        "superseded": supersedes_artifact_id is not None,
+    }
 
 
 async def get_artifact(
@@ -244,101 +238,94 @@ async def create_artifact_with_manifest(
     artifact_id = _id()
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        existing = await _one(
-            await db.execute(
-                "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
-                (company_id, result["sha256"]),
-            )
-        )
-        if existing is not None:
-            await db.commit()
-            return {
-                "id": existing["id"],
-                "content_sha256": result["sha256"],
-                "deduplicated": True,
-            }
-
-        if supersedes_artifact_id:
-            await db.execute(
-                """UPDATE artifacts
-                   SET is_current=0
-                   WHERE id=? AND company_id=?""",
-                (supersedes_artifact_id, company_id),
-            )
-
-            old_cursor = await db.execute(
-                """SELECT object_sha256 FROM artifacts
-                   WHERE id=? AND company_id=?""",
-                (supersedes_artifact_id, company_id),
-            )
-            old_row = await old_cursor.fetchone()
-            old_sha256 = dict(old_row)["object_sha256"] if old_row else None
-
-            if old_sha256:
-                await db.execute(
-                    """UPDATE review_assignments
-                       SET status='stale'
-                       WHERE company_id=? AND reviewed_sha256=?
-                       AND status NOT IN ('stale','cancelled')""",
-                    (company_id, old_sha256),
-                )
-
-                await db.execute(
-                    """UPDATE review_issues
-                       SET superseded_by_artifact_id=?
-                       WHERE company_id=? AND id IN (
-                           SELECT ri.id FROM review_issues ri
-                           JOIN review_reports rr ON rr.id=ri.review_report_id
-                           JOIN review_assignments ra ON ra.id=rr.assignment_id
-                           WHERE ra.reviewed_sha256=?
-                           AND ri.superseded_by_artifact_id IS NULL
-                       )""",
-                    (artifact_id, company_id, old_sha256),
-                )
-
+    existing = await _one(
         await db.execute(
-            """INSERT INTO artifacts
-               (id, company_id, company_task_id, artifact_type,
-                logical_name, media_type, object_sha256, object_size,
-                metadata_json, supersedes_artifact_id, is_current,
-                created_by_type, created_by_run_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
-            (
-                artifact_id,
-                company_id,
-                company_task_id,
-                artifact_type,
-                relative_path,
-                "application/octet-stream",
-                result["sha256"],
-                len(content),
-                "{}",
-                supersedes_artifact_id,
-                "user",
-                None,
-                now,
-            ),
+            "SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?",
+            (company_id, result["sha256"]),
         )
-
-        await db.execute(
-            """INSERT INTO artifact_contributors
-               (artifact_id, company_id, employee_id)
-               VALUES (?,?,?)""",
-            (artifact_id, company_id, created_by_employee_id),
-        )
-
-        await db.commit()
+    )
+    if existing is not None:
         return {
-            "id": artifact_id,
+            "id": existing["id"],
             "content_sha256": result["sha256"],
-            "deduplicated": False,
-            "superseded": supersedes_artifact_id is not None,
+            "deduplicated": True,
         }
-    except Exception:
-        await db.rollback()
-        raise
+
+    if supersedes_artifact_id:
+        await db.execute(
+            """UPDATE artifacts
+               SET is_current=0
+               WHERE id=? AND company_id=?""",
+            (supersedes_artifact_id, company_id),
+        )
+
+        old_cursor = await db.execute(
+            """SELECT object_sha256 FROM artifacts
+               WHERE id=? AND company_id=?""",
+            (supersedes_artifact_id, company_id),
+        )
+        old_row = await old_cursor.fetchone()
+        old_sha256 = dict(old_row)["object_sha256"] if old_row else None
+
+        if old_sha256:
+            await db.execute(
+                """UPDATE review_assignments
+                   SET status='stale'
+                   WHERE company_id=? AND reviewed_sha256=?
+                   AND status NOT IN ('stale','cancelled')""",
+                (company_id, old_sha256),
+            )
+
+            await db.execute(
+                """UPDATE review_issues
+                   SET superseded_by_artifact_id=?
+                   WHERE company_id=? AND id IN (
+                       SELECT ri.id FROM review_issues ri
+                       JOIN review_reports rr ON rr.id=ri.review_report_id
+                       JOIN review_assignments ra ON ra.id=rr.assignment_id
+                       WHERE ra.reviewed_sha256=?
+                       AND ri.superseded_by_artifact_id IS NULL
+                   )""",
+                (artifact_id, company_id, old_sha256),
+            )
+
+    await db.execute(
+        """INSERT INTO artifacts
+           (id, company_id, company_task_id, artifact_type,
+            logical_name, media_type, object_sha256, object_size,
+            metadata_json, supersedes_artifact_id, is_current,
+            created_by_type, created_by_run_id, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+        (
+            artifact_id,
+            company_id,
+            company_task_id,
+            artifact_type,
+            relative_path,
+            "application/octet-stream",
+            result["sha256"],
+            len(content),
+            "{}",
+            supersedes_artifact_id,
+            "user",
+            None,
+            now,
+        ),
+    )
+
+    await db.execute(
+        """INSERT INTO artifact_contributors
+           (artifact_id, company_id, employee_id)
+           VALUES (?,?,?)""",
+        (artifact_id, company_id, created_by_employee_id),
+    )
+
+    return {
+        "id": artifact_id,
+        "content_sha256": result["sha256"],
+        "deduplicated": False,
+        "superseded": supersedes_artifact_id is not None,
+    }
 
 
 async def resolve_issue(
@@ -419,8 +406,6 @@ async def resolve_issue(
            WHERE id=? AND company_id=? AND status='fixing'""",
         (resolution_summary, now, issue_id, company_id),
     )
-
-    await db.commit()
 
     return {
         "resolution_id": resolution_id,

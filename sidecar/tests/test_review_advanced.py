@@ -34,70 +34,76 @@ from ibreeze.state_machine import can_transition, is_terminal
 
 async def _company_with_artifact(db: aiosqlite.Connection, profile_id: str):
     """Create company with department, employees, and a fake artifact."""
-    company = await create_company(
-        db,
-        CompanyCreate(
-            name="评审公司",
-            introduction="测试评审流程",
-            general_manager_name="总经理",
-            base_profile_version_id=profile_id,
-        ),
-    )
-    department = await create_department(
-        db,
-        company.id,
-        DepartmentCreate(
-            name="开发部",
-            function_description="实现代码",
-            leader_name="负责人",
-            base_profile_version_id=profile_id,
-        ),
-    )
-    contributor = await create_employee(
-        db,
-        company.id,
-        department.id,
-        EmployeeCreate(
-            display_name="开发者",
-            base_profile_version_id=profile_id,
-            workflow_role=WorkflowRole.MEMBER,
-        ),
-    )
-    reviewer = await create_employee(
-        db,
-        company.id,
-        department.id,
-        EmployeeCreate(
-            display_name="评审者",
-            base_profile_version_id=profile_id,
-            workflow_role=WorkflowRole.MEMBER,
-        ),
-    )
-    artifact_id = "artifact-001"
-    sha256 = "a" * 64
-    await db.execute("PRAGMA foreign_keys = OFF")
+    await db.execute("BEGIN IMMEDIATE")
     try:
-        await db.execute(
-            """INSERT INTO artifacts
-               (id, company_id, company_task_id, artifact_type, logical_name,
-                object_sha256, object_size, media_type, metadata_json,
-                supersedes_artifact_id, created_by_type, created_by_run_id,
-                created_at)
-               VALUES (?, ?, ?, 'source_code_patch', 'main.py',
-                       ?, 100, 'text/plain', '{}', NULL, 'system', NULL,
-                       '2026-01-01T00:00:00Z')""",
-            (artifact_id, company.id, "task-001", sha256),
+        company = await create_company(
+            db,
+            CompanyCreate(
+                name="评审公司",
+                introduction="测试评审流程",
+                general_manager_name="总经理",
+                base_profile_version_id=profile_id,
+            ),
         )
-        await db.execute(
-            """INSERT INTO artifact_contributors
-               (artifact_id, company_id, employee_id)
-               VALUES (?, ?, ?)""",
-            (artifact_id, company.id, contributor.id),
+        department = await create_department(
+            db,
+            company.id,
+            DepartmentCreate(
+                name="开发部",
+                function_description="实现代码",
+                leader_name="负责人",
+                base_profile_version_id=profile_id,
+            ),
         )
+        contributor = await create_employee(
+            db,
+            company.id,
+            department.id,
+            EmployeeCreate(
+                display_name="开发者",
+                base_profile_version_id=profile_id,
+                workflow_role=WorkflowRole.MEMBER,
+            ),
+        )
+        reviewer = await create_employee(
+            db,
+            company.id,
+            department.id,
+            EmployeeCreate(
+                display_name="评审者",
+                base_profile_version_id=profile_id,
+                workflow_role=WorkflowRole.MEMBER,
+            ),
+        )
+        artifact_id = "artifact-001"
+        sha256 = "a" * 64
+        await db.execute("PRAGMA foreign_keys = OFF")
+        try:
+            await db.execute(
+                """INSERT INTO artifacts
+                   (id, company_id, company_task_id, artifact_type, logical_name,
+                    object_sha256, object_size, media_type, metadata_json,
+                    supersedes_artifact_id, created_by_type, created_by_run_id,
+                    created_at)
+                   VALUES (?, ?, ?, 'source_code_patch', 'main.py',
+                           ?, 100, 'text/plain', '{}', NULL, 'system', NULL,
+                           '2026-01-01T00:00:00Z')""",
+                (artifact_id, company.id, "task-001", sha256),
+            )
+            await db.execute(
+                """INSERT INTO artifact_contributors
+                   (artifact_id, company_id, employee_id)
+                   VALUES (?, ?, ?)""",
+                (artifact_id, company.id, contributor.id),
+            )
+            await db.commit()
+        finally:
+            await db.execute("PRAGMA foreign_keys = ON")
         await db.commit()
-    finally:
-        await db.execute("PRAGMA foreign_keys = ON")
-    return company, contributor, reviewer, artifact_id
+        return company, contributor, reviewer, artifact_id
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def _create_report_direct(

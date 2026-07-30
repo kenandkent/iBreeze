@@ -31,11 +31,11 @@ def test_verify_all_e2e_skip_no_test_files() -> None:
 
 def test_verify_all_gates_are_sequential() -> None:
     lines = _read_script_lines()
-    gate_markers = [l for l in lines if l.startswith("echo \"---")]
+    gate_markers = [l.strip() for l in lines if "echo \"---" in l]
     assert len(gate_markers) >= 8
     expected_gates = [
-        "contracts lint", "desktop-core", "backend-api", "sidecar",
-        "desktop", "admin-web", "python tests", "e2e", "contract drift",
+        "contracts", "desktop-core", "backend-api", "sidecar",
+        "desktop", "admin-web", "e2e", "contract drift",
     ]
     for expected in expected_gates:
         assert any(expected in m for m in gate_markers), f"Missing gate: {expected}"

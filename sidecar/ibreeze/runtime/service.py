@@ -170,46 +170,40 @@ async def cancel_run(
     """Cancel a running agent."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        run = await _one(
-            await db.execute(
-                """SELECT status FROM agent_runs
-                   WHERE id=? AND company_id=?""",
-                (run_id, company_id),
-            )
-        )
-        if run is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        terminal = {"succeeded", "cancelled", "timed_out", "failed", "lost"}
-        if run["status"] in terminal:
-            raise ValueError("STATE_TRANSITION_INVALID")
-
-        cursor = await db.execute(
-            """UPDATE agent_runs
-               SET status='cancelled', updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status NOT IN ('succeeded','cancelled','timed_out','failed','lost')""",
-            (now, run_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-
+    run = await _one(
         await db.execute(
-            """UPDATE runtime_queue
-               SET status='cancelled'
-               WHERE run_id=? AND company_id=?""",
+            """SELECT status FROM agent_runs
+               WHERE id=? AND company_id=?""",
             (run_id, company_id),
         )
+    )
+    if run is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    terminal = {"succeeded", "cancelled", "timed_out", "failed", "lost"}
+    if run["status"] in terminal:
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        await db.commit()
-        return {
-            "run_id": run_id,
-            "status": "cancelled",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    cursor = await db.execute(
+        """UPDATE agent_runs
+           SET status='cancelled', updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status NOT IN ('succeeded','cancelled','timed_out','failed','lost')""",
+        (now, run_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
+    await db.execute(
+        """UPDATE runtime_queue
+           SET status='cancelled'
+           WHERE run_id=? AND company_id=?""",
+        (run_id, company_id),
+    )
+
+    return {
+        "run_id": run_id,
+        "status": "cancelled",
+    }
 
 
 async def resume_run(
@@ -222,38 +216,32 @@ async def resume_run(
 
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        run = await _one(
-            await db.execute(
-                """SELECT status, resume_state FROM agent_runs
-                   WHERE id=? AND company_id=?""",
-                (run_id, company_id),
-            )
+    run = await _one(
+        await db.execute(
+            """SELECT status, resume_state FROM agent_runs
+               WHERE id=? AND company_id=?""",
+            (run_id, company_id),
         )
-        if run is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if run["status"] not in ("waiting_approval", "waiting_resource"):
-            raise ValueError("STATE_TRANSITION_INVALID")
+    )
+    if run is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if run["status"] not in ("waiting_approval", "waiting_resource"):
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        resume_to = run["resume_state"] or "running"
-        transition("AgentRun", run["status"], resume_to)
+    resume_to = run["resume_state"] or "running"
+    transition("AgentRun", run["status"], resume_to)
 
-        cursor = await db.execute(
-            """UPDATE agent_runs
-               SET status=?, resume_state=NULL, updated_at=?, version=version+1
-               WHERE id=? AND company_id=?
-               AND status IN ('waiting_approval','waiting_resource')""",
-            (resume_to, now, run_id, company_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+    cursor = await db.execute(
+        """UPDATE agent_runs
+           SET status=?, resume_state=NULL, updated_at=?, version=version+1
+           WHERE id=? AND company_id=?
+           AND status IN ('waiting_approval','waiting_resource')""",
+        (resume_to, now, run_id, company_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
 
-        await db.commit()
-        return {
-            "run_id": run_id,
-            "status": resume_to,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "run_id": run_id,
+        "status": resume_to,
+    }

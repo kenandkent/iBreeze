@@ -34,7 +34,6 @@ class TestBackupRecords:
         )
         assert result["status"] == "creating"
         mock_db.execute.assert_called_once()
-        mock_db.commit.assert_called_once()
 
     async def test_complete_record(self, mock_db):
         cursor = AsyncMock()
@@ -42,7 +41,6 @@ class TestBackupRecords:
         result = await complete_backup_record(mock_db, "record-1")
         assert result["status"] == "completed"
         mock_db.execute.assert_called_once()
-        mock_db.commit.assert_called_once()
 
     async def test_fail_record(self, mock_db):
         cursor = AsyncMock()
@@ -51,7 +49,6 @@ class TestBackupRecords:
         assert result["status"] == "failed"
         assert result["error_code"] == "BACKUP_ERROR"
         mock_db.execute.assert_called_once()
-        mock_db.commit.assert_called_once()
 
     async def test_list_records_empty(self, mock_db):
         cursor = AsyncMock()

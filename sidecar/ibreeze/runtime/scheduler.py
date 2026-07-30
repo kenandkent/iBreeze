@@ -38,7 +38,6 @@ async def enqueue(
         VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', ?)""",
         (qid, company_id, work_item_type, work_item_id, job_id, run_id, priority, now),
     )
-    await db.commit()
     return qid
 
 
@@ -82,34 +81,30 @@ async def acquire_lease(
     conv_id = conversation_id or None
     run_id_val = run_id or None
 
-    try:
-        await db.execute(
-            """INSERT INTO runtime_leases
-            (id, queue_id, job_id, run_id, employee_id, company_id,
-             conversation_id, acquired_at, heartbeat_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?, '+' || ? || ' seconds'))""",
-            (
-                lease_id,
-                queue_id,
-                job_id,
-                run_id_val,
-                emp_id,
-                company_id,
-                conv_id,
-                now,
-                now,
-                now,
-                ttl_seconds,
-            ),
-        )
-        await db.execute(
-            "UPDATE runtime_queue SET status = 'leased', leased_at = ? WHERE id = ?",
-            (now, queue_id),
-        )
-        await db.commit()
-        return lease_id
-    except Exception:
-        return None
+    await db.execute(
+        """INSERT INTO runtime_leases
+        (id, queue_id, job_id, run_id, employee_id, company_id,
+         conversation_id, acquired_at, heartbeat_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?, '+' || ? || ' seconds'))""",
+        (
+            lease_id,
+            queue_id,
+            job_id,
+            run_id_val,
+            emp_id,
+            company_id,
+            conv_id,
+            now,
+            now,
+            now,
+            ttl_seconds,
+        ),
+    )
+    await db.execute(
+        "UPDATE runtime_queue SET status = 'leased', leased_at = ? WHERE id = ?",
+        (now, queue_id),
+    )
+    return lease_id
 
 
 async def heartbeat_lease(db: Any, lease_id: str) -> bool:
@@ -121,7 +116,6 @@ async def heartbeat_lease(db: Any, lease_id: str) -> bool:
         WHERE id = ? AND expires_at > ?""",
         (now, lease_id, now),
     )
-    await db.commit()
     return cursor.rowcount == 1  # type: ignore[no-any-return]
 
 
@@ -139,7 +133,6 @@ async def release_lease(db: Any, lease_id: str) -> None:
             (row["queue_id"],),
         )
     await db.execute("DELETE FROM runtime_leases WHERE id = ?", (lease_id,))
-    await db.commit()
 
 
 async def update_fairness(db: Any, company_id: str) -> None:
@@ -152,4 +145,3 @@ async def update_fairness(db: Any, company_id: str) -> None:
             last_dispatched_at = excluded.last_dispatched_at""",
         (company_id, now),
     )
-    await db.commit()

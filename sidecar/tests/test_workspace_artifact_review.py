@@ -282,20 +282,14 @@ class TestArtifactExtended:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_create_artifact_error_rollback(self, mock_db_session):
+    async def test_create_artifact_error_propagates(self, mock_db_session):
         call_count = 0
         async def mock_execute(sql, params=()):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                # BEGIN IMMEDIATE
-                return MagicMock()
-            # Simulate error on INSERT
             raise Exception("DB error")
 
         mock_db_session.execute = mock_execute
-        mock_db_session.rollback = AsyncMock()
-        mock_db_session.commit = AsyncMock()
 
         with pytest.raises(Exception, match="DB error"):
             await create_artifact(

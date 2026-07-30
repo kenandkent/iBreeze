@@ -122,7 +122,7 @@ async def test_log_audit_writes_and_returns_id() -> None:
         detail={"key": "value"},
     )
     assert result  # returns non-empty log_id
-    mock_db.commit.assert_awaited()
+    # commit is handled by WriteQueue wrapper
 
 
 @pytest.mark.asyncio

@@ -10,8 +10,10 @@ def test_rpc_server_exists():
     assert (SIDECAR_DIR / "ibreeze" / "rpc_server.py").exists()
 
 
-def test_local_db_exists():
-    assert (SIDECAR_DIR / "ibreeze" / "local_db.py").exists()
+def test_local_db_deleted():
+    """local_db.py has been deleted as part of single-writer refactoring.
+    All DB access now goes through WriteQueue/UnitOfWork."""
+    assert not (SIDECAR_DIR / "ibreeze" / "local_db.py").exists()
 
 
 def test_company_exists():
@@ -25,16 +27,12 @@ def test_rpc_server_is_valid():
     assert "class RPCServer" in content
 
 
-def test_local_db_is_valid():
-    init_path = SIDECAR_DIR / "ibreeze" / "local_db.py"
-    content = init_path.read_text()
-    compile(content, str(init_path), "exec")
-    assert "class LocalDB" in content
-    assert "async def initialize" in content
-    assert "async def insert" in content
-    assert "async def get_by_id" in content
-    assert "async def update_by_id" in content
-    assert "async def delete_by_id" in content
+def test_production_rpc_server_exists():
+    """New production RPC server (replaces old rpc_server.py)."""
+    production_path = SIDECAR_DIR / "ibreeze" / "rpc" / "production_server.py"
+    assert production_path.exists()
+    content = production_path.read_text()
+    assert "class ProductionRpcServer" in content
 
 
 def test_company_is_valid():

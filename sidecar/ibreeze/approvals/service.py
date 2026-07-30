@@ -38,39 +38,33 @@ async def request_external_write_approval(
         datetime.now(UTC) + timedelta(seconds=ttl_seconds)
     ).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        target_json = json.dumps(
-            {"path": target_path, "action": action, "old_hash": old_hash, "new_hash": new_hash},
-            sort_keys=True,
-        )
-        await db.execute(
-            """INSERT INTO human_approvals
-               (id, company_id, run_id, approval_type,
-                target_json, target_sha256, status, requested_at, expires_at)
-               VALUES (?,?,'external_write',?,?, 'pending',?,?)""",
-            (
-                approval_id,
-                company_id,
-                run_id,
-                target_json,
-                new_hash,
-                now,
-                expires_at,
-            ),
-        )
+    target_json = json.dumps(
+        {"path": target_path, "action": action, "old_hash": old_hash, "new_hash": new_hash},
+        sort_keys=True,
+    )
+    await db.execute(
+        """INSERT INTO human_approvals
+           (id, company_id, run_id, approval_type,
+            target_json, target_sha256, status, requested_at, expires_at)
+           VALUES (?,?,'external_write',?,?, 'pending',?,?)""",
+        (
+            approval_id,
+            company_id,
+            run_id,
+            target_json,
+            new_hash,
+            now,
+            expires_at,
+        ),
+    )
 
-        await db.commit()
-        return {
-            "id": approval_id,
-            "approval_type": "external_write",
-            "status": "pending",
-            "target_path": target_path,
-            "action": action,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "id": approval_id,
+        "approval_type": "external_write",
+        "status": "pending",
+        "target_path": target_path,
+        "action": action,
+    }
 
 
 async def request_uncertain_recovery_approval(
@@ -90,36 +84,30 @@ async def request_uncertain_recovery_approval(
         datetime.now(UTC) + timedelta(seconds=ttl_seconds)
     ).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        target_json = json.dumps({"reason": reason}, sort_keys=True)
-        target_sha = hashlib.sha256(reason.encode("utf-8")).hexdigest()
-        await db.execute(
-            """INSERT INTO human_approvals
-               (id, company_id, run_id, approval_type,
-                target_json, target_sha256, status, requested_at, expires_at)
-               VALUES (?,?,'uncertain_recovery',?,?, 'pending',?,?)""",
-            (
-                approval_id,
-                company_id,
-                run_id,
-                target_json,
-                target_sha,
-                now,
-                expires_at,
-            ),
-        )
+    target_json = json.dumps({"reason": reason}, sort_keys=True)
+    target_sha = hashlib.sha256(reason.encode("utf-8")).hexdigest()
+    await db.execute(
+        """INSERT INTO human_approvals
+           (id, company_id, run_id, approval_type,
+            target_json, target_sha256, status, requested_at, expires_at)
+           VALUES (?,?,'uncertain_recovery',?,?, 'pending',?,?)""",
+        (
+            approval_id,
+            company_id,
+            run_id,
+            target_json,
+            target_sha,
+            now,
+            expires_at,
+        ),
+    )
 
-        await db.commit()
-        return {
-            "id": approval_id,
-            "approval_type": "uncertain_recovery",
-            "status": "pending",
-            "reason": reason,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "id": approval_id,
+        "approval_type": "uncertain_recovery",
+        "status": "pending",
+        "reason": reason,
+    }
 
 
 async def resolve_approval(
@@ -132,37 +120,31 @@ async def resolve_approval(
     """Resolve an approval request (approve or deny)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        approval = await _one(
-            await db.execute(
-                """SELECT * FROM human_approvals
-                   WHERE id=? AND company_id=?""",
-                (approval_id, company_id),
-            )
-        )
-        if approval is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if approval["status"] != "pending":
-            raise ValueError("STATE_TRANSITION_INVALID")
-
-        new_status = "allowed" if decision in ("approve", "allowed") else "denied"
-
+    approval = await _one(
         await db.execute(
-            """UPDATE human_approvals
-               SET status=?, resolved_at=?
+            """SELECT * FROM human_approvals
                WHERE id=? AND company_id=?""",
-            (new_status, now, approval_id, company_id),
+            (approval_id, company_id),
         )
+    )
+    if approval is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if approval["status"] != "pending":
+        raise ValueError("STATE_TRANSITION_INVALID")
 
-        await db.commit()
-        return {
-            "id": approval_id,
-            "status": new_status,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    new_status = "allowed" if decision in ("approve", "allowed") else "denied"
+
+    await db.execute(
+        """UPDATE human_approvals
+           SET status=?, resolved_at=?
+           WHERE id=? AND company_id=?""",
+        (new_status, now, approval_id, company_id),
+    )
+
+    return {
+        "id": approval_id,
+        "status": new_status,
+    }
 
 
 async def list_pending_approvals(
@@ -207,5 +189,4 @@ async def expire_stale_approvals(
            AND expires_at < ?""",
         (now, company_id, now),
     )
-    await db.commit()
     return cursor.rowcount  # type: ignore[no-any-return]

@@ -48,7 +48,4 @@ async def recover_stale_runs(db: Any) -> dict[str, Any]:
         )
         recovered += 1
 
-    if recovered:
-        await db.commit()
-
     return {"recovered": recovered, "checked": len(stale_runs)}

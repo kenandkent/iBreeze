@@ -33,57 +33,51 @@ async def assign_reviewer(
     assignment_id = _id()
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        contributor = await _one(
-            await db.execute(
-                """SELECT 1 FROM artifact_contributors
-                   WHERE artifact_id=? AND company_id=? AND employee_id=?""",
-                (artifact_id, company_id, reviewer_employee_id),
-            )
-        )
-        if contributor is not None:
-            raise ValueError("REVIEWER_CANNOT_BE_CONTRIBUTOR")
-
-        existing = await _one(
-            await db.execute(
-                """SELECT id FROM review_assignments
-                   WHERE artifact_id=? AND company_id=?
-                   AND reviewer_employee_id=? AND review_round=?""",
-                (artifact_id, company_id, reviewer_employee_id, review_round),
-            )
-        )
-        if existing is not None:
-            raise ValueError("REVIEWER_ALREADY_ASSIGNED")
-
+    contributor = await _one(
         await db.execute(
-            """INSERT INTO review_assignments
-               (id, company_id, artifact_id, reviewer_employee_id,
-                review_round, reviewed_sha256, status, assigned_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            (
-                assignment_id,
-                company_id,
-                artifact_id,
-                reviewer_employee_id,
-                review_round,
-                reviewed_sha256,
-                "assigned",
-                now,
-            ),
+            """SELECT 1 FROM artifact_contributors
+               WHERE artifact_id=? AND company_id=? AND employee_id=?""",
+            (artifact_id, company_id, reviewer_employee_id),
         )
+    )
+    if contributor is not None:
+        raise ValueError("REVIEWER_CANNOT_BE_CONTRIBUTOR")
 
-        await db.commit()
-        return {
-            "id": assignment_id,
-            "artifact_id": artifact_id,
-            "reviewer_employee_id": reviewer_employee_id,
-            "review_round": review_round,
-            "status": "assigned",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    existing = await _one(
+        await db.execute(
+            """SELECT id FROM review_assignments
+               WHERE artifact_id=? AND company_id=?
+               AND reviewer_employee_id=? AND review_round=?""",
+            (artifact_id, company_id, reviewer_employee_id, review_round),
+        )
+    )
+    if existing is not None:
+        raise ValueError("REVIEWER_ALREADY_ASSIGNED")
+
+    await db.execute(
+        """INSERT INTO review_assignments
+           (id, company_id, artifact_id, reviewer_employee_id,
+            review_round, reviewed_sha256, status, assigned_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (
+            assignment_id,
+            company_id,
+            artifact_id,
+            reviewer_employee_id,
+            review_round,
+            reviewed_sha256,
+            "assigned",
+            now,
+        ),
+    )
+
+    return {
+        "id": assignment_id,
+        "artifact_id": artifact_id,
+        "reviewer_employee_id": reviewer_employee_id,
+        "review_round": review_round,
+        "status": "assigned",
+    }
 
 
 async def start_review(
@@ -102,7 +96,6 @@ async def start_review(
     if cursor.rowcount != 1:
         raise ValueError("STATE_TRANSITION_INVALID")
 
-    await db.commit()
     return {
         "id": assignment_id,
         "status": "in_review",
@@ -132,133 +125,127 @@ async def submit_review_report(
     report_id = _id()
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        assignment = await _one(
-            await db.execute(
-                """SELECT * FROM review_assignments
-                   WHERE id=? AND company_id=?""",
-                (assignment_id, company_id),
-            )
-        )
-        if assignment is None:
-            raise ValueError("RESOURCE_NOT_FOUND")
-        if assignment["status"] not in ("assigned", "in_review"):
-            raise ValueError("STATE_TRANSITION_INVALID")
-        if reviewer_run_id is None:
-            raise ValueError("REVIEWER_RUN_ID_REQUIRED")
-
-        artifact = await _one(
-            await db.execute(
-                """SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?""",
-                (artifact_id, company_id),
-            )
-        )
-        if artifact is None:
-            raise ValueError("ARTIFACT_NOT_FOUND")
-        if dict(artifact)["object_sha256"] != artifact_sha256:
-            raise ValueError("ARTIFACT_SHA_MISMATCH")
-
-        contributor = await _one(
-            await db.execute(
-                """SELECT 1 FROM artifact_contributors
-                   WHERE artifact_id=? AND company_id=?
-                   AND employee_id IN (
-                       SELECT reviewer_employee_id FROM review_assignments WHERE id=?
-                   )
-                   LIMIT 1""",
-                (artifact_id, company_id, assignment_id),
-            )
-        )
-        if contributor is not None:
-            raise ValueError("REVIEWER_CANNOT_BE_CONTRIBUTOR")
-
-        superseding = await _one(
-            await db.execute(
-                """SELECT id FROM artifacts
-                   WHERE supersedes_artifact_id=? AND company_id=?
-                   LIMIT 1""",
-                (artifact_id, company_id),
-            )
-        )
-
-        if superseding is not None:
-            new_status = "stale"
-        else:
-            new_status = "submitted"
-
+    assignment = await _one(
         await db.execute(
-            """INSERT INTO review_reports
-               (id, company_id, assignment_id, reviewer_run_id,
-                verdict, report_artifact_id, created_at)
-               VALUES (?,?,?,?,?,?,?)""",
-            (
-                report_id,
-                company_id,
-                assignment_id,
-                reviewer_run_id,
-                verdict,
-                report_artifact_id,
-                now,
-            ),
+            """SELECT * FROM review_assignments
+               WHERE id=? AND company_id=?""",
+            (assignment_id, company_id),
         )
+    )
+    if assignment is None:
+        raise ValueError("RESOURCE_NOT_FOUND")
+    if assignment["status"] not in ("assigned", "in_review"):
+        raise ValueError("STATE_TRANSITION_INVALID")
+    if reviewer_run_id is None:
+        raise ValueError("REVIEWER_RUN_ID_REQUIRED")
 
-        if issues:
-            for iss in issues:
-                await db.execute(
-                    """INSERT INTO review_issues
-                       (id, company_id, review_report_id, severity, category,
-                        description, expected, actual, suggested_fix,
-                        evidence_refs_json, status, assignee_employee_id,
-                        verifier_employee_id, created_at, updated_at, version)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        _id(),
-                        company_id,
-                        report_id,
-                        iss.get("severity", "medium"),
-                        iss.get("category", "general"),
-                        iss.get("description", ""),
-                        iss.get("expected", ""),
-                        iss.get("actual", ""),
-                        iss.get("suggested_fix", ""),
-                        "[]",
-                        "open",
-                        None,
-                        None,
-                        now,
-                        now,
-                        1,
-                    ),
-                )
+    artifact = await _one(
+        await db.execute(
+            """SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?""",
+            (artifact_id, company_id),
+        )
+    )
+    if artifact is None:
+        raise ValueError("ARTIFACT_NOT_FOUND")
+    if dict(artifact)["object_sha256"] != artifact_sha256:
+        raise ValueError("ARTIFACT_SHA_MISMATCH")
 
-        if superseding is not None:
+    contributor = await _one(
+        await db.execute(
+            """SELECT 1 FROM artifact_contributors
+               WHERE artifact_id=? AND company_id=?
+               AND employee_id IN (
+                   SELECT reviewer_employee_id FROM review_assignments WHERE id=?
+               )
+               LIMIT 1""",
+            (artifact_id, company_id, assignment_id),
+        )
+    )
+    if contributor is not None:
+        raise ValueError("REVIEWER_CANNOT_BE_CONTRIBUTOR")
+
+    superseding = await _one(
+        await db.execute(
+            """SELECT id FROM artifacts
+               WHERE supersedes_artifact_id=? AND company_id=?
+               LIMIT 1""",
+            (artifact_id, company_id),
+        )
+    )
+
+    if superseding is not None:
+        new_status = "stale"
+    else:
+        new_status = "submitted"
+
+    await db.execute(
+        """INSERT INTO review_reports
+           (id, company_id, assignment_id, reviewer_run_id,
+            verdict, report_artifact_id, created_at)
+           VALUES (?,?,?,?,?,?,?)""",
+        (
+            report_id,
+            company_id,
+            assignment_id,
+            reviewer_run_id,
+            verdict,
+            report_artifact_id,
+            now,
+        ),
+    )
+
+    if issues:
+        for iss in issues:
             await db.execute(
-                """UPDATE review_assignments
-                   SET status='stale'
-                   WHERE artifact_id=? AND company_id=?
-                   AND status IN ('assigned','in_review','submitted')""",
-                (artifact_id, company_id),
+                """INSERT INTO review_issues
+                   (id, company_id, review_report_id, severity, category,
+                    description, expected, actual, suggested_fix,
+                    evidence_refs_json, status, assignee_employee_id,
+                    verifier_employee_id, created_at, updated_at, version)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    _id(),
+                    company_id,
+                    report_id,
+                    iss.get("severity", "medium"),
+                    iss.get("category", "general"),
+                    iss.get("description", ""),
+                    iss.get("expected", ""),
+                    iss.get("actual", ""),
+                    iss.get("suggested_fix", ""),
+                    "[]",
+                    "open",
+                    None,
+                    None,
+                    now,
+                    now,
+                    1,
+                ),
             )
 
+    if superseding is not None:
         await db.execute(
             """UPDATE review_assignments
-               SET status=?, submitted_at=?
-               WHERE id=? AND company_id=?""",
-            (new_status, now, assignment_id, company_id),
+               SET status='stale'
+               WHERE artifact_id=? AND company_id=?
+               AND status IN ('assigned','in_review','submitted')""",
+            (artifact_id, company_id),
         )
 
-        await db.commit()
-        return {
-            "id": report_id,
-            "assignment_id": assignment_id,
-            "artifact_id": artifact_id,
-            "verdict": verdict,
-            "status": new_status,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE review_assignments
+           SET status=?, submitted_at=?
+           WHERE id=? AND company_id=?""",
+        (new_status, now, assignment_id, company_id),
+    )
+
+    return {
+        "id": report_id,
+        "assignment_id": assignment_id,
+        "artifact_id": artifact_id,
+        "verdict": verdict,
+        "status": new_status,
+    }
 
 
 async def create_review_issue(
@@ -311,7 +298,6 @@ async def create_review_issue(
             1,
         ),
     )
-    await db.commit()
 
     return {
         "id": issue_id,
@@ -339,7 +325,6 @@ async def start_fixing_review_issue(
     if cursor.rowcount != 1:
         raise ValueError("STATE_TRANSITION_INVALID")
 
-    await db.commit()
     return {
         "id": issue_id,
         "status": "fixing",
@@ -366,7 +351,6 @@ async def resolve_review_issue(
     if cursor.rowcount != 1:
         raise ValueError("STATE_TRANSITION_INVALID")
 
-    await db.commit()
     return {
         "id": issue_id,
         "status": "resolved",

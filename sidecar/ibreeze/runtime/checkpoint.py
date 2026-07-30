@@ -79,7 +79,6 @@ async def create_checkpoint(
             (cp_id, run_id, seq, boundary_type, raw, uncompressed_size, digest, now),
         )
 
-    await db.commit()
     return {"id": cp_id, "sequence": seq, "created_at": now}
 
 

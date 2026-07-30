@@ -131,6 +131,4 @@ async def hybrid_search(
                 _now(),
             ),
         )
-        await db.commit()
-
     return selected

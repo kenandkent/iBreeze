@@ -13,35 +13,41 @@ from ibreeze.schemas import CompanyCreate, DepartmentCreate, EmployeeCreate, Wor
 
 
 async def _setup_company(db: aiosqlite.Connection, profile_id: str):
-    company = await create_company(
-        db,
-        CompanyCreate(
-            name="门控公司",
-            introduction="测试完成门控",
-            general_manager_name="总经理",
-            base_profile_version_id=profile_id,
-        ),
-    )
-    department = await create_department(
-        db,
-        company.id,
-        DepartmentCreate(
-            name="研发部",
-            function_description="研发任务",
-            leader_name="负责人",
-            base_profile_version_id=profile_id,
-        ),
-    )
-    employee = await create_employee(
-        db,
-        company.id,
-        department.id,
-        EmployeeCreate(
-            display_name="开发者",
-            base_profile_version_id=profile_id,
-            workflow_role=WorkflowRole.MEMBER,
-        ),
-    )
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        company = await create_company(
+            db,
+            CompanyCreate(
+                name="门控公司",
+                introduction="测试完成门控",
+                general_manager_name="总经理",
+                base_profile_version_id=profile_id,
+            ),
+        )
+        department = await create_department(
+            db,
+            company.id,
+            DepartmentCreate(
+                name="研发部",
+                function_description="研发任务",
+                leader_name="负责人",
+                base_profile_version_id=profile_id,
+            ),
+        )
+        employee = await create_employee(
+            db,
+            company.id,
+            department.id,
+            EmployeeCreate(
+                display_name="开发者",
+                base_profile_version_id=profile_id,
+                workflow_role=WorkflowRole.MEMBER,
+            ),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return company, department, employee
 
 

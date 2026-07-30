@@ -353,8 +353,6 @@ async def _feedback_to_tasks(
                 (ct_status, now, run["company_task_id"], company_id),
             )
 
-    await db.commit()
-
 
 async def run_consumer_loop(
     db: Any,

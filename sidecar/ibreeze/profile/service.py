@@ -34,83 +34,77 @@ async def create_draft(
     version_id = _id()
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        existing = await _one(
-            await db.execute(
-                """SELECT id FROM employee_base_profile_versions
-                   WHERE profile_id=? AND status='draft'""",
-                (profile_id,),
-            )
-        )
-        if existing is not None:
-            raise ValueError("DRAFT_ALREADY_EXISTS")
-
-        normalized_name = str(base_profile.get("name", "")).strip().lower()
-
+    existing = await _one(
         await db.execute(
-            """INSERT INTO employee_base_profiles
-               (id, company_id, name, normalized_name, description, status,
-                created_at, updated_at, version)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (
-                profile_id,
-                company_id,
-                base_profile.get("name", ""),
-                normalized_name,
-                base_profile.get("description", ""),
-                "active",
-                now,
-                now,
-                1,
-            ),
+            """SELECT id FROM employee_base_profile_versions
+               WHERE profile_id=? AND status='draft'""",
+            (profile_id,),
         )
+    )
+    if existing is not None:
+        raise ValueError("DRAFT_ALREADY_EXISTS")
 
-        await db.execute(
-            """INSERT INTO employee_base_profile_versions
-               (id, profile_id, version_number, name, description, profile_type,
-                runtime_binding_json, system_prompt, capability_tags_json,
-                tool_policy_json, timeout_seconds, max_retries,
-                workspace_policy, catalog_release_id, content_sha256,
-                status, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                version_id,
-                profile_id,
-                1,
-                base_profile.get("name", ""),
-                base_profile.get("description", ""),
-                "agent_cli" if agent_cli else "api_model",
-                json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
-                base_profile.get("system_prompt", ""),
-                json.dumps(base_profile.get("capability_tags", [])),
-                json.dumps(base_profile.get("tool_policy", {})),
-                base_profile.get("timeout_seconds", 3600),
-                base_profile.get("max_retries", 3),
-                "workspace_rw_external_ro",
-                base_profile.get("catalog_release_id", ""),
-                base_profile.get("content_sha256", ""),
-                "draft",
-                now,
-            ),
-        )
+    normalized_name = str(base_profile.get("name", "")).strip().lower()
 
-        await db.execute(
-            """UPDATE employee_base_profiles
-               SET current_version_id=?, updated_at=?
-               WHERE id=?""",
-            (version_id, now, profile_id),
-        )
+    await db.execute(
+        """INSERT INTO employee_base_profiles
+           (id, company_id, name, normalized_name, description, status,
+            created_at, updated_at, version)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (
+            profile_id,
+            company_id,
+            base_profile.get("name", ""),
+            normalized_name,
+            base_profile.get("description", ""),
+            "active",
+            now,
+            now,
+            1,
+        ),
+    )
 
-        await db.commit()
-        return {
-            "profile_id": profile_id,
-            "version_id": version_id,
-            "status": "draft",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """INSERT INTO employee_base_profile_versions
+           (id, profile_id, version_number, name, description, profile_type,
+            runtime_binding_json, system_prompt, capability_tags_json,
+            tool_policy_json, timeout_seconds, max_retries,
+            workspace_policy, catalog_release_id, content_sha256,
+            status, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            version_id,
+            profile_id,
+            1,
+            base_profile.get("name", ""),
+            base_profile.get("description", ""),
+            "agent_cli" if agent_cli else "api_model",
+            json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
+            base_profile.get("system_prompt", ""),
+            json.dumps(base_profile.get("capability_tags", [])),
+            json.dumps(base_profile.get("tool_policy", {})),
+            base_profile.get("timeout_seconds", 3600),
+            base_profile.get("max_retries", 3),
+            "workspace_rw_external_ro",
+            base_profile.get("catalog_release_id", ""),
+            base_profile.get("content_sha256", ""),
+            "draft",
+            now,
+        ),
+    )
+
+    await db.execute(
+        """UPDATE employee_base_profiles
+           SET current_version_id=?, updated_at=?
+           WHERE id=?""",
+        (version_id, now, profile_id),
+    )
+
+    return {
+        "profile_id": profile_id,
+        "version_id": version_id,
+        "status": "draft",
+    }
 
 
 async def update_draft(
@@ -124,37 +118,31 @@ async def update_draft(
     """Update an existing draft."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        draft = await _one(
-            await db.execute(
-                """SELECT * FROM employee_base_profile_versions
-                   WHERE id=? AND status='draft'""",
-                (draft_id,),
-            )
-        )
-        if draft is None:
-            raise ValueError("DRAFT_NOT_FOUND")
-
+    draft = await _one(
         await db.execute(
-            """UPDATE employee_base_profile_versions
-               SET runtime_binding_json=?
+            """SELECT * FROM employee_base_profile_versions
                WHERE id=? AND status='draft'""",
-            (
-                json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
-                draft_id,
-            ),
+            (draft_id,),
         )
+    )
+    if draft is None:
+        raise ValueError("DRAFT_NOT_FOUND")
 
-        await db.commit()
-        return {
-            "version_id": draft_id,
-            "status": "draft",
-            "updated_at": now,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE employee_base_profile_versions
+           SET runtime_binding_json=?
+           WHERE id=? AND status='draft'""",
+        (
+            json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
+            draft_id,
+        ),
+    )
+
+    return {
+        "version_id": draft_id,
+        "status": "draft",
+        "updated_at": now,
+    }
 
 
 async def get_profile(
@@ -221,69 +209,63 @@ async def bind_skill(
     import hashlib as _hashlib
     _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        draft = await _one(
-            await db.execute(
-                """SELECT id FROM employee_base_profile_versions
-                   WHERE profile_id=? AND status='draft'""",
-                (profile_id,),
-            )
-        )
-        if draft is None:
-            raise ValueError("DRAFT_NOT_FOUND")
-
-        existing = await _one(
-            await db.execute(
-                """SELECT 1 FROM profile_skill_bindings
-                   WHERE profile_version_id=? AND skill_id=?""",
-                (draft["id"], skill_id),
-            )
-        )
-        if existing is not None:
-            raise ValueError("SKILL_ALREADY_BOUND")
-
-        max_order_row = await _one(
-            await db.execute(
-                """SELECT COALESCE(MAX(load_order), -1) + 1 AS next_order
-                   FROM profile_skill_bindings
-                   WHERE profile_version_id=?""",
-                (draft["id"],),
-            )
-        )
-        assert max_order_row is not None
-        next_order = max_order_row["next_order"]
-
-        binding_id = _id()
-        sha = package_sha256 if len(package_sha256) == 64 else _hashlib.sha256(
-            f"{skill_id}:{skill_version}".encode()
-        ).hexdigest()
-
+    draft = await _one(
         await db.execute(
-            """INSERT INTO profile_skill_bindings
-               (profile_version_id, skill_id, skill_version_id, skill_version,
-                package_sha256, load_order)
-               VALUES (?,?,?,?,?,?)""",
-            (
-                draft["id"],
-                skill_id,
-                binding_id,
-                skill_version,
-                sha,
-                next_order,
-            ),
+            """SELECT id FROM employee_base_profile_versions
+               WHERE profile_id=? AND status='draft'""",
+            (profile_id,),
         )
+    )
+    if draft is None:
+        raise ValueError("DRAFT_NOT_FOUND")
 
-        await db.commit()
-        return {
-            "profile_id": profile_id,
-            "skill_id": skill_id,
-            "skill_version": skill_version,
-            "load_order": next_order,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    existing = await _one(
+        await db.execute(
+            """SELECT 1 FROM profile_skill_bindings
+               WHERE profile_version_id=? AND skill_id=?""",
+            (draft["id"], skill_id),
+        )
+    )
+    if existing is not None:
+        raise ValueError("SKILL_ALREADY_BOUND")
+
+    max_order_row = await _one(
+        await db.execute(
+            """SELECT COALESCE(MAX(load_order), -1) + 1 AS next_order
+               FROM profile_skill_bindings
+               WHERE profile_version_id=?""",
+            (draft["id"],),
+        )
+    )
+    assert max_order_row is not None
+    next_order = max_order_row["next_order"]
+
+    binding_id = _id()
+    sha = package_sha256 if len(package_sha256) == 64 else _hashlib.sha256(
+        f"{skill_id}:{skill_version}".encode()
+    ).hexdigest()
+
+    await db.execute(
+        """INSERT INTO profile_skill_bindings
+           (profile_version_id, skill_id, skill_version_id, skill_version,
+            package_sha256, load_order)
+           VALUES (?,?,?,?,?,?)""",
+        (
+            draft["id"],
+            skill_id,
+            binding_id,
+            skill_version,
+            sha,
+            next_order,
+        ),
+    )
+
+    return {
+        "profile_id": profile_id,
+        "skill_id": skill_id,
+        "skill_version": skill_version,
+        "load_order": next_order,
+    }
 
 
 async def unbind_skill(
@@ -294,35 +276,29 @@ async def unbind_skill(
     skill_id: str,
 ) -> dict[str, object]:
     """Remove a skill binding from profile."""
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        draft = await _one(
-            await db.execute(
-                """SELECT id FROM employee_base_profile_versions
-                   WHERE profile_id=? AND status='draft'""",
-                (profile_id,),
-            )
+    draft = await _one(
+        await db.execute(
+            """SELECT id FROM employee_base_profile_versions
+               WHERE profile_id=? AND status='draft'""",
+            (profile_id,),
         )
-        if draft is None:
-            raise ValueError("DRAFT_NOT_FOUND")
+    )
+    if draft is None:
+        raise ValueError("DRAFT_NOT_FOUND")
 
-        cursor = await db.execute(
-            """DELETE FROM profile_skill_bindings
-               WHERE profile_version_id=? AND skill_id=?""",
-            (draft["id"], skill_id),
-        )
-        if cursor.rowcount == 0:
-            raise ValueError("SKILL_NOT_BOUND")
+    cursor = await db.execute(
+        """DELETE FROM profile_skill_bindings
+           WHERE profile_version_id=? AND skill_id=?""",
+        (draft["id"], skill_id),
+    )
+    if cursor.rowcount == 0:
+        raise ValueError("SKILL_NOT_BOUND")
 
-        await db.commit()
-        return {
-            "profile_id": profile_id,
-            "skill_id": skill_id,
-            "unbound": True,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    return {
+        "profile_id": profile_id,
+        "skill_id": skill_id,
+        "unbound": True,
+    }
 
 
 async def validate_draft(
@@ -369,41 +345,35 @@ async def publish_draft(
     """Publish draft (draft→published)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        draft = await _one(
-            await db.execute(
-                """SELECT * FROM employee_base_profile_versions
-                   WHERE id=? AND status='draft'""",
-                (draft_id,),
-            )
-        )
-        if draft is None:
-            raise ValueError("DRAFT_NOT_FOUND")
-
+    draft = await _one(
         await db.execute(
-            """UPDATE employee_base_profile_versions
-               SET status='published', published_at=?
+            """SELECT * FROM employee_base_profile_versions
                WHERE id=? AND status='draft'""",
-            (now, draft_id),
+            (draft_id,),
         )
+    )
+    if draft is None:
+        raise ValueError("DRAFT_NOT_FOUND")
 
-        await db.execute(
-            """UPDATE employee_base_profiles
-               SET current_version_id=?, updated_at=?
-               WHERE id=?""",
-            (draft_id, now, draft["profile_id"]),
-        )
+    await db.execute(
+        """UPDATE employee_base_profile_versions
+           SET status='published', published_at=?
+           WHERE id=? AND status='draft'""",
+        (now, draft_id),
+    )
 
-        await db.commit()
-        return {
-            "version_id": draft_id,
-            "status": "published",
-            "published_at": now,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE employee_base_profiles
+           SET current_version_id=?, updated_at=?
+           WHERE id=?""",
+        (draft_id, now, draft["profile_id"]),
+    )
+
+    return {
+        "version_id": draft_id,
+        "status": "published",
+        "published_at": now,
+    }
 
 
 async def retire_version(
@@ -414,33 +384,27 @@ async def retire_version(
     """Retire a published version."""
     _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        version = await _one(
-            await db.execute(
-                """SELECT * FROM employee_base_profile_versions
-                   WHERE id=? AND status='published'""",
-                (version_id,),
-            )
-        )
-        if version is None:
-            raise ValueError("VERSION_NOT_PUBLISHED")
-
+    version = await _one(
         await db.execute(
-            """UPDATE employee_base_profile_versions
-               SET status='retired'
+            """SELECT * FROM employee_base_profile_versions
                WHERE id=? AND status='published'""",
             (version_id,),
         )
+    )
+    if version is None:
+        raise ValueError("VERSION_NOT_PUBLISHED")
 
-        await db.commit()
-        return {
-            "version_id": version_id,
-            "status": "retired",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE employee_base_profile_versions
+           SET status='retired'
+           WHERE id=? AND status='published'""",
+        (version_id,),
+    )
+
+    return {
+        "version_id": version_id,
+        "status": "retired",
+    }
 
 
 async def retire_profile(
@@ -451,51 +415,45 @@ async def retire_profile(
     """Retire all versions of a profile (rejects drafts, retires published)."""
     now = _now()
 
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        profile = await _one(
-            await db.execute(
-                "SELECT id FROM employee_base_profiles WHERE id=?",
-                (profile_id,),
-            )
+    profile = await _one(
+        await db.execute(
+            "SELECT id FROM employee_base_profiles WHERE id=?",
+            (profile_id,),
         )
-        if profile is None:
-            raise ValueError("PROFILE_NOT_FOUND")
+    )
+    if profile is None:
+        raise ValueError("PROFILE_NOT_FOUND")
 
-        draft = await _one(
-            await db.execute(
-                """SELECT id FROM employee_base_profile_versions
-                   WHERE profile_id=? AND status='draft'""",
-                (profile_id,),
-            )
+    draft = await _one(
+        await db.execute(
+            """SELECT id FROM employee_base_profile_versions
+               WHERE profile_id=? AND status='draft'""",
+            (profile_id,),
         )
-        if draft is not None:
-            await db.execute(
-                """UPDATE employee_base_profile_versions
-                   SET status='retired'
-                   WHERE profile_id=? AND status='draft'""",
-                (profile_id,),
-            )
-
+    )
+    if draft is not None:
         await db.execute(
             """UPDATE employee_base_profile_versions
                SET status='retired'
-               WHERE profile_id=? AND status='published'""",
+               WHERE profile_id=? AND status='draft'""",
             (profile_id,),
         )
 
-        await db.execute(
-            """UPDATE employee_base_profiles
-               SET status='retired', current_version_id=NULL, updated_at=?
-               WHERE id=?""",
-            (now, profile_id),
-        )
+    await db.execute(
+        """UPDATE employee_base_profile_versions
+           SET status='retired'
+           WHERE profile_id=? AND status='published'""",
+        (profile_id,),
+    )
 
-        await db.commit()
-        return {
-            "profile_id": profile_id,
-            "status": "retired",
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    await db.execute(
+        """UPDATE employee_base_profiles
+           SET status='retired', current_version_id=NULL, updated_at=?
+           WHERE id=?""",
+        (now, profile_id),
+    )
+
+    return {
+        "profile_id": profile_id,
+        "status": "retired",
+    }

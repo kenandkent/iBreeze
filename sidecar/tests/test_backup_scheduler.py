@@ -114,4 +114,3 @@ class TestApplyRetentionPolicy:
         db.execute.return_value = cursor
         result = await apply_retention_policy(db)
         assert result["deleted"] == 1
-        db.commit.assert_awaited_once()

@@ -19,6 +19,13 @@ cd "$ROOT_DIR"
 echo "--- Step 1: Generate fresh contracts to temp directory ---"
 IBREEZE_OUTPUT_ROOT="$TMP_DIR/out" bash "$ROOT_DIR/scripts/generate-contracts.sh" 2>&1
 
+echo "--- Step 1b: Generate method-kind lookups to temp dir ---"
+python3 "$ROOT_DIR/scripts/generate-method-kinds.py"
+TS_FILE="$ROOT_DIR/apps/desktop/src/generated/rpc/method_kinds.ts"
+RS_FILE="$ROOT_DIR/apps/desktop-core/src/generated/rpc/method_kinds.rs"
+if [ -f "$TS_FILE" ]; then cp "$TS_FILE" "$TMP_DIR/out/apps/desktop/src/generated/rpc/method_kinds.ts"; fi
+if [ -f "$RS_FILE" ]; then cp "$RS_FILE" "$TMP_DIR/out/apps/desktop-core/src/generated/rpc/method_kinds.rs"; fi
+
 echo "--- Step 2: Compare generated files ---"
 HAS_DRIFT=0
 
@@ -79,6 +86,14 @@ compare_dir "admin-web/src/generated/openapi" \
 compare_dir "packages/contracts/openapi" \
   "$ROOT_DIR/packages/contracts/openapi" \
   "$TMP_DIR/out/packages/contracts/openapi"
+
+echo "--- Step 3: Check method kind registry drift ---"
+if python3 "$ROOT_DIR/scripts/generate-method-kinds.py" --check; then
+  echo "  ✓ method kinds match registry"
+else
+  echo "  ✗ method kinds drift detected (run generate-method-kinds.py)"
+  HAS_DRIFT=1
+fi
 
 echo ""
 if [ "$HAS_DRIFT" -eq 0 ]; then

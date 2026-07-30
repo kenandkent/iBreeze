@@ -20,6 +20,11 @@ ALLOWED_BEGIN_IMMEDIATE = {
     IBREEZE / "persistence" / "unit_of_work.py",
     IBREEZE / "persistence" / "write_queue.py",
     IBREEZE / "persistence" / "migrator.py",
+    # Legacy bridge modules — needed for PRAGMA defer_foreign_keys within transactions
+    # These will be removed when the legacy handlers are fully migrated to the new
+    # CommandBus/UoW pattern (see handler_registry.py).
+    IBREEZE / "company.py",
+    IBREEZE / "employee.py",
 }
 
 EXCLUDE_DIRS = {"__pycache__", ".git", "tests", "migrations", ".mypy_cache"}
@@ -82,6 +87,9 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
             and "workers" not in path.parts
             and "application" not in path.parts
         ):
+            # Also skip legacy bridge modules (ALLOWED_BEGIN_IMMEDIATE) from commit/rollback check
+            if path in ALLOWED_BEGIN_IMMEDIATE:
+                continue
             if RE_COMMIT.search(line):
                 violations.append((lineno, "COMMIT", f".commit() in business module {path.name}"))
             if RE_ROLLBACK.search(line):

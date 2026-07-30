@@ -65,7 +65,6 @@ async def import_knowledge(
     event_id = _id()
     now = _now()
     content_sha = _sha256(data.content)
-    await db.execute("BEGIN IMMEDIATE")
     try:
         company = await _one(
             await db.execute(
@@ -184,10 +183,8 @@ async def import_knowledge(
                VALUES (?,?,'knowledge.index.requested',?,'pending',0,?,?)""",
             (_id(), event_id, payload, now, now),
         )
-        await db.commit()
         return await get_knowledge(db, company_id, item_id)
     except Exception:
-        await db.rollback()
         raise
 
 
@@ -236,7 +233,6 @@ async def remove_knowledge(
     item_id: str,
 ) -> dict[str, object]:
     """Record the removal fact before deleting the source row."""
-    await db.execute("BEGIN IMMEDIATE")
     try:
         row = await _one(
             await db.execute(
@@ -288,10 +284,8 @@ async def remove_knowledge(
             "DELETE FROM knowledge_items WHERE id=? AND company_id=?",
             (item_id, company_id),
         )
-        await db.commit()
         return {"id": item_id, "removed": True}
     except Exception:
-        await db.rollback()
         raise
 
 
@@ -382,7 +376,6 @@ async def search_knowledge(
             _now(),
         ),
     )
-    await db.commit()
     return selected
 
 

@@ -63,7 +63,6 @@ async def verify_and_fix(
              json.dumps(verification_command.split()), wait_result.get("exit_code", -1),
              verdict, now, now),
         )
-        await db.commit()
 
         if verdict == "passed":
             return {

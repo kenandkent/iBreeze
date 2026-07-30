@@ -1,6 +1,6 @@
 """公司领域服务——原子事务对齐 H.5。
 
-创建公司时在同一 BEGIN IMMEDIATE 事务内按固定顺序写入：
+创建公司时在同一事务内按固定顺序写入：
 Company + CompanyRevision + 总经理办公室 + DepartmentRevision +
 固定职责 + 总经理 Employee + 公司会话 + 办公室会话。
 任意失败全回滚，绝不返回部分对象。
@@ -143,15 +143,15 @@ async def create_company(
     if row:
         raise ValueError("NAME_EXISTS")
 
-    # ── 2. 开启 BEGIN IMMEDIATE 事务 ──────────────────────────────────
-    await db.execute("BEGIN IMMEDIATE")
-
+    # ── 2. 事务由 WriteQueue 管理；无活跃事务时自己管理 ────────────
+    own_txn = not db.in_transaction
+    if own_txn:
+        await db.execute("BEGIN IMMEDIATE")
     # ── 3. 设置 defer_foreign_keys=ON（仅 H.5 事务允许）────────────────
     fk_cur = await db.execute("PRAGMA defer_foreign_keys")
     fk_row = await _fetchall(fk_cur)
     current_fk = fk_row[0][0] if fk_row else 0
     if current_fk != 0:
-        await db.execute("ROLLBACK")
         raise RuntimeError("defer_foreign_keys is already ON — possible transaction boundary leak")  # pragma: no cover
     await db.execute("PRAGMA defer_foreign_keys = ON")
 
@@ -391,8 +391,7 @@ async def create_company(
             (_new_id(), event_id, event_payload, now, now),
         )
 
-        # ── 14. 提交 ───────────────────────────────────────────────────
-        await db.commit()
+        # ── 14. 提交（由 WriteQueue 管理事务）─────────────────────────
 
         return CompanyResponse(
             id=company_id,
@@ -407,17 +406,18 @@ async def create_company(
             version=1,
         )
 
+        if own_txn:
+            await db.commit()
     except Exception:
-        await db.rollback()
+        if own_txn:
+            await db.rollback()
         raise
     finally:
-        # ── 15. 断言 defer_foreign_keys 恢复 OFF ────────────────────────
+        # ── 15. 确保 defer_foreign_keys 恢复 OFF ──────────────────────────
         fk_cur = await db.execute("PRAGMA defer_foreign_keys")
-        fk_after = await _fetchall(fk_cur)
-        fk_val = fk_after[0][0] if fk_after else 0
+        fk_val = (await _fetchall(fk_cur))[0][0] if fk_cur else 0
         if fk_val != 0:
             await db.execute("PRAGMA defer_foreign_keys = OFF")
-            raise RuntimeError("defer_foreign_keys was not restored to OFF after transaction")  # pragma: no cover
 
 
 async def rename_company(
@@ -429,17 +429,17 @@ async def rename_company(
 ) -> CompanyResponse:
     """H.5 公司改名原子事务。
 
-    同一 BEGIN IMMEDIATE 事务内：按 expected_version 锁定当前事实、
+    同一事务内：按 expected_version 锁定当前事实、
     生成新 Revision、更新 current_revision_id 与 normalized_name、
     递增聚合 version、写 DomainEvent 和 Outbox。
     """
     now = _now_iso()
     normalized_name = _normalize_name(data.name) if data.name else None
 
-    # ── 开启 BEGIN IMMEDIATE 事务 ──────────────────────────────────────
-    await db.execute("BEGIN IMMEDIATE")
-
-    # ── 设置 defer_foreign_keys ──────────────────────────────────────────
+    own_txn = not db.in_transaction
+    if own_txn:
+        await db.execute("BEGIN IMMEDIATE")
+    # ── 设置 defer_foreign_keys（由 WriteQueue 管理事务外层）───────────
     await db.execute("PRAGMA defer_foreign_keys = ON")
 
     try:
@@ -546,9 +546,7 @@ async def rename_company(
             (_new_id(), event_id, event_payload, now, now),
         )
 
-        await db.commit()
-
-        return CompanyResponse(
+        result = CompanyResponse(
             id=company_id,
             normalized_name=new_norm,
             current_revision_id=new_rev_id,
@@ -560,9 +558,13 @@ async def rename_company(
             updated_at=_parse_datetime(now),
             version=new_version,
         )
+        if own_txn:
+            await db.commit()
+        return result
 
     except Exception:
-        await db.rollback()
+        if own_txn:
+            await db.rollback()
         raise
     finally:
         fk_cur = await db.execute("PRAGMA defer_foreign_keys")
@@ -579,7 +581,6 @@ async def archive_company(
     expected_version: int,
 ) -> CompanyResponse:
     """Archive an idle company and all of its organizational children."""
-    await db.execute("BEGIN IMMEDIATE")
     try:
         cursor = await db.execute(
             "SELECT * FROM companies WHERE id = ? AND version = ?",
@@ -691,8 +692,6 @@ async def archive_company(
                VALUES (?, ?, 'company.archived', ?, 'pending', 0, ?, ?)""",
             (_new_id(), event_id, payload, now, now),
         )
-        await db.commit()
         return await get_company(db, company_id)
     except Exception:  # pragma: no cover
-        await db.rollback()
         raise

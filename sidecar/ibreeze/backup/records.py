@@ -47,7 +47,6 @@ async def create_backup_record(
             now,
         ),
     )
-    await db.commit()
     return {"id": record_id, "status": "creating", "created_at": now}
 
 
@@ -59,7 +58,6 @@ async def complete_backup_record(db: Any, record_id: str) -> dict[str, Any]:
         "WHERE id = ?",
         (now, record_id),
     )
-    await db.commit()
     return {"record_id": record_id, "status": "completed", "completed_at": now}
 
 
@@ -73,7 +71,6 @@ async def fail_backup_record(
         "completed_at = ? WHERE id = ?",
         (error_code, now, record_id),
     )
-    await db.commit()
     return {
         "record_id": record_id,
         "status": "failed",

@@ -155,6 +155,7 @@ class ApplicationLifecycle:
         self._workers: WorkerSupervisor | None = None
         self._dispatcher: Dispatcher = Dispatcher()
         self._reverse_table: ReverseMethodTable = ReverseMethodTable()
+        self._heartbeat_task: asyncio.Task[None] | None = None
 
     @property
     def phase(self) -> LifecyclePhase:
@@ -197,6 +198,9 @@ class ApplicationLifecycle:
         logger.info("lifecycle: acquire profile file lock")
         self._prepared = await prepare(self._profile_path)
         self._phase = LifecyclePhase.LOCK_ACQUIRED
+
+        # Start independent heartbeat task (ticks every 5 s so event-loop lag is measurable)
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
         # Phase: UDS handshake-only — wire reverse RPC socket path
         if self._socket_path is not None:
@@ -262,6 +266,13 @@ class ApplicationLifecycle:
         logger.info("lifecycle: stop accepting new RPC")
         logger.info("lifecycle: cancel active streams")
         logger.info("lifecycle: stop leasing runtime work")
+
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
         if self._write_queue is not None:
             logger.info("lifecycle: drain write queue (max 10s)")
@@ -353,7 +364,6 @@ class ApplicationLifecycle:
         )
 
     async def health(self) -> HealthSnapshot:
-        tick_heartbeat()
         return await health_snapshot_async(
             writer=self._writer,
             write_queue=self._write_queue,
@@ -378,3 +388,14 @@ class ApplicationLifecycle:
 
     def _shutdown_called(self) -> None:
         logger.info("system.shutdown requested")
+
+    async def _heartbeat_loop(self) -> None:
+        """Tick heartbeat every 5 s so event-loop lag is observable."""
+        while True:
+            try:
+                await asyncio.sleep(5.0)
+                tick_heartbeat()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("heartbeat loop error")

@@ -32,11 +32,14 @@ def test_domain_events_registry_exists():
 def test_domain_events_registry_valid():
     registry_file = CONTRACTS_DIR / "domain-events" / "registry.v1.json"
     registry = json.loads(registry_file.read_text())
-    # This is a JSON Schema definition, check it's valid schema
-    assert registry["$schema"].startswith("https://json-schema.org/draft/2020-12")
-    assert "required" in registry
-    assert "version" in registry["properties"]
-    assert "events" in registry["properties"]
+    # domain-events registry is a version manifest (not a JSON Schema definition)
+    assert "version" in registry
+    assert "events" in registry
+
+
+_EXCLUDE_FROM_SCHEMA_CHECK = frozenset({
+    "domain-events/registry.v1.json",
+})
 
 
 def test_all_schemas_have_json_schema_2020_12():
@@ -46,6 +49,8 @@ def test_all_schemas_have_json_schema_2020_12():
         if not schema_dir.exists():
             continue
         for schema_file in schema_dir.glob("*.json"):
+            if f"{dir_name}/{schema_file.name}" in _EXCLUDE_FROM_SCHEMA_CHECK:
+                continue
             schema = json.loads(schema_file.read_text())
             if not schema.get("$schema", "").startswith("https://json-schema.org/draft/2020-12"):
                 errors.append(f"{dir_name}/{schema_file.name}: missing or invalid $schema")
@@ -59,6 +64,8 @@ def test_all_schemas_have_required_fields():
         if not schema_dir.exists():
             continue
         for schema_file in schema_dir.glob("*.json"):
+            if f"{dir_name}/{schema_file.name}" in _EXCLUDE_FROM_SCHEMA_CHECK:
+                continue
             schema = json.loads(schema_file.read_text())
             missing = []
             for field in ["$id", "title", "type"]:

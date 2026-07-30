@@ -68,8 +68,6 @@ async def request_plan_confirmation(
            VALUES (?, ?, ?, 'uncertain_recovery', ?, ?, 'pending', ?, ?, 1)""",
         (approval_id, company_id, run_id, target_json, target_sha256, now, expires_at),
     )
-    await db.commit()
-
     return {
         "approval_id": approval_id,
         "plan_version_id": plan_version_id,
@@ -114,8 +112,6 @@ async def confirm_plan(
                WHERE id = ? AND company_id = ?""",
             (plan_status, now, plan_version_id, company_id),
         )
-
-    await db.commit()
 
     return {
         "approval_id": approval_id,
@@ -169,8 +165,6 @@ async def modify_plan(
             now,
         ),
     )
-    await db.commit()
-
     return {
         "new_version_id": new_version_id,
         "modified_at": now,

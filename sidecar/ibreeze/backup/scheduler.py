@@ -125,7 +125,4 @@ async def apply_retention_policy(db: Any) -> dict[str, Any]:
             )
             deleted += 1
 
-    if deleted:
-        await db.commit()
-
     return {"deleted": deleted}
