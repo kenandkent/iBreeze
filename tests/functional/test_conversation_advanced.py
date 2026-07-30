@@ -4,6 +4,7 @@ Covers design spec sections:
 - CONV-001 Company scope enforcement
 - CONV-002 Message projection rebuildable from events
 """
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 

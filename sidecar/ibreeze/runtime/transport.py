@@ -243,23 +243,26 @@ class ReverseRpcTransport(ModelTransport):
         from datetime import UTC, datetime, timedelta
 
         deadline_at = (datetime.now(UTC) + timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
-        result = await self._rpc.call("credential.http.start", {
-            "run_id": self._run_id,
-            "credential_ref": self._credential_ref,
-            "provider_release_id": self._provider_release_id,
-            "model_binding_id": self._model_binding_id,
-            "protocol": "https",
-            "operation": "chat",
-            "relative_path": "/v1/chat/completions",
-            "request": {
-                "model": self._model,
-                "messages": list(messages),
-                "tools": list(tool_names),
+        result = await self._rpc.call(
+            "credential.http.start",
+            {
+                "run_id": self._run_id,
+                "credential_ref": self._credential_ref,
+                "provider_release_id": self._provider_release_id,
+                "model_binding_id": self._model_binding_id,
+                "protocol": "https",
+                "operation": "chat",
+                "relative_path": "/v1/chat/completions",
+                "request": {
+                    "model": self._model,
+                    "messages": list(messages),
+                    "tools": list(tool_names),
+                },
+                "deadline_at": deadline_at,
+                "provider_base_url": self._provider_base_url,
+                "profile_directory_id": self._profile_directory_id,
             },
-            "deadline_at": deadline_at,
-            "provider_base_url": self._provider_base_url,
-            "profile_directory_id": self._profile_directory_id,
-        })
+        )
         return ModelTurn(
             content=result.get("content", ""),
             tool_calls=tuple(
@@ -274,10 +277,13 @@ class ReverseRpcTransport(ModelTransport):
         )
 
     async def probe(self) -> bool:
-        result = await self._rpc.call("credential.probe", {
-            "credential_ref": self._credential_ref,
-            "profile_directory_id": self._profile_directory_id,
-        })
+        result = await self._rpc.call(
+            "credential.probe",
+            {
+                "credential_ref": self._credential_ref,
+                "profile_directory_id": self._profile_directory_id,
+            },
+        )
         return result.get("status") == "ok"
 
     def normalize_usage(self, raw_usage: dict[str, Any]) -> UsageStats:

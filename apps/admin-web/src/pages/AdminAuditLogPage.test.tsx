@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { TestProviders, createTestQueryClient } from '../test-utils';
 import AdminAuditLogPage from './AdminAuditLogPage';
 import * as apiClient from '../utils/apiClient';

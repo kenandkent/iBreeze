@@ -143,9 +143,7 @@ async def create_conversation(
     company_id: str,
     title: str,
 ) -> ConversationResponse:
-    cursor = await db.execute(
-        "SELECT status FROM companies WHERE id=?", (company_id,)
-    )
+    cursor = await db.execute("SELECT status FROM companies WHERE id=?", (company_id,))
     company = await _one(cursor)
     if company is None or company["status"] != "active":
         raise ValueError("RESOURCE_NOT_FOUND")
@@ -226,9 +224,7 @@ async def submit_user_message(
         }:
             raise ValueError("STATE_TRANSITION_INVALID")
         task_version = task["version"] + 1
-        task_status: Literal["draft", "revision_requested"] = (
-            "revision_requested"
-        )
+        task_status: Literal["draft", "revision_requested"] = "revision_requested"
         intake_mode: Literal[
             "new_task",
             "plan_revision",

@@ -9,12 +9,13 @@ Covers design spec sections:
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 
-def _has_cycle(departments: dict, candidate_id: uuid.UUID, candidate_parent_id: uuid.UUID) -> bool:
+def _has_cycle(
+    departments: dict, candidate_id: uuid.UUID, candidate_parent_id: uuid.UUID
+) -> bool:
     """Check if adding candidate_parent_id → candidate_id creates a cycle."""
     parent_map = {d["id"]: d["parent_id"] for d in departments}
     parent_map[candidate_id] = candidate_parent_id
@@ -52,7 +53,9 @@ class TestDepartmentDAG:
         departments[1]["parent_id"] = departments[0]["id"]
         departments[2]["parent_id"] = departments[1]["id"]
 
-        assert _has_cycle(departments, departments[0]["id"], departments[2]["id"]) is True
+        assert (
+            _has_cycle(departments, departments[0]["id"], departments[2]["id"]) is True
+        )
 
     async def test_valid_parent(self):
         d1_id = uuid.uuid4()
@@ -72,7 +75,10 @@ class TestDepartmentDAG:
 
     async def test_deep_chain_detection(self):
         ids = [uuid.uuid4() for _ in range(5)]
-        departments = [{"id": ids[i], "name": f"D{i}", "parent_id": ids[i-1] if i > 0 else None} for i in range(5)]
+        departments = [
+            {"id": ids[i], "name": f"D{i}", "parent_id": ids[i - 1] if i > 0 else None}
+            for i in range(5)
+        ]
         assert _has_cycle(departments, ids[0], ids[4]) is True
 
 
@@ -90,8 +96,16 @@ class TestHeadSwitch:
 
     async def test_old_tasks_keep_old_head(self):
         tasks = [
-            {"id": str(uuid.uuid4()), "assignee": "head_v1", "created_at": "2024-01-01"},
-            {"id": str(uuid.uuid4()), "assignee": "head_v1", "created_at": "2024-01-02"},
+            {
+                "id": str(uuid.uuid4()),
+                "assignee": "head_v1",
+                "created_at": "2024-01-01",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "assignee": "head_v1",
+                "created_at": "2024-01-02",
+            },
         ]
         for t in tasks:
             t["assignee"] = "head_v2"

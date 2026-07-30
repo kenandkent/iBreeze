@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, PropertyMock
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest

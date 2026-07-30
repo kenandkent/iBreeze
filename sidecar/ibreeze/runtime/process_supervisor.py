@@ -160,10 +160,10 @@ class ProcessSupervisor:
             "(allow sysctl-read)"
             "(allow mach-lookup)"
             "(allow ipc-posix-shm-read-data ipc-posix-shm-write-data)"
-            "(allow file-read* (subpath \"/usr\") (subpath \"/System\") (subpath \"/Library\"))"
-            "(allow file-read* (subpath \"/private/tmp\"))"
-            "(allow file-write* (subpath \"/private/tmp\") (subpath \"/private/var/folders\"))"
-            "(allow network* (remote-ip \"127.0.0.1\"))"
+            '(allow file-read* (subpath "/usr") (subpath "/System") (subpath "/Library"))'
+            '(allow file-read* (subpath "/private/tmp"))'
+            '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders"))'
+            '(allow network* (remote-ip "127.0.0.1"))'
             "(deny network*)"
         )
         return ["sandbox-exec", "-p", profile, *cmd]

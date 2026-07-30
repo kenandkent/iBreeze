@@ -81,9 +81,7 @@ def validate_plan(
         not plan.goals
         or not plan.department_tasks
         or any(
-            not task.objective.strip()
-            or not task.deliverables
-            or not task.acceptance_criteria
+            not task.objective.strip() or not task.deliverables or not task.acceptance_criteria
             for task in plan.department_tasks
         )
     ):
@@ -106,12 +104,8 @@ def validate_plan(
             )
         )
     for task in plan.department_tasks:
-        if (
-            task.department_id not in active_department_ids
-            or (
-                task.department_id not in candidate_department_ids
-                and not task.general_manager_office_temporary_assignment
-            )
+        if task.department_id not in active_department_ids or (
+            task.department_id not in candidate_department_ids and not task.general_manager_office_temporary_assignment
         ):
             issues.append(
                 PlanValidationIssue(
@@ -128,10 +122,7 @@ def validate_plan(
                     "Department has no active leader.",
                 )
             )
-        if any(
-            dependency not in reference_set or dependency == task.local_ref
-            for dependency in task.dependency_refs
-        ):
+        if any(dependency not in reference_set or dependency == task.local_ref for dependency in task.dependency_refs):
             issues.append(
                 PlanValidationIssue(
                     "PV-003",
@@ -142,11 +133,7 @@ def validate_plan(
         for index, deliverable in enumerate(task.deliverables):
             contributors = set(deliverable.contributor_employee_ids)
             reviewers = set(deliverable.reviewer_employee_ids)
-            if (
-                not contributors
-                or not reviewers
-                or not (contributors | reviewers) <= allowed_employee_ids
-            ):
+            if not contributors or not reviewers or not (contributors | reviewers) <= allowed_employee_ids:
                 issues.append(
                     PlanValidationIssue(
                         "PV-005",
@@ -171,8 +158,7 @@ def validate_plan(
                     )
                 )
         if emergency_disabled_capability_tags and any(
-            tag in emergency_disabled_capability_tags
-            for tag in task.required_capability_tags
+            tag in emergency_disabled_capability_tags for tag in task.required_capability_tags
         ):
             issues.append(
                 PlanValidationIssue(
@@ -224,10 +210,7 @@ def validate_plan(
 
 
 def _has_cycle(tasks: tuple[DepartmentPlanTask, ...]) -> bool:
-    graph = {
-        task.local_ref: tuple(task.dependency_refs)
-        for task in tasks
-    }
+    graph = {task.local_ref: tuple(task.dependency_refs) for task in tasks}
     visiting: set[str] = set()
     visited: set[str] = set()
 

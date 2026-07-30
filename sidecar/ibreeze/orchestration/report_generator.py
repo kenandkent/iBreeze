@@ -94,11 +94,7 @@ async def generate_company_review(
         "review_type": "company",
         "company_id": company_id,
         "department_count": len(departments) if departments else 0,
-        "task_status_summary": (
-            {dict(r)["status"]: dict(r)["cnt"] for r in status_counts}
-            if status_counts
-            else {}
-        ),
+        "task_status_summary": ({dict(r)["status"]: dict(r)["cnt"] for r in status_counts} if status_counts else {}),
         "review_count": review_count,
         "generated_at": _now(),
     }
@@ -156,7 +152,10 @@ async def generate_final_report(
     for dept in departments:
         dept_id = dict(dept)["id"]
         report = await generate_department_report(
-            db, company_id=company_id, department_id=dept_id, task_id=task_id,
+            db,
+            company_id=company_id,
+            department_id=dept_id,
+            task_id=task_id,
         )
         dept_reports.append(report)
 

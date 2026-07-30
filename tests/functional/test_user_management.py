@@ -5,8 +5,9 @@ Covers design spec sections:
 - User creation, retrieval, update, deletion, pagination
 - Password hashing with Argon2id
 """
+
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,13 +16,20 @@ import pytest
 # Schema validation
 # ---------------------------------------------------------------------------
 
+
 class TestUserSchemas:
     """Pydantic schema validation for users."""
 
     def test_user_create_valid(self):
         from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
 
-        user = UserCreate(user_type="admin", username="alice", email=None, display_name="Alice", password="securepass1")
+        user = UserCreate(
+            user_type="admin",
+            username="alice",
+            email=None,
+            display_name="Alice",
+            password="securepass1",
+        )
         assert user.username == "alice"
         assert user.user_type == "admin"
 
@@ -30,28 +38,52 @@ class TestUserSchemas:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            UserCreate(user_type="superadmin", username="alice", email=None, display_name="Alice", password="securepass1")
+            UserCreate(
+                user_type="superadmin",
+                username="alice",
+                email=None,
+                display_name="Alice",
+                password="securepass1",
+            )
 
     def test_user_create_empty_username_rejected(self):
         from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            UserCreate(user_type="admin", username="", email=None, display_name="Alice", password="securepass1")
+            UserCreate(
+                user_type="admin",
+                username="",
+                email=None,
+                display_name="Alice",
+                password="securepass1",
+            )
 
     def test_user_create_short_password_rejected(self):
         from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            UserCreate(user_type="admin", username="alice", email=None, display_name="Alice", password="short")
+            UserCreate(
+                user_type="admin",
+                username="alice",
+                email=None,
+                display_name="Alice",
+                password="short",
+            )
 
     def test_user_create_invalid_email_rejected(self):
         from ibreeze_backend.users.schemas import UserAdminCreate as UserCreate
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            UserCreate(user_type="admin", username="alice", email="not-an-email", display_name="Alice", password="securepass1")
+            UserCreate(
+                user_type="admin",
+                username="alice",
+                email="not-an-email",
+                display_name="Alice",
+                password="securepass1",
+            )
 
     def test_user_update_partial(self):
         from ibreeze_backend.users.schemas import UserAdminUpdate as UserUpdate
@@ -92,7 +124,10 @@ class TestUserSchemas:
     def test_user_list_response(self):
         from datetime import UTC, datetime
 
-        from ibreeze_backend.users.schemas import UserAdminListResponse as UserListResponse, UserAdminResponse as UserResponse
+        from ibreeze_backend.users.schemas import (
+            UserAdminListResponse as UserListResponse,
+            UserAdminResponse as UserResponse,
+        )
 
         users = [
             UserResponse(
@@ -118,6 +153,7 @@ class TestUserSchemas:
 # User service
 # ---------------------------------------------------------------------------
 
+
 class TestUserService:
     """User service CRUD operations."""
 
@@ -126,7 +162,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import create_admin_user as create_user
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -152,7 +196,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import create_admin_user as create_user
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -176,7 +228,15 @@ class TestUserService:
         from ibreeze_backend.users.service import create_admin_user as create_user
         from passlib.hash import argon2
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -199,8 +259,22 @@ class TestUserService:
         from ibreeze_backend.users.service import list_users_admin as list_users
 
         users = [
-            User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active"),
-            User(user_type="app_user", username=None, email="b@b.com", password_hash="h", display_name="B", status="active"),
+            User(
+                user_type="app_user",
+                username=None,
+                email="a@b.com",
+                password_hash="h",
+                display_name="A",
+                status="active",
+            ),
+            User(
+                user_type="app_user",
+                username=None,
+                email="b@b.com",
+                password_hash="h",
+                display_name="B",
+                status="active",
+            ),
         ]
 
         count_result = MagicMock()
@@ -211,7 +285,9 @@ class TestUserService:
 
         mock_db_session.execute.side_effect = [count_result, list_result]
 
-        result_users, next_cursor, total = await list_users(mock_db_session, cursor=None, limit=10, user_type_filter=None)
+        result_users, next_cursor, total = await list_users(
+            mock_db_session, cursor=None, limit=10, user_type_filter=None
+        )
         assert total == 2
         assert len(result_users) == 2
 
@@ -225,7 +301,9 @@ class TestUserService:
         list_result.scalars.return_value.all.return_value = []
         mock_db_session.execute.side_effect = [count_result, list_result]
 
-        users, next_cursor, total = await list_users(mock_db_session, cursor=None, limit=10, user_type_filter=None)
+        users, next_cursor, total = await list_users(
+            mock_db_session, cursor=None, limit=10, user_type_filter=None
+        )
         assert total == 0
         assert users == []
 
@@ -234,7 +312,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user as update_user
 
-        target = User(user_type="app_user", username=None, email="old@b.com", password_hash="h", display_name="Old", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="old@b.com",
+            password_hash="h",
+            display_name="Old",
+            status="active",
+            version=1,
+        )
         target.protected = False
 
         user_lookup = MagicMock()
@@ -243,7 +329,15 @@ class TestUserService:
         conflict_check.scalar_one_or_none.return_value = None
         mock_db_session.execute.side_effect = [user_lookup, conflict_check]
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         updated = await update_user(
             mock_db_session,
             user_id=target.id,
@@ -260,7 +354,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user as update_user
 
-        target = User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="Old Name", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="a@b.com",
+            password_hash="h",
+            display_name="Old Name",
+            status="active",
+            version=1,
+        )
         target.protected = False
 
         user_lookup = MagicMock()
@@ -269,7 +371,15 @@ class TestUserService:
         conflict_check.scalar_one_or_none.return_value = None
         mock_db_session.execute.side_effect = [user_lookup, conflict_check]
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         updated = await update_user(
             mock_db_session,
             user_id=target.id,
@@ -286,7 +396,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user as update_user
 
-        target = User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="a@b.com",
+            password_hash="h",
+            display_name="A",
+            status="active",
+            version=1,
+        )
         target.protected = False
 
         user_lookup = MagicMock()
@@ -295,9 +413,21 @@ class TestUserService:
         conflict_check.scalar_one_or_none.return_value = None
         revoke_result = MagicMock()
         revoke_result.scalars.return_value.all.return_value = []
-        mock_db_session.execute.side_effect = [user_lookup, conflict_check, revoke_result]
+        mock_db_session.execute.side_effect = [
+            user_lookup,
+            conflict_check,
+            revoke_result,
+        ]
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         updated = await update_user(
             mock_db_session,
             user_id=target.id,
@@ -314,14 +444,30 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user as update_user
 
-        target = User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="a@b.com",
+            password_hash="h",
+            display_name="A",
+            status="active",
+            version=1,
+        )
         target.protected = False
 
         user_lookup = MagicMock()
         user_lookup.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = user_lookup
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         original_email = target.email
         updated = await update_user(
             mock_db_session,
@@ -339,7 +485,15 @@ class TestUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import delete_admin_user as delete_user
 
-        target = User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="a@b.com",
+            password_hash="h",
+            display_name="A",
+            status="active",
+            version=1,
+        )
         target.protected = False
 
         user_lookup = MagicMock()
@@ -348,7 +502,15 @@ class TestUserService:
         revoke_result.scalars.return_value.all.return_value = []
         mock_db_session.execute.side_effect = [user_lookup, revoke_result]
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         await delete_user(mock_db_session, user_id=target.id, admin_user=admin)
         mock_db_session.delete.assert_awaited_once_with(target)
         mock_db_session.flush.assert_awaited_once()
@@ -357,6 +519,7 @@ class TestUserService:
 # ---------------------------------------------------------------------------
 # Admin user management service
 # ---------------------------------------------------------------------------
+
 
 class TestAdminUserService:
     """Admin user management service CRUD."""
@@ -370,7 +533,15 @@ class TestAdminUserService:
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         user = await create_admin_user(
             mock_db_session,
             user_type="app_user",
@@ -393,7 +564,15 @@ class TestAdminUserService:
         mock_result.scalar_one_or_none.return_value = existing
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Email already exists"):
             await create_admin_user(
                 mock_db_session,
@@ -410,7 +589,15 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="app_user", username=None, email="u@test.com", password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="u@test.com",
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = False
         user_lookup = MagicMock()
         user_lookup.scalar_one_or_none.return_value = target
@@ -418,7 +605,15 @@ class TestAdminUserService:
         conflict_check.scalar_one_or_none.return_value = None
         mock_db_session.execute.side_effect = [user_lookup, conflict_check]
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         updated = await update_admin_user(
             mock_db_session,
             user_id=target.id,
@@ -435,28 +630,62 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import delete_admin_user
 
-        target = User(user_type="admin", username="u", email=None, password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="admin",
+            username="u",
+            email=None,
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = True
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot delete protected user"):
-            await delete_admin_user(mock_db_session, user_id=target.id, admin_user=admin)
+            await delete_admin_user(
+                mock_db_session, user_id=target.id, admin_user=admin
+            )
 
     @pytest.mark.asyncio
     async def test_protected_user_cannot_change_email(self, mock_db_session):
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="admin", username="u", email=None, password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="admin",
+            username="u",
+            email=None,
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = True
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot modify protected user"):
             await update_admin_user(
                 mock_db_session,
@@ -473,13 +702,29 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="admin", username="u", email=None, password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="admin",
+            username="u",
+            email=None,
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = True
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot modify protected user"):
             await update_admin_user(
                 mock_db_session,
@@ -496,13 +741,29 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="admin", username="u", email=None, password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="admin",
+            username="u",
+            email=None,
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = True
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot modify protected user"):
             await update_admin_user(
                 mock_db_session,
@@ -519,13 +780,29 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import delete_admin_user
 
-        target = User(user_type="app_user", username=None, email="u@test.com", password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="u@test.com",
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = False
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         await delete_admin_user(mock_db_session, user_id=target.id, admin_user=admin)
         mock_db_session.delete.assert_awaited_once()
 
@@ -538,22 +815,53 @@ class TestAdminUserService:
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="User not found"):
-            await delete_admin_user(mock_db_session, user_id=uuid.uuid4(), admin_user=admin)
+            await delete_admin_user(
+                mock_db_session, user_id=uuid.uuid4(), admin_user=admin
+            )
 
     @pytest.mark.asyncio
     async def test_reset_password(self, mock_db_session):
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import reset_password
 
-        target = User(user_type="app_user", username=None, email="u@test.com", password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="u@test.com",
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
-        user = await reset_password(mock_db_session, user_id=target.id, new_password="new_password123", admin_user=admin)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
+        user = await reset_password(
+            mock_db_session,
+            user_id=target.id,
+            new_password="new_password123",
+            admin_user=admin,
+        )
         assert user.password_hash != "h"
         assert user.password_hash != "new_password123"
 
@@ -562,13 +870,31 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import revoke_sessions
 
-        target = User(user_type="app_user", username=None, email="u@test.com", password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="u@test.com",
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
-        result = await revoke_sessions(mock_db_session, user_id=target.id, admin_user=admin)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
+        result = await revoke_sessions(
+            mock_db_session, user_id=target.id, admin_user=admin
+        )
         assert result is None
 
     @pytest.mark.asyncio
@@ -576,13 +902,29 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="app_user", username=None, email="u@test.com", password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="app_user",
+            username=None,
+            email="u@test.com",
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = False
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot set username for app_user"):
             await update_admin_user(
                 mock_db_session,
@@ -599,13 +941,29 @@ class TestAdminUserService:
         from ibreeze_backend.models.user import User
         from ibreeze_backend.users.service import update_admin_user
 
-        target = User(user_type="admin", username="u", email=None, password_hash="h", display_name="U", status="active", version=1)
+        target = User(
+            user_type="admin",
+            username="u",
+            email=None,
+            password_hash="h",
+            display_name="U",
+            status="active",
+            version=1,
+        )
         target.protected = False
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = target
         mock_db_session.execute.return_value = mock_result
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         with pytest.raises(ValueError, match="Cannot set email for admin user"):
             await update_admin_user(
                 mock_db_session,
@@ -623,8 +981,22 @@ class TestAdminUserService:
         from ibreeze_backend.users.service import list_users_admin
 
         users = [
-            User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active"),
-            User(user_type="app_user", username=None, email="b@b.com", password_hash="h", display_name="B", status="active"),
+            User(
+                user_type="app_user",
+                username=None,
+                email="a@b.com",
+                password_hash="h",
+                display_name="A",
+                status="active",
+            ),
+            User(
+                user_type="app_user",
+                username=None,
+                email="b@b.com",
+                password_hash="h",
+                display_name="B",
+                status="active",
+            ),
         ]
 
         count_result = MagicMock()
@@ -635,7 +1007,9 @@ class TestAdminUserService:
 
         mock_db_session.execute.side_effect = [count_result, list_result]
 
-        result_users, next_cursor, total = await list_users_admin(mock_db_session, cursor=None, limit=50, user_type_filter=None)
+        result_users, next_cursor, total = await list_users_admin(
+            mock_db_session, cursor=None, limit=50, user_type_filter=None
+        )
         assert total == 2
         assert len(result_users) == 2
         assert next_cursor is None
@@ -648,8 +1022,22 @@ class TestAdminUserService:
         from ibreeze_backend.users.service import list_users_admin
 
         users = [
-            User(user_type="app_user", username=None, email="a@b.com", password_hash="h", display_name="A", status="active"),
-            User(user_type="app_user", username=None, email="b@b.com", password_hash="h", display_name="B", status="active"),
+            User(
+                user_type="app_user",
+                username=None,
+                email="a@b.com",
+                password_hash="h",
+                display_name="A",
+                status="active",
+            ),
+            User(
+                user_type="app_user",
+                username=None,
+                email="b@b.com",
+                password_hash="h",
+                display_name="B",
+                status="active",
+            ),
         ]
         users[0].created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
         users[0].id = uuid.uuid4()
@@ -664,7 +1052,9 @@ class TestAdminUserService:
 
         mock_db_session.execute.side_effect = [count_result, list_result]
 
-        result_users, next_cursor, total = await list_users_admin(mock_db_session, cursor=None, limit=1, user_type_filter=None)
+        result_users, next_cursor, total = await list_users_admin(
+            mock_db_session, cursor=None, limit=1, user_type_filter=None
+        )
         assert total == 3
         assert len(result_users) == 1
         assert next_cursor is not None
@@ -689,7 +1079,15 @@ class TestAdminUserService:
 
         mock_db_session.execute.side_effect = side_effect
 
-        admin = User(user_type="admin", username="admin", email=None, display_name="Admin", password_hash="h", status="active", version=1)
+        admin = User(
+            user_type="admin",
+            username="admin",
+            email=None,
+            display_name="Admin",
+            password_hash="h",
+            status="active",
+            version=1,
+        )
         user = await create_admin_user(
             mock_db_session,
             user_type="app_user",
@@ -706,6 +1104,7 @@ class TestAdminUserService:
 # User API router integration (with mocked auth)
 # ---------------------------------------------------------------------------
 
+
 class TestUserEndpoints:
     """User router endpoint logic."""
 
@@ -721,7 +1120,13 @@ class TestUserEndpoints:
             mock_create.return_value = mock_user
 
             result = await create_user_endpoint(
-                user_in=UserCreate(user_type="admin", username="alice", email=None, display_name="Alice", password="securepass1"),
+                user_in=UserCreate(
+                    user_type="admin",
+                    username="alice",
+                    email=None,
+                    display_name="Alice",
+                    password="securepass1",
+                ),
                 db=mock_db_session,
                 current_user=MagicMock(),
             )
@@ -734,7 +1139,9 @@ class TestUserEndpoints:
 
         with patch("ibreeze_backend.users.router.list_users_admin") as mock_list:
             mock_list.return_value = ([], None, 0)
-            result = await list_users_endpoint(db=mock_db_session, current_user=MagicMock())
+            result = await list_users_endpoint(
+                db=mock_db_session, current_user=MagicMock()
+            )
             assert result == {"users": [], "next_cursor": None, "total": 0}
 
     @pytest.mark.asyncio
@@ -748,7 +1155,9 @@ class TestUserEndpoints:
         mock_result.scalar_one_or_none.return_value = mock_user
         mock_db_session.execute.return_value = mock_result
 
-        result = await get_user_endpoint(user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock())
+        result = await get_user_endpoint(
+            user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock()
+        )
         assert result == mock_user
 
     @pytest.mark.asyncio
@@ -762,7 +1171,9 @@ class TestUserEndpoints:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_user_endpoint(user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock())
+            await get_user_endpoint(
+                user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock()
+            )
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -770,13 +1181,16 @@ class TestUserEndpoints:
         from ibreeze_backend.users.router import delete_user_endpoint
 
         with patch("ibreeze_backend.users.router.delete_admin_user") as mock_delete:
-            await delete_user_endpoint(user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock())
+            await delete_user_endpoint(
+                user_id=uuid.uuid4(), db=mock_db_session, current_user=MagicMock()
+            )
             mock_delete.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
 # Auth dependency
 # ---------------------------------------------------------------------------
+
 
 class TestAuthDependency:
     """get_current_user dependency."""
@@ -802,7 +1216,9 @@ class TestAuthDependency:
 
             creds = MagicMock()
             creds.credentials = "valid.token"
-            user = await get_current_user(request=mock_request, credentials=creds, db=mock_db_session)
+            user = await get_current_user(
+                request=mock_request, credentials=creds, db=mock_db_session
+            )
             assert user == mock_user
 
     @pytest.mark.asyncio
@@ -819,7 +1235,9 @@ class TestAuthDependency:
             creds = MagicMock()
             creds.credentials = "bad.token"
             with pytest.raises(HTTPException) as exc_info:
-                await get_current_user(request=mock_request, credentials=creds, db=mock_db_session)
+                await get_current_user(
+                    request=mock_request, credentials=creds, db=mock_db_session
+                )
             assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
@@ -843,5 +1261,7 @@ class TestAuthDependency:
             creds = MagicMock()
             creds.credentials = "valid.token"
             with pytest.raises(HTTPException) as exc_info:
-                await get_current_user(request=mock_request, credentials=creds, db=mock_db_session)
+                await get_current_user(
+                    request=mock_request, credentials=creds, db=mock_db_session
+                )
             assert exc_info.value.status_code == 401

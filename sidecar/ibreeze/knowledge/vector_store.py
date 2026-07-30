@@ -59,12 +59,7 @@ class VectorStore:
 
             safe_id = _escape_sql_literal(id)
 
-            existing = (
-                table.search()
-                .where(f"id = '{safe_id}'")
-                .limit(1)
-                .to_list()
-            )
+            existing = table.search().where(f"id = '{safe_id}'").limit(1).to_list()
             if existing:
                 table.delete(f"id = '{safe_id}'")
 
@@ -95,10 +90,7 @@ class VectorStore:
             return []
         try:
             safe_company_id = _escape_sql_literal(company_id)
-            query = (
-                table.search(query_embedding)
-                .where(f"company_id = '{safe_company_id}'")
-            )
+            query = table.search(query_embedding).where(f"company_id = '{safe_company_id}'")
             if generation_id:
                 safe_gen_id = _escape_sql_literal(generation_id)
                 query = query.where(f"generation_id = '{safe_gen_id}'")

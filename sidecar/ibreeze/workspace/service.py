@@ -242,7 +242,10 @@ async def apply_workspace(
 
     # Attempt merge into integration branch (conflict means abort, not apply)
     merge_result = await git_command(
-        "merge", "--no-ff", "--no-commit", integration_branch,
+        "merge",
+        "--no-ff",
+        "--no-commit",
+        integration_branch,
         cwd=ws.repository_root,
     )
 
@@ -250,7 +253,9 @@ async def apply_workspace(
     if merge_result["success"]:
         # Commit the merge
         commit_result = await git_command(
-            "commit", "-m", f"ibreeze({ws.company_task_id[:8]}): apply completed task",
+            "commit",
+            "-m",
+            f"ibreeze({ws.company_task_id[:8]}): apply completed task",
             cwd=ws.repository_root,
         )
         if not commit_result["success"]:

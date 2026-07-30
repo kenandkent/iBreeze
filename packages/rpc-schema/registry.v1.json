@@ -25,9 +25,9 @@
           "owner": {
             "type": "string",
             "enum": [
-              "rust",
+              "rust_core",
               "sidecar",
-              "supervisor"
+              "supervisor_only"
             ]
           },
           "kind": {
@@ -169,7 +169,7 @@
     },
     {
       "method": "auth.changePassword",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.changePassword.request.schema.json",
@@ -184,7 +184,7 @@
     },
     {
       "method": "auth.closeProfile",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.closeProfile.request.schema.json",
@@ -199,7 +199,7 @@
     },
     {
       "method": "auth.listOfflineProfiles",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "read",
       "scope": "none",
       "request_schema": "methods/auth.listOfflineProfiles.request.schema.json",
@@ -213,7 +213,7 @@
     },
     {
       "method": "auth.login",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.login.request.schema.json",
@@ -228,7 +228,7 @@
     },
     {
       "method": "auth.logout",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.logout.request.schema.json",
@@ -243,7 +243,7 @@
     },
     {
       "method": "auth.openProfile",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.openProfile.request.schema.json",
@@ -258,7 +258,7 @@
     },
     {
       "method": "auth.register",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "none",
       "request_schema": "methods/auth.register.request.schema.json",
@@ -273,7 +273,7 @@
     },
     {
       "method": "backend.validateOrigin",
-      "owner": "sidecar",
+      "owner": "rust_core",
       "kind": "write",
       "scope": "profile",
       "request_schema": "methods/backend.validateOrigin.request.schema.json",

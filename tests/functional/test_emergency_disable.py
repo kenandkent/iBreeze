@@ -4,6 +4,7 @@ Covers design spec sections:
 - REL-004 Emergency disable flow
 - CAT-004 Emergency disable priority over manifest
 """
+
 import hashlib
 import json
 import uuid
@@ -21,7 +22,9 @@ class TestEmergencyDisable:
         from ibreeze_backend.releases.emergency import create_emergency_disable
 
         db = AsyncMock()
-        db.execute.return_value = AsyncMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+        db.execute.return_value = AsyncMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        )
         db.flush = AsyncMock()
         db.add = MagicMock()
 
@@ -48,7 +51,9 @@ class TestEmergencyDisable:
         from ibreeze_backend.releases.emergency import create_emergency_disable
 
         db = AsyncMock()
-        db.execute.return_value = AsyncMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+        db.execute.return_value = AsyncMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        )
         db.flush = AsyncMock()
         db.add = MagicMock()
 
@@ -69,7 +74,7 @@ class TestEmergencyDisable:
 
     async def test_emergency_disable_does_not_modify_history(self):
         """Emergency disable should not modify previous manifests."""
-        from ibreeze_backend.releases.emergency import create_emergency_disable, get_latest_emergency_disable
+        from ibreeze_backend.releases.emergency import create_emergency_disable
 
         db = AsyncMock()
         db.flush = AsyncMock()
@@ -136,7 +141,9 @@ class TestEmergencyDisable:
         from ibreeze_backend.releases.emergency import create_emergency_disable
 
         db = AsyncMock()
-        db.execute.return_value = AsyncMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+        db.execute.return_value = AsyncMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        )
         db.flush = AsyncMock()
         db.add = MagicMock()
 

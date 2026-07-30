@@ -24,13 +24,13 @@ from ibreeze.rpc.frame import (
 class TestEncodeFrame:
     def test_encodes_simple_dict(self):
         data = encode_frame({"hello": "world"})
-        length = struct.unpack(">I", data[:4])[0]
+        struct.unpack(">I", data[:4])[0]
         payload = data[4:].decode("utf-8")
         assert json.loads(payload) == {"hello": "world"}
 
     def test_encodes_unicode(self):
         data = encode_frame({"key": "值"})
-        length = struct.unpack(">I", data[:4])[0]
+        struct.unpack(">I", data[:4])[0]
         payload = data[4:].decode("utf-8")
         assert json.loads(payload) == {"key": "值"}
 

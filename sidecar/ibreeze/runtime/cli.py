@@ -161,11 +161,7 @@ def _minimal_environment() -> dict[str, str]:
         "USER",
         "SHELL",
     }
-    return {
-        key: value
-        for key, value in os.environ.items()
-        if key in allowed
-    }
+    return {key: value for key, value in os.environ.items() if key in allowed}
 
 
 class CodexCliAdapter:
@@ -190,8 +186,10 @@ class CodexCliAdapter:
         timeout_seconds: float = 300,
     ) -> ProcessResult:
         arguments = [
-            "--model", model,
-            "--approval-mode", approval_mode,
+            "--model",
+            model,
+            "--approval-mode",
+            approval_mode,
             "--quiet",
             prompt,
         ]
@@ -231,8 +229,10 @@ class ClaudeCodeAdapter:
         timeout_seconds: float = 300,
     ) -> ProcessResult:
         arguments = [
-            "--model", model,
-            "--permission-mode", permission_mode,
+            "--model",
+            model,
+            "--permission-mode",
+            permission_mode,
             "--print",
             prompt,
         ]
@@ -271,7 +271,8 @@ class OpenCodeAdapter:
         timeout_seconds: float = 300,
     ) -> ProcessResult:
         arguments = [
-            "--model", model,
+            "--model",
+            model,
             "--non-interactive",
             prompt,
         ]

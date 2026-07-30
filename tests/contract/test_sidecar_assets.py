@@ -1,8 +1,8 @@
 """Tests for sidecar assets packaging - P0-T04."""
+
 import json
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).parent.parent.parent
 ASSETS_DIR = ROOT / "sidecar" / "ibreeze" / "assets"

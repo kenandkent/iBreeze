@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import aiosqlite
 
@@ -102,7 +102,8 @@ def _build_command(command_cls: type, params: dict[str, Any]) -> Any:
                     evidence_refs=tuple(_dict_to_uuid(e) for e in i.get("evidence_refs", [])),
                     suggested_fix=i["suggested_fix"],
                     assignee_employee_id=_dict_to_uuid(i["assignee_employee_id"])
-                    if i.get("assignee_employee_id") else None,
+                    if i.get("assignee_employee_id")
+                    else None,
                 )
                 for i in val
             )
@@ -116,6 +117,7 @@ def _handler(handler: Any, command_cls: type) -> Any:
         idempotency_key = params.get("idempotency_key")
         command = _build_command(command_cls, params)
         return await handler.handle(idempotency_key, command)
+
     return wrapped
 
 
@@ -124,6 +126,7 @@ def _submit_handler(handler: SubmitReviewHandler) -> Any:
         idempotency_key = params.get("idempotency_key")
         command = _build_command(SubmitReview, params)
         return await handler.handle(idempotency_key, command)
+
     return wrapped
 
 
@@ -137,6 +140,7 @@ class ApplicationLifecycle:
         app_user_id: str = "",
         masked_identifier: str = "",
         device_id: str = "",
+        app_version: str = "0.0.0",
         profile_mode: str = "offline",
     ) -> None:
         self._profile_path = profile_path
@@ -145,6 +149,7 @@ class ApplicationLifecycle:
         self._app_user_id = app_user_id
         self._masked_identifier = masked_identifier
         self._device_id = device_id
+        self._app_version = app_version
         self._profile_mode = profile_mode
         self._phase = LifecyclePhase.INIT
         self._prepared: PreparedProfileDatabase | None = None
@@ -314,12 +319,18 @@ class ApplicationLifecycle:
         self._dispatcher.register("review.closeIssue", _handler(CloseIssueHandler(repo, uow), CloseIssue))
         self._dispatcher.register("review.rejectIssue", _handler(RejectIssueHandler(repo, uow), RejectIssue))
 
-        self._dispatcher.register("completion.acceptEmployeeTask", _handler(
-            AcceptEmployeeTaskHandler(EmployeeGate(), uow), AcceptEmployeeTask))
-        self._dispatcher.register("completion.completeDepartmentTask", _handler(
-            CompleteDepartmentTaskHandler(DepartmentGate(), uow), CompleteDepartmentTask))
-        self._dispatcher.register("completion.completeCompanyTask", _handler(
-            CompleteCompanyTaskHandler(CompanyGate(), uow), CompleteCompanyTask))
+        self._dispatcher.register(
+            "completion.acceptEmployeeTask",
+            _handler(AcceptEmployeeTaskHandler(EmployeeGate(), uow), AcceptEmployeeTask),
+        )
+        self._dispatcher.register(
+            "completion.completeDepartmentTask",
+            _handler(CompleteDepartmentTaskHandler(DepartmentGate(), uow), CompleteDepartmentTask),
+        )
+        self._dispatcher.register(
+            "completion.completeCompanyTask",
+            _handler(CompleteCompanyTaskHandler(CompanyGate(), uow), CompleteCompanyTask),
+        )
 
         logger.info("lifecycle: registered %d review/completion handlers", self._dispatcher.method_count)
 
@@ -327,14 +338,55 @@ class ApplicationLifecycle:
         prepared = self._prepared
         if prepared is None:
             raise RuntimeError("LIFECYCLE_INVALID: profile not prepared")
-        cursor = await self._writer.execute(
+        writer = self._writer
+        assert writer is not None, "Writer must be set before identity check"
+        cursor = await writer.execute(
             "SELECT id, schema_epoch, backend_origin, app_user_id, "
             "masked_identifier, device_id, created_at, last_opened_at "
             "FROM local_profile"
         )
         row = await cursor.fetchone()
         if row is None:
+            if self._profile_mode == "online":
+                profile_id = str(uuid4())
+                now = _now_iso()
+
+                async def _insert_profile(conn: aiosqlite.Connection) -> None:
+                    await conn.execute(
+                        "INSERT INTO local_profile "
+                        "(id, schema_epoch, created_by_app_version, backend_origin, "
+                        "app_user_id, masked_identifier, device_id, created_at, "
+                        "last_opened_at) "
+                        "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            profile_id,
+                            self._app_version,
+                            self._backend_origin,
+                            self._app_user_id,
+                            self._masked_identifier,
+                            self._device_id,
+                            now,
+                            now,
+                        ),
+                    )
+
+                wq = self._write_queue
+                assert wq is not None
+                await wq.submit(
+                    command_name="init_profile",
+                    trace_id=uuid4(),
+                    deadline_at=datetime.now(UTC).replace(year=9999),
+                    execute=_insert_profile,
+                )
+                logger.info(
+                    "lifecycle: profile identity initialized (backend=%s, user=%s, mode=online)",
+                    self._backend_origin,
+                    self._app_user_id,
+                )
+                return
             raise RuntimeError("PROFILE_NOT_FOUND: no local_profile record")
+        if row["schema_epoch"] != 1:
+            raise RuntimeError(f"PROFILE_SCHEMA_UNSUPPORTED: schema_epoch={row['schema_epoch']}")
         expected_backend = self._backend_origin
         expected_user = self._app_user_id
         expected_masked = self._masked_identifier
@@ -349,18 +401,28 @@ class ApplicationLifecycle:
         if row["device_id"] != expected_device:
             mismatches.append("device_id")
         if mismatches:
-            raise RuntimeError(
-                f"PROFILE_IDENTITY_MISMATCH: {', '.join(mismatches)}"
-            )
+            raise RuntimeError(f"PROFILE_IDENTITY_MISMATCH: {', '.join(mismatches)}")
+
         now = _now_iso()
-        await self._writer.execute(
-            "UPDATE local_profile SET last_opened_at=? WHERE id=?",
-            (now, row["id"]),
+        wq = self._write_queue
+        assert wq is not None
+
+        async def _update_opened_at(conn: aiosqlite.Connection) -> None:
+            await conn.execute(
+                "UPDATE local_profile SET last_opened_at=? WHERE id=?",
+                (now, row["id"]),
+            )
+
+        await wq.submit(
+            command_name="update_profile_opened_at",
+            trace_id=uuid4(),
+            deadline_at=datetime.now(UTC).replace(year=9999),
+            execute=_update_opened_at,
         )
-        await self._writer.commit()
         logger.info(
             "lifecycle: profile identity verified (backend=%s, user=%s)",
-            expected_backend, expected_user,
+            expected_backend,
+            expected_user,
         )
 
     async def health(self) -> HealthSnapshot:

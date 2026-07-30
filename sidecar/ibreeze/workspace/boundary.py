@@ -18,10 +18,7 @@ class WorkspaceBoundary:
         if not root.is_dir():
             raise ValueError("WORKSPACE_ACCESS_DENIED")
         self.root = root
-        self._external_read_roots = tuple(
-            Path(path).resolve(strict=True)
-            for path in external_read_roots
-        )
+        self._external_read_roots = tuple(Path(path).resolve(strict=True) for path in external_read_roots)
 
     def resolve_workspace_path(
         self,
@@ -46,10 +43,7 @@ class WorkspaceBoundary:
 
     def resolve_external_read(self, path: str | Path) -> Path:
         resolved = Path(path).resolve(strict=True)
-        if not any(
-            self._is_within(resolved, root)
-            for root in self._external_read_roots
-        ):
+        if not any(self._is_within(resolved, root) for root in self._external_read_roots):
             raise ValueError("WORKSPACE_ACCESS_DENIED")
         return resolved
 

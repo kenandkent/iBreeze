@@ -45,7 +45,10 @@ SOFTWARE_REQUIREMENT_DELIVERY = WorkflowTemplate(
             name="Requirement Analysis",
             description="Analyze and decompose the software requirement",
             required_roles=("department_leader",),
-            quality_gates=("requirement_clarity", "scope_defined",),
+            quality_gates=(
+                "requirement_clarity",
+                "scope_defined",
+            ),
         ),
         WorkflowStep(
             phase=WorkflowPhase.ARCHITECTURE,
@@ -53,7 +56,10 @@ SOFTWARE_REQUIREMENT_DELIVERY = WorkflowTemplate(
             description="Design system architecture and component interfaces",
             required_roles=("department_leader", "member"),
             dependencies=(WorkflowPhase.ANALYSIS,),
-            quality_gates=("architecture_review", "interface_defined",),
+            quality_gates=(
+                "architecture_review",
+                "interface_defined",
+            ),
         ),
         WorkflowStep(
             phase=WorkflowPhase.DEVELOPMENT,
@@ -61,7 +67,10 @@ SOFTWARE_REQUIREMENT_DELIVERY = WorkflowTemplate(
             description="Implement the designed components",
             required_roles=("member",),
             dependencies=(WorkflowPhase.ARCHITECTURE,),
-            quality_gates=("code_review", "unit_tests_pass",),
+            quality_gates=(
+                "code_review",
+                "unit_tests_pass",
+            ),
         ),
         WorkflowStep(
             phase=WorkflowPhase.TESTING,
@@ -70,14 +79,20 @@ SOFTWARE_REQUIREMENT_DELIVERY = WorkflowTemplate(
             required_roles=("member",),
             parallel_with=(WorkflowPhase.DEVELOPMENT,),
             dependencies=(WorkflowPhase.ARCHITECTURE,),
-            quality_gates=("integration_tests_pass", "coverage_threshold",),
+            quality_gates=(
+                "integration_tests_pass",
+                "coverage_threshold",
+            ),
         ),
         WorkflowStep(
             phase=WorkflowPhase.FIRST_TEST,
             name="First Integration Test",
             description="First integration test cycle",
             required_roles=("member",),
-            dependencies=(WorkflowPhase.DEVELOPMENT, WorkflowPhase.TESTING,),
+            dependencies=(
+                WorkflowPhase.DEVELOPMENT,
+                WorkflowPhase.TESTING,
+            ),
             quality_gates=("all_tests_pass",),
         ),
         WorkflowStep(
@@ -94,7 +109,10 @@ SOFTWARE_REQUIREMENT_DELIVERY = WorkflowTemplate(
             description="Final validation test cycle",
             required_roles=("member",),
             dependencies=(WorkflowPhase.FIXING,),
-            quality_gates=("all_tests_pass", "no_critical_issues",),
+            quality_gates=(
+                "all_tests_pass",
+                "no_critical_issues",
+            ),
         ),
         WorkflowStep(
             phase=WorkflowPhase.GM_REVIEW,

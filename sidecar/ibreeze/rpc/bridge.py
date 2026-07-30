@@ -9,6 +9,7 @@ OldHandler = Callable[[dict[str, Any]], Awaitable[object]]
 def wrap_handler(handler: OldHandler) -> HandlerFn:
     async def wrapped(params: dict[str, Any], session: object) -> Any:
         return await handler(params)
+
     return wrapped
 
 

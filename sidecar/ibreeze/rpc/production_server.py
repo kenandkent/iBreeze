@@ -136,9 +136,7 @@ class ProductionRpcServer:
                     return self._error(request_id, -32001, "IPC_SESSION_INVALID")
                 if not self._lifecycle.dispatcher.has_method(method):
                     return self._error(request_id, -32601, "Method not found.")
-                result = await self._lifecycle.dispatcher.dispatch(
-                    method, params, _DummySession()
-                )
+                result = await self._lifecycle.dispatcher.dispatch(method, params, _DummySession())
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,

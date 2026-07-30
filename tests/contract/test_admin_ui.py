@@ -1,7 +1,7 @@
 """Tests for Admin Web React UI - P10.
 验证管理后台不再有 mock 常量，SettingsPage 对接真实 API。
 """
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
@@ -24,7 +24,9 @@ def test_settings_page_no_mock():
     """SettingsPage 不应包含 MOCK_SETTINGS 常量。"""
     content = (ADMIN_DIR / "src" / "pages" / "SettingsPage.tsx").read_text()
     assert "MOCK_SETTINGS" not in content, "SettingsPage still contains MOCK_SETTINGS"
-    assert "fetch" in content or "useQuery" in content, "SettingsPage must use real API call"
+    assert "fetch" in content or "useQuery" in content, (
+        "SettingsPage must use real API call"
+    )
 
 
 def test_vite_config_has_proxy():

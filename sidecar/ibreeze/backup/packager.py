@@ -22,11 +22,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 
 
 def _now() -> str:
-    return (
-        datetime.now(UTC)
-        .isoformat(timespec="microseconds")
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _sha256_file(path: Path) -> str:
@@ -88,11 +84,13 @@ def create_backup_package(
         if st.st_size > MAX_FILE_SIZE:
             return
         fhash = _sha256_file(file_path)
-        manifest["files"].append({
-            "path": arcname,
-            "sha256": fhash,
-            "size": st.st_size,
-        })
+        manifest["files"].append(
+            {
+                "path": arcname,
+                "sha256": fhash,
+                "size": st.st_size,
+            }
+        )
         total_size += st.st_size
 
     db_p = Path(db_path)

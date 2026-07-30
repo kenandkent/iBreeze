@@ -82,14 +82,17 @@ class GeneralManagerBehavior(RoleBehavior):
         dispatches: list[dict[str, Any]] = []
         for section in plan.get("sections", []):
             if section.get("type") == "department_tasks":
-                dispatches.append({
-                    "department_id": section.get("department_id"),
-                    "tasks": section.get("planned_tasks", []),
-                })
+                dispatches.append(
+                    {
+                        "department_id": section.get("department_id"),
+                        "tasks": section.get("planned_tasks", []),
+                    }
+                )
         return dispatches
 
     async def summarize_results(
-        self, department_reports: list[dict[str, Any]],
+        self,
+        department_reports: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Summarize department results into company report."""
         return {

@@ -42,13 +42,14 @@ async def request_plan_confirmation(
         raise ValueError("PLAN_NOT_CONFIRMABLE")
 
     target_json = json.dumps(
-        {"plan_version_id": plan_version_id}, ensure_ascii=False,
+        {"plan_version_id": plan_version_id},
+        ensure_ascii=False,
     )
     target_sha256 = hashlib.sha256(target_json.encode()).hexdigest()
     now = _now()
     expires_at = (
-        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
-    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    )
 
     # Find an existing active run for this task to link the approval
     cursor = await db.execute(

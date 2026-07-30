@@ -13,9 +13,7 @@ from typing import Any
 
 async def check_company_isolation(db: Any, company_id: str, table: str, row_id: str) -> bool:
     """Verify that a row belongs to the expected company (公司隔离检查)."""
-    cursor = await db.execute(
-        f"SELECT 1 FROM {table} WHERE id=? AND company_id=?", (row_id, company_id)
-    )
+    cursor = await db.execute(f"SELECT 1 FROM {table} WHERE id=? AND company_id=?", (row_id, company_id))
     return await cursor.fetchone() is not None
 
 
@@ -81,8 +79,8 @@ async def claim_idempotency(
 
     now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
     expires = (
-        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
-    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    )
     try:
         await db.execute(
             """INSERT INTO idempotency

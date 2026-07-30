@@ -80,8 +80,14 @@ async def start(
     effective_work_item = work_item_id or company_task_id
 
     valid_work_item_types = {
-        "interactive_turn", "company_plan", "employee_task", "review",
-        "verification", "repair", "merge", "summary",
+        "interactive_turn",
+        "company_plan",
+        "employee_task",
+        "review",
+        "verification",
+        "repair",
+        "merge",
+        "summary",
     }
     work_item_type = run_purpose if run_purpose in valid_work_item_types else "employee_task"
 

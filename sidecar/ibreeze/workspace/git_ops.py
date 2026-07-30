@@ -54,9 +54,7 @@ async def create_worktree(
     worktree_path = os.path.join(base_dir, "worktrees", worktree_name)
 
     await git_command("branch", branch_name, base_branch, cwd=base_dir)
-    result = await git_command(
-        "worktree", "add", worktree_path, branch_name, cwd=base_dir
-    )
+    result = await git_command("worktree", "add", worktree_path, branch_name, cwd=base_dir)
     return {
         "path": worktree_path,
         "branch": branch_name,
@@ -70,9 +68,7 @@ async def remove_worktree(base_dir: str, worktree_name: str) -> dict[str, Any]:
     import os
 
     worktree_path = os.path.join(base_dir, "worktrees", worktree_name)
-    result = await git_command(
-        "worktree", "remove", worktree_path, "--force", cwd=base_dir
-    )
+    result = await git_command("worktree", "remove", worktree_path, "--force", cwd=base_dir)
     return {
         "success": result["success"],
         "error": result["stderr"] if not result["success"] else None,
@@ -103,21 +99,15 @@ async def merge_branch(
 
 async def get_merge_conflicts(base_dir: str) -> list[str]:
     """List files with merge conflicts."""
-    result = await git_command(
-        "diff", "--name-only", "--diff-filter=U", cwd=base_dir
-    )
+    result = await git_command("diff", "--name-only", "--diff-filter=U", cwd=base_dir)
     if result["success"] and result["stdout"].strip():
         return result["stdout"].strip().split("\n")  # type: ignore[no-any-return]
     return []
 
 
-async def create_bundle(
-    base_dir: str, output_path: str, branch: str
-) -> dict[str, Any]:
+async def create_bundle(base_dir: str, output_path: str, branch: str) -> dict[str, Any]:
     """Create a git bundle for backup."""
-    result = await git_command(
-        "bundle", "create", output_path, branch, cwd=base_dir
-    )
+    result = await git_command("bundle", "create", output_path, branch, cwd=base_dir)
     return {
         "success": result["success"],
         "path": output_path,

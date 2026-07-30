@@ -46,29 +46,35 @@ async def _run_availability_checks(db: Any, company_id: str) -> dict[str, Any]:
     overall = "available"
     cursor = await db.execute("SELECT 1")
     row = await cursor.fetchone()
-    checks.append({
-        "check": "db_health",
-        "status": "available" if row else "unavailable",
-        "detail": "",
-    })
+    checks.append(
+        {
+            "check": "db_health",
+            "status": "available" if row else "unavailable",
+            "detail": "",
+        }
+    )
     cursor = await db.execute(
         "SELECT release_id, downloaded_at FROM catalog_cache_releases"
         " WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1",
     )
     row = await cursor.fetchone()
     if row is None:
-        checks.append({
-            "check": "catalog_release",
-            "status": "unavailable",
-            "detail": "No active catalog release",
-        })
+        checks.append(
+            {
+                "check": "catalog_release",
+                "status": "unavailable",
+                "detail": "No active catalog release",
+            }
+        )
         overall = "unavailable"
     else:
-        checks.append({
-            "check": "catalog_release",
-            "status": "available",
-            "detail": row["release_id"],
-        })
+        checks.append(
+            {
+                "check": "catalog_release",
+                "status": "available",
+                "detail": row["release_id"],
+            }
+        )
     return {"checks": checks, "overall": overall}
 
 
@@ -298,9 +304,7 @@ async def confirm_and_dispatch(
                 binding = json.loads(profile_row["runtime_binding_json"])
                 raw_type = profile_row["profile_type"]
                 adapter_type = (
-                    raw_type
-                    if raw_type in ("api_model", "codex_cli", "claude_code", "opencode")
-                    else "codex_cli"
+                    raw_type if raw_type in ("api_model", "codex_cli", "claude_code", "opencode") else "codex_cli"
                 )
                 model_id = (
                     binding.get("agent_cli")
@@ -431,12 +435,15 @@ async def confirm_and_dispatch(
 
     plan_artifact_id = command.plan_artifact_id
     plan_artifact_sha = hashlib.sha256(plan_row["canonical_json"].encode()).hexdigest()
-    plan_meta = json.dumps({
-        "plan_version_id": plan_row["id"],
-        "version_number": plan_row["version_number"],
-        "goal": goal,
-        "company_task_id": command.company_task_id,
-    }, sort_keys=True)
+    plan_meta = json.dumps(
+        {
+            "plan_version_id": plan_row["id"],
+            "version_number": plan_row["version_number"],
+            "goal": goal,
+            "company_task_id": command.company_task_id,
+        },
+        sort_keys=True,
+    )
     await db.execute(
         "INSERT INTO artifacts"
         " (id, company_id, company_task_id, artifact_type, logical_name,"

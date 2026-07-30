@@ -35,8 +35,8 @@ async def request_external_write_approval(
     approval_id = _id()
     now = _now()
     expires_at = (
-        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
-    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    )
 
     target_json = json.dumps(
         {"path": target_path, "action": action, "old_hash": old_hash, "new_hash": new_hash},
@@ -81,8 +81,8 @@ async def request_uncertain_recovery_approval(
     approval_id = _id()
     now = _now()
     expires_at = (
-        datetime.now(UTC) + timedelta(seconds=ttl_seconds)
-    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    )
 
     target_json = json.dumps({"reason": reason}, sort_keys=True)
     target_sha = hashlib.sha256(reason.encode("utf-8")).hexdigest()

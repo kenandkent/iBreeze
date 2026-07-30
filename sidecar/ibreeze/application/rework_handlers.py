@@ -14,7 +14,6 @@ def _hash(obj: Any) -> str:
 
 
 class RequestReworkHandler:
-
     def __init__(self, uow: Any) -> None:
         self._uow = uow
 
@@ -39,8 +38,8 @@ class RequestReworkHandler:
 
             dept_id = (
                 str(request.department_task_id)
-                if hasattr(request, 'department_task_id') and request.department_task_id
-                else ''
+                if hasattr(request, "department_task_id") and request.department_task_id
+                else ""
             )
             cursor = await session.execute(
                 """SELECT COALESCE(MAX(attempt_no), 0) + 1
@@ -52,13 +51,13 @@ class RequestReworkHandler:
             row = await cursor.fetchone()
             next_no = row[0] if row else 1
 
-            attempt_id = str(hashlib.md5(
-                f"{request.company_id}:{request.company_task_id}:{next_no}".encode()
-            ).hexdigest()[:32])
+            attempt_id = str(
+                hashlib.md5(f"{request.company_id}:{request.company_task_id}:{next_no}".encode()).hexdigest()[:32]
+            )
 
             dept_id_val = (
                 str(request.department_task_id)
-                if hasattr(request, 'department_task_id') and request.department_task_id
+                if hasattr(request, "department_task_id") and request.department_task_id
                 else None
             )
             await session.execute(
@@ -66,9 +65,7 @@ class RequestReworkHandler:
                    (id, company_id, company_task_id, department_task_id,
                     attempt_no, status, version, created_at)
                    VALUES (?,?,?,?,?,?,1,datetime('now'))""",
-                (attempt_id, str(request.company_id),
-                 str(request.company_task_id), dept_id_val,
-                 next_no, "planned"),
+                (attempt_id, str(request.company_id), str(request.company_task_id), dept_id_val, next_no, "planned"),
             )
 
             for issue_id in request.source_review_issue_ids:
@@ -79,7 +76,7 @@ class RequestReworkHandler:
                     (str(request.company_id), attempt_id, str(issue_id)),
                 )
 
-            is_dept = hasattr(request, 'department_task_id') and request.department_task_id
+            is_dept = hasattr(request, "department_task_id") and request.department_task_id
             task_type = "department_task" if is_dept else "company_task"
             task_id = request.department_task_id if is_dept else request.company_task_id
 
@@ -98,18 +95,20 @@ class RequestReworkHandler:
                     "attempt_no": next_no,
                     "status": "planned",
                 },
-                events=({
-                    "event_type": f"{task_type}.status_changed",
-                    "aggregate_id": str(task_id),
-                    "to_state": "fixing",
-                },),
+                events=(
+                    {
+                        "event_type": f"{task_type}.status_changed",
+                        "aggregate_id": str(task_id),
+                        "to_state": "fixing",
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, _hash(request), command)
 
 
 class AdvanceReworkAttemptHandler:
-
     def __init__(self, uow: Any) -> None:
         self._uow = uow
 
@@ -164,4 +163,5 @@ class AdvanceReworkAttemptHandler:
                 events=(),
                 outbox=(),
             )
+
         return await self._uow.execute(context, _hash(locals()), command)

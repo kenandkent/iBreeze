@@ -3,8 +3,7 @@
 Covers design spec sections:
 - G.13 Middleware (audit logging, idempotency)
 """
-import hashlib
-import json
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,8 +33,12 @@ class TestAuditMiddleware:
 
         call_next = AsyncMock(return_value=response)
 
-        with patch("ibreeze_backend.middleware.audit.async_session_factory") as mock_factory, \
-             patch("ibreeze_backend.middleware.audit.write_audit_log") as mock_write:
+        with (
+            patch(
+                "ibreeze_backend.middleware.audit.async_session_factory"
+            ) as mock_factory,
+            patch("ibreeze_backend.middleware.audit.write_audit_log") as mock_write,
+        ):
             mock_session = AsyncMock()
             mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -87,7 +90,9 @@ class TestIdempotencyMiddleware:
 
         call_next = AsyncMock(return_value=response)
 
-        with patch("ibreeze_backend.middleware.idempotency.async_session_factory") as mock_factory:
+        with patch(
+            "ibreeze_backend.middleware.idempotency.async_session_factory"
+        ) as mock_factory:
             mock_session = AsyncMock()
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None
@@ -116,8 +121,12 @@ class TestIdempotencyMiddleware:
         existing.response_body = "different_hash"
         existing.response_status = 200
 
-        with patch("ibreeze_backend.middleware.idempotency.async_session_factory") as mock_factory, \
-             patch("ibreeze_backend.middleware.idempotency._hash_body") as mock_hash:
+        with (
+            patch(
+                "ibreeze_backend.middleware.idempotency.async_session_factory"
+            ) as mock_factory,
+            patch("ibreeze_backend.middleware.idempotency._hash_body") as mock_hash,
+        ):
             mock_session = AsyncMock()
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = existing
@@ -147,7 +156,9 @@ class TestIdempotencyMiddleware:
 
         call_next = AsyncMock(return_value=response)
 
-        with patch("ibreeze_backend.middleware.idempotency.async_session_factory") as mock_factory:
+        with patch(
+            "ibreeze_backend.middleware.idempotency.async_session_factory"
+        ) as mock_factory:
             mock_session = AsyncMock()
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None

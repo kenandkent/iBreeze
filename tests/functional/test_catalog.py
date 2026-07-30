@@ -4,6 +4,7 @@ Covers design spec sections:
 - G.5 Skill Catalog (Agent/Model/Provider CRUD)
 - Skill schema validation
 """
+
 import uuid
 from unittest.mock import AsyncMock
 
@@ -14,13 +15,16 @@ import pytest
 # Schema validation
 # ---------------------------------------------------------------------------
 
+
 class TestSkillSchemas:
     """Pydantic schema validation for skills."""
 
     def test_skill_create_valid(self):
         from ibreeze_backend.skills.schemas import SkillCreate
 
-        skill = SkillCreate(key="my-skill", display_name="My Skill", description="A test skill")
+        skill = SkillCreate(
+            key="my-skill", display_name="My Skill", description="A test skill"
+        )
         assert skill.key == "my-skill"
         assert skill.display_name == "My Skill"
 
@@ -86,6 +90,7 @@ class TestSkillSchemas:
 # Skill service
 # ---------------------------------------------------------------------------
 
+
 class TestSkillService:
     """Skill service CRUD operations."""
 
@@ -94,7 +99,9 @@ class TestSkillService:
         from ibreeze_backend.skills.schemas import SkillCreate
         from ibreeze_backend.skills.service import create_skill
 
-        body = SkillCreate(key="my-skill", display_name="My Skill", description="A skill")
+        body = SkillCreate(
+            key="my-skill", display_name="My Skill", description="A skill"
+        )
         mock_db_session.scalar = AsyncMock(return_value=0)
         skill = await create_skill(mock_db_session, body)
         assert skill.key == "my-skill"

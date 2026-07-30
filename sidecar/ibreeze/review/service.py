@@ -266,9 +266,7 @@ async def create_review_issue(
     issue_id = _id()
     now = _now()
     evidence_refs = json.dumps(
-        [{"file_path": file_path, "line_number": line_number}]
-        if file_path is not None
-        else [],
+        [{"file_path": file_path, "line_number": line_number}] if file_path is not None else [],
         separators=(",", ":"),
     )
 

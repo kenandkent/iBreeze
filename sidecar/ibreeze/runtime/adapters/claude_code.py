@@ -34,8 +34,10 @@ class ClaudeCodeAdapter:
         permission_mode = spec.get("permission_mode", "acceptEdits")
         cmd = [
             "claude",
-            "--model", model,
-            "--permission-mode", permission_mode,
+            "--model",
+            model,
+            "--permission-mode",
+            permission_mode,
             "--print",
             prompt_file,
         ]
@@ -72,5 +74,6 @@ class ClaudeCodeAdapter:
             Checkpoint ref string.
         """
         import hashlib
+
         raw = json.dumps(native_state, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()[:32]

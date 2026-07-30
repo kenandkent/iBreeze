@@ -7,8 +7,6 @@ import * as apiClient from '../utils/apiClient';
 const mockApiGet = vi.spyOn(apiClient, 'apiGet');
 const mockApiPost = vi.spyOn(apiClient, 'apiPost');
 const mockApiDelete = vi.spyOn(apiClient, 'apiDelete');
-const mockApiUpload = vi.spyOn(apiClient, 'apiUpload');
-
 function renderPage() {
   const qc = createTestQueryClient();
   return render(<TestProviders qc={qc}><SkillPage /></TestProviders>);

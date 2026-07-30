@@ -1,8 +1,7 @@
 """Tests for repository layout existence - P0-T01."""
-import os
+
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).parent.parent.parent
 
@@ -56,7 +55,9 @@ def test_backend_api_pyproject():
 
 
 def test_backend_api_main():
-    assert (ROOT / "apps" / "backend-api" / "src" / "ibreeze_backend" / "main.py").exists()
+    assert (
+        ROOT / "apps" / "backend-api" / "src" / "ibreeze_backend" / "main.py"
+    ).exists()
 
 
 def test_gitignore():
@@ -84,4 +85,6 @@ def test_sidecar_init():
 
 
 def test_backend_api_init():
-    assert (ROOT / "apps" / "backend-api" / "src" / "ibreeze_backend" / "__init__.py").exists()
+    assert (
+        ROOT / "apps" / "backend-api" / "src" / "ibreeze_backend" / "__init__.py"
+    ).exists()

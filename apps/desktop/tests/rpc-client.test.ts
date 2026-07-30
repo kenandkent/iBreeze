@@ -6,7 +6,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 const mockInvoke = vi.mocked((await import('@tauri-apps/api/core')).invoke);
 
-const { createRpcRequest, isReadOperation, systemHealth } = await import('../src/shared/rpcClient');
+const { createRpcRequest, systemHealth } = await import('../src/shared/rpcClient');
+const { isReadOperation } = await import('../src/generated/rpc/method_kinds.ts');
 
 describe('isReadOperation', () => {
   it('returns true for get operations', () => {

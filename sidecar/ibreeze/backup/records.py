@@ -13,11 +13,7 @@ def _id() -> str:
 
 
 def _now() -> str:
-    return (
-        datetime.now(UTC)
-        .isoformat(timespec="microseconds")
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 async def create_backup_record(
@@ -54,21 +50,17 @@ async def complete_backup_record(db: Any, record_id: str) -> dict[str, Any]:
     """Mark a backup record as completed."""
     now = _now()
     await db.execute(
-        "UPDATE backup_records SET status = 'completed', completed_at = ? "
-        "WHERE id = ?",
+        "UPDATE backup_records SET status = 'completed', completed_at = ? WHERE id = ?",
         (now, record_id),
     )
     return {"record_id": record_id, "status": "completed", "completed_at": now}
 
 
-async def fail_backup_record(
-    db: Any, record_id: str, error_code: str
-) -> dict[str, Any]:
+async def fail_backup_record(db: Any, record_id: str, error_code: str) -> dict[str, Any]:
     """Mark a backup record as failed."""
     now = _now()
     await db.execute(
-        "UPDATE backup_records SET status = 'failed', error_code = ?, "
-        "completed_at = ? WHERE id = ?",
+        "UPDATE backup_records SET status = 'failed', error_code = ?, completed_at = ? WHERE id = ?",
         (error_code, now, record_id),
     )
     return {
@@ -80,9 +72,7 @@ async def fail_backup_record(
 
 async def list_backup_records(db: Any) -> list[dict[str, Any]]:
     """List all backup records ordered by creation time."""
-    cursor = await db.execute(
-        "SELECT * FROM backup_records ORDER BY created_at DESC"
-    )
+    cursor = await db.execute("SELECT * FROM backup_records ORDER BY created_at DESC")
     rows = await cursor.fetchall()
     return [dict(r) for r in rows] if rows else []
 

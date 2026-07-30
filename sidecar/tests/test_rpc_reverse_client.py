@@ -99,8 +99,9 @@ class TestReverseClient:
         await client.notify("notification.method", {"data": "test"})
         writer.write.assert_called_once()
         written_data = writer.write.call_args[0][0]
-        import struct, json
-        length = struct.unpack(">I", written_data[:4])[0]
+        import json
+        import struct
+        struct.unpack(">I", written_data[:4])[0]
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["jsonrpc"] == "2.0"
         assert payload["method"] == "notification.method"

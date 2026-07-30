@@ -1,7 +1,7 @@
 """Tests for Desktop React UI - P9.
 验证前端不再有 mock 实现，所有 hook 均通过 Tauri IPC 调用真实后端。
 """
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

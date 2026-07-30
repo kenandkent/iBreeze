@@ -4,9 +4,10 @@ Covers design spec sections:
 - G.11 Authentication (access token, refresh token families, rotation, revocation)
 - Token algorithm, expiry, payload structure
 """
+
 import uuid
 from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,6 +24,7 @@ def _mock_jwt_user(user_type="admin"):
 # ---------------------------------------------------------------------------
 # Token creation & verification
 # ---------------------------------------------------------------------------
+
 
 class TestTokenCreation:
     """JWT access token creation."""
@@ -72,6 +74,7 @@ class TestTokenCreation:
 
         token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         import jwt as _jwt_mod
+
         header = _jwt_mod.get_unverified_header(token)
         assert header["alg"] == "EdDSA"
 
@@ -93,7 +96,9 @@ class TestTokenVerification:
     def test_verify_invalid_token_returns_none(self):
         from ibreeze_backend.auth.service import verify_token
 
-        assert verify_token("not.a.valid.token", expected_audience="ibreeze-admin") is None
+        assert (
+            verify_token("not.a.valid.token", expected_audience="ibreeze-admin") is None
+        )
 
     def test_verify_tampered_token_returns_none(self, mock_user):
         from ibreeze_backend.auth.service import (
@@ -103,7 +108,14 @@ class TestTokenVerification:
 
         token = create_access_token(mock_user, uuid.uuid4(), "ibreeze-admin")
         parts = token.split(".")
-        tampered = parts[0] + "." + parts[1][:-1] + ("A" if parts[1][-1] != "A" else "B") + "." + parts[2]
+        tampered = (
+            parts[0]
+            + "."
+            + parts[1][:-1]
+            + ("A" if parts[1][-1] != "A" else "B")
+            + "."
+            + parts[2]
+        )
         assert verify_token(tampered, expected_audience="ibreeze-admin") is None
 
     def test_verify_empty_string_returns_none(self):
@@ -115,7 +127,12 @@ class TestTokenVerification:
         from ibreeze_backend.auth.service import verify_token
 
         import jwt
-        payload = {"sub": "user1", "aud": "ibreeze-admin", "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
+
+        payload = {
+            "sub": "user1",
+            "aud": "ibreeze-admin",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        }
         token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
         assert verify_token(token, expected_audience="ibreeze-admin") is None
 
@@ -153,6 +170,7 @@ class TestTokenExpiry:
 # Token families
 # ---------------------------------------------------------------------------
 
+
 class TestTokenFamily:
     """Token family creation and lifecycle."""
 
@@ -161,7 +179,9 @@ class TestTokenFamily:
         from ibreeze_backend.auth.service import _create_token_family
 
         user_id = uuid.uuid4()
-        family, token, raw_token = await _create_token_family(mock_db_session, user_id, uuid.uuid4())
+        family, token, raw_token = await _create_token_family(
+            mock_db_session, user_id, uuid.uuid4()
+        )
 
         assert family.user_id == user_id
         assert isinstance(raw_token, str)
@@ -188,12 +208,20 @@ class TestTokenRotation:
             create_access_token,
             refresh_tokens as rotate_token,
         )
-        from ibreeze_backend.models.token_family import RefreshTokenFamily
 
         user_id = uuid.uuid4()
         family_id = uuid.uuid4()
 
-        stored_token = MagicMock(spec=["family_id", "revoked_at", "consumed_at", "expires_at", "id", "replaced_by_id"])
+        stored_token = MagicMock(
+            spec=[
+                "family_id",
+                "revoked_at",
+                "consumed_at",
+                "expires_at",
+                "id",
+                "replaced_by_id",
+            ]
+        )
         stored_token.family_id = family_id
         stored_token.revoked_at = None
         stored_token.consumed_at = None
@@ -214,6 +242,7 @@ class TestTokenRotation:
         _mock_user.status = "active"
 
         call_count = [0]
+
         def side_effect(stmt):
             call_count[0] += 1
             result = MagicMock()
@@ -264,8 +293,13 @@ class TestTokenRotation:
             await rotate_token(mock_db_session, token, "ibreeze-admin")
 
     @pytest.mark.asyncio
-    async def test_rotate_token_with_nonexistent_family_returns_none(self, mock_db_session):
-        from ibreeze_backend.auth.service import refresh_tokens as rotate_token, create_access_token
+    async def test_rotate_token_with_nonexistent_family_returns_none(
+        self, mock_db_session
+    ):
+        from ibreeze_backend.auth.service import (
+            refresh_tokens as rotate_token,
+            create_access_token,
+        )
 
         token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
         mock_result = MagicMock()
@@ -277,11 +311,15 @@ class TestTokenRotation:
 
     @pytest.mark.asyncio
     async def test_rotate_already_rotated_family_returns_none(self, mock_db_session):
-        from ibreeze_backend.auth.service import refresh_tokens as rotate_token, create_access_token
+        from ibreeze_backend.auth.service import (
+            refresh_tokens as rotate_token,
+            create_access_token,
+        )
 
         token = create_access_token(_mock_jwt_user(), uuid.uuid4(), "ibreeze-admin")
 
         call_count = [0]
+
         def side_effect(stmt):
             call_count[0] += 1
             result = MagicMock()
@@ -292,7 +330,9 @@ class TestTokenRotation:
                 family.revoked_at = datetime.now(UTC)
                 result.scalar_one.return_value = family
             else:
-                result.scalar_one_or_none.return_value = MagicMock(user_type="admin", status="active")
+                result.scalar_one_or_none.return_value = MagicMock(
+                    user_type="admin", status="active"
+                )
             return result
 
         mock_db_session.execute.side_effect = side_effect
@@ -306,7 +346,10 @@ class TestTokenRevocation:
 
     @pytest.mark.asyncio
     async def test_revoke_existing_family(self, mock_db_session):
-        from ibreeze_backend.auth.service import logout as revoke_family, create_access_token
+        from ibreeze_backend.auth.service import (
+            logout as revoke_family,
+            create_access_token,
+        )
 
         family = MagicMock()
         family.status = "active"
@@ -320,7 +363,10 @@ class TestTokenRevocation:
 
     @pytest.mark.asyncio
     async def test_revoke_nonexistent_family(self, mock_db_session):
-        from ibreeze_backend.auth.service import logout as revoke_family, create_access_token
+        from ibreeze_backend.auth.service import (
+            logout as revoke_family,
+            create_access_token,
+        )
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -334,6 +380,7 @@ class TestTokenRevocation:
 # ---------------------------------------------------------------------------
 # Register, login, refresh, logout, change password (auth.service)
 # ---------------------------------------------------------------------------
+
 
 class TestRegister:
     """Registration flow."""
@@ -391,7 +438,13 @@ class TestLogin:
         mock_result.scalar_one_or_none.return_value = user
         mock_db_session.execute.return_value = mock_result
 
-        result = await login(mock_db_session, "test@ibreeze.local", "correct_password", "admin", uuid.uuid4())
+        result = await login(
+            mock_db_session,
+            "test@ibreeze.local",
+            "correct_password",
+            "admin",
+            uuid.uuid4(),
+        )
         assert "access_token" in result
         assert "refresh_token" in result
         assert result["token_type"] == "bearer"
@@ -414,7 +467,13 @@ class TestLogin:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="Invalid credentials"):
-            await login(mock_db_session, "test@ibreeze.local", "wrong_password", "admin", uuid.uuid4())
+            await login(
+                mock_db_session,
+                "test@ibreeze.local",
+                "wrong_password",
+                "admin",
+                uuid.uuid4(),
+            )
 
     @pytest.mark.asyncio
     async def test_login_nonexistent_user(self, mock_db_session):
@@ -425,7 +484,13 @@ class TestLogin:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="Invalid credentials"):
-            await login(mock_db_session, "nobody@ibreeze.local", "password", "admin", uuid.uuid4())
+            await login(
+                mock_db_session,
+                "nobody@ibreeze.local",
+                "password",
+                "admin",
+                uuid.uuid4(),
+            )
 
     @pytest.mark.asyncio
     async def test_login_disabled_account(self, mock_db_session):
@@ -443,7 +508,9 @@ class TestLogin:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="Invalid credentials"):
-            await login(mock_db_session, "test@ibreeze.local", "password", "admin", uuid.uuid4())
+            await login(
+                mock_db_session, "test@ibreeze.local", "password", "admin", uuid.uuid4()
+            )
 
     @pytest.mark.asyncio
     async def test_login_wrong_audience(self, mock_db_session):
@@ -462,7 +529,9 @@ class TestLogin:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="Invalid credentials"):
-            await login(mock_db_session, "test@ibreeze.local", "password", "admin", uuid.uuid4())
+            await login(
+                mock_db_session, "test@ibreeze.local", "password", "admin", uuid.uuid4()
+            )
 
 
 class TestRefreshTokens:
@@ -582,7 +651,14 @@ class TestChangePassword:
         mock_result.scalar_one_or_none.return_value = user
         mock_db_session.execute.return_value = mock_result
 
-        result = await change_password(mock_db_session, user.id, "old_password", "new_password", uuid.uuid4(), "admin")
+        result = await change_password(
+            mock_db_session,
+            user.id,
+            "old_password",
+            "new_password",
+            uuid.uuid4(),
+            "admin",
+        )
         assert "access_token" in result
         assert "refresh_token" in result
         assert user.must_change_password is False
@@ -602,7 +678,14 @@ class TestChangePassword:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="Invalid password"):
-            await change_password(mock_db_session, user.id, "wrong_old", "new_password", uuid.uuid4(), "admin")
+            await change_password(
+                mock_db_session,
+                user.id,
+                "wrong_old",
+                "new_password",
+                uuid.uuid4(),
+                "admin",
+            )
 
     @pytest.mark.asyncio
     async def test_change_password_nonexistent_user(self, mock_db_session):
@@ -613,12 +696,15 @@ class TestChangePassword:
         mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(ValueError, match="User not found"):
-            await change_password(mock_db_session, uuid.uuid4(), "old", "new", uuid.uuid4(), "admin")
+            await change_password(
+                mock_db_session, uuid.uuid4(), "old", "new", uuid.uuid4(), "admin"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Audience separation & dependency injection
 # ---------------------------------------------------------------------------
+
 
 class TestAudienceSeparation:
     """Admin vs app audience separation."""

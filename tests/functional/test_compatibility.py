@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.5 Compatibility rules CRUD
 """
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------------
+
 
 class TestRuleSchemas:
     """Pydantic schema validation for compatibility rules."""
@@ -71,6 +73,7 @@ class TestRuleSchemas:
 # ---------------------------------------------------------------------------
 # Compatibility service
 # ---------------------------------------------------------------------------
+
 
 class TestCompatibilityRule:
     """Compatibility rule service CRUD."""

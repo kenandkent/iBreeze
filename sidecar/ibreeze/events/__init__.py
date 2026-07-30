@@ -121,9 +121,7 @@ class EventPublisher:
         callback: Any,
     ) -> None:
         if event_type in self._subscribers:
-            self._subscribers[event_type] = [
-                cb for cb in self._subscribers[event_type] if cb != callback
-            ]
+            self._subscribers[event_type] = [cb for cb in self._subscribers[event_type] if cb != callback]
 
     def get_sequence(self, run_id: str, company_id: str) -> int:
         key = f"{run_id}:{company_id}"

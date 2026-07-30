@@ -69,6 +69,7 @@ class WriteQueue:
     async def barrier(self, timeout: float = 10.0) -> None:
         async def _noop(_conn: aiosqlite.Connection) -> None:
             return None
+
         envelope = WriteEnvelope(
             command_name="__barrier__",
             trace_id=UUID(int=0),

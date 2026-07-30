@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.15 Cryptographic signing (Ed25519)
 """
+
 import pytest
 
 

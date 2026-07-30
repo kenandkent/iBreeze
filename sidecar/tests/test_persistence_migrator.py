@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
 
 from ibreeze.persistence.migrator import (
-    MIGRATIONS_DIR,
     MigrationRunner,
     PreparedProfileDatabase,
     ProfileFileLock,
@@ -314,7 +312,6 @@ class TestMigrationRunnerApplyAll:
         db.row_factory = aiosqlite.Row
         try:
             real_execute = db.execute
-            real_executescript = db.executescript
 
             async def _mock_execute(sql, parameters=()):
                 if "integrity_check" in sql:

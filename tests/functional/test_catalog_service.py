@@ -3,8 +3,9 @@
 Covers design spec sections:
 - G.5 Catalog Service (status machine, immutable published, draft copy)
 """
+
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -31,6 +32,7 @@ def _mock_scalars(items):
 # Agent CRUD
 # ---------------------------------------------------------------------------
 
+
 class TestAgentCatalog:
     """Agent catalog CRUD."""
 
@@ -39,7 +41,9 @@ class TestAgentCatalog:
         from ibreeze_backend.catalog.service import create_agent
 
         mock_db_session.execute.return_value = _mock_result(None)
-        agent = await create_agent(mock_db_session, "test-agent", "Test Agent", "A test agent")
+        agent = await create_agent(
+            mock_db_session, "test-agent", "Test Agent", "A test agent"
+        )
         assert agent.key == "test-agent"
         assert agent.display_name == "Test Agent"
         # status 由 mapped_column(default="draft") 在 INSERT 时设置，实例化时为 None
@@ -63,14 +67,16 @@ class TestAgentCatalog:
         agent.catalog_revision = 1
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] <= 2:
                 return _mock_result(agent)
             return _mock_result(None)
+
         mock_db_session.execute.side_effect = side_effect
 
-        result = await transition_agent_status(mock_db_session, agent.id, "validated")
+        await transition_agent_status(mock_db_session, agent.id, "validated")
         assert agent.status == "validated"
         assert agent.catalog_revision == 2
 
@@ -83,14 +89,16 @@ class TestAgentCatalog:
         agent.catalog_revision = 2
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] <= 2:
                 return _mock_result(agent)
             return _mock_result(None)
+
         mock_db_session.execute.side_effect = side_effect
 
-        result = await transition_agent_status(mock_db_session, agent.id, "published")
+        await transition_agent_status(mock_db_session, agent.id, "published")
         assert agent.status == "published"
         assert agent.catalog_revision == 3
 
@@ -140,11 +148,13 @@ class TestAgentCatalog:
         version.content_sha256 = "abc"
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] <= 2:
                 return _mock_result(source)
             return _mock_scalars([version])
+
         mock_db_session.execute.side_effect = side_effect
 
         new_agent = await copy_agent_to_draft(mock_db_session, source.id)
@@ -157,6 +167,7 @@ class TestAgentCatalog:
 # Model CRUD
 # ---------------------------------------------------------------------------
 
+
 class TestModelCatalog:
     """Model catalog CRUD."""
 
@@ -165,9 +176,14 @@ class TestModelCatalog:
         from ibreeze_backend.catalog.service import create_model
 
         model = await create_model(
-            mock_db_session, "openai", "gpt-4", "GPT-4",
-            context_window=8192, supports_tools=True,
-            supports_streaming=True, supports_vision=False,
+            mock_db_session,
+            "openai",
+            "gpt-4",
+            "GPT-4",
+            context_window=8192,
+            supports_tools=True,
+            supports_streaming=True,
+            supports_vision=False,
         )
         assert model.provider_key == "openai"
         assert model.model_key == "gpt-4"
@@ -179,6 +195,7 @@ class TestModelCatalog:
 # ---------------------------------------------------------------------------
 # Provider CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestProviderCatalog:
     """Provider catalog CRUD."""
@@ -201,6 +218,7 @@ class TestProviderCatalog:
 # Agent-Model binding
 # ---------------------------------------------------------------------------
 
+
 class TestAgentModelBinding:
     """Agent-Model and Provider-Model bindings."""
 
@@ -214,14 +232,18 @@ class TestAgentModelBinding:
         model.id = uuid.uuid4()
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] == 1:
                 return _mock_result(agent)
             return _mock_result(model)
+
         mock_db_session.execute.side_effect = side_effect
 
-        binding = await create_agent_model_binding(mock_db_session, agent.id, model.id, {"min": "1.0"})
+        binding = await create_agent_model_binding(
+            mock_db_session, agent.id, model.id, {"min": "1.0"}
+        )
         assert binding.agent_id == agent.id
         assert binding.model_id == model.id
         mock_db_session.add.assert_called_once()
@@ -236,11 +258,13 @@ class TestAgentModelBinding:
         model.id = uuid.uuid4()
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] == 1:
                 return _mock_result(provider)
             return _mock_result(model)
+
         mock_db_session.execute.side_effect = side_effect
 
         binding = await create_provider_model_binding(

@@ -17,7 +17,9 @@ REQUIRED_WORKFLOWS = {
 def test_ci_workflows_are_tracked_in_git() -> None:
     result = subprocess.run(
         ["git", "ls-files", f"{GITHUB_WORKFLOWS_PREFIX}/"],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
     )
     assert result.returncode == 0, f"git ls-files failed: {result.stderr}"
     workflows = [f for f in result.stdout.strip().split("\n") if f.strip()]
@@ -30,8 +32,14 @@ def test_ci_workflows_are_tracked_in_git() -> None:
 def test_required_workflows_exist() -> None:
     result = subprocess.run(
         ["git", "ls-files", f"{GITHUB_WORKFLOWS_PREFIX}/"],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
     )
-    workflows = {f.removeprefix(f"{GITHUB_WORKFLOWS_PREFIX}/") for f in result.stdout.strip().split("\n") if f.strip()}
+    workflows = {
+        f.removeprefix(f"{GITHUB_WORKFLOWS_PREFIX}/")
+        for f in result.stdout.strip().split("\n")
+        if f.strip()
+    }
     missing = REQUIRED_WORKFLOWS - workflows
     assert not missing, f"Required workflows missing from git tracking: {missing}"

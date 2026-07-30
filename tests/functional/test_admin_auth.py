@@ -1,15 +1,22 @@
 """Test admin authentication flow - login, refresh, logout."""
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import AsyncClient
+
 
 @pytest.mark.asyncio
-async def test_login_refresh_logout_flow(app_client: AsyncClient, admin_credentials: dict):
+async def test_login_refresh_logout_flow(
+    app_client: AsyncClient, admin_credentials: dict
+):
     # Login
-    login_resp = await app_client.post("/admin/api/v1/auth/login", json={
-        "identifier": admin_credentials["identifier"],
-        "password": admin_credentials["password"],
-        "device_id": "00000000-0000-0000-0000-000000000001",
-    })
+    login_resp = await app_client.post(
+        "/admin/api/v1/auth/login",
+        json={
+            "identifier": admin_credentials["identifier"],
+            "password": admin_credentials["password"],
+            "device_id": "00000000-0000-0000-0000-000000000001",
+        },
+    )
     assert login_resp.status_code == 200
     data = login_resp.json()
     assert "data" in data

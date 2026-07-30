@@ -3,6 +3,7 @@
 Covers design spec sections:
 - H.4 Local Database (WAL mode, CRUD, search, compact)
 """
+
 import pytest
 import pytest_asyncio
 
@@ -110,18 +111,40 @@ class TestLocalDB:
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).isoformat()
-        await db.insert("companies", {
-            "id": "c1", "name": "A", "email": None, "phone": None,
-            "unified_credit_code": None, "business_license_url": None,
-            "legal_rep_id_card": None, "industry": None, "address": None,
-            "status": "active", "created_at": now, "updated_at": now,
-        })
-        await db.insert("companies", {
-            "id": "c2", "name": "B", "email": None, "phone": None,
-            "unified_credit_code": None, "business_license_url": None,
-            "legal_rep_id_card": None, "industry": None, "address": None,
-            "status": "inactive", "created_at": now, "updated_at": now,
-        })
+        await db.insert(
+            "companies",
+            {
+                "id": "c1",
+                "name": "A",
+                "email": None,
+                "phone": None,
+                "unified_credit_code": None,
+                "business_license_url": None,
+                "legal_rep_id_card": None,
+                "industry": None,
+                "address": None,
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        await db.insert(
+            "companies",
+            {
+                "id": "c2",
+                "name": "B",
+                "email": None,
+                "phone": None,
+                "unified_credit_code": None,
+                "business_license_url": None,
+                "legal_rep_id_card": None,
+                "industry": None,
+                "address": None,
+                "status": "inactive",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
         active = await db.list_all("companies", filters={"status": "active"})
         assert len(active) == 1
@@ -133,13 +156,23 @@ class TestLocalDB:
 
         now = datetime.now(timezone.utc).isoformat()
         for i in range(5):
-            await db.insert("companies", {
-                "id": f"c{i}", "name": f"Company {i}", "email": None,
-                "phone": None, "unified_credit_code": None,
-                "business_license_url": None, "legal_rep_id_card": None,
-                "industry": None, "address": None, "status": "active",
-                "created_at": now, "updated_at": now,
-            })
+            await db.insert(
+                "companies",
+                {
+                    "id": f"c{i}",
+                    "name": f"Company {i}",
+                    "email": None,
+                    "phone": None,
+                    "unified_credit_code": None,
+                    "business_license_url": None,
+                    "legal_rep_id_card": None,
+                    "industry": None,
+                    "address": None,
+                    "status": "active",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
 
         page = await db.list_all("companies", limit=2, offset=0)
         assert len(page) == 2
@@ -150,13 +183,23 @@ class TestLocalDB:
 
         now = datetime.now(timezone.utc).isoformat()
         for i in range(3):
-            await db.insert("companies", {
-                "id": f"c{i}", "name": f"Company {i}", "email": None,
-                "phone": None, "unified_credit_code": None,
-                "business_license_url": None, "legal_rep_id_card": None,
-                "industry": None, "address": None, "status": "active",
-                "created_at": now, "updated_at": now,
-            })
+            await db.insert(
+                "companies",
+                {
+                    "id": f"c{i}",
+                    "name": f"Company {i}",
+                    "email": None,
+                    "phone": None,
+                    "unified_credit_code": None,
+                    "business_license_url": None,
+                    "legal_rep_id_card": None,
+                    "industry": None,
+                    "address": None,
+                    "status": "active",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
 
         total = await db.count("companies")
         assert total == 3
@@ -166,13 +209,23 @@ class TestLocalDB:
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).isoformat()
-        await db.insert("companies", {
-            "id": "c1", "name": "Acme Corp", "email": "admin@acme.com",
-            "phone": None, "unified_credit_code": None,
-            "business_license_url": None, "legal_rep_id_card": None,
-            "industry": None, "address": None, "status": "active",
-            "created_at": now, "updated_at": now,
-        })
+        await db.insert(
+            "companies",
+            {
+                "id": "c1",
+                "name": "Acme Corp",
+                "email": "admin@acme.com",
+                "phone": None,
+                "unified_credit_code": None,
+                "business_license_url": None,
+                "legal_rep_id_card": None,
+                "industry": None,
+                "address": None,
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
         results = await db.search("companies", "Acme")
         assert len(results) == 1
@@ -183,12 +236,23 @@ class TestLocalDB:
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).isoformat()
-        await db.insert("companies", {
-            "id": "c1", "name": "Test", "email": None, "phone": None,
-            "unified_credit_code": None, "business_license_url": None,
-            "legal_rep_id_card": None, "industry": None, "address": None,
-            "status": "active", "created_at": now, "updated_at": now,
-        })
+        await db.insert(
+            "companies",
+            {
+                "id": "c1",
+                "name": "Test",
+                "email": None,
+                "phone": None,
+                "unified_credit_code": None,
+                "business_license_url": None,
+                "legal_rep_id_card": None,
+                "industry": None,
+                "address": None,
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
         await db.compact()
         count = await db.count("companies")

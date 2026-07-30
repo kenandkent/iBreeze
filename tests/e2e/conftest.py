@@ -19,4 +19,5 @@ for _p in (_backend_root, _sidecar_root):
 def app():
     """Import and return the FastAPI application."""
     from ibreeze_backend.main import app as fastapi_app
+
     return fastapi_app

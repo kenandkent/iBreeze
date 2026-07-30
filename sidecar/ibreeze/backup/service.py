@@ -22,14 +22,16 @@ import zstandard as zstd
 
 from ibreeze.persistence.write_queue import WriteQueue
 
-_SENSITIVE_FILES: frozenset[str] = frozenset({
-    "secrets.json",
-    "keys.db",
-    ".env",
-    "credentials.json",
-    "id_rsa",
-    "id_ed25519",
-})
+_SENSITIVE_FILES: frozenset[str] = frozenset(
+    {
+        "secrets.json",
+        "keys.db",
+        ".env",
+        "credentials.json",
+        "id_rsa",
+        "id_ed25519",
+    }
+)
 
 
 def _id() -> str:
@@ -51,9 +53,7 @@ def _sha256_file(path: Path) -> str:
 def _compute_table_stats(db_path: Path) -> dict[str, int]:
     conn = sqlite3.connect(str(db_path))
     try:
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         tables = [row[0] for row in cursor.fetchall()]
         stats = {}
         for table in tables:
@@ -69,9 +69,7 @@ def _collect_external_refs(db_path: Path) -> dict[str, list[dict[str, Any]]]:
     refs: dict[str, list[dict[str, Any]]] = {}
     conn = sqlite3.connect(str(db_path))
     try:
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         for row in cursor.fetchall():
             table = row[0]
             fk_cursor = conn.execute(f"PRAGMA foreign_key_list([{table}])")
@@ -118,11 +116,13 @@ def _archive_backup_package(
                             if fsize > max_cas_file:
                                 continue
                             fhash = _sha256_file(Path(fpath))
-                            manifest["files"].append({
-                                "path": arcname,
-                                "sha256": fhash,
-                                "size": fsize,
-                            })
+                            manifest["files"].append(
+                                {
+                                    "path": arcname,
+                                    "sha256": fhash,
+                                    "size": fsize,
+                                }
+                            )
                             tar.add(fpath, arcname=arcname)
                 manifest_bytes = json.dumps(manifest, indent=2).encode()
                 manifest_info = tarfile.TarInfo(name="manifest.json")
@@ -320,6 +320,7 @@ async def apply_retention_policy(
         backup_path = backup_dir / backup["backup_id"]
         if backup_path.exists():
             import shutil
+
             shutil.rmtree(backup_path)
             deleted += 1
 
@@ -336,5 +337,6 @@ async def delete_backup(backup_dir: Path, backup_id: str) -> dict[str, Any]:
         raise ValueError("BACKUP_NOT_FOUND")
 
     import shutil
+
     shutil.rmtree(backup_path)
     return {"backup_id": backup_id, "deleted": True}

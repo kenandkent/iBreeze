@@ -1,5 +1,5 @@
 """Tests for backend deployment and Docker Compose configuration."""
-import pytest
+
 from pathlib import Path
 import json
 
@@ -57,7 +57,9 @@ def test_rust_commands_has_register():
     """commands.rs 必须有 register 命令。"""
     commands = ROOT / "apps" / "desktop-core" / "src" / "commands.rs"
     content = commands.read_text()
-    assert "pub async fn auth_register" in content, "commands.rs must have auth_register command"
+    assert "pub async fn auth_register" in content, (
+        "commands.rs must have auth_register command"
+    )
     assert "ApiClient" in content, "commands.rs must use ApiClient"
 
 

@@ -360,25 +360,31 @@ async def resolve_issue(
     if issue_row["status"] != "fixing":
         raise ValueError("ISSUE_NOT_IN_FIXING_STATE")
 
-    artifact = await (await db.execute(
-        """SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?""",
-        (company_id, resolution_artifact_sha256),
-    )).fetchone()
+    artifact = await (
+        await db.execute(
+            """SELECT id FROM artifacts WHERE company_id=? AND object_sha256=?""",
+            (company_id, resolution_artifact_sha256),
+        )
+    ).fetchone()
     if artifact is None:
         raise ValueError("RESOLUTION_ARTIFACT_NOT_FOUND")
 
-    run = await (await db.execute(
-        """SELECT id FROM agent_runs WHERE id=? AND company_id=?""",
-        (fix_run_id, company_id),
-    )).fetchone()
+    run = await (
+        await db.execute(
+            """SELECT id FROM agent_runs WHERE id=? AND company_id=?""",
+            (fix_run_id, company_id),
+        )
+    ).fetchone()
     if run is None:
         raise ValueError("FIX_RUN_NOT_FOUND")
 
-    retest = await (await db.execute(
-        """SELECT id FROM artifacts WHERE id=? AND company_id=?
+    retest = await (
+        await db.execute(
+            """SELECT id FROM artifacts WHERE id=? AND company_id=?
            AND artifact_type='test_result'""",
-        (retest_result_id, company_id),
-    )).fetchone()
+            (retest_result_id, company_id),
+        )
+    ).fetchone()
     if retest is None:
         raise ValueError("RETEST_RESULT_NOT_FOUND")
 

@@ -31,11 +31,13 @@ class AnalysisWorker(BaseWorker):
 
         async def _cleanup(conn: Any) -> int:
             now = _now()
-            expired = await (await conn.execute(
-                """SELECT id, queue_id, job_id, run_id, company_id
+            expired = await (
+                await conn.execute(
+                    """SELECT id, queue_id, job_id, run_id, company_id
                    FROM runtime_leases WHERE expires_at < ?""",
-                (now,),
-            )).fetchall()
+                    (now,),
+                )
+            ).fetchall()
             if not expired:
                 return 0
             for row in expired:

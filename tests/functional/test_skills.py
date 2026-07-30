@@ -3,17 +3,15 @@
 Covers design spec sections:
 - G.8 Skill Management (ZIP validation, signing, storage)
 """
+
 import hashlib
 import zipfile
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 
 # ---------------------------------------------------------------------------
 # ZIP validation
 # ---------------------------------------------------------------------------
+
 
 class TestZipValidation:
     """ZIP structure validation for skill packages."""
@@ -119,7 +117,7 @@ class TestZipValidation:
         from ibreeze_backend.services.zip_service import validate_skill_zip
 
         zip_path = tmp_path / "empty.zip"
-        with zipfile.ZipFile(zip_path, "w") as zf:
+        with zipfile.ZipFile(zip_path, "w"):
             pass  # Empty archive
 
         valid, errors = validate_skill_zip(zip_path)
@@ -131,7 +129,9 @@ class TestZipChecksum:
     """ZIP file checksum computation."""
 
     def test_checksum_sha256(self, tmp_path):
-        from ibreeze_backend.services.zip_service import _file_sha256 as compute_zip_checksum
+        from ibreeze_backend.services.zip_service import (
+            _file_sha256 as compute_zip_checksum,
+        )
 
         zip_path = tmp_path / "test.zip"
         zip_path.write_bytes(b"file content")
@@ -141,7 +141,9 @@ class TestZipChecksum:
         assert checksum == hashlib.sha256(b"file content").hexdigest()
 
     def test_checksum_deterministic(self, tmp_path):
-        from ibreeze_backend.services.zip_service import _file_sha256 as compute_zip_checksum
+        from ibreeze_backend.services.zip_service import (
+            _file_sha256 as compute_zip_checksum,
+        )
 
         zip_path = tmp_path / "test.zip"
         zip_path.write_bytes(b"same content")
@@ -151,7 +153,9 @@ class TestZipChecksum:
         assert c1 == c2
 
     def test_checksum_different_for_different_content(self, tmp_path):
-        from ibreeze_backend.services.zip_service import _file_sha256 as compute_zip_checksum
+        from ibreeze_backend.services.zip_service import (
+            _file_sha256 as compute_zip_checksum,
+        )
 
         p1 = tmp_path / "a.zip"
         p2 = tmp_path / "b.zip"
@@ -176,6 +180,7 @@ class TestSignatureVerification:
 # ---------------------------------------------------------------------------
 # Object storage
 # ---------------------------------------------------------------------------
+
 
 class TestObjectStorage:
     """Local filesystem object storage."""

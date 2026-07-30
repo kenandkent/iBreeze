@@ -52,9 +52,7 @@ class MigrationRunner:
         """)
 
     async def _get_applied(self) -> set[int]:
-        cursor = await self._db.execute(
-            "SELECT version FROM schema_migrations WHERE status = 'completed'"
-        )
+        cursor = await self._db.execute("SELECT version FROM schema_migrations WHERE status = 'completed'")
         return {row[0] async for row in cursor}
 
     async def apply_all(self) -> None:
@@ -80,16 +78,12 @@ class MigrationRunner:
                 cursor = await self._db.execute("PRAGMA foreign_key_check")
                 fk_violations = await cursor.fetchall()
                 if fk_violations:
-                    raise RuntimeError(
-                        f"Migration {version}: foreign key violations: {fk_violations}"
-                    )
+                    raise RuntimeError(f"Migration {version}: foreign key violations: {fk_violations}")
 
                 cursor = await self._db.execute("PRAGMA integrity_check")
                 row = await cursor.fetchone()
                 if row and row[0] != "ok":
-                    raise RuntimeError(
-                        f"Migration {version}: integrity check failed: {row[0]}"
-                    )
+                    raise RuntimeError(f"Migration {version}: integrity check failed: {row[0]}")
 
                 completed_at = _now_iso()
                 await self._db.execute(

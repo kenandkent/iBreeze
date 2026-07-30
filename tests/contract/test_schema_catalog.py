@@ -1,8 +1,8 @@
 """Tests for schema catalog - P0-T02."""
+
 import json
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).parent.parent.parent
 CONTRACTS_DIR = ROOT / "packages" / "contracts"
@@ -37,9 +37,11 @@ def test_domain_events_registry_valid():
     assert "events" in registry
 
 
-_EXCLUDE_FROM_SCHEMA_CHECK = frozenset({
-    "domain-events/registry.v1.json",
-})
+_EXCLUDE_FROM_SCHEMA_CHECK = frozenset(
+    {
+        "domain-events/registry.v1.json",
+    }
+)
 
 
 def test_all_schemas_have_json_schema_2020_12():
@@ -52,9 +54,13 @@ def test_all_schemas_have_json_schema_2020_12():
             if f"{dir_name}/{schema_file.name}" in _EXCLUDE_FROM_SCHEMA_CHECK:
                 continue
             schema = json.loads(schema_file.read_text())
-            if not schema.get("$schema", "").startswith("https://json-schema.org/draft/2020-12"):
-                errors.append(f"{dir_name}/{schema_file.name}: missing or invalid $schema")
-    assert not errors, f"Schema validation errors:\n" + "\n".join(errors)
+            if not schema.get("$schema", "").startswith(
+                "https://json-schema.org/draft/2020-12"
+            ):
+                errors.append(
+                    f"{dir_name}/{schema_file.name}: missing or invalid $schema"
+                )
+    assert not errors, "Schema validation errors:\n" + "\n".join(errors)
 
 
 def test_all_schemas_have_required_fields():
@@ -73,7 +79,7 @@ def test_all_schemas_have_required_fields():
                     missing.append(field)
             if missing:
                 errors.append(f"{dir_name}/{schema_file.name}: missing {missing}")
-    assert not errors, f"Missing fields:\n" + "\n".join(errors)
+    assert not errors, "Missing fields:\n" + "\n".join(errors)
 
 
 def test_no_duplicate_ids():
@@ -94,7 +100,7 @@ def test_no_duplicate_ids():
                     )
                 else:
                     seen_ids[schema_id] = f"{dir_name}/{schema_file.name}"
-    assert not errors, f"Duplicate IDs:\n" + "\n".join(errors)
+    assert not errors, "Duplicate IDs:\n" + "\n".join(errors)
 
 
 def test_meta_schema_has_required_fields():

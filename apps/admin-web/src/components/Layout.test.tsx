@@ -10,7 +10,6 @@ vi.mock('../utils/apiClient', () => ({
 }));
 
 describe('Layout', () => {
-  const mockNavigate = vi.fn();
   const mockLogout = vi.fn();
 
   beforeEach(() => {

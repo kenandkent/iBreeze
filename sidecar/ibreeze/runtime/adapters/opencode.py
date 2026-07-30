@@ -33,7 +33,8 @@ class OpenCodeAdapter:
         model = spec.get("model", "anthropic/claude-sonnet-4-20250514")
         cmd = [
             "opencode",
-            "--model", model,
+            "--model",
+            model,
             "--non-interactive",
             prompt_file,
         ]
@@ -70,5 +71,6 @@ class OpenCodeAdapter:
             Checkpoint ref string.
         """
         import hashlib
+
         raw = json.dumps(native_state, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()[:32]

@@ -1,5 +1,5 @@
 """Tests for Sidecar infrastructure and local persistence - P3."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

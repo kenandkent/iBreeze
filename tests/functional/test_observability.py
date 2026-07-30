@@ -3,8 +3,8 @@
 Covers design spec sections:
 - G.16 Observability (audit logs, metrics, health checks)
 """
+
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

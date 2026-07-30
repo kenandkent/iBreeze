@@ -4,8 +4,9 @@ Covers design spec sections:
 - CT-013 Adapter probe contract (version and capabilities)
 - CT-014 Model transport contract (request/response)
 """
+
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -57,7 +58,6 @@ class TestCLIAdapterContract:
 
     def test_adapter_type_literal(self):
         """CT-013: Adapter types should be restricted to known set."""
-        from ibreeze.runtime.cli import AdapterName
 
         valid = {"codex_cli", "claude_code", "opencode"}
         assert valid == {"codex_cli", "claude_code", "opencode"}

@@ -1,5 +1,5 @@
 """Tests for local conversation and task domain - P4."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

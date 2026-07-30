@@ -25,12 +25,13 @@ class WorkerHealth:
 class BaseWorker:
     name: str = "base"
 
-    def __init__(self) -> None:
+    def __init__(self, write_queue: WriteQueue | None = None) -> None:
         self._state = "stopped"
         self._heartbeat_at = ""
         self._last_success_at: str | None = None
         self._last_error_code: str | None = None
         self._restart_count = 0
+        self._write_queue = write_queue
 
     async def work(self) -> None:
         raise NotImplementedError
@@ -154,9 +155,7 @@ class BackupWorker(BaseWorker):
                    WHERE status='active' AND created_at < ?""",
                 (cutoff,),
             )
-            cursor = await conn.execute(
-                "SELECT COUNT(*) AS cnt FROM backup_manifest WHERE status='active'"
-            )
+            cursor = await conn.execute("SELECT COUNT(*) AS cnt FROM backup_manifest WHERE status='active'")
             row = await cursor.fetchone()
             active_count = row["cnt"] if row else 0
             if active_count < 3:
@@ -193,13 +192,14 @@ class EventCompactionWorker(BaseWorker):
                    WHERE status='delivered' AND delivered_at < ?""",
                 (cutoff,),
             )
-            deleted_outbox = cursor.rowcount
+            deleted_outbox: int = cursor.rowcount
             cursor = await conn.execute(
                 "SELECT COUNT(*) AS cnt FROM domain_events WHERE occurred_at < ?",
                 (cutoff,),
             )
             row = await cursor.fetchone()
-            old_events = row["cnt"] if row else 0
+            old_events: int = row["cnt"] if row else 0
+            deleted_events: int
             if old_events > 10000:
                 cursor = await conn.execute(
                     """DELETE FROM domain_events
@@ -218,4 +218,3 @@ class EventCompactionWorker(BaseWorker):
             await wq.submit("event.compact", UUID(int=0), deadline, _compact)
         except Exception:
             logger.exception("EventCompactionWorker failed")
-

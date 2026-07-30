@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.9 Catalog Release (manifest, signing, publish, emergency disable)
 """
+
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
@@ -65,7 +66,11 @@ class TestManifestGeneration:
         version_result_2 = MagicMock()
         version_result_2.scalar_one_or_none.return_value = sv2
 
-        mock_db_session.execute.side_effect = [skills_result, version_result_1, version_result_2]
+        mock_db_session.execute.side_effect = [
+            skills_result,
+            version_result_1,
+            version_result_2,
+        ]
 
         manifest = await build_manifest(mock_db_session, sequence=3)
         assert manifest["release_sequence"] == 3
@@ -98,7 +103,9 @@ class TestManifestGeneration:
         from ibreeze_backend.releases.manifest import build_manifest
 
         skill_id = uuid.uuid4()
-        skill = _make_skill(id=skill_id, key="alpha", display_name="Alpha Skill", version=5)
+        skill = _make_skill(
+            id=skill_id, key="alpha", display_name="Alpha Skill", version=5
+        )
         sv = _make_skill_version(content_sha256="deadbeef")
 
         skills_result = MagicMock()
@@ -141,8 +148,6 @@ class TestReleaseLifecycle:
         mock_db_session.execute.return_value = mock_result
 
         from ibreeze_backend.releases.router import publish_release_endpoint
-        from fastapi import Request
-        from starlette.datastructures import Headers
 
         request = MagicMock()
         request.state.request_id = str(uuid.uuid4())

@@ -4,8 +4,27 @@
 // 120 total methods (50 read, 70 write)
 
 /// Returns `true` when the method is a read (idempotent, safe to retry without idempotency key).
+/// Returns `None` when the method is not in the registry.
 pub fn method_is_read(method: &str) -> Option<bool> {
-    Some(method_matches(method, &READ_METHODS))
+    if method_matches(method, READ_METHODS) {
+        Some(true)
+    } else if method_matches(method, WRITE_METHODS) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Returns `true` when the method is a write (requires idempotency key).
+/// Returns `None` when the method is not in the registry.
+pub fn method_is_write(method: &str) -> Option<bool> {
+    if method_matches(method, WRITE_METHODS) {
+        Some(true)
+    } else if method_matches(method, READ_METHODS) {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 const READ_METHODS: &[&str] = &[
@@ -60,11 +79,6 @@ const READ_METHODS: &[&str] = &[
     "workspace.get",
     "workspace.list",
 ];
-
-/// Returns `true` when the method is a write (requires idempotency key).
-pub fn method_is_write(method: &str) -> Option<bool> {
-    Some(method_matches(method, &WRITE_METHODS))
-}
 
 const WRITE_METHODS: &[&str] = &[
     "approval.resolve",

@@ -6,9 +6,8 @@ Covers design spec sections:
 - CT-009 system.health response contract
 - CT-010 credential.http.* method availability
 """
-import json
 
-import pytest
+import json
 
 
 class TestRustSidecarContract:
@@ -97,11 +96,13 @@ class TestRustSidecarContract:
 
     def test_credential_http_callback(self):
         """CT-010: Sidecar should be able to call credential.http.*."""
-        from ibreeze.rpc_server import RPCServer
 
         rpc_methods = {
-            "company.create", "company.get", "system.handshake",
-            "system.health", "backup.create",
+            "company.create",
+            "company.get",
+            "system.handshake",
+            "system.health",
+            "backup.create",
         }
         assert "system.handshake" in rpc_methods
         assert "system.health" in rpc_methods

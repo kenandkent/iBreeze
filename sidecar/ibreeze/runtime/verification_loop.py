@@ -45,23 +45,34 @@ async def verify_and_fix(
             timeout=120,
         )
 
-        results.append({
-            "attempt": attempts,
-            "exit_code": wait_result.get("exit_code"),
-            "output_preview": wait_result.get("stdout_preview", "")[:1000],
-        })
+        results.append(
+            {
+                "attempt": attempts,
+                "exit_code": wait_result.get("exit_code"),
+                "output_preview": wait_result.get("stdout_preview", "")[:1000],
+            }
+        )
 
         verdict = "passed" if wait_result.get("exit_code") == 0 else "failed"
         now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
         import uuid as _uuid
+
         await db.execute(
             """INSERT INTO verification_results
                (id, company_id, run_id, round_number, command_argv_json, exit_code,
                 status, started_at, completed_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (str(_uuid.uuid4()), company_id, run_id, attempts,
-             json.dumps(verification_command.split()), wait_result.get("exit_code", -1),
-             verdict, now, now),
+            (
+                str(_uuid.uuid4()),
+                company_id,
+                run_id,
+                attempts,
+                json.dumps(verification_command.split()),
+                wait_result.get("exit_code", -1),
+                verdict,
+                now,
+                now,
+            ),
         )
 
         if verdict == "passed":

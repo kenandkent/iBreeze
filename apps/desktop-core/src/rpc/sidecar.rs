@@ -45,13 +45,15 @@ struct HandshakeResponse {
     migration_version: String,
 }
 
+type PendingMap = HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>;
+
 #[derive(Debug)]
 pub struct SidecarClient {
     socket_path: PathBuf,
     writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
     ipc_session_id: Mutex<Option<Uuid>>,
     window_session_id: Uuid,
-    pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>>>,
+    pending: Arc<Mutex<PendingMap>>,
     reader_task: Mutex<Option<JoinHandle<()>>>,
     reverse_table: Arc<ReverseMethodTable>,
 }
@@ -176,9 +178,7 @@ impl SidecarClient {
         {
             let mut pending = self.pending.lock().await;
             for (_, tx) in pending.drain() {
-                let _ = tx.send(Err(AppError::Sidecar(
-                    "Sidecar disconnected".to_owned(),
-                )));
+                let _ = tx.send(Err(AppError::Sidecar("Sidecar disconnected".to_owned())));
             }
         }
         *self.ipc_session_id.lock().await = None;
@@ -205,10 +205,10 @@ impl SidecarClient {
                 .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
             Self::write_frame(writer, &payload).await?;
         }
-        let response: JsonRpcResponse = rx
+        let inner: Result<JsonRpcResponse, AppError> = rx
             .await
-            .map_err(|_| AppError::Sidecar("Sidecar reader task terminated".to_owned()))?
-            .map_err(|e| e)?;
+            .map_err(|_| AppError::Sidecar("Sidecar reader task terminated".to_owned()))?;
+        let response: JsonRpcResponse = inner?;
         if response.jsonrpc != "2.0" || response.id != request_id {
             return Err(AppError::Sidecar(
                 "Sidecar response correlation failed".to_owned(),
@@ -229,10 +229,7 @@ impl SidecarClient {
         })
     }
 
-    async fn write_frame(
-        writer: &mut OwnedWriteHalf,
-        payload: &[u8],
-    ) -> Result<(), AppError> {
+    async fn write_frame(writer: &mut OwnedWriteHalf, payload: &[u8]) -> Result<(), AppError> {
         writer
             .write_all(&(payload.len() as u32).to_be_bytes())
             .await
@@ -251,14 +248,11 @@ impl SidecarClient {
     async fn reader_loop(
         mut reader: OwnedReadHalf,
         writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
-        pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>>>,
+        pending: Arc<Mutex<PendingMap>>,
         reverse_table: Arc<ReverseMethodTable>,
     ) {
-        loop {
-            let size = match reader.read_u32().await {
-                Ok(n) => n as usize,
-                Err(_) => break,
-            };
+        while let Ok(n) = reader.read_u32().await {
+            let size = n as usize;
             if size == 0 || size > MAX_FRAME_BYTES {
                 break;
             }
@@ -276,7 +270,9 @@ impl SidecarClient {
                     Ok(r) => r,
                     Err(_) => break,
                 };
-                let result = reverse_table.dispatch(&request.method, request.params).await;
+                let result = reverse_table
+                    .dispatch(&request.method, request.params)
+                    .await;
                 let response_payload = match result {
                     Ok(value) => serde_json::to_vec(&serde_json::json!({
                         "jsonrpc": "2.0",

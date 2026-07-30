@@ -1143,9 +1143,7 @@ class KnowledgeItemCreate(StrictModel):
 
     @model_validator(mode="after")
     def validate_source_and_scope(self) -> KnowledgeItemCreate:
-        if (self.source_artifact_id is None) == (
-            self.source_message_event_id is None
-        ):
+        if (self.source_artifact_id is None) == (self.source_message_event_id is None):
             raise ValueError("exactly one knowledge source is required")
         scope = (
             self.department_id,
@@ -1160,8 +1158,7 @@ class KnowledgeItemCreate(StrictModel):
         }
         expected = allowed[self.visibility]
         if scope != expected or (
-            self.visibility is not KnowledgeVisibility.COMPANY
-            and all(value is None for value in expected)
+            self.visibility is not KnowledgeVisibility.COMPANY and all(value is None for value in expected)
         ):
             raise ValueError("knowledge visibility scope is invalid")
         return self

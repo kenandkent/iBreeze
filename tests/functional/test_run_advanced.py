@@ -159,7 +159,6 @@ class TestCheckpointRecovery:
         assert restored_ctx.sequence == 10
 
     async def test_recovery_with_no_checkpoint(self):
-        checkpoint = None
         ctx = _mock_run_context()
         assert ctx.run_id is not None
 

@@ -19,6 +19,7 @@ _TRACE_ID = UUID(int=0)
 def _read_wrapper(handler: Any) -> Any:
     async def wrapped(params: dict[str, Any], session: object) -> Any:
         return await handler(params)
+
     return wrapped
 
 
@@ -26,20 +27,24 @@ def _write_wrapper_factory(handler: Any, method_name: str, write_queue: WriteQue
     async def wrapped(params: dict[str, Any], session: object) -> Any:
         async def _exec(_conn: aiosqlite.Connection) -> Any:
             return await handler(params)
+
         return await write_queue.submit(
             "legacy." + method_name,
             _TRACE_ID,
             datetime.now(UTC) + timedelta(seconds=30),
             _exec,
         )
+
     return wrapped
 
 
-_LEGACY_SKIP_PREFIXES = frozenset({
-    "review.",
-    "completion.",
-    "rework.",
-})
+_LEGACY_SKIP_PREFIXES = frozenset(
+    {
+        "review.",
+        "completion.",
+        "rework.",
+    }
+)
 
 
 def register_legacy_handlers(
@@ -80,6 +85,7 @@ def register_legacy_handlers(
 
     logger.info(
         "handler_registry: registered %d legacy handlers, skipped %d (already have modern handlers)",
-        count, skipped,
+        count,
+        skipped,
     )
     return count

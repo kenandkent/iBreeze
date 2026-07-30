@@ -24,7 +24,6 @@ def canonical_hash(request: Any) -> str:
 
 
 class SubmitReviewGuards:
-
     def __init__(self, repo: ReviewRepository) -> None:
         self._repo = repo
 
@@ -41,8 +40,7 @@ class SubmitReviewGuards:
         cursor = await session.execute(
             """SELECT 1 FROM artifact_contributors
                WHERE artifact_id=? AND company_id=? AND employee_id=?""",
-            (str(assignment.artifact_id), str(assignment.company_id),
-             str(assignment.reviewer_employee_id)),
+            (str(assignment.artifact_id), str(assignment.company_id), str(assignment.reviewer_employee_id)),
         )
         if await cursor.fetchone() is not None:
             raise ValueError("REVIEW_SELF_ASSIGNMENT")
@@ -52,15 +50,13 @@ class SubmitReviewGuards:
             raise ValueError("VERDICT_NEEDS_CHANGES_WITHOUT_ISSUES")
         if request.verdict == "failed":
             has_blocker_review_exec = any(
-                iss.severity == "blocker" and iss.category == "review_execution"
-                for iss in request.issues
+                iss.severity == "blocker" and iss.category == "review_execution" for iss in request.issues
             )
             if not has_blocker_review_exec:
                 raise ValueError("VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION")
 
 
 class StartReviewHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -73,20 +69,22 @@ class StartReviewHandler:
             result = await self._repo.transition(session, assignment, "in_review")
             return CommandResult(
                 response={"id": str(result.id), "status": result.state},
-                events=({
-                    "event_type": "review.assigned",
-                    "aggregate_id": str(result.id),
-                    "from_state": assignment.state,
-                    "to_state": result.state,
-                    "version": result.version,
-                },),
+                events=(
+                    {
+                        "event_type": "review.assigned",
+                        "aggregate_id": str(result.id),
+                        "from_state": assignment.state,
+                        "to_state": result.state,
+                        "version": result.version,
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class SubmitReviewHandler:
-
     def __init__(
         self,
         repo: ReviewRepository,
@@ -99,9 +97,7 @@ class SubmitReviewHandler:
 
     async def handle(self, context: Any, request: SubmitReview) -> Any:
         async def command(session: Any) -> Any:
-            assignment = await self._repo.lock_assignment(
-                session, request.assignment_id
-            )
+            assignment = await self._repo.lock_assignment(session, request.assignment_id)
             await self._guards.validate(session, assignment, request)
             report = await self._repo.create_report(
                 session,
@@ -127,9 +123,7 @@ class SubmitReviewHandler:
                 }
                 for iss in request.issues
             ]
-            issues = await self._repo.create_issues(
-                session, request.company_id, report.id, issues_data
-            )
+            issues = await self._repo.create_issues(session, request.company_id, report.id, issues_data)
             result = await self._repo.transition(session, assignment, "submitted")
             return CommandResult(
                 response={
@@ -142,33 +136,34 @@ class SubmitReviewHandler:
                         "id": str(report.id),
                         "verdict": report.verdict,
                     },
-                    "issues": [
-                        {"id": str(iss.id), "severity": iss.severity, "state": iss.state}
-                        for iss in issues
-                    ],
+                    "issues": [{"id": str(iss.id), "severity": iss.severity, "state": iss.state} for iss in issues],
                 },
-                events=({
-                    "event_type": "review.submitted",
-                    "aggregate_id": str(result.id),
-                    "aggregate_type": "review_assignment",
-                    "from_state": assignment.state,
-                    "to_state": result.state,
-                    "version": result.version,
-                    "company_id": str(request.company_id),
-                },),
-                outbox=({
-                    "command_type": "EvaluateEmployeeAcceptance",
-                    "payload": {
-                        "assignment_id": str(result.id),
+                events=(
+                    {
+                        "event_type": "review.submitted",
+                        "aggregate_id": str(result.id),
+                        "aggregate_type": "review_assignment",
+                        "from_state": assignment.state,
+                        "to_state": result.state,
+                        "version": result.version,
                         "company_id": str(request.company_id),
                     },
-                },),
+                ),
+                outbox=(
+                    {
+                        "command_type": "EvaluateEmployeeAcceptance",
+                        "payload": {
+                            "assignment_id": str(result.id),
+                            "company_id": str(request.company_id),
+                        },
+                    },
+                ),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class StartIssueFixHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -178,25 +173,25 @@ class StartIssueFixHandler:
             issue = await self._repo.lock_issue(session, request.issue_id)
             if issue.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            result = await self._repo.transition_issue(
-                session, issue, "fixing"
-            )
+            result = await self._repo.transition_issue(session, issue, "fixing")
             return CommandResult(
                 response={"id": str(result.id), "state": result.state},
-                events=({
-                    "event_type": "review.issue_changed",
-                    "issue_id": str(result.id),
-                    "from_state": issue.state,
-                    "to_state": result.state,
-                    "severity": result.severity,
-                },),
+                events=(
+                    {
+                        "event_type": "review.issue_changed",
+                        "issue_id": str(result.id),
+                        "from_state": issue.state,
+                        "to_state": result.state,
+                        "severity": result.severity,
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class ResolveIssueHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -206,25 +201,25 @@ class ResolveIssueHandler:
             issue = await self._repo.lock_issue(session, request.issue_id)
             if issue.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            result = await self._repo.transition_issue(
-                session, issue, "resolved"
-            )
+            result = await self._repo.transition_issue(session, issue, "resolved")
             return CommandResult(
                 response={"id": str(result.id), "state": result.state},
-                events=({
-                    "event_type": "review.issue_changed",
-                    "issue_id": str(result.id),
-                    "from_state": issue.state,
-                    "to_state": result.state,
-                    "severity": result.severity,
-                },),
+                events=(
+                    {
+                        "event_type": "review.issue_changed",
+                        "issue_id": str(result.id),
+                        "from_state": issue.state,
+                        "to_state": result.state,
+                        "severity": result.severity,
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class VerifyIssueHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -234,25 +229,25 @@ class VerifyIssueHandler:
             issue = await self._repo.lock_issue(session, request.issue_id)
             if issue.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            result = await self._repo.transition_issue(
-                session, issue, "verified"
-            )
+            result = await self._repo.transition_issue(session, issue, "verified")
             return {
                 "response": {"id": str(result.id), "state": result.state},
-                "events": ({
-                    "event_type": "review.issue_changed",
-                    "issue_id": str(result.id),
-                    "from_state": issue.state,
-                    "to_state": result.state,
-                    "severity": result.severity,
-                },),
+                "events": (
+                    {
+                        "event_type": "review.issue_changed",
+                        "issue_id": str(result.id),
+                        "from_state": issue.state,
+                        "to_state": result.state,
+                        "severity": result.severity,
+                    },
+                ),
                 "outbox": (),
             }
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class CloseIssueHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -262,31 +257,33 @@ class CloseIssueHandler:
             issue = await self._repo.lock_issue(session, request.issue_id)
             if issue.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            result = await self._repo.transition_issue(
-                session, issue, "closed"
-            )
+            result = await self._repo.transition_issue(session, issue, "closed")
             return CommandResult(
                 response={"id": str(result.id), "state": result.state},
-                events=({
-                    "event_type": "review.issue_changed",
-                    "issue_id": str(result.id),
-                    "from_state": issue.state,
-                    "to_state": result.state,
-                    "severity": result.severity,
-                },),
-                outbox=({
-                    "command_type": "EvaluateAffectedTask",
-                    "payload": {
+                events=(
+                    {
+                        "event_type": "review.issue_changed",
                         "issue_id": str(result.id),
-                        "company_id": str(result.company_id),
+                        "from_state": issue.state,
+                        "to_state": result.state,
+                        "severity": result.severity,
                     },
-                },),
+                ),
+                outbox=(
+                    {
+                        "command_type": "EvaluateAffectedTask",
+                        "payload": {
+                            "issue_id": str(result.id),
+                            "company_id": str(result.company_id),
+                        },
+                    },
+                ),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)
 
 
 class RejectIssueHandler:
-
     def __init__(self, repo: ReviewRepository, uow: Any) -> None:
         self._repo = repo
         self._uow = uow
@@ -296,18 +293,19 @@ class RejectIssueHandler:
             issue = await self._repo.lock_issue(session, request.issue_id)
             if issue.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            result = await self._repo.transition_issue(
-                session, issue, "rejected"
-            )
+            result = await self._repo.transition_issue(session, issue, "rejected")
             return CommandResult(
                 response={"id": str(result.id), "state": result.state},
-                events=({
-                    "event_type": "review.issue_changed",
-                    "issue_id": str(result.id),
-                    "from_state": issue.state,
-                    "to_state": result.state,
-                    "severity": result.severity,
-                },),
+                events=(
+                    {
+                        "event_type": "review.issue_changed",
+                        "issue_id": str(result.id),
+                        "from_state": issue.state,
+                        "to_state": result.state,
+                        "severity": result.severity,
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, canonical_hash(request), command)

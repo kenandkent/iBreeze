@@ -8,27 +8,19 @@ from typing import Any
 
 
 def _now() -> str:
-    return (
-        datetime.now(UTC)
-        .isoformat(timespec="microseconds")
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 async def should_run_daily_backup(db: Any) -> bool:
     """Check if a daily backup should run (>24h since last)."""
     cursor = await db.execute(
-        "SELECT created_at FROM backup_records "
-        "WHERE backup_type = 'daily' "
-        "ORDER BY created_at DESC LIMIT 1"
+        "SELECT created_at FROM backup_records WHERE backup_type = 'daily' ORDER BY created_at DESC LIMIT 1"
     )
     last = await cursor.fetchone()
     if not last:
         return True
 
-    last_time = datetime.fromisoformat(
-        dict(last)["created_at"].replace("Z", "+00:00")
-    )
+    last_time = datetime.fromisoformat(dict(last)["created_at"].replace("Z", "+00:00"))
     now = datetime.now(UTC)
     hours_since = (now - last_time).total_seconds() / 3600
     return hours_since >= 24
@@ -39,9 +31,7 @@ async def should_run_pre_upgrade_backup(db: Any) -> bool:
     return True
 
 
-async def trigger_daily_backup(
-    db: Any, base_path: str
-) -> dict[str, Any] | None:
+async def trigger_daily_backup(db: Any, base_path: str) -> dict[str, Any] | None:
     """Trigger a daily backup if needed."""
     if not await should_run_daily_backup(db):
         return None
@@ -54,9 +44,7 @@ async def trigger_daily_backup(
     output_dir = os.path.join(base_path, "backups")
     os.makedirs(output_dir, exist_ok=True)
 
-    result = create_backup_package(
-        db_path, cas_path, output_dir, backup_type="daily"
-    )
+    result = create_backup_package(db_path, cas_path, output_dir, backup_type="daily")
 
     record = await create_backup_record(
         db,
@@ -102,20 +90,12 @@ async def apply_retention_policy(db: Any) -> dict[str, Any]:
 
     for backup in backups:
         backup_dict = dict(backup)
-        backup_time = datetime.fromisoformat(
-            backup_dict["created_at"].replace("Z", "+00:00")
-        )
+        backup_time = datetime.fromisoformat(backup_dict["created_at"].replace("Z", "+00:00"))
 
         should_delete = False
-        if (
-            backup_dict["backup_type"] == "daily"
-            and backup_time < daily_cutoff
-        ):
+        if backup_dict["backup_type"] == "daily" and backup_time < daily_cutoff:
             should_delete = True
-        elif (
-            backup_dict["backup_type"] == "weekly"
-            and backup_time < weekly_cutoff
-        ):
+        elif backup_dict["backup_type"] == "weekly" and backup_time < weekly_cutoff:
             should_delete = True
 
         if should_delete:

@@ -4,10 +4,9 @@ Covers design spec sections:
 - REL-005 Audit log hash chain integrity
 - SEC-001 Company isolation in audit logs
 """
-import hashlib
+
 import json
-import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -15,6 +14,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Hash chain
 # ---------------------------------------------------------------------------
+
 
 class TestAuditIntegrity:
     """Audit log hash chain and integrity checks."""

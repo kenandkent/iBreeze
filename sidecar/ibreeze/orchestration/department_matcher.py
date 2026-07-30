@@ -65,15 +65,9 @@ def match_departments(
                     department_id=profile.department_id,
                     responsibility_key=profile.responsibility_key,
                     score=round(score, 6),
-                    matched_capabilities=tuple(
-                        sorted(required_capabilities & profile.capability_tags)
-                    ),
-                    matched_deliverables=tuple(
-                        sorted(required_deliverables & profile.deliverable_types)
-                    ),
-                    matched_quality_gates=tuple(
-                        sorted(required_quality_gates & profile.quality_gates)
-                    ),
+                    matched_capabilities=tuple(sorted(required_capabilities & profile.capability_tags)),
+                    matched_deliverables=tuple(sorted(required_deliverables & profile.deliverable_types)),
+                    matched_quality_gates=tuple(sorted(required_quality_gates & profile.quality_gates)),
                 ),
                 profile.created_at,
             )

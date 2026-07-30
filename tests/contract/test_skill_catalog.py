@@ -1,5 +1,5 @@
 """Tests for skill catalog entities and compatibility - P1-T04."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

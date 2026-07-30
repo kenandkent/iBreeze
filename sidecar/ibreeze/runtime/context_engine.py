@@ -22,9 +22,7 @@ class ContextEngine:
     def add_system_prompt(self, content: str) -> None:
         """Add system prompt (always included, never truncated)."""
         tokens = self._estimate_tokens(content)
-        self._messages.insert(
-            0, {"role": "system", "content": content, "tokens": tokens, "pinned": True}
-        )
+        self._messages.insert(0, {"role": "system", "content": content, "tokens": tokens, "pinned": True})
         self._used_tokens += tokens
 
     def add_tool_result(self, tool_call_id: str, content: str) -> None:

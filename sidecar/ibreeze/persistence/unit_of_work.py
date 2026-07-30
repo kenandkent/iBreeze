@@ -52,7 +52,9 @@ class UnitOfWork:
         try:
             if idempotency_key:
                 claimed = await self._idempotency.claim(
-                    session, idempotency_key, request_sha256,
+                    session,
+                    idempotency_key,
+                    request_sha256,
                     ttl=timedelta(days=ttl_days),
                 )
                 if not claimed:

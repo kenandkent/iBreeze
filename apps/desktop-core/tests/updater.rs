@@ -356,7 +356,10 @@ fn mark_stable_records_version() {
     let store = UpdateStore::new(temp.path().to_path_buf());
 
     store.mark_stable("0.2.0").unwrap();
-    assert_eq!(store.load_stable_version().unwrap(), Some("0.2.0".to_owned()));
+    assert_eq!(
+        store.load_stable_version().unwrap(),
+        Some("0.2.0".to_owned())
+    );
 }
 
 #[test]

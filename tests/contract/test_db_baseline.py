@@ -1,5 +1,5 @@
 """Tests for PostgreSQL, SQLAlchemy and Alembic baseline - P1-T01."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

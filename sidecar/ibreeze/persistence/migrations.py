@@ -15,7 +15,7 @@ class Migration:
     def load_sql(self) -> str:
         if self.sql.startswith("file://"):
             base = Path(__file__).resolve().parent
-            file_path = base / self.sql[len("file://"):]
+            file_path = base / self.sql[len("file://") :]
             return file_path.read_text("utf-8")
         return self.sql
 
@@ -74,18 +74,17 @@ async def run_migrations(
             if sql and not sql.startswith("--"):
                 await db.executescript(sql)
             completed_at = time.strftime(
-                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time()),
+                "%Y-%m-%dT%H:%M:%SZ",
+                time.gmtime(time.time()),
             )
             await db.execute(
-                "UPDATE schema_migrations SET status = 'completed', completed_at = ? "
-                "WHERE version = ?",
+                "UPDATE schema_migrations SET status = 'completed', completed_at = ? WHERE version = ?",
                 (completed_at, str(m.version)),
             )
         except Exception as exc:
             error_code = str(exc)[:200]
             await db.execute(
-                "UPDATE schema_migrations SET status = 'failed', error_message = ? "
-                "WHERE version = ?",
+                "UPDATE schema_migrations SET status = 'failed', error_message = ? WHERE version = ?",
                 (error_code, str(m.version)),
             )
             raise

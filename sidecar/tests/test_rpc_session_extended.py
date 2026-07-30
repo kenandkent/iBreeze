@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +10,6 @@ import pytest
 
 from ibreeze.rpc.multiplexer import Multiplexer
 from ibreeze.rpc.session import (
-    HEARTBEAT_INTERVAL,
     IpcSession,
     IpcSessionMeta,
 )
@@ -100,7 +98,7 @@ class TestIpcSession:
         written_data = writer.write.call_args[0][0]
         # Verify it's a valid frame
         import struct
-        length = struct.unpack(">I", written_data[:4])[0]
+        struct.unpack(">I", written_data[:4])[0]
         import json
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["method"] == "sys.ping"
@@ -109,8 +107,9 @@ class TestIpcSession:
     async def test_respond_success(self, session: IpcSession, writer: AsyncMock):
         await session.respond("rpc:123", result={"value": 42})
         written_data = writer.write.call_args[0][0]
-        import struct, json
-        length = struct.unpack(">I", written_data[:4])[0]
+        import json
+        import struct
+        struct.unpack(">I", written_data[:4])[0]
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["id"] == "rpc:123"
         assert payload["result"] == {"value": 42}
@@ -119,8 +118,9 @@ class TestIpcSession:
     async def test_respond_error(self, session: IpcSession, writer: AsyncMock):
         await session.respond("rpc:456", error="SOME_ERROR")
         written_data = writer.write.call_args[0][0]
-        import struct, json
-        length = struct.unpack(">I", written_data[:4])[0]
+        import json
+        import struct
+        struct.unpack(">I", written_data[:4])[0]
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["id"] == "rpc:456"
         assert "error" in payload
@@ -151,7 +151,6 @@ class TestIpcSession:
 
         with patch("ibreeze.rpc.session.asyncio.sleep", side_effect=fake_sleep):
             # The notify will succeed, but let's simulate failure on 2nd call
-            original_notify = session.notify
             call_count_notify = 0
 
             async def failing_notify(*args, **kwargs):

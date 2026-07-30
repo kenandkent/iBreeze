@@ -12,11 +12,22 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-_SENSITIVE_KEYS = frozenset({
-    "password", "token", "api_key", "authorization", "cookie",
-    "secret", "credential", "access_token", "refresh_token",
-    "private_key", "jwt", "bearer",
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "password",
+        "token",
+        "api_key",
+        "authorization",
+        "cookie",
+        "secret",
+        "credential",
+        "access_token",
+        "refresh_token",
+        "private_key",
+        "jwt",
+        "bearer",
+    }
+)
 
 
 def _sanitize(data: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -97,15 +108,18 @@ async def log_audit(
     sanitized = _sanitize(detail)
     detail_json = json.dumps(sanitized or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
-    row_data = json.dumps({
-        "company_id": company_id,
-        "actor_type": actor_type,
-        "actor_id": actor_id,
-        "action": action,
-        "resource_type": resource_type,
-        "resource_id": resource_id,
-        "outcome": outcome,
-    }, sort_keys=True)
+    row_data = json.dumps(
+        {
+            "company_id": company_id,
+            "actor_type": actor_type,
+            "actor_id": actor_id,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "outcome": outcome,
+        },
+        sort_keys=True,
+    )
     prev_hash = await _get_prev_hash(db, company_id)
     chain_hash = _compute_hash(row_data, prev_hash)
 
@@ -116,9 +130,19 @@ async def log_audit(
             hash, prev_hash)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            log_id, company_id, actor_type, actor_id, action, resource_type,
-            resource_id, outcome, detail_json, trace_id, now,
-            chain_hash, prev_hash,
+            log_id,
+            company_id,
+            actor_type,
+            actor_id,
+            action,
+            resource_type,
+            resource_id,
+            outcome,
+            detail_json,
+            trace_id,
+            now,
+            chain_hash,
+            prev_hash,
         ),
     )
     return log_id

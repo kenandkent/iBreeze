@@ -10,9 +10,6 @@ pub use external::*;
 pub use updater::{updater_check, updater_install, updater_restore_stable, updater_verify_launch};
 pub use workspace::*;
 
-// method_kind lookup generated from packages/rpc-schema/registry.v1.json
-use crate::rpc::generated_method_kinds;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -617,14 +614,131 @@ fn load_auth_keyset(
 }
 
 fn sidecar_method_kind(method: &str) -> Result<bool, AppError> {
-    // Generated from packages/rpc-schema/registry.v1.json via generated_method_kinds
-    if generated_method_kinds::method_is_write(method).unwrap_or(false) {
-        return Ok(true);
+    let write = matches!(
+        method,
+        "approval.resolve"
+            | "artifact.create"
+            | "backup.create"
+            | "backup.restore"
+            | "catalog.installSkill"
+            | "catalog.removeSkill"
+            | "catalog.sync"
+            | "catalog.verifyCache"
+            | "company.archive"
+            | "company.create"
+            | "company.update"
+            | "conversation.archive"
+            | "conversation.create"
+            | "conversation.submitUserMessage"
+            | "department.archive"
+            | "department.create"
+            | "department.responsibility.create"
+            | "department.responsibility.delete"
+            | "department.responsibility.update"
+            | "department.setLeader"
+            | "department.update"
+            | "departmentTask.checkResources"
+            | "departmentTask.replaceEmployee"
+            | "employee.archive"
+            | "employee.create"
+            | "employee.transfer"
+            | "employee.updateBaseProfile"
+            | "employee.updateDisplayName"
+            | "employee.updateStatus"
+            | "employee.updateWorkRole"
+            | "event.replay"
+            | "event.subscribe"
+            | "knowledge.import"
+            | "knowledge.remove"
+            | "profile.bindSkill"
+            | "profile.createDraft"
+            | "profile.publish"
+            | "profile.retire"
+            | "profile.retireVersion"
+            | "profile.unbindSkill"
+            | "profile.updateDraft"
+            | "profile.validate"
+            | "report.generateDepartment"
+            | "report.generateFinal"
+            | "review.assign"
+            | "review.rerun"
+            | "review.resolveIssue"
+            | "review.submit"
+            | "run.cancel"
+            | "run.resume"
+            | "runtime.run"
+            | "runtime.stop"
+            | "settings.update"
+            | "task.cancel"
+            | "task.confirmPlan"
+            | "task.pause"
+            | "task.rejectPlan"
+            | "task.requestPlanRevision"
+            | "task.resume"
+            | "task.supersede"
+            | "workspace.abandon"
+            | "workspace.apply"
+            | "workspace.cleanupTask"
+    );
+    let read = matches!(
+        method,
+        "approval.listPending"
+            | "artifact.get"
+            | "artifact.getSnapshot"
+            | "artifact.list"
+            | "backup.get"
+            | "backup.list"
+            | "catalog.get"
+            | "catalog.getActiveRelease"
+            | "catalog.list"
+            | "catalog.listAgents"
+            | "catalog.listModels"
+            | "catalog.listSkills"
+            | "company.get"
+            | "company.list"
+            | "conversation.getCompany"
+            | "conversation.getDepartment"
+            | "conversation.list"
+            | "conversation.listMessages"
+            | "department.get"
+            | "department.list"
+            | "departmentTask.get"
+            | "departmentTask.getReport"
+            | "departmentTask.list"
+            | "employee.get"
+            | "employee.list"
+            | "employeeTask.get"
+            | "employeeTask.list"
+            | "knowledge.get"
+            | "knowledge.list"
+            | "knowledge.search"
+            | "profile.get"
+            | "profile.list"
+            | "review.get"
+            | "review.list"
+            | "review.listIssues"
+            | "run.get"
+            | "run.list"
+            | "run.listEvents"
+            | "runtime.getStatus"
+            | "runtime.listAvailableModels"
+            | "runtime.probeAgent"
+            | "runtime.probeProvider"
+            | "settings.get"
+            | "task.get"
+            | "task.getEvidence"
+            | "task.getGraph"
+            | "task.list"
+            | "workspace.get"
+            | "workspace.list"
+    );
+    if write {
+        Ok(true)
+    } else if read {
+        Ok(false)
+    } else {
+        Err(AppError::Validation("METHOD_NOT_ALLOWED".to_owned()))
     }
-    if generated_method_kinds::method_is_read(method).unwrap_or(false) {
-        return Ok(false);
-    }
-    Err(AppError::Validation(format!("METHOD_NOT_ALLOWED: {method}")))
 }
 
 #[tauri::command]
@@ -672,9 +786,9 @@ mod tests {
 
     #[test]
     fn rpc_ownership_uses_generated_registry() {
-        // auth.login and backend.validateOrigin are now in the registry
-        assert!(sidecar_method_kind("auth.login").expect("write"));
-        assert!(sidecar_method_kind("backend.validateOrigin").expect("write"));
+        // auth methods are now rust_core owned, not in sidecar list
+        assert!(sidecar_method_kind("auth.login").is_err());
+        assert!(sidecar_method_kind("backend.validateOrigin").is_err());
         // system methods are not in the sidecar registry
         assert!(sidecar_method_kind("system.shutdown").is_err());
         assert!(sidecar_method_kind("system.health").is_err());

@@ -39,10 +39,7 @@ def _sanitize(value: object, key: str = "") -> object:
             return {"redacted": True, "sha256": digest}
         return {"redacted": True}
     if isinstance(value, dict):
-        return {
-            str(child_key): _sanitize(child_value, str(child_key))
-            for child_key, child_value in value.items()
-        }
+        return {str(child_key): _sanitize(child_value, str(child_key)) for child_key, child_value in value.items()}
     if isinstance(value, list):
         return [_sanitize(item) for item in value]
     return value
@@ -137,9 +134,7 @@ async def list_audit(
             outcome=row["outcome"],
             detail_json=row["detail_json"],
             trace_id=row["trace_id"],
-            created_at=datetime.fromisoformat(
-                row["created_at"].replace("Z", "+00:00")
-            ),
+            created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
         )
         for row in await cursor.fetchall()
     ]

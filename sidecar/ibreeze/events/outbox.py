@@ -6,18 +6,22 @@ from uuid import uuid4
 
 from ibreeze.persistence.types import DomainEventRecord, OutboxRecord, WriteSession
 
-EVENT_COMMAND_MAP: MappingProxyType[str, str] = MappingProxyType({
-    "review.submitted": "EvaluateEmployeeAcceptance",
-    "review.issue_changed": "EvaluateAffectedTask",
-    "employee_task.status_changed": "EvaluateDepartmentReadiness",
-    "department_task.status_changed": "EvaluateCompanyReadiness",
-})
+EVENT_COMMAND_MAP: MappingProxyType[str, str] = MappingProxyType(
+    {
+        "review.submitted": "EvaluateEmployeeAcceptance",
+        "review.issue_changed": "EvaluateAffectedTask",
+        "employee_task.status_changed": "EvaluateDepartmentReadiness",
+        "department_task.status_changed": "EvaluateCompanyReadiness",
+    }
+)
 
-EVENT_TO_STATE_TRIGGER: MappingProxyType[str, frozenset[str]] = MappingProxyType({
-    "review.issue_changed": frozenset({"closed"}),
-    "employee_task.status_changed": frozenset({"accepted"}),
-    "department_task.status_changed": frozenset({"completed"}),
-})
+EVENT_TO_STATE_TRIGGER: MappingProxyType[str, frozenset[str]] = MappingProxyType(
+    {
+        "review.issue_changed": frozenset({"closed"}),
+        "employee_task.status_changed": frozenset({"accepted"}),
+        "department_task.status_changed": frozenset({"completed"}),
+    }
+)
 
 
 class OutboxWriter:

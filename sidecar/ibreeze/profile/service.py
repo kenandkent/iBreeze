@@ -207,6 +207,7 @@ async def bind_skill(
 ) -> dict[str, object]:
     """Bind a skill to profile."""
     import hashlib as _hashlib
+
     _now()
 
     draft = await _one(
@@ -241,9 +242,11 @@ async def bind_skill(
     next_order = max_order_row["next_order"]
 
     binding_id = _id()
-    sha = package_sha256 if len(package_sha256) == 64 else _hashlib.sha256(
-        f"{skill_id}:{skill_version}".encode()
-    ).hexdigest()
+    sha = (
+        package_sha256
+        if len(package_sha256) == 64
+        else _hashlib.sha256(f"{skill_id}:{skill_version}".encode()).hexdigest()
+    )
 
     await db.execute(
         """INSERT INTO profile_skill_bindings

@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.17 Pagination (cursor-based, encode/decode)
 """
+
 import uuid
 from datetime import datetime, timezone
 

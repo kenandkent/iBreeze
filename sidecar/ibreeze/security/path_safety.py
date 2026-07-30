@@ -50,7 +50,4 @@ def verify_write_approval(
     """Verify a write approval is valid and not expired."""
     if time.time() > float(approval["expires_at"]):  # type: ignore[arg-type]
         return False
-    return (
-        approval["normalized_path"] == normalized_path
-        and approval["content_hash"] == content_hash
-    )
+    return approval["normalized_path"] == normalized_path and approval["content_hash"] == content_hash

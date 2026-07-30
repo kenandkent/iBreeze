@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync hand-maintained method lists from contract registry.
+"""Sync generated method lists from contract registry.
 
 This script reads the canonical RPC registry and updates:
 1. Python: sidecar/ibreeze/rpc_server.py - READ_METHODS and self.methods
@@ -22,7 +22,6 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent
 REGISTRY_PATH = ROOT_DIR / "packages" / "rpc-schema" / "registry.v1.json"
-OWNERSHIP_PATH = ROOT_DIR / "packages" / "rpc-schema" / "ownership.v1.json"
 PYTHON_SERVER_PATH = ROOT_DIR / "sidecar" / "ibreeze" / "rpc_server.py"
 RUST_COMMANDS_PATH = ROOT_DIR / "apps" / "desktop-core" / "src" / "commands.rs"
 TS_RPC_CLIENT_PATH = ROOT_DIR / "apps" / "desktop" / "src" / "shared" / "rpcClient.ts"
@@ -30,25 +29,16 @@ TS_RPC_CLIENT_PATH = ROOT_DIR / "apps" / "desktop" / "src" / "shared" / "rpcClie
 
 def load_registry() -> list[dict]:
     """Load the RPC registry and return all sidecar-owned methods.
-    
-    Uses ownership.v1.json as the source of truth for which methods are
-    sidecar-owned, since registry.v1.json may have incorrect ownership.
+
+    Registry.v1.json is the single source of truth for method ownership.
+    Methods with owner="sidecar" are returned.
     """
     with open(REGISTRY_PATH) as f:
         registry = json.load(f)
-    
-    with open(OWNERSHIP_PATH) as f:
-        ownership = json.load(f)
-    
-    sidecar_methods_list = ownership.get("sidecar", [])
-    all_methods = {m["method"]: m for m in registry.get("methods", [])}
-    
-    sidecar_methods = []
-    for method_name in sidecar_methods_list:
-        if method_name in all_methods:
-            sidecar_methods.append(all_methods[method_name])
-    
-    return sidecar_methods
+
+    all_methods = {m["method"]: m for m in registry.get("methods", []) if m.get("owner") == "sidecar"}
+
+    return list(all_methods.values())
 
 
 def generate_python_read_methods(methods: list[dict]) -> str:
@@ -62,17 +52,6 @@ def generate_python_read_methods(methods: list[dict]) -> str:
     lines.append(')')
     
     return "\n".join(lines)
-
-
-def generate_python_methods_dict(methods: list[dict]) -> str:
-    """Generate the self.methods dictionary for Python.
-    
-    This is a validation function that ensures all methods in the registry
-    have corresponding handlers in the self.methods dictionary.
-    """
-    # This is a placeholder - the actual self.methods dictionary
-    # is manually maintained with specific handler mappings
-    return ""
 
 
 def generate_python_methods_dict(methods: list[dict]) -> str:

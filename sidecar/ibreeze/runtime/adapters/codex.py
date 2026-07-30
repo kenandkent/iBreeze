@@ -34,8 +34,10 @@ class CodexAdapter:
         approval_mode = spec.get("approval_mode", "suggest")
         cmd = [
             "codex",
-            "--model", model,
-            "--approval-mode", approval_mode,
+            "--model",
+            model,
+            "--approval-mode",
+            approval_mode,
             "--quiet",
             prompt_file,
         ]
@@ -71,5 +73,6 @@ class CodexAdapter:
             Checkpoint ref string.
         """
         import hashlib
+
         raw = json.dumps(native_state, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()[:32]

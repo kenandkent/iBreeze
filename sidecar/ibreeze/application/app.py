@@ -49,6 +49,7 @@ class SidecarApplication:
             app_user_id=self._app_user_id,
             masked_identifier=self._masked_identifier,
             device_id=self._device_id,
+            app_version=self._app_version,
             profile_mode=self._profile_mode,
         )
         await self._lifecycle.start()

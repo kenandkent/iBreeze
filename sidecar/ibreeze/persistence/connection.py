@@ -104,9 +104,7 @@ class ReadPool:
         finally:
             await self._release(conn)
 
-    async def read_transaction(
-        self, callback: Callable[[aiosqlite.Connection], Awaitable[_T]]
-    ) -> _T:
+    async def read_transaction(self, callback: Callable[[aiosqlite.Connection], Awaitable[_T]]) -> _T:
         conn = await self._acquire()
         try:
             return await callback(conn)

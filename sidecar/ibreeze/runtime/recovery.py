@@ -37,13 +37,7 @@ async def recover_stale_runs(db: Any) -> dict[str, Any]:
         status = run["status"]
 
         await db.execute(
-            (
-                "UPDATE agent_runs "
-                "SET status = 'failed', "
-                "    failure_code = ?, "
-                "    updated_at = ? "
-                "WHERE id = ?"
-            ),
+            ("UPDATE agent_runs SET status = 'failed',     failure_code = ?,     updated_at = ? WHERE id = ?"),
             (f"{_RECOVERY_MESSAGE_PREFIX}: run was '{status}' at crash time", now, run_id),
         )
         recovered += 1

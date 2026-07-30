@@ -44,7 +44,6 @@ class TestProfileFileLockErrorPaths:
     async def test_release_close_fd_error_swallowed(self, tmp_path):
         path = tmp_path / "profile.db"
         lock = await ProfileFileLock.acquire(path)
-        fd = lock._lock_file
         with patch("os.close", side_effect=OSError("bad fd")):
             await lock.release()
         assert lock._lock_file is None

@@ -1,5 +1,5 @@
 """Tests for authentication, token family and offline tokens - P1-T02."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
@@ -11,7 +11,9 @@ def test_user_model_exists():
 
 
 def test_token_family_model_exists():
-    assert (BACKEND_DIR / "src" / "ibreeze_backend" / "models" / "token_family.py").exists()
+    assert (
+        BACKEND_DIR / "src" / "ibreeze_backend" / "models" / "token_family.py"
+    ).exists()
 
 
 def test_token_service_exists():

@@ -53,6 +53,7 @@ async def count_lancedb_items(company_id: str) -> int:
     """Count rows in LanceDB for a company."""
     try:
         import lancedb  # type: ignore[import-untyped]
+
         db = lancedb.connect("~/.ibreeze/lancedb")
         try:
             table = db.open_table("knowledge_embeddings")
@@ -68,6 +69,7 @@ async def count_lancedb_items_for_generation(generation_id: str) -> int:
     """Count rows in LanceDB for a specific generation."""
     try:
         import lancedb
+
         db = lancedb.connect("~/.ibreeze/lancedb")
         try:
             table = db.open_table("knowledge_embeddings")

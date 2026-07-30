@@ -1,5 +1,5 @@
 """Tests for observability, security and performance - P11."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

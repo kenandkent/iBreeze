@@ -28,21 +28,25 @@ async def dispatch_company_task(
     """Dispatch an approved plan: parse canonical_json, create tasks, enqueue runs."""
     now = _now()
 
-    task_row = await (await db.execute(
-        """SELECT id, status, company_conversation_id
+    task_row = await (
+        await db.execute(
+            """SELECT id, status, company_conversation_id
            FROM company_tasks WHERE id=? AND company_id=?""",
-        (task_id, company_id),
-    )).fetchone()
+            (task_id, company_id),
+        )
+    ).fetchone()
     if task_row is None:
         raise ValueError("RESOURCE_NOT_FOUND")
     if task_row["status"] not in ("approved", "dispatching"):
         raise ValueError("STATE_TRANSITION_INVALID")
 
-    plan_row = await (await db.execute(
-        """SELECT id, canonical_json FROM company_plan_versions
+    plan_row = await (
+        await db.execute(
+            """SELECT id, canonical_json FROM company_plan_versions
            WHERE company_task_id=? AND company_id=? AND status='approved'""",
-        (task_id, company_id),
-    )).fetchone()
+            (task_id, company_id),
+        )
+    ).fetchone()
     if plan_row is None:
         raise ValueError("NO_APPROVED_PLAN")
 
@@ -50,10 +54,12 @@ async def dispatch_company_task(
     dept_tasks = plan.get("department_tasks", [])
 
     # Ensure active catalog release exists
-    catalog_row = await (await db.execute(
-        """SELECT release_id FROM catalog_cache_releases
+    catalog_row = await (
+        await db.execute(
+            """SELECT release_id FROM catalog_cache_releases
            WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1"""
-    )).fetchone()
+        )
+    ).fetchone()
     if catalog_row:
         catalog_release_id: str = catalog_row["release_id"]
     else:
@@ -65,9 +71,9 @@ async def dispatch_company_task(
         )
 
     # Fetch current company revision
-    company_row = await (await db.execute(
-        "SELECT current_revision_id FROM companies WHERE id=?", (company_id,)
-    )).fetchone()
+    company_row = await (
+        await db.execute("SELECT current_revision_id FROM companies WHERE id=?", (company_id,))
+    ).fetchone()
     company_revision_id: str = company_row["current_revision_id"] if company_row else ""
 
     created_dept_tasks: list[str] = []
@@ -150,19 +156,23 @@ async def dispatch_company_task(
                 created_emp_tasks.append(emp_task_id)
 
                 # Enqueue run for this employee task
-                employee_row = await (await db.execute(
-                    """SELECT base_profile_version_id FROM employees
+                employee_row = await (
+                    await db.execute(
+                        """SELECT base_profile_version_id FROM employees
                        WHERE id=? AND company_id=?""",
-                    (emp_id, company_id),
-                )).fetchone()
+                        (emp_id, company_id),
+                    )
+                ).fetchone()
                 if employee_row:
                     profile_version_id = employee_row["base_profile_version_id"]
-                    profile_row = await (await db.execute(
-                        """SELECT profile_type, runtime_binding_json
+                    profile_row = await (
+                        await db.execute(
+                            """SELECT profile_type, runtime_binding_json
                            FROM employee_base_profile_versions
                            WHERE id=?""",
-                        (profile_version_id,),
-                    )).fetchone()
+                            (profile_version_id,),
+                        )
+                    ).fetchone()
                     if profile_row:
                         binding = json.loads(profile_row["runtime_binding_json"])
                         raw_type = profile_row["profile_type"]
@@ -201,18 +211,28 @@ async def dispatch_company_task(
                                 checked_at, expires_at)
                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
-                                avail_snap_id, company_id, task_id, dept_task_id,
-                                "task_execution", emp_task_id, emp_id,
-                                profile_version_id, spec_sha,
+                                avail_snap_id,
+                                company_id,
+                                task_id,
+                                dept_task_id,
+                                "task_execution",
+                                emp_task_id,
+                                emp_id,
+                                profile_version_id,
+                                spec_sha,
                                 catalog_release_id,
                                 json.dumps(availability_checks),
-                                "available", now, now,
+                                "available",
+                                now,
+                                now,
                             ),
                         )
-                        dept_rev_row = await (await db.execute(
-                            "SELECT current_revision_id FROM departments WHERE id=? AND company_id=?",
-                            (department_id, company_id),
-                        )).fetchone()
+                        dept_rev_row = await (
+                            await db.execute(
+                                "SELECT current_revision_id FROM departments WHERE id=? AND company_id=?",
+                                (department_id, company_id),
+                            )
+                        ).fetchone()
                         dept_revision_id: str = dept_rev_row["current_revision_id"] if dept_rev_row else ""
                         exec_snap_id = _id()
                         await db.execute(
@@ -227,14 +247,26 @@ async def dispatch_company_task(
                                 verification_commands_json, content_sha256, created_at)
                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
-                                exec_snap_id, company_id, task_id, department_id,
-                                dept_task_id, emp_task_id, emp_id,
-                                "task_execution", emp_task_id,
-                                company_revision_id, dept_revision_id,
-                                profile_version_id, catalog_release_id,
+                                exec_snap_id,
+                                company_id,
+                                task_id,
+                                department_id,
+                                dept_task_id,
+                                emp_task_id,
+                                emp_id,
+                                "task_execution",
+                                emp_task_id,
+                                company_revision_id,
+                                dept_revision_id,
+                                profile_version_id,
+                                catalog_release_id,
                                 json.dumps(binding),
-                                "{}", "{}", "{}", "[]",
-                                spec_sha, now,
+                                "{}",
+                                "{}",
+                                "{}",
+                                "[]",
+                                spec_sha,
+                                now,
                             ),
                         )
 
@@ -249,13 +281,25 @@ async def dispatch_company_task(
                                 updated_at, version)
                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
-                                run_id, company_id, task_id, dept_task_id,
-                                emp_task_id, emp_task_id, emp_id,
+                                run_id,
+                                company_id,
+                                task_id,
+                                dept_task_id,
+                                emp_task_id,
+                                emp_task_id,
+                                emp_id,
                                 task_row["company_conversation_id"],
-                                avail_snap_id, exec_snap_id,
-                                "task_execution", adapter_type,
-                                spec_json, spec_sha,
-                                "queued", 1, now, now, 1,
+                                avail_snap_id,
+                                exec_snap_id,
+                                "task_execution",
+                                adapter_type,
+                                spec_json,
+                                spec_sha,
+                                "queued",
+                                1,
+                                now,
+                                now,
+                                1,
                             ),
                         )
                         await db.execute(

@@ -5,6 +5,7 @@ Usage:
     setup_logging()
     logger = get_logger("ibreeze.rpc_server")
 """
+
 from __future__ import annotations
 
 import json
@@ -15,11 +16,22 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-_SENSITIVE_KEYS = frozenset({
-    "password", "token", "api_key", "authorization", "cookie",
-    "secret", "credential", "access_token", "refresh_token",
-    "private_key", "jwt", "bearer",
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "password",
+        "token",
+        "api_key",
+        "authorization",
+        "cookie",
+        "secret",
+        "credential",
+        "access_token",
+        "refresh_token",
+        "private_key",
+        "jwt",
+        "bearer",
+    }
+)
 
 _REDACTED = "[REDACTED]"
 _TRUNCATE_LENGTH = 100
@@ -33,10 +45,7 @@ class RedactionFilter(logging.Filter):
             record.msg = self._redact_string(record.msg)
         if hasattr(record, "args") and record.args:
             if isinstance(record.args, dict):
-                record.args = {
-                    k: _REDACTED if k.lower() in _SENSITIVE_KEYS else v
-                    for k, v in record.args.items()
-                }
+                record.args = {k: _REDACTED if k.lower() in _SENSITIVE_KEYS else v for k, v in record.args.items()}
         return True
 
     def _redact_string(self, text: str) -> str:
@@ -119,6 +128,7 @@ def setup_logging(
 def _clean_old_logs(log_dir: str, retention_days: int) -> None:
     """Remove log files older than retention_days."""
     import time as _time
+
     cutoff = _time.time() - (retention_days * 86400)
     try:
         for f in Path(log_dir).glob("sidecar.jsonl*"):

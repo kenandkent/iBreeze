@@ -82,14 +82,17 @@ PROTOCOL_VERSION = 1
 READ_METHODS = frozenset(
     {
         "approval.listPending",
+        "artifact.get",
         "artifact.getSnapshot",
         "artifact.list",
+        "backup.get",
         "backup.list",
+        "catalog.get",
         "catalog.getActiveRelease",
+        "catalog.list",
         "catalog.listAgents",
         "catalog.listModels",
         "catalog.listSkills",
-        "catalog.verifyCache",
         "company.get",
         "company.list",
         "conversation.getCompany",
@@ -98,14 +101,20 @@ READ_METHODS = frozenset(
         "conversation.listMessages",
         "department.get",
         "department.list",
+        "departmentTask.get",
         "departmentTask.getReport",
+        "departmentTask.list",
         "employee.get",
         "employee.list",
-        "event.replay",
+        "employeeTask.get",
+        "employeeTask.list",
+        "knowledge.get",
         "knowledge.list",
         "knowledge.search",
         "profile.get",
         "profile.list",
+        "review.get",
+        "review.list",
         "review.listIssues",
         "run.get",
         "run.list",
@@ -633,9 +642,7 @@ class RPCServer:
         # Get actual migration version from database
         migration_version = "unknown"
         try:
-            cursor = await self._writer.execute(
-                "SELECT MAX(version) FROM schema_migrations WHERE status='completed'"
-            )
+            cursor = await self._writer.execute("SELECT MAX(version) FROM schema_migrations WHERE status='completed'")
             row = await cursor.fetchone()
             result = row[0] if row else None
             if result:
@@ -645,7 +652,7 @@ class RPCServer:
 
         # Check process pool status
         process_pool_status = "unknown"
-        if hasattr(self, '_process_supervisor') and self._process_supervisor is not None:
+        if hasattr(self, "_process_supervisor") and self._process_supervisor is not None:
             active = self._process_supervisor.active_count
             process_pool_status = "ready" if active >= 0 else "degraded"
 
@@ -693,6 +700,7 @@ class RPCServer:
             if datetime.now(UTC) - created < timedelta(minutes=10):
                 raise DomainError("IDEMPOTENCY_IN_PROGRESS")
             if self._write_queue is not None:
+
                 async def _abandon(conn: Any) -> None:
                     await conn.execute(
                         """UPDATE idempotency
@@ -700,6 +708,7 @@ class RPCServer:
                            WHERE idempotency_key=?""",
                         (key,),
                     )
+
                 await self._write_queue.submit(
                     "rpc.abandon",
                     uuid.UUID(int=0),
@@ -717,9 +726,7 @@ class RPCServer:
             raise DomainError("IDEMPOTENCY_PROCESSING_ABANDONED")
 
         now = _now()
-        expires_at = (
-            datetime.now(UTC) + timedelta(days=30)
-        ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        expires_at = (datetime.now(UTC) + timedelta(days=30)).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
         async def _execute(conn: Any) -> object:
             await conn.execute(
@@ -1530,9 +1537,7 @@ class RPCServer:
     async def _department_responsibility_update(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE department_responsibilities "
-            "SET name=?, description=?, updated_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE department_responsibilities SET name=?, description=?, updated_at=? WHERE id=? AND company_id=?",
             (
                 params["name"],
                 params.get("description", ""),
@@ -1555,8 +1560,7 @@ class RPCServer:
     async def _department_archive(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE departments SET status='archived', updated_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE departments SET status='archived', updated_at=? WHERE id=? AND company_id=?",
             (now, params["department_id"], params["company_id"]),
         )
         await self._connection.commit()
@@ -1582,8 +1586,7 @@ class RPCServer:
 
     async def _artifact_list(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM artifacts WHERE company_id=? AND company_task_id=? "
-            "ORDER BY created_at DESC",
+            "SELECT * FROM artifacts WHERE company_id=? AND company_task_id=? ORDER BY created_at DESC",
             (params["company_id"], params["task_id"]),
         )
         rows = await cursor.fetchall()
@@ -1618,8 +1621,7 @@ class RPCServer:
     async def _workspace_apply(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='applied', updated_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE task_workspaces SET status='applied', updated_at=? WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
         await self._connection.commit()
@@ -1628,8 +1630,7 @@ class RPCServer:
     async def _workspace_abandon(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='abandoned', updated_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE task_workspaces SET status='abandoned', updated_at=? WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
         await self._connection.commit()
@@ -1638,8 +1639,7 @@ class RPCServer:
     async def _workspace_cleanup_task(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE task_workspaces SET status='abandoned', cleaned_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE task_workspaces SET status='abandoned', cleaned_at=? WHERE id=? AND company_id=?",
             (now, params["workspace_id"], params["company_id"]),
         )
         await self._connection.commit()
@@ -1684,8 +1684,7 @@ class RPCServer:
     async def _review_resolve_issue(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE review_issues SET status='resolved', updated_at=?, "
-            "version=version+1 WHERE id=? AND company_id=?",
+            "UPDATE review_issues SET status='resolved', updated_at=?, version=version+1 WHERE id=? AND company_id=?",
             (
                 now,
                 params["issue_id"],
@@ -1699,8 +1698,7 @@ class RPCServer:
 
     async def _approval_list_pending(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM human_approvals WHERE company_id=? AND status='pending' "
-            "ORDER BY requested_at DESC",
+            "SELECT * FROM human_approvals WHERE company_id=? AND status='pending' ORDER BY requested_at DESC",
             (params["company_id"],),
         )
         rows = await cursor.fetchall()
@@ -1711,8 +1709,7 @@ class RPCServer:
         decision = params["decision"]
         new_status = "allowed" if decision in ("approve", "allowed") else "denied"
         await self._connection.execute(
-            "UPDATE human_approvals SET status=?, resolved_at=? "
-            "WHERE id=? AND company_id=?",
+            "UPDATE human_approvals SET status=?, resolved_at=? WHERE id=? AND company_id=?",
             (
                 new_status,
                 now,
@@ -1757,8 +1754,7 @@ class RPCServer:
 
     async def _knowledge_list(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM knowledge_items WHERE company_id=? "
-            "ORDER BY created_at DESC",
+            "SELECT * FROM knowledge_items WHERE company_id=? ORDER BY created_at DESC",
             (params["company_id"],),
         )
         rows = await cursor.fetchall()
@@ -1796,8 +1792,7 @@ class RPCServer:
     async def _backup_restore(self, params: dict[str, Any]) -> object:
         now = _now()
         await self._connection.execute(
-            "UPDATE backup_records SET status='completed', completed_at=? "
-            "WHERE id=?",
+            "UPDATE backup_records SET status='completed', completed_at=? WHERE id=?",
             (now, params["backup_id"]),
         )
         await self._connection.commit()
@@ -1814,8 +1809,7 @@ class RPCServer:
 
     async def _settings_get(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT cli_global_concurrency, log_retention_days, version "
-            "FROM local_preferences WHERE singleton_id=1",
+            "SELECT cli_global_concurrency, log_retention_days, version FROM local_preferences WHERE singleton_id=1",
         )
         row = await cursor.fetchone()
         if row is None:
@@ -1855,8 +1849,7 @@ class RPCServer:
 
     async def _event_replay(self, params: dict[str, Any]) -> object:
         cursor = await self._connection.execute(
-            "SELECT * FROM domain_events WHERE company_id=? "
-            "ORDER BY occurred_at DESC LIMIT ?",
+            "SELECT * FROM domain_events WHERE company_id=? ORDER BY occurred_at DESC LIMIT ?",
             (params["company_id"], params.get("limit", 100)),
         )
         rows = await cursor.fetchall()
@@ -1908,17 +1901,14 @@ class RPCServer:
 
     async def _catalog_remove_skill(self, params: dict[str, Any]) -> object:
         await self._connection.execute(
-            "UPDATE installed_skill_versions SET status='disabled' "
-            "WHERE skill_id=?",
+            "UPDATE installed_skill_versions SET status='disabled' WHERE skill_id=?",
             (params["skill_id"],),
         )
         await self._connection.commit()
         return {"removed": True}
 
     async def _catalog_verify_cache(self, params: dict[str, Any]) -> object:
-        cursor = await self._connection.execute(
-            "SELECT COUNT(*) as cnt FROM catalog_cache_releases"
-        )
+        cursor = await self._connection.execute("SELECT COUNT(*) as cnt FROM catalog_cache_releases")
         row = await cursor.fetchone()
         return {"valid": True, "release_count": dict(row)["cnt"] if row else 0}
 

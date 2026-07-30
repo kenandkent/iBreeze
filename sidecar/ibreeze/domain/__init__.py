@@ -89,39 +89,23 @@ class DomainEventSpec:
 
 # 注册表: 所有标准域事件的定义
 EVENT_REGISTRY: dict[DomainEventType, DomainEventSpec] = {
-    DomainEventType.COMPANY_CREATED: DomainEventSpec(
-        DomainEventType.COMPANY_CREATED, "company", "公司创建"
-    ),
-    DomainEventType.COMPANY_RENAMED: DomainEventSpec(
-        DomainEventType.COMPANY_RENAMED, "company", "公司改名"
-    ),
-    DomainEventType.COMPANY_UPDATED: DomainEventSpec(
-        DomainEventType.COMPANY_UPDATED, "company", "公司信息更新"
-    ),
-    DomainEventType.COMPANY_ARCHIVED: DomainEventSpec(
-        DomainEventType.COMPANY_ARCHIVED, "company", "公司归档"
-    ),
-    DomainEventType.DEPARTMENT_CREATED: DomainEventSpec(
-        DomainEventType.DEPARTMENT_CREATED, "department", "部门创建"
-    ),
+    DomainEventType.COMPANY_CREATED: DomainEventSpec(DomainEventType.COMPANY_CREATED, "company", "公司创建"),
+    DomainEventType.COMPANY_RENAMED: DomainEventSpec(DomainEventType.COMPANY_RENAMED, "company", "公司改名"),
+    DomainEventType.COMPANY_UPDATED: DomainEventSpec(DomainEventType.COMPANY_UPDATED, "company", "公司信息更新"),
+    DomainEventType.COMPANY_ARCHIVED: DomainEventSpec(DomainEventType.COMPANY_ARCHIVED, "company", "公司归档"),
+    DomainEventType.DEPARTMENT_CREATED: DomainEventSpec(DomainEventType.DEPARTMENT_CREATED, "department", "部门创建"),
     DomainEventType.DEPARTMENT_UPDATED: DomainEventSpec(
         DomainEventType.DEPARTMENT_UPDATED, "department", "部门信息更新"
     ),
     DomainEventType.DEPARTMENT_LEADER_CHANGED: DomainEventSpec(
         DomainEventType.DEPARTMENT_LEADER_CHANGED, "department", "部门负责人变更"
     ),
-    DomainEventType.EMPLOYEE_CREATED: DomainEventSpec(
-        DomainEventType.EMPLOYEE_CREATED, "employee", "职员创建"
-    ),
-    DomainEventType.EMPLOYEE_UPDATED: DomainEventSpec(
-        DomainEventType.EMPLOYEE_UPDATED, "employee", "职员信息更新"
-    ),
+    DomainEventType.EMPLOYEE_CREATED: DomainEventSpec(DomainEventType.EMPLOYEE_CREATED, "employee", "职员创建"),
+    DomainEventType.EMPLOYEE_UPDATED: DomainEventSpec(DomainEventType.EMPLOYEE_UPDATED, "employee", "职员信息更新"),
     DomainEventType.EMPLOYEE_STATUS_CHANGED: DomainEventSpec(
         DomainEventType.EMPLOYEE_STATUS_CHANGED, "employee", "职员状态变更"
     ),
-    DomainEventType.EMPLOYEE_TRANSFERRED: DomainEventSpec(
-        DomainEventType.EMPLOYEE_TRANSFERRED, "employee", "职员调岗"
-    ),
+    DomainEventType.EMPLOYEE_TRANSFERRED: DomainEventSpec(DomainEventType.EMPLOYEE_TRANSFERRED, "employee", "职员调岗"),
     # ── CompanyTask ────────────────────────────────────────────────────
     DomainEventType.COMPANY_TASK_CREATED: DomainEventSpec(
         DomainEventType.COMPANY_TASK_CREATED, "company_task", "公司任务创建"
@@ -166,58 +150,32 @@ EVENT_REGISTRY: dict[DomainEventType, DomainEventSpec] = {
         DomainEventType.CONVERSATION_EMPLOYEE_MESSAGE_SUBMITTED, "conversation", "职员消息提交"
     ),
     # ── Plan ───────────────────────────────────────────────────────────
-    DomainEventType.PLAN_GENERATED: DomainEventSpec(
-        DomainEventType.PLAN_GENERATED, "company_plan", "计划已生成"
-    ),
+    DomainEventType.PLAN_GENERATED: DomainEventSpec(DomainEventType.PLAN_GENERATED, "company_plan", "计划已生成"),
     DomainEventType.PLAN_AWAITING_CONFIRMATION: DomainEventSpec(
         DomainEventType.PLAN_AWAITING_CONFIRMATION, "company_plan", "计划等待确认"
     ),
-    DomainEventType.PLAN_APPROVED: DomainEventSpec(
-        DomainEventType.PLAN_APPROVED, "company_plan", "计划已批准"
-    ),
-    DomainEventType.PLAN_REJECTED: DomainEventSpec(
-        DomainEventType.PLAN_REJECTED, "company_plan", "计划已拒绝"
-    ),
-    DomainEventType.PLAN_SUPERSEDED: DomainEventSpec(
-        DomainEventType.PLAN_SUPERSEDED, "company_plan", "计划已替代"
-    ),
+    DomainEventType.PLAN_APPROVED: DomainEventSpec(DomainEventType.PLAN_APPROVED, "company_plan", "计划已批准"),
+    DomainEventType.PLAN_REJECTED: DomainEventSpec(DomainEventType.PLAN_REJECTED, "company_plan", "计划已拒绝"),
+    DomainEventType.PLAN_SUPERSEDED: DomainEventSpec(DomainEventType.PLAN_SUPERSEDED, "company_plan", "计划已替代"),
     # ── Review ─────────────────────────────────────────────────────────
     DomainEventType.REVIEW_ASSIGNMENT_CREATED: DomainEventSpec(
         DomainEventType.REVIEW_ASSIGNMENT_CREATED, "review", "审查分配已创建"
     ),
-    DomainEventType.REVIEW_STARTED: DomainEventSpec(
-        DomainEventType.REVIEW_STARTED, "review", "审查已开始"
-    ),
-    DomainEventType.REVIEW_SUBMITTED: DomainEventSpec(
-        DomainEventType.REVIEW_SUBMITTED, "review", "审查已提交"
-    ),
+    DomainEventType.REVIEW_STARTED: DomainEventSpec(DomainEventType.REVIEW_STARTED, "review", "审查已开始"),
+    DomainEventType.REVIEW_SUBMITTED: DomainEventSpec(DomainEventType.REVIEW_SUBMITTED, "review", "审查已提交"),
     DomainEventType.REVIEW_ISSUE_CREATED: DomainEventSpec(
         DomainEventType.REVIEW_ISSUE_CREATED, "review", "审查问题已创建"
     ),
     DomainEventType.REVIEW_ISSUE_RESOLVED: DomainEventSpec(
         DomainEventType.REVIEW_ISSUE_RESOLVED, "review", "审查问题已解决"
     ),
-    DomainEventType.RUN_PROBING: DomainEventSpec(
-        DomainEventType.RUN_PROBING, "agent_run", "运行探测"
-    ),
-    DomainEventType.RUN_STARTED: DomainEventSpec(
-        DomainEventType.RUN_STARTED, "agent_run", "运行开始"
-    ),
-    DomainEventType.RUN_COMPLETED: DomainEventSpec(
-        DomainEventType.RUN_COMPLETED, "agent_run", "运行完成"
-    ),
-    DomainEventType.RUN_FAILED: DomainEventSpec(
-        DomainEventType.RUN_FAILED, "agent_run", "运行失败"
-    ),
-    DomainEventType.RUN_CANCELLED: DomainEventSpec(
-        DomainEventType.RUN_CANCELLED, "agent_run", "运行取消"
-    ),
-    DomainEventType.RUN_TIMED_OUT: DomainEventSpec(
-        DomainEventType.RUN_TIMED_OUT, "agent_run", "运行超时"
-    ),
-    DomainEventType.RUN_LOST: DomainEventSpec(
-        DomainEventType.RUN_LOST, "agent_run", "运行丢失"
-    ),
+    DomainEventType.RUN_PROBING: DomainEventSpec(DomainEventType.RUN_PROBING, "agent_run", "运行探测"),
+    DomainEventType.RUN_STARTED: DomainEventSpec(DomainEventType.RUN_STARTED, "agent_run", "运行开始"),
+    DomainEventType.RUN_COMPLETED: DomainEventSpec(DomainEventType.RUN_COMPLETED, "agent_run", "运行完成"),
+    DomainEventType.RUN_FAILED: DomainEventSpec(DomainEventType.RUN_FAILED, "agent_run", "运行失败"),
+    DomainEventType.RUN_CANCELLED: DomainEventSpec(DomainEventType.RUN_CANCELLED, "agent_run", "运行取消"),
+    DomainEventType.RUN_TIMED_OUT: DomainEventSpec(DomainEventType.RUN_TIMED_OUT, "agent_run", "运行超时"),
+    DomainEventType.RUN_LOST: DomainEventSpec(DomainEventType.RUN_LOST, "agent_run", "运行丢失"),
 }
 
 

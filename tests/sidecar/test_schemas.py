@@ -3,6 +3,7 @@
 Covers design spec sections:
 - H.1 Schema validation (Pydantic V2 strict models)
 """
+
 import pytest
 from pydantic import ValidationError
 

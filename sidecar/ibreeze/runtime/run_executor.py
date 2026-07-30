@@ -24,13 +24,20 @@ _TERMINAL_RUN = {"succeeded", "cancelled", "timed_out", "failed", "lost"}
 
 def _now() -> str:
     from datetime import UTC, datetime
+
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 async def _write_event(
-    db: Any, *, company_id: str, run_id: str, event_type: str, payload: dict[str, Any],
+    db: Any,
+    *,
+    company_id: str,
+    run_id: str,
+    event_type: str,
+    payload: dict[str, Any],
 ) -> None:
     import uuid
+
     event_id = str(uuid.uuid4())
     await db.execute(
         """INSERT INTO agent_run_events
@@ -51,12 +58,14 @@ async def execute_single_run(
     now = _now()
 
     # Fetch run details
-    run_row = await (await db.execute(
-        """SELECT id, company_id, adapter_type, run_spec_json, employee_id,
+    run_row = await (
+        await db.execute(
+            """SELECT id, company_id, adapter_type, run_spec_json, employee_id,
                   process_pid, status
            FROM agent_runs WHERE id=? AND company_id=?""",
-        (run_id, company_id),
-    )).fetchone()
+            (run_id, company_id),
+        )
+    ).fetchone()
     if run_row is None:
         return {"error": "RUN_NOT_FOUND"}
 
@@ -73,8 +82,9 @@ async def execute_single_run(
            WHERE id=? AND company_id=?""",
         (now, run_id, company_id),
     )
-    await _write_event(db, company_id=company_id, run_id=run_id,
-                       event_type="run_probing", payload={"adapter_type": adapter_type})
+    await _write_event(
+        db, company_id=company_id, run_id=run_id, event_type="run_probing", payload={"adapter_type": adapter_type}
+    )
 
     # Probe adapter availability
     probe_ok = await _probe_adapter(adapter_type)
@@ -112,12 +122,23 @@ async def execute_single_run(
            SET status=?, completed_at=?, exit_code=?, failure_code=?,
                updated_at=?, version=version+1
            WHERE id=? AND company_id=?""",
-        (final_status, completed_at, result.get("exit_code", -1),
-         None if success else "AGENT_FAILED", completed_at, run_id, company_id),
+        (
+            final_status,
+            completed_at,
+            result.get("exit_code", -1),
+            None if success else "AGENT_FAILED",
+            completed_at,
+            run_id,
+            company_id,
+        ),
     )
-    await _write_event(db, company_id=company_id, run_id=run_id,
-                       event_type=f"run_{final_status}",
-                       payload={"exit_code": result.get("exit_code", -1)})
+    await _write_event(
+        db,
+        company_id=company_id,
+        run_id=run_id,
+        event_type=f"run_{final_status}",
+        payload={"exit_code": result.get("exit_code", -1)},
+    )
 
     # Feedback to task states
     await _feedback_to_tasks(db, run_id, company_id, success)
@@ -131,8 +152,8 @@ async def execute_single_run(
 async def _probe_adapter(adapter_type: str) -> bool:
     """Check if the CLI adapter is available on this machine."""
     from ibreeze.runtime.cli import probe_agent
-    mapping = {"codex_cli": "codex_cli", "claude_code": "claude_code",
-               "opencode": "opencode", "agent_cli": "codex_cli"}
+
+    mapping = {"codex_cli": "codex_cli", "claude_code": "claude_code", "opencode": "opencode", "agent_cli": "codex_cli"}
     name = mapping.get(adapter_type)
     if name is None:
         return adapter_type == "api_model"
@@ -144,7 +165,9 @@ async def _probe_adapter(adapter_type: str) -> bool:
 
 
 async def _execute_cli(
-    run_id: str, spec: dict[str, Any], adapter_type: str,
+    run_id: str,
+    spec: dict[str, Any],
+    adapter_type: str,
 ) -> dict[str, Any]:
     """Execute a CLI adapter run using the structured adapter classes."""
     import tempfile
@@ -168,6 +191,7 @@ async def _execute_cli(
         result = await supervisor.wait(run_id, timeout=timeout)
     finally:
         import os
+
         try:
             os.unlink(prompt_file)
         except OSError:
@@ -220,7 +244,10 @@ async def _execute_model(run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _fail_run(
-    db: Any, run_id: str, company_id: str, failure_code: str,
+    db: Any,
+    run_id: str,
+    company_id: str,
+    failure_code: str,
 ) -> None:
     """Mark a run as failed and write event."""
     now = _now()
@@ -231,13 +258,17 @@ async def _fail_run(
            WHERE id=? AND company_id=?""",
         (failure_code, now, now, run_id, company_id),
     )
-    await _write_event(db, company_id=company_id, run_id=run_id,
-                       event_type="run_failed", payload={"failure_code": failure_code})
+    await _write_event(
+        db, company_id=company_id, run_id=run_id, event_type="run_failed", payload={"failure_code": failure_code}
+    )
     await _feedback_to_tasks(db, run_id, company_id, False)
 
 
 async def _feedback_to_tasks(
-    db: Any, run_id: str, company_id: str, success: bool,
+    db: Any,
+    run_id: str,
+    company_id: str,
+    success: bool,
 ) -> None:
     """Propagate run completion back to employee_task → department_task → company_task.
 
@@ -248,11 +279,13 @@ async def _feedback_to_tasks(
 
     now = _now()
 
-    run_row = await (await db.execute(
-        """SELECT employee_task_id, department_task_id, company_task_id
+    run_row = await (
+        await db.execute(
+            """SELECT employee_task_id, department_task_id, company_task_id
            FROM agent_runs WHERE id=? AND company_id=?""",
-        (run_id, company_id),
-    )).fetchone()
+            (run_id, company_id),
+        )
+    ).fetchone()
     if run_row is None:
         return
     run = dict(run_row)
@@ -276,18 +309,22 @@ async def _feedback_to_tasks(
 
     # Check if all employee_tasks for this department_task are done
     if run.get("department_task_id"):
-        pending = await (await db.execute(
-            """SELECT COUNT(*) as cnt FROM employee_tasks
+        pending = await (
+            await db.execute(
+                """SELECT COUNT(*) as cnt FROM employee_tasks
                WHERE department_task_id=? AND company_id=?
                AND status NOT IN ('submitted','accepted','cancelled','failed','needs_review','needs_rework')""",
-            (run["department_task_id"], company_id),
-        )).fetchone()
-        if pending and pending["cnt"] == 0:
-            any_failed = await (await db.execute(
-                """SELECT COUNT(*) as cnt FROM employee_tasks
-                   WHERE department_task_id=? AND company_id=? AND status='failed'""",
                 (run["department_task_id"], company_id),
-            )).fetchone()
+            )
+        ).fetchone()
+        if pending and pending["cnt"] == 0:
+            any_failed = await (
+                await db.execute(
+                    """SELECT COUNT(*) as cnt FROM employee_tasks
+                   WHERE department_task_id=? AND company_id=? AND status='failed'""",
+                    (run["department_task_id"], company_id),
+                )
+            ).fetchone()
             dept_status = "failed" if (any_failed and any_failed["cnt"] > 0) else "reviewing"
             await db.execute(
                 """UPDATE department_tasks
@@ -297,19 +334,23 @@ async def _feedback_to_tasks(
             )
 
             # Trigger downstream department_tasks
-            downstream = await (await db.execute(
-                """SELECT department_task_id FROM department_task_dependencies
+            downstream = await (
+                await db.execute(
+                    """SELECT department_task_id FROM department_task_dependencies
                    WHERE depends_on_task_id=? AND company_task_id=?""",
-                (run["department_task_id"], run["company_task_id"]),
-            )).fetchall()
+                    (run["department_task_id"], run["company_task_id"]),
+                )
+            ).fetchall()
             for row in downstream:
                 down_id = row["department_task_id"]
-                unmet = await (await db.execute(
-                    """SELECT COUNT(*) as cnt FROM department_task_dependencies d
+                unmet = await (
+                    await db.execute(
+                        """SELECT COUNT(*) as cnt FROM department_task_dependencies d
                        JOIN department_tasks t ON t.id = d.depends_on_task_id
                        WHERE d.department_task_id=? AND t.status NOT IN ('completed','cancelled')""",
-                    (down_id,),
-                )).fetchone()
+                        (down_id,),
+                    )
+                ).fetchone()
                 if unmet and unmet["cnt"] == 0:
                     await db.execute(
                         """UPDATE department_tasks
@@ -320,24 +361,30 @@ async def _feedback_to_tasks(
 
     # Check if all department_tasks for this company_task are done
     if run.get("company_task_id"):
-        dept_pending = await (await db.execute(
-            """SELECT COUNT(*) as cnt FROM department_tasks
+        dept_pending = await (
+            await db.execute(
+                """SELECT COUNT(*) as cnt FROM department_tasks
                WHERE company_task_id=? AND company_id=?
                AND status NOT IN ('reviewing','completed','cancelled','failed')""",
-            (run["company_task_id"], company_id),
-        )).fetchone()
-        if dept_pending and dept_pending["cnt"] == 0:
-            any_dept_failed = await (await db.execute(
-                """SELECT COUNT(*) as cnt FROM department_tasks
-                   WHERE company_task_id=? AND company_id=? AND status='failed'""",
                 (run["company_task_id"], company_id),
-            )).fetchone()
+            )
+        ).fetchone()
+        if dept_pending and dept_pending["cnt"] == 0:
+            any_dept_failed = await (
+                await db.execute(
+                    """SELECT COUNT(*) as cnt FROM department_tasks
+                   WHERE company_task_id=? AND company_id=? AND status='failed'""",
+                    (run["company_task_id"], company_id),
+                )
+            ).fetchone()
             if any_dept_failed and any_dept_failed["cnt"] > 0:
                 ct_status = "failed"
             else:
                 company_gate = CompanyGate()
                 blockers = await company_gate.blockers(
-                    db, UUID(run["company_task_id"]), UUID(company_id),
+                    db,
+                    UUID(run["company_task_id"]),
+                    UUID(company_id),
                 )
                 ct_status = "reviewing" if not blockers else "needs_rework"
                 if blockers:

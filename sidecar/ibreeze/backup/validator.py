@@ -20,19 +20,21 @@ from typing import Any
 
 import zstandard as zstd
 
-REQUIRED_TABLES: frozenset[str] = frozenset({
-    "companies",
-    "departments",
-    "employees",
-    "conversations",
-    "agent_runs",
-    "artifacts",
-    "knowledge_items",
-    "backup_records",
-    "domain_events",
-    "schema_migrations",
-    "embedding_generations",
-})
+REQUIRED_TABLES: frozenset[str] = frozenset(
+    {
+        "companies",
+        "departments",
+        "employees",
+        "conversations",
+        "agent_runs",
+        "artifacts",
+        "knowledge_items",
+        "backup_records",
+        "domain_events",
+        "schema_migrations",
+        "embedding_generations",
+    }
+)
 
 ARTIFACT_REF_CHAINS: list[tuple[str, str, str]] = [
     ("knowledge_items", "source_artifact_id", "artifacts"),
@@ -57,9 +59,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
         if integrity_lines != ["ok"]:
             errors.append(f"Integrity check failed: {integrity_lines}")
 
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = {row[0] for row in cursor.fetchall()}
         missing = REQUIRED_TABLES - tables
         if missing:
@@ -71,9 +71,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
         user_version = cursor.fetchone()[0]
 
         if "schema_migrations" in tables:
-            cursor.execute(
-                "SELECT version, name, applied_at, checksum FROM schema_migrations ORDER BY version"
-            )
+            cursor.execute("SELECT version, name, applied_at, checksum FROM schema_migrations ORDER BY version")
             migrations = [
                 {
                     "version": row[0],
@@ -88,9 +86,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
             migration_versions = [m["version"] for m in migrations]
             expected = list(range(1, len(migrations) + 1))
             if migration_versions != expected:
-                warnings.append(
-                    f"Migration versions not sequential: {migration_versions}"
-                )
+                warnings.append(f"Migration versions not sequential: {migration_versions}")
         else:
             migrations = []
             warnings.append("No schema_migrations table")
@@ -99,12 +95,14 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
         fk_violations = cursor.fetchall()
         fk_detail: list[dict[str, Any]] = []
         for v in fk_violations:
-            fk_detail.append({
-                "table": v[0],
-                "rowid": v[1],
-                "parent": v[2],
-                "fkid": v[3],
-            })
+            fk_detail.append(
+                {
+                    "table": v[0],
+                    "rowid": v[1],
+                    "parent": v[2],
+                    "fkid": v[3],
+                }
+            )
         if fk_detail:
             warnings.append(f"FK violations: {len(fk_detail)}")
 
@@ -120,9 +118,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
                 )
                 orphan_count = cursor.fetchone()[0]
                 if orphan_count > 0:
-                    ref_issues.append(
-                        f"{child_table}.{child_col} -> {parent_table}: {orphan_count} orphans"
-                    )
+                    ref_issues.append(f"{child_table}.{child_col} -> {parent_table}: {orphan_count} orphans")
             except Exception:
                 pass
 
@@ -131,8 +127,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
 
         index_issues: list[str] = []
         cursor.execute(
-            "SELECT name, sql FROM sqlite_master "
-            "WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
+            "SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
         )
         for idx_row in cursor.fetchall():
             idx_name = idx_row[0]
@@ -264,9 +259,7 @@ async def restore_from_backup(
             if highest != total:
                 return {
                     "success": False,
-                    "errors": [
-                        f"Migration chain incomplete: {highest}/{total} versions applied"
-                    ],
+                    "errors": [f"Migration chain incomplete: {highest}/{total} versions applied"],
                 }
 
         if os.path.exists(db_path):

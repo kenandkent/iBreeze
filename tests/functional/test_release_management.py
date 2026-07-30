@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.9 Catalog Release (manifest, signing, emergency disable)
 """
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -69,7 +70,9 @@ class TestEmergencyDisable:
 
         mock_db_session.execute.return_value = _mock_scalars([])
 
-        disable = await create_emergency_disable(mock_db_session, ["skill-1", "skill-2"])
+        disable = await create_emergency_disable(
+            mock_db_session, ["skill-1", "skill-2"]
+        )
         assert disable.sequence == 1
         assert disable.disabled_skill_ids == ["skill-1", "skill-2"]
         mock_db_session.add.assert_called_once()

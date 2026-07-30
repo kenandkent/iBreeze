@@ -6,6 +6,7 @@ Covers design spec sections:
 - G.3 Staff Management (create, transfer, deactivate)
 - G.4 Conversation Management
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 # ---------------------------------------------------------------------------
 # Company
 # ---------------------------------------------------------------------------
+
 
 class TestCompanyModel:
     """Company domain model validation."""
@@ -80,6 +82,7 @@ class TestCompanyModel:
 # Department
 # ---------------------------------------------------------------------------
 
+
 class TestDepartmentModel:
     """Department hierarchy model."""
 
@@ -109,6 +112,7 @@ class TestDepartmentModel:
 # ---------------------------------------------------------------------------
 # Staff (mapped to Employee in current API)
 # ---------------------------------------------------------------------------
+
 
 class TestStaffModel:
     """Staff member model (mapped to EmployeeCreate)."""
@@ -224,8 +228,15 @@ class _TaskCreate(BaseModel):
     description: str | None = None
 
 
-async def _create_task(db, *, title: str, company_id: str, description: str | None = None,
-                       assignee_id: str | None = None, conversation_id: str | None = None):
+async def _create_task(
+    db,
+    *,
+    title: str,
+    company_id: str,
+    description: str | None = None,
+    assignee_id: str | None = None,
+    conversation_id: str | None = None,
+):
     task = MagicMock()
     task.title = title
     task.description = description
@@ -239,13 +250,17 @@ class TestTaskModel:
 
     @pytest.mark.asyncio
     async def test_create_task(self, mock_db_session):
-        task = await _create_task(mock_db_session, title="Test Task", company_id="comp-1")
+        task = await _create_task(
+            mock_db_session, title="Test Task", company_id="comp-1"
+        )
         assert task is not None
         assert task.title == "Test Task"
 
     @pytest.mark.asyncio
     async def test_task_with_description(self, mock_db_session):
-        task = await _create_task(mock_db_session, title="Task", description="Desc", company_id="comp-1")
+        task = await _create_task(
+            mock_db_session, title="Task", description="Desc", company_id="comp-1"
+        )
         assert task.description == "Desc"
 
     def test_task_create_schema(self):
@@ -262,10 +277,17 @@ class TestTaskModel:
 
     @pytest.mark.asyncio
     async def test_task_with_assignee(self, mock_db_session):
-        task = await _create_task(mock_db_session, title="Assigned", company_id="comp-1", assignee_id="emp-1")
+        task = await _create_task(
+            mock_db_session, title="Assigned", company_id="comp-1", assignee_id="emp-1"
+        )
         assert task.assignee_id == "emp-1"
 
     @pytest.mark.asyncio
     async def test_task_linked_to_conversation(self, mock_db_session):
-        task = await _create_task(mock_db_session, title="Linked", company_id="comp-1", conversation_id="conv-1")
+        task = await _create_task(
+            mock_db_session,
+            title="Linked",
+            company_id="comp-1",
+            conversation_id="conv-1",
+        )
         assert task.conversation_id == "conv-1"

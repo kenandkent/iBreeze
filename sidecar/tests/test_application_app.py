@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ibreeze.application.app import SidecarApplication
-from ibreeze.application.lifecycle import ApplicationLifecycle, LifecyclePhase
+from ibreeze.application.lifecycle import LifecyclePhase
 from ibreeze.observability.health import HealthSnapshot
 
 
@@ -70,6 +70,7 @@ class TestSidecarApplicationStart:
                 app_user_id="user-abc",
                 masked_identifier="mask-123",
                 device_id="dev-xyz",
+                app_version="2.0.0",
                 profile_mode="offline",
             )
             mock_lifecycle.start.assert_awaited_once()
@@ -111,6 +112,7 @@ class TestSidecarApplicationStart:
                 app_user_id="uid-42",
                 masked_identifier="m-99",
                 device_id="d-abc",
+                app_version="2.0.0",
                 profile_mode="online",
             )
 

@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.8 Skill Management (install, remove, disable)
 """
+
 import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -20,8 +21,12 @@ class TestSkillManagement:
         with (
             patch("ibreeze_backend.skills.service.validate_skill_zip") as mock_validate,
             patch("ibreeze_backend.skills.service.validate_zip_size") as mock_size,
-            patch("ibreeze_backend.skills.service.validate_uncompressed_size") as mock_uncompressed,
-            patch("ibreeze_backend.skills.service.compute_zip_checksum") as mock_checksum,
+            patch(
+                "ibreeze_backend.skills.service.validate_uncompressed_size"
+            ) as mock_uncompressed,
+            patch(
+                "ibreeze_backend.skills.service.compute_zip_checksum"
+            ) as mock_checksum,
             patch("ibreeze_backend.skills.service.storage") as mock_storage,
         ):
             mock_validate.return_value = (True, [])
@@ -34,7 +39,9 @@ class TestSkillManagement:
             mock_result.scalar_one_or_none.return_value = None
             mock_db_session.execute.return_value = mock_result
 
-            skill = await install_skill(mock_db_session, str(uuid.uuid4()), "1.0.0", Path("/tmp/test.zip"))
+            skill = await install_skill(
+                mock_db_session, str(uuid.uuid4()), "1.0.0", Path("/tmp/test.zip")
+            )
             assert skill.version == "1.0.0"
             assert skill.is_active is True
             assert skill.checksum == "abc123hash"
@@ -96,11 +103,13 @@ class TestSkillManagement:
         model.id = uuid.uuid4()
 
         call_idx = [0]
+
         def side_effect(stmt):
             call_idx[0] += 1
             if call_idx[0] == 1:
                 return MagicMock(scalar_one_or_none=MagicMock(return_value=agent))
             return MagicMock(scalar_one_or_none=MagicMock(return_value=model))
+
         mock_db_session.execute.side_effect = side_effect
 
         binding = await create_agent_model_binding(

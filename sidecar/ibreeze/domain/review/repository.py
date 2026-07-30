@@ -10,7 +10,6 @@ from ibreeze.domain.review.state import ASSIGNMENT_TRANSITIONS, ISSUE_TRANSITION
 
 
 class ReviewRepository:
-
     async def lock_assignment(
         self,
         session: Any,
@@ -190,14 +189,16 @@ class ReviewRepository:
                     str(iss.get("assignee_employee_id")) if iss.get("assignee_employee_id") else None,
                 ),
             )
-            result.append(ReviewIssue(
-                id=UUID(issue_id),
-                company_id=company_id,
-                severity=iss["severity"],
-                category=iss["category"],
-                state="open",
-                version=1,
-            ))
+            result.append(
+                ReviewIssue(
+                    id=UUID(issue_id),
+                    company_id=company_id,
+                    severity=iss["severity"],
+                    category=iss["category"],
+                    state="open",
+                    version=1,
+                )
+            )
         return tuple(result)
 
     async def stale_assignments_for_hash(

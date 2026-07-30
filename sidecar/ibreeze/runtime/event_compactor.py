@@ -39,9 +39,7 @@ async def compact_events(db: Any, run_id: str) -> dict[str, Any]:
         payload: dict[str, Any] = json.loads(raw) if raw else {}
 
         if event_type == "run.started":
-            transcript_parts.append(
-                f"[Run Started] Agent: {payload.get('agent_id', 'unknown')}"
-            )
+            transcript_parts.append(f"[Run Started] Agent: {payload.get('agent_id', 'unknown')}")
         elif event_type == "run.completed":
             transcript_parts.append(f"[Run Completed] {payload.get('summary', '')}")
         elif event_type == "run.failed":
@@ -53,13 +51,9 @@ async def compact_events(db: Any, run_id: str) -> dict[str, Any]:
             if event_type == "tool.completed":
                 transcript_parts.append(f"[Tool: {tool_name}] Completed")
             elif event_type == "tool.failed":
-                transcript_parts.append(
-                    f"[Tool: {tool_name}] Failed: {payload.get('error', '')}"
-                )
+                transcript_parts.append(f"[Tool: {tool_name}] Failed: {payload.get('error', '')}")
         elif event_type.startswith("approval."):
-            transcript_parts.append(
-                f"[Approval {payload.get('status', '')}] Tool: {payload.get('tool', '')}"
-            )
+            transcript_parts.append(f"[Approval {payload.get('status', '')}] Tool: {payload.get('tool', '')}")
 
     transcript = "\n".join(transcript_parts)
 

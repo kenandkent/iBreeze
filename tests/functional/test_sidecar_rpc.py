@@ -3,10 +3,9 @@
 Covers design spec sections:
 - H.2 JSON-RPC Server (schema validation, method registration, direction)
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
-
-import pytest
 
 
 def _make_server():
@@ -50,14 +49,18 @@ class TestRpcServer:
 
     def test_ping(self):
         server = _make_server()
-        response = _run(server._handle_request({"jsonrpc": "2.0", "method": "ping", "id": 1}))
+        response = _run(
+            server._handle_request({"jsonrpc": "2.0", "method": "ping", "id": 1})
+        )
         assert response["jsonrpc"] == "2.0"
         assert response["result"]["pong"] == "pong"
         assert response["id"] == 1
 
     def test_method_not_found(self):
         server = _make_server()
-        response = _run(server._handle_request({"jsonrpc": "2.0", "method": "nonexistent", "id": 1}))
+        response = _run(
+            server._handle_request({"jsonrpc": "2.0", "method": "nonexistent", "id": 1})
+        )
 
         assert "error" in response
         assert response["error"]["code"] == -32601
@@ -70,7 +73,9 @@ class TestRpcServer:
             raise ValueError("boom")
 
         server.methods["fail"] = bad_handler
-        response = _run(server._handle_request({"jsonrpc": "2.0", "method": "fail", "id": 1}))
+        response = _run(
+            server._handle_request({"jsonrpc": "2.0", "method": "fail", "id": 1})
+        )
 
         assert "error" in response
         assert response["error"]["code"] == -32603
@@ -82,12 +87,16 @@ class TestRpcServer:
             return {"name": params.get("name"), "age": params.get("age")}
 
         server.methods["test"] = echo
-        response = _run(server._handle_request({
-            "jsonrpc": "2.0",
-            "method": "test",
-            "params": {"name": "alice", "age": 30},
-            "id": 1,
-        }))
+        response = _run(
+            server._handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "test",
+                    "params": {"name": "alice", "age": 30},
+                    "id": 1,
+                }
+            )
+        )
 
         assert response["result"]["name"] == "alice"
         assert response["result"]["age"] == 30
@@ -99,7 +108,9 @@ class TestRpcServer:
             return "fine"
 
         server.methods["noparams"] = noparams
-        response = _run(server._handle_request({"jsonrpc": "2.0", "method": "noparams", "id": 1}))
+        response = _run(
+            server._handle_request({"jsonrpc": "2.0", "method": "noparams", "id": 1})
+        )
         assert response["result"] == "fine"
 
     def test_missing_method_field(self):
@@ -130,8 +141,16 @@ class TestRpcServer:
         server.methods["add"] = add
         server.methods["mul"] = mul
 
-        r1 = _run(server._handle_request({"jsonrpc": "2.0", "method": "add", "params": {"a": 2, "b": 3}, "id": 1}))
-        r2 = _run(server._handle_request({"jsonrpc": "2.0", "method": "mul", "params": {"a": 2, "b": 3}, "id": 2}))
+        r1 = _run(
+            server._handle_request(
+                {"jsonrpc": "2.0", "method": "add", "params": {"a": 2, "b": 3}, "id": 1}
+            )
+        )
+        r2 = _run(
+            server._handle_request(
+                {"jsonrpc": "2.0", "method": "mul", "params": {"a": 2, "b": 3}, "id": 2}
+            )
+        )
 
         assert r1["result"] == 5
         assert r2["result"] == 6
@@ -148,7 +167,9 @@ class TestRpcServer:
         server.methods["test"] = v1
         server.methods["test"] = v2
 
-        response = _run(server._handle_request({"jsonrpc": "2.0", "method": "test", "id": 1}))
+        response = _run(
+            server._handle_request({"jsonrpc": "2.0", "method": "test", "id": 1})
+        )
         assert response["result"] == "v2"
 
     def test_rpc_server_has_methods_dict(self):

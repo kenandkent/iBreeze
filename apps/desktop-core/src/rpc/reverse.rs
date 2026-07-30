@@ -225,36 +225,48 @@ pub fn register_reverse_handlers(
         }),
     );
     let broker_clone = broker.clone();
-    table.register("credential.probe", Arc::new(move |params| {
-        let broker = broker_clone.clone();
-        Box::pin(async move {
-            let request: CredentialProbe =
-                serde_json::from_value(params.clone()).map_err(|e| IpcError::Internal(e.to_string()))?;
-            let profile_id = params.get("profile_directory_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("default");
-            let result = broker.handle_credential_probe(request, profile_id).await;
-            result.map_err(|e| IpcError::Internal(e.to_string()))
-        })
-    }));
-    table.register("runtime.processRegistered", Arc::new(|params| {
-        Box::pin(async move {
-            let _event: ProcessEvent = serde_json::from_value(params)
-                .map_err(|e| IpcError::Internal(e.to_string()))?;
-            handle_process_registered(_event).await
-                .map_err(|e| IpcError::Internal(e.to_string()))?;
-            Ok(serde_json::json!({"status": "accepted"}))
-        })
-    }));
-    table.register("runtime.processExited", Arc::new(|params| {
-        Box::pin(async move {
-            let _event: ProcessEvent = serde_json::from_value(params)
-                .map_err(|e| IpcError::Internal(e.to_string()))?;
-            handle_process_exited(_event).await
-                .map_err(|e| IpcError::Internal(e.to_string()))?;
-            Ok(serde_json::json!({"status": "accepted"}))
-        })
-    }));
+    table.register(
+        "credential.probe",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: CredentialProbe = serde_json::from_value(params.clone())
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                let profile_id = params
+                    .get("profile_directory_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default");
+                let result = broker.handle_credential_probe(request, profile_id).await;
+                result.map_err(|e| IpcError::Internal(e.to_string()))
+            })
+        }),
+    );
+    table.register(
+        "runtime.processRegistered",
+        Arc::new(|params| {
+            Box::pin(async move {
+                let _event: ProcessEvent = serde_json::from_value(params)
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                handle_process_registered(_event)
+                    .await
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                Ok(serde_json::json!({"status": "accepted"}))
+            })
+        }),
+    );
+    table.register(
+        "runtime.processExited",
+        Arc::new(|params| {
+            Box::pin(async move {
+                let _event: ProcessEvent = serde_json::from_value(params)
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                handle_process_exited(_event)
+                    .await
+                    .map_err(|e| IpcError::Internal(e.to_string()))?;
+                Ok(serde_json::json!({"status": "accepted"}))
+            })
+        }),
+    );
 }
 
 /// Allowed reverse methods from Sidecar to Rust

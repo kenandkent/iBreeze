@@ -4,6 +4,7 @@ Covers design spec sections:
 - REC-001 Reconciliation order
 - REC-002 Writes during reconciliation should be queued
 """
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -48,13 +49,18 @@ class TestReconciliation:
 
     async def test_recovery_marks_stale_runs_as_failed(self):
         """Stale runs should be marked as failed with recovery message."""
-        from ibreeze.runtime.recovery import recover_stale_runs, _RECOVERY_MESSAGE_PREFIX
+        from ibreeze.runtime.recovery import (
+            recover_stale_runs,
+            _RECOVERY_MESSAGE_PREFIX,
+        )
 
         db = AsyncMock()
         select_cursor = MagicMock()
-        select_cursor.fetchall = AsyncMock(return_value=[
-            {"id": "run-1", "status": "running"},
-        ])
+        select_cursor.fetchall = AsyncMock(
+            return_value=[
+                {"id": "run-1", "status": "running"},
+            ]
+        )
         update_cursor = MagicMock()
         update_cursor.rowcount = 1
 
@@ -72,7 +78,7 @@ class TestReconciliation:
 
     async def test_recovery_only_targets_stale_statuses(self):
         """Only runs in stale statuses should be recovered."""
-        from ibreeze.runtime.recovery import recover_stale_runs, _STALE_STATUSES
+        from ibreeze.runtime.recovery import _STALE_STATUSES
 
         assert "running" in _STALE_STATUSES
         assert "queued" in _STALE_STATUSES
@@ -103,9 +109,11 @@ class TestReconciliation:
 
         db = AsyncMock()
         select_cursor = MagicMock()
-        select_cursor.fetchall = AsyncMock(return_value=[
-            {"id": "run-1", "status": "probing"},
-        ])
+        select_cursor.fetchall = AsyncMock(
+            return_value=[
+                {"id": "run-1", "status": "probing"},
+            ]
+        )
         update_cursor = MagicMock()
         update_cursor.rowcount = 1
 

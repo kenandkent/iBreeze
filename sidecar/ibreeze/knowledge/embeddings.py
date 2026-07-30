@@ -27,20 +27,14 @@ class EmbeddingService:
             import onnxruntime as ort  # type: ignore[import-untyped]
             from transformers import AutoTokenizer  # type: ignore[import-not-found]
 
-            model_path = self._model_path or os.path.expanduser(
-                "~/.ibreeze/models/multilingual-e5-small.onnx"
-            )
+            model_path = self._model_path or os.path.expanduser("~/.ibreeze/models/multilingual-e5-small.onnx")
             self._session = ort.InferenceSession(model_path)
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                "intfloat/multilingual-e5-small"
-            )
+            self._tokenizer = AutoTokenizer.from_pretrained("intfloat/multilingual-e5-small")
         except Exception:
             self._session = "fallback"
 
     @staticmethod
-    def _mean_pooling(
-        token_embeddings: np.ndarray, attention_mask: np.ndarray
-    ) -> np.ndarray:
+    def _mean_pooling(token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
         """Mean pooling over token embeddings, masked by attention_mask."""
         mask_expanded = np.expand_dims(attention_mask, -1).astype(np.float32)
         summed = np.sum(token_embeddings * mask_expanded, axis=1)
@@ -81,6 +75,7 @@ class EmbeddingService:
     def _fallback_embed(self, texts: list[str]) -> list[list[float]]:
         """Deterministic pseudo-embedding based on text hash."""
         import hashlib
+
         results: list[list[float]] = []
         for text in texts:
             seed = int.from_bytes(hashlib.sha256(text.encode()).digest()[:8], "little")

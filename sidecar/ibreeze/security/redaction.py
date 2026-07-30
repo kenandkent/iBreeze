@@ -33,10 +33,7 @@ def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
             redacted[k] = redact_dict(v)
         elif isinstance(v, list):
             redacted[k] = [
-                redact_dict(i) if isinstance(i, dict)
-                else redact_string(i) if isinstance(i, str)
-                else i
-                for i in v
+                redact_dict(i) if isinstance(i, dict) else redact_string(i) if isinstance(i, str) else i for i in v
             ]
         else:
             redacted[k] = v

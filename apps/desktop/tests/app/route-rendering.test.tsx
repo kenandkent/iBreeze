@@ -34,15 +34,15 @@ vi.mock('../../src/pages/SkillsPage', () => ({ default: mockComponent('SkillsPag
 vi.mock('../../src/pages/RecoveryPage', () => ({ default: mockComponent('RecoveryPage') }));
 vi.mock('../../src/components/Layout', () => ({ default: mockComponent('Layout') }));
 
-vi.mock('antd', () => {
-  const React = require('react');
+vi.mock('antd', async () => {
+  const React = await import('react');
   return {
     Spin: (props: Record<string, unknown>) =>
       React.createElement('div', { 'data-testid': 'Spin' }, props.children as React.ReactNode),
   };
 });
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, beforeEach } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

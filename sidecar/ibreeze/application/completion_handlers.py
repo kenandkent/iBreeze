@@ -19,7 +19,6 @@ def _hash(obj: Any) -> str:
 
 
 class EmployeeGate:
-
     async def blockers(self, session: Any, task_id: UUID, company_id: UUID) -> tuple[str, ...]:
         result: list[str] = []
         if await self._missing_required_artifact(session, task_id, company_id):
@@ -158,7 +157,6 @@ class EmployeeGate:
 
 
 class DepartmentGate:
-
     async def blockers(self, session: Any, task_id: UUID, company_id: UUID) -> tuple[str, ...]:
         result: list[str] = []
         if await self._required_employee_tasks_not_accepted(session, task_id, company_id):
@@ -283,7 +281,6 @@ class DepartmentGate:
 
 
 class CompanyGate:
-
     async def blockers(self, session: Any, task_id: UUID, company_id: UUID) -> tuple[str, ...]:
         result: list[str] = []
         if await self._required_department_tasks_not_completed(session, task_id, company_id):
@@ -406,7 +403,6 @@ class CompanyGate:
 
 
 class AcceptEmployeeTaskHandler:
-
     def __init__(self, gate: EmployeeGate, uow: Any) -> None:
         self._gate = gate
         self._uow = uow
@@ -414,9 +410,7 @@ class AcceptEmployeeTaskHandler:
     async def handle(self, context: Any, request: AcceptEmployeeTask) -> Any:
         async def command(session: Any) -> Any:
             task = await self._lock_task(session, request.task_id, request.company_id)
-            blockers = await self._gate.blockers(
-                session, request.task_id, request.company_id
-            )
+            blockers = await self._gate.blockers(session, request.task_id, request.company_id)
             if blockers:
                 raise ValueError(f"COMPLETION_GATE_BLOCKED:{','.join(blockers)}")
             cursor = await session.execute(
@@ -429,22 +423,27 @@ class AcceptEmployeeTaskHandler:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
             return CommandResult(
                 response={"id": str(request.task_id), "status": "accepted"},
-                events=({
-                    "event_type": "employee_task.status_changed",
-                    "aggregate_id": str(request.task_id),
-                    "from_state": task["status"],
-                    "to_state": "accepted",
-                    "version": task["version"] + 1,
-                    "company_id": str(request.company_id),
-                },),
-                outbox=({
-                    "command_type": "EvaluateDepartmentReadiness",
-                    "payload": {
-                        "task_id": str(request.task_id),
+                events=(
+                    {
+                        "event_type": "employee_task.status_changed",
+                        "aggregate_id": str(request.task_id),
+                        "from_state": task["status"],
+                        "to_state": "accepted",
+                        "version": task["version"] + 1,
                         "company_id": str(request.company_id),
                     },
-                },),
+                ),
+                outbox=(
+                    {
+                        "command_type": "EvaluateDepartmentReadiness",
+                        "payload": {
+                            "task_id": str(request.task_id),
+                            "company_id": str(request.company_id),
+                        },
+                    },
+                ),
             )
+
         return await self._uow.execute(context, _hash(request), command)
 
     async def _lock_task(self, session: Any, task_id: UUID, company_id: UUID) -> dict[str, Any]:
@@ -460,7 +459,6 @@ class AcceptEmployeeTaskHandler:
 
 
 class CompleteDepartmentTaskHandler:
-
     def __init__(self, gate: DepartmentGate, uow: Any) -> None:
         self._gate = gate
         self._uow = uow
@@ -468,9 +466,7 @@ class CompleteDepartmentTaskHandler:
     async def handle(self, context: Any, request: CompleteDepartmentTask) -> Any:
         async def command(session: Any) -> Any:
             task = await self._lock_task(session, request.task_id, request.company_id)
-            blockers = await self._gate.blockers(
-                session, request.task_id, request.company_id
-            )
+            blockers = await self._gate.blockers(session, request.task_id, request.company_id)
             if blockers:
                 raise ValueError(f"COMPLETION_GATE_BLOCKED:{','.join(blockers)}")
             cursor = await session.execute(
@@ -483,22 +479,27 @@ class CompleteDepartmentTaskHandler:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
             return CommandResult(
                 response={"id": str(request.task_id), "status": "completed"},
-                events=({
-                    "event_type": "department_task.status_changed",
-                    "aggregate_id": str(request.task_id),
-                    "from_state": task["status"],
-                    "to_state": "completed",
-                    "version": task["version"] + 1,
-                    "company_id": str(request.company_id),
-                },),
-                outbox=({
-                    "command_type": "EvaluateCompanyReadiness",
-                    "payload": {
-                        "task_id": str(request.task_id),
+                events=(
+                    {
+                        "event_type": "department_task.status_changed",
+                        "aggregate_id": str(request.task_id),
+                        "from_state": task["status"],
+                        "to_state": "completed",
+                        "version": task["version"] + 1,
                         "company_id": str(request.company_id),
                     },
-                },),
+                ),
+                outbox=(
+                    {
+                        "command_type": "EvaluateCompanyReadiness",
+                        "payload": {
+                            "task_id": str(request.task_id),
+                            "company_id": str(request.company_id),
+                        },
+                    },
+                ),
             )
+
         return await self._uow.execute(context, _hash(request), command)
 
     async def _lock_task(self, session: Any, task_id: UUID, company_id: UUID) -> dict[str, Any]:
@@ -514,7 +515,6 @@ class CompleteDepartmentTaskHandler:
 
 
 class CompleteCompanyTaskHandler:
-
     def __init__(self, gate: CompanyGate, uow: Any) -> None:
         self._gate = gate
         self._uow = uow
@@ -522,9 +522,7 @@ class CompleteCompanyTaskHandler:
     async def handle(self, context: Any, request: CompleteCompanyTask) -> Any:
         async def command(session: Any) -> Any:
             task = await self._lock_task(session, request.task_id, request.company_id)
-            blockers = await self._gate.blockers(
-                session, request.task_id, request.company_id
-            )
+            blockers = await self._gate.blockers(session, request.task_id, request.company_id)
             if blockers:
                 raise ValueError(f"COMPLETION_GATE_BLOCKED:{','.join(blockers)}")
             cursor = await session.execute(
@@ -537,16 +535,19 @@ class CompleteCompanyTaskHandler:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
             return CommandResult(
                 response={"id": str(request.task_id), "status": "completed"},
-                events=({
-                    "event_type": "company_task.status_changed",
-                    "aggregate_id": str(request.task_id),
-                    "from_state": task["status"],
-                    "to_state": "completed",
-                    "version": task["version"] + 1,
-                    "company_id": str(request.company_id),
-                },),
+                events=(
+                    {
+                        "event_type": "company_task.status_changed",
+                        "aggregate_id": str(request.task_id),
+                        "from_state": task["status"],
+                        "to_state": "completed",
+                        "version": task["version"] + 1,
+                        "company_id": str(request.company_id),
+                    },
+                ),
                 outbox=(),
             )
+
         return await self._uow.execute(context, _hash(request), command)
 
     async def _lock_task(self, session: Any, task_id: UUID, company_id: UUID) -> dict[str, Any]:

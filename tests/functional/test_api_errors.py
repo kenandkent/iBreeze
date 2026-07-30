@@ -3,6 +3,7 @@
 Covers design spec sections:
 - G.14 Error handling (RFC 9457 Problem Details)
 """
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -66,8 +67,7 @@ class TestProblemDetailError:
         exc = Exception("something broke")
 
         import asyncio
-        response = asyncio.run(
-            generic_exception_handler(request, exc)
-        )
+
+        response = asyncio.run(generic_exception_handler(request, exc))
         assert response.status_code == 500
         assert response.body is not None

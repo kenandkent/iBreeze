@@ -1,5 +1,5 @@
 """Tests for Agent Runtime Gateway - P5."""
-import pytest
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

@@ -5,8 +5,8 @@ Covers design spec sections:
 - APR-003 Lost execution receipt recovery
 - APR-004 Uncertain outcomes require manual approval
 """
-import uuid
-from unittest.mock import AsyncMock, MagicMock
+
+from unittest.mock import AsyncMock
 
 import pytest
 

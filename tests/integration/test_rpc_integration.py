@@ -1,7 +1,8 @@
 """Integration tests for RPC method registration and service layer."""
+
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 
 @pytest.fixture
@@ -36,19 +37,7 @@ class TestCompanyServiceIntegration:
         """Verify all RPC methods are properly registered."""
         import ibreeze.rpc_server
 
-        expected_methods = [
-            "company.create", "company.get", "company.list",
-            "department.create", "department.get",
-            "employee.create", "employee.get",
-            "task.get", "task.list",
-            "review.submit", "review.listIssues",
-            "backup.create", "backup.list",
-            "knowledge.import", "knowledge.search",
-        ]
-
-        server = ibreeze.rpc_server.RPCServer.__new__(
-            ibreeze.rpc_server.RPCServer
-        )
+        server = ibreeze.rpc_server.RPCServer.__new__(ibreeze.rpc_server.RPCServer)
         server.methods = {}
         ibreeze.rpc_server.RPCServer._register = lambda self: None
 
