@@ -4,13 +4,7 @@
       "id": "GHSA-rgw5-rvv9-x895",
       "package": "brace-expansion",
       "severity": "high",
-      "reason": "Transitive via eslint -> minimatch and @redocly/openapi-core (openapi-typescript codegen devDep). Upstream must update before we can fix."
-    },
-    {
-      "id": "GHSA-5p4m-2wfm-xmqj",
-      "package": "js-yaml",
-      "severity": "high",
-      "reason": "Transitive via @redocly/openapi-core (openapi-typescript codegen devDep). Upstream must update before we can fix."
+      "reason": "Transitive via eslint -> minimatch (devDep). Upstream must update before we can fix."
     },
     {
       "id": "GHSA-2v37-7h3g-55p8",
