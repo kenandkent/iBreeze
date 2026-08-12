@@ -16,6 +16,44 @@ from ibreeze.persistence.connection import open_writer
 from ibreeze.persistence.migrator import MigrationRunner
 
 
+class TransactionalTestConnection:
+    """Test-only connection adapter for direct service-layer tests.
+
+    Production commands enter through WriteQueue, which starts ``BEGIN
+    IMMEDIATE`` before invoking a service.  These tests intentionally exercise
+    services without booting the application, so the adapter supplies the
+    same transaction precondition and opens the real SQLite transaction just
+    before the first mutating statement.  PRAGMA setup remains outside a
+    transaction, which is required by the fixture's foreign-key setup.
+    """
+
+    _MUTATING_SQL = {"INSERT", "UPDATE", "DELETE", "REPLACE", "WITH"}
+
+    def __init__(self, connection: aiosqlite.Connection) -> None:
+        self._connection = connection
+
+    @property
+    def in_transaction(self) -> bool:
+        # The scope is owned by this fixture even before SQLite has received a
+        # mutating statement; this mirrors WriteQueue's precondition check.
+        return True
+
+    async def execute(self, sql: str, parameters: object = ()):
+        statement = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
+        if statement in self._MUTATING_SQL and not self._connection.in_transaction:
+            await self._connection.execute("BEGIN IMMEDIATE")
+        return await self._connection.execute(sql, parameters)
+
+    async def commit(self) -> None:
+        await self._connection.commit()
+
+    async def rollback(self) -> None:
+        await self._connection.rollback()
+
+    def __getattr__(self, name: str):
+        return getattr(self._connection, name)
+
+
 @pytest.fixture
 def mock_db_session():
     """Create a mock async database session."""
@@ -45,8 +83,8 @@ async def local_db(tmp_path: Path) -> AsyncIterator[aiosqlite.Connection]:
 
 
 @pytest_asyncio.fixture
-async def db(local_db: aiosqlite.Connection) -> aiosqlite.Connection:
-    return local_db
+async def db(local_db: aiosqlite.Connection) -> TransactionalTestConnection:
+    return TransactionalTestConnection(local_db)
 
 
 @pytest_asyncio.fixture

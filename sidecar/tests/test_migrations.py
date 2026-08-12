@@ -26,12 +26,13 @@ class TestMigration:
         sql = m.load_sql()
         assert sql == "SELECT 1"
 
-    def test_migration_001_sha256(self) -> None:
+    def test_migration_hashes_match_files(self) -> None:
         base = Path(__file__).resolve().parent.parent / "ibreeze" / "persistence"
-        file_path = base / "migrations" / "001_initial.sql"
-        content = file_path.read_bytes()
-        actual = hashlib.sha256(content).hexdigest()
-        assert actual == MIGRATIONS[0].sha256
+        for migration in MIGRATIONS:
+            file_path = base / "migrations" / migration.filename
+            content = file_path.read_bytes()
+            actual = hashlib.sha256(content).hexdigest()
+            assert actual == migration.sha256, migration.filename
 
 
 @pytest.mark.asyncio

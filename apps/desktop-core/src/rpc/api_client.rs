@@ -108,8 +108,52 @@ pub struct ReadyResponse {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CatalogManifest {
+    pub release_id: Uuid,
     pub release_sequence: u64,
+    pub created_at: String,
+    pub minimum_client_version: String,
+    pub signature_algorithm: String,
     pub resources: Vec<serde_json::Value>,
+    pub signing_key_id: String,
+    pub signature: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogProvider {
+    pub id: Uuid,
+    pub key: String,
+    pub display_name: String,
+    pub base_url: String,
+    pub protocol: String,
+    pub auth_scheme: String,
+    pub catalog_revision: i64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogProviderModel {
+    pub binding_id: Uuid,
+    pub id: Uuid,
+    pub model_id: Uuid,
+    pub provider_key: String,
+    pub model_key: String,
+    pub display_name: String,
+    pub context_window: i64,
+    pub supports_tools: bool,
+    pub supports_streaming: bool,
+    pub supports_vision: bool,
+    pub provider_model_name: String,
+    pub request_defaults: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CatalogList<T> {
+    data: Vec<T>,
+    #[allow(dead_code)]
+    meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -291,6 +335,36 @@ impl ApiClient {
             .await
             .map_err(|error| AppError::Network(error.to_string()))?;
         decode_response(response).await
+    }
+
+    pub async fn catalog_providers(&self) -> Result<Vec<CatalogProvider>, AppError> {
+        let response = self
+            .client
+            .get(self.url("/api/v1/catalog/providers")?)
+            .send()
+            .await
+            .map_err(|error| AppError::Network(error.to_string()))?;
+        Ok(decode_response::<CatalogList<CatalogProvider>>(response)
+            .await?
+            .data)
+    }
+
+    pub async fn catalog_provider_models(
+        &self,
+        provider_id: Uuid,
+    ) -> Result<Vec<CatalogProviderModel>, AppError> {
+        let path = format!("/api/v1/catalog/providers/{provider_id}/models");
+        let response = self
+            .client
+            .get(self.url(&path)?)
+            .send()
+            .await
+            .map_err(|error| AppError::Network(error.to_string()))?;
+        Ok(
+            decode_response::<CatalogList<CatalogProviderModel>>(response)
+                .await?
+                .data,
+        )
     }
 
     pub async fn catalog_keys(&self) -> Result<CatalogKeyset, AppError> {

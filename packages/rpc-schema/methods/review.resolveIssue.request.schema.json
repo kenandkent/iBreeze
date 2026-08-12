@@ -6,8 +6,20 @@
   "properties": {
     "company_id": {"type": "string", "format": "uuid"},
     "issue_id": {"type": "string", "format": "uuid"},
-    "resolution": {"type": "string", "minLength": 1}
+    "resolution_artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fix_run_id": {"type": "string", "format": "uuid"},
+    "retest_result_id": {"type": "string", "format": "uuid"},
+    "resolution_summary": {"type": "string", "minLength": 1, "maxLength": 20000},
+    "expected_version": {"type": "integer", "minimum": 1}
   },
   "additionalProperties": false,
-  "required": ["company_id", "issue_id", "resolution"]
+  "required": [
+    "company_id",
+    "issue_id",
+    "resolution_artifact_sha256",
+    "fix_run_id",
+    "retest_result_id",
+    "resolution_summary",
+    "expected_version"
+  ]
 }

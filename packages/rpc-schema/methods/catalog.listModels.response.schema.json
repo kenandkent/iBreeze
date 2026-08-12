@@ -19,6 +19,17 @@
           "provider": {
             "type": "string"
           },
+          "provider_release_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "model_binding_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider_protocol": {
+            "enum": ["openai_responses", "anthropic_messages", "openai_chat_completions"]
+          },
           "capabilities": {
             "type": "array",
             "items": {

@@ -69,7 +69,7 @@ async def _enqueue_with_run(
         await db.commit()
     finally:
         await db.execute("PRAGMA foreign_keys = ON")
-    return await enqueue(
+    queue_id = await enqueue(
         db,
         company_id=company_id,
         run_id=run_id,
@@ -78,6 +78,8 @@ async def _enqueue_with_run(
         job_id=job_id,
         priority=priority,
     )
+    await db.commit()
+    return queue_id
 
 
 @pytest.mark.asyncio

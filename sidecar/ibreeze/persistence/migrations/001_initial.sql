@@ -977,12 +977,15 @@ CREATE TABLE review_reports (
     company_id TEXT NOT NULL,
     assignment_id TEXT NOT NULL UNIQUE,
     reviewer_run_id TEXT NOT NULL,
+    reviewed_artifact_id TEXT NOT NULL,
+    reviewed_sha256 TEXT NOT NULL CHECK(length(reviewed_sha256) = 64),
     verdict TEXT NOT NULL CHECK(verdict IN ('pass', 'needs_changes', 'failed')),
     report_artifact_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
     UNIQUE(id, company_id),
     FOREIGN KEY(assignment_id, company_id) REFERENCES review_assignments(id, company_id),
     FOREIGN KEY(reviewer_run_id, company_id) REFERENCES agent_runs(id, company_id),
+    FOREIGN KEY(reviewed_artifact_id, company_id) REFERENCES artifacts(id, company_id),
     FOREIGN KEY(report_artifact_id, company_id) REFERENCES artifacts(id, company_id)
 );
 
@@ -1064,33 +1067,6 @@ CREATE TABLE rework_attempt_issues (
         REFERENCES review_issues(id, company_id)
 );
 
--- approvals
-CREATE TABLE approvals (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL,
-    company_task_id TEXT NOT NULL,
-    run_id TEXT NOT NULL,
-    approval_type TEXT NOT NULL CHECK(approval_type IN ('task_completion', 'external_write', 'tool_execution')),
-    target_json TEXT NOT NULL CHECK(json_valid(target_json)),
-    target_sha256 TEXT NOT NULL CHECK(length(target_sha256) = 64),
-    status TEXT NOT NULL CHECK(status IN ('pending','allowed','denied','expired','consumed')),
-    requested_at TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    resolved_at TEXT,
-    consumed_at TEXT,
-    version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
-    FOREIGN KEY(company_task_id, company_id) REFERENCES company_tasks(id, company_id),
-    FOREIGN KEY(run_id, company_id) REFERENCES agent_runs(id, company_id),
-    UNIQUE(id, run_id),
-    CHECK(
-        (status = 'pending' AND resolved_at IS NULL AND consumed_at IS NULL)
-        OR
-        (status IN ('allowed','denied','expired') AND resolved_at IS NOT NULL AND consumed_at IS NULL)
-        OR
-        (status = 'consumed' AND resolved_at IS NOT NULL AND consumed_at IS NOT NULL)
-    )
-);
-
 -- verifications
 CREATE TABLE verifications (
     id TEXT PRIMARY KEY,
@@ -1106,43 +1082,7 @@ CREATE TABLE verifications (
     UNIQUE(id, company_id)
 );
 
--- domain_event_store (domain event registry)
-CREATE TABLE domain_event_store (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL,
-    aggregate_type TEXT NOT NULL,
-    aggregate_id TEXT NOT NULL,
-    aggregate_version INTEGER NOT NULL,
-    event_type TEXT NOT NULL,
-    payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
-    trace_id TEXT NOT NULL,
-    occurred_at TEXT NOT NULL,
-    UNIQUE(id, company_id)
-);
-
--- outbox
-CREATE TABLE outbox (
-    id TEXT PRIMARY KEY,
-    domain_event_id TEXT NOT NULL UNIQUE,
-    topic TEXT NOT NULL,
-    payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
-    status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'delivered', 'failed')),
-    attempts INTEGER NOT NULL DEFAULT 0,
-    next_attempt_at TEXT NOT NULL,
-    last_error TEXT,
-    created_at TEXT NOT NULL,
-    delivered_at TEXT
-);
-CREATE INDEX ix_outbox_ready_pending ON outbox(status, next_attempt_at, created_at)
-    WHERE status IN ('pending', 'processing');
-
--- projections
-CREATE TABLE projections (
-    name TEXT PRIMARY KEY,
-    last_row_sequence INTEGER NOT NULL DEFAULT 0,
-    state_json TEXT CHECK(state_json IS NULL OR json_valid(state_json)),
-    updated_at TEXT NOT NULL
-);
+-- domain_events is the single domain-event fact source.
 
 -- knowledge_sources
 CREATE TABLE knowledge_sources (
@@ -1323,14 +1263,6 @@ BEGIN SELECT RAISE(ABORT, 'review report is immutable'); END;
 CREATE TRIGGER review_reports_no_delete
 BEFORE DELETE ON review_reports
 BEGIN SELECT RAISE(ABORT, 'review report is immutable'); END;
-
-CREATE TRIGGER domain_event_store_no_update
-BEFORE UPDATE ON domain_event_store
-BEGIN SELECT RAISE(ABORT, 'domain event store is immutable'); END;
-
-CREATE TRIGGER domain_event_store_no_delete
-BEFORE DELETE ON domain_event_store
-BEGIN SELECT RAISE(ABORT, 'domain event store is immutable'); END;
 
 CREATE TRIGGER profile_revisions_no_update
 BEFORE UPDATE ON profile_revisions

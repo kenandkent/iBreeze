@@ -1,17 +1,21 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::RngCore;
+use std::sync::atomic::AtomicUsize;
 use tokio::net::TcpListener;
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tracing::info;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::broker::connect::ConnectHandler;
 use crate::broker::domain_policy::NormalizedDomain;
 use crate::error::AppError;
+
+pub const EGRESS_LEASE_TTL: Duration = Duration::from_secs(300);
 
 pub struct EgressLease {
     pub lease_id: Uuid,
@@ -22,7 +26,9 @@ pub struct EgressLease {
     pub token_b64: Zeroizing<String>,
     pub allowed_domains: BTreeSet<NormalizedDomain>,
     pub created_at: Instant,
+    pub expires_at: Instant,
     pub cancel: Mutex<Option<oneshot::Sender<()>>>,
+    pub active_tunnels: AtomicUsize,
 }
 
 impl EgressLease {
@@ -34,14 +40,25 @@ impl EgressLease {
     }
 }
 
+#[derive(Clone)]
 pub struct EgressBroker {
-    leases: RwLock<Vec<Arc<EgressLease>>>,
+    leases: Arc<RwLock<Vec<Arc<EgressLease>>>>,
+    lease_ttl: Duration,
 }
 
 impl EgressBroker {
     pub fn new() -> Self {
         Self {
-            leases: RwLock::new(Vec::new()),
+            leases: Arc::new(RwLock::new(Vec::new())),
+            lease_ttl: EGRESS_LEASE_TTL,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_ttl(lease_ttl: Duration) -> Self {
+        Self {
+            leases: Arc::new(RwLock::new(Vec::new())),
+            lease_ttl,
         }
     }
 
@@ -50,6 +67,7 @@ impl EgressBroker {
         run_id: Uuid,
         allowed_domains: BTreeSet<NormalizedDomain>,
     ) -> Result<Arc<EgressLease>, AppError> {
+        self.cleanup_expired().await;
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .map_err(|e| AppError::Internal(format!("Failed to bind egress proxy: {e}")))?;
@@ -63,32 +81,55 @@ impl EgressBroker {
         rand::thread_rng().fill_bytes(&mut *token_bytes);
         let token_b64 = Zeroizing::new(URL_SAFE_NO_PAD.encode(*token_bytes));
 
-        let (cancel_tx, _) = oneshot::channel::<()>();
+        let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
 
+        let created_at = Instant::now();
         let lease = Arc::new(EgressLease {
             lease_id: Uuid::new_v4(),
             run_id,
-            listener: Some(listener),
+            listener: None,
             port,
             token: token_bytes,
             token_b64,
             allowed_domains,
-            created_at: Instant::now(),
+            created_at,
+            expires_at: created_at + self.lease_ttl,
             cancel: Mutex::new(Some(cancel_tx)),
+            active_tunnels: AtomicUsize::new(0),
         });
 
         self.leases.write().await.push(lease.clone());
+        let broker = Arc::new(self.clone());
+        tokio::spawn(async move {
+            let handler = Arc::new(ConnectHandler::new(broker, port));
+            loop {
+                tokio::select! {
+                    _ = &mut cancel_rx => break,
+                    result = listener.accept() => {
+                        let Ok((mut stream, peer)) = result else { break };
+                        let handler = handler.clone();
+                        tokio::spawn(async move {
+                            if let Err(error) = handler.handle_connect(&mut stream, peer).await {
+                                tracing::debug!(%error, "egress CONNECT closed");
+                            }
+                        });
+                    }
+                }
+            }
+        });
         info!(%run_id, port, "egress lease created");
 
         Ok(lease)
     }
 
     pub async fn get_lease(&self, run_id: Uuid) -> Option<Arc<EgressLease>> {
+        self.cleanup_expired().await;
         let leases = self.leases.read().await;
         leases.iter().find(|l| l.run_id == run_id).cloned()
     }
 
     pub async fn get_lease_by_port(&self, port: u16) -> Option<Arc<EgressLease>> {
+        self.cleanup_expired().await;
         let leases = self.leases.read().await;
         leases.iter().find(|l| l.port == port).cloned()
     }
@@ -108,11 +149,30 @@ impl EgressBroker {
         Ok(())
     }
 
+    /// Revoke the exact lease associated with a process.  Run IDs are the
+    /// business correlation key; lease IDs are the security resource key and
+    /// must be used when a failed spawn races another lifecycle operation.
+    pub async fn revoke_lease_by_id(&self, lease_id: Uuid) -> Result<(), AppError> {
+        let mut leases = self.leases.write().await;
+        let pos = leases
+            .iter()
+            .position(|lease| lease.lease_id == lease_id)
+            .ok_or_else(|| AppError::NotFound("Egress lease not found".to_owned()))?;
+        let lease = leases.remove(pos);
+        let mut cancel = lease.cancel.lock().await;
+        if let Some(sender) = cancel.take() {
+            let _ = sender.send(());
+        }
+        info!(%lease_id, "egress lease revoked");
+        Ok(())
+    }
+
     pub async fn validate_token(
         &self,
         run_id: Uuid,
         token_b64: &str,
     ) -> Result<Arc<EgressLease>, AppError> {
+        self.cleanup_expired().await;
         let leases = self.leases.read().await;
         leases
             .iter()
@@ -126,6 +186,7 @@ impl EgressBroker {
         port: u16,
         token_b64: &str,
     ) -> Result<Arc<EgressLease>, AppError> {
+        self.cleanup_expired().await;
         let leases = self.leases.read().await;
         leases
             .iter()
@@ -135,10 +196,38 @@ impl EgressBroker {
     }
 
     pub async fn active_count(&self) -> usize {
+        self.cleanup_expired().await;
         self.leases.read().await.len()
     }
 
+    pub async fn cleanup_expired(&self) -> usize {
+        let now = Instant::now();
+        let expired = {
+            let mut leases = self.leases.write().await;
+            let mut active = Vec::with_capacity(leases.len());
+            let mut expired = Vec::new();
+            for lease in leases.drain(..) {
+                if lease.expires_at <= now {
+                    expired.push(lease);
+                } else {
+                    active.push(lease);
+                }
+            }
+            *leases = active;
+            expired
+        };
+        let count = expired.len();
+        for lease in expired {
+            let mut cancel = lease.cancel.lock().await;
+            if let Some(sender) = cancel.take() {
+                let _ = sender.send(());
+            }
+        }
+        count
+    }
+
     pub async fn cancel_session(&self, session_run_ids: &[Uuid]) -> usize {
+        self.cleanup_expired().await;
         let mut leases = self.leases.write().await;
         let before = leases.len();
         let mut to_remove = Vec::new();
@@ -221,6 +310,19 @@ mod tests {
         let run_id = Uuid::new_v4();
         broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
         assert!(broker.validate_token(run_id, "wrong-token").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn expired_leases_are_revoked_before_validation() {
+        let broker = EgressBroker::with_ttl(Duration::from_millis(1));
+        let run_id = Uuid::new_v4();
+        let lease = broker.create_lease(run_id, BTreeSet::new()).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(broker
+            .validate_token(run_id, &lease.token_b64)
+            .await
+            .is_err());
+        assert_eq!(broker.active_count().await, 0);
     }
 
     #[test]

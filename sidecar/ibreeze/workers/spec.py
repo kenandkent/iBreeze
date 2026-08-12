@@ -69,26 +69,19 @@ class KnowledgeWorker(BaseWorker):
             return
 
         async def _index_pending(conn: Any) -> int:
-            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Knowledge indexing is driven by the canonical outbox event
+            # (knowledge.index.requested).  There is intentionally no
+            # mutable ``knowledge_queue`` table in the v1 schema.  The
+            # worker only observes unembedded items here; the actual vector
+            # generation is owned by the knowledge service and is retried via
+            # its outbox command.
             cursor = await conn.execute(
-                """SELECT id, company_id, content, content_type
-                   FROM knowledge_queue
-                   WHERE status='pending' AND next_attempt_at <= ?
-                   ORDER BY created_at ASC LIMIT 20""",
-                (now,),
+                """SELECT COUNT(*) AS cnt
+                   FROM knowledge_items
+                   WHERE embedding_generation_id IS NULL"""
             )
-            rows = await cursor.fetchall()
-            if not rows:
-                return 0
-            for row in rows:
-                content_hash = str(hash(row["content"])) if row["content"] else ""
-                await conn.execute(
-                    """UPDATE knowledge_queue
-                       SET status='indexed', indexed_at=?, content_hash=?
-                       WHERE id=?""",
-                    (now, content_hash, row["id"]),
-                )
-            return len(rows)
+            await cursor.fetchone()
+            return 0
 
         try:
             deadline = datetime.now(UTC) + timedelta(seconds=25)
@@ -113,7 +106,7 @@ class ReconciliationWorker(BaseWorker):
 
         async def _reconcile(conn: Any) -> int:
             issues = 0
-            cursor = await conn.execute("SELECT COUNT(*) AS cnt FROM outbox WHERE status='pending'")
+            cursor = await conn.execute("SELECT COUNT(*) AS cnt FROM outbox_events WHERE status='pending'")
             row = await cursor.fetchone()
             outbox_pending = row["cnt"] if row else 0
             if outbox_pending > 1000:
@@ -147,23 +140,15 @@ class BackupWorker(BaseWorker):
             return
 
         async def _rotate_backups(conn: Any) -> int:
-            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-            cutoff = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Backup archives are created and retained by backup.service.
+            # ``backup_records`` is an immutable audit ledger; the old
+            # ``backup_manifest`` table was removed from the canonical schema
+            # and must not be recreated by a background worker.
             await conn.execute(
-                """UPDATE backup_manifest
-                   SET status='expired'
-                   WHERE status='active' AND created_at < ?""",
-                (cutoff,),
+                """SELECT COUNT(*) AS cnt
+                   FROM backup_records
+                   WHERE status='completed'"""
             )
-            cursor = await conn.execute("SELECT COUNT(*) AS cnt FROM backup_manifest WHERE status='active'")
-            row = await cursor.fetchone()
-            active_count = row["cnt"] if row else 0
-            if active_count < 3:
-                await conn.execute(
-                    "INSERT INTO backup_manifest (status, created_at) VALUES ('active', ?)",
-                    (now,),
-                )
-                return 1
             return 0
 
         try:
@@ -188,7 +173,7 @@ class EventCompactionWorker(BaseWorker):
         async def _compact(conn: Any) -> int:
             cutoff = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
             cursor = await conn.execute(
-                """DELETE FROM outbox
+                """DELETE FROM outbox_events
                    WHERE status='delivered' AND delivered_at < ?""",
                 (cutoff,),
             )
@@ -203,8 +188,8 @@ class EventCompactionWorker(BaseWorker):
             if old_events > 10000:
                 cursor = await conn.execute(
                     """DELETE FROM domain_events
-                       WHERE occurred_at < ? AND id NOT IN (
-                           SELECT domain_event_id FROM outbox WHERE domain_event_id IS NOT NULL
+                       WHERE occurred_at < ? AND event_id NOT IN (
+                           SELECT domain_event_id FROM outbox_events WHERE domain_event_id IS NOT NULL
                        )""",
                     (cutoff,),
                 )

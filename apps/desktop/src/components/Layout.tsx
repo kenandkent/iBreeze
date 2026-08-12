@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Layout as AntLayout, Menu, Typography, Switch, Space, Avatar, Dropdown } from 'antd';
 import {
   DashboardOutlined,
@@ -38,16 +38,25 @@ const menuItems = [
   { key: '/backups', icon: <CloudUploadOutlined />, label: '备份管理' },
 ];
 
+const companyScopedMenuKeys = new Set([
+  '/dashboard', '/conversations', '/knowledge', '/workspaces', '/orchestrations',
+  '/agents', '/skills', '/audit-logs', '/reviews', '/approvals', '/backups',
+]);
+
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { companyId } = useParams<{ companyId?: string }>();
   const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useAppStore();
   const { maskedIdentifier, closeProfile } = useAuthStore();
 
   const handleMenuClick = ({ key }: { key: string }) => {
     logger.logMenuClick(key);
-    logger.logNavigation(location.pathname, key);
-    navigate(key);
+    const target = companyId && companyScopedMenuKeys.has(key)
+      ? `/companies/${companyId}${key}`
+      : key;
+    logger.logNavigation(location.pathname, target);
+    navigate(target);
   };
 
   const handleThemeToggle = (checked: boolean) => {
@@ -85,7 +94,9 @@ export default function Layout() {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[companyId && location.pathname.startsWith(`/companies/${companyId}`)
+            ? location.pathname.slice(`/companies/${companyId}`.length) || '/dashboard'
+            : location.pathname]}
           items={menuItems}
           onClick={handleMenuClick}
         />

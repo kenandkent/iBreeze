@@ -7,6 +7,7 @@ use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
+use crate::broker::dns_policy::DnsPolicy;
 use crate::broker::egress::EgressBroker;
 use crate::error::AppError;
 
@@ -24,13 +25,15 @@ struct TunnelMetrics {
 
 pub struct ConnectHandler {
     egress_broker: Arc<EgressBroker>,
+    listener_port: u16,
     metrics: RwLock<TunnelMetrics>,
 }
 
 impl ConnectHandler {
-    pub fn new(egress_broker: Arc<EgressBroker>) -> Self {
+    pub fn new(egress_broker: Arc<EgressBroker>, listener_port: u16) -> Self {
         Self {
             egress_broker,
+            listener_port,
             metrics: RwLock::new(TunnelMetrics {
                 minute_start: Instant::now(),
                 tunnels_this_minute: 0,
@@ -130,7 +133,11 @@ impl ConnectHandler {
 
                 let lease = match self
                     .egress_broker
-                    .validate_token_by_port(port, &token)
+                    // `port` is the remote CONNECT authority (always 443),
+                    // not the local ephemeral proxy port.  Binding the
+                    // handler to the listener port prevents a token from
+                    // one run being replayed against another run's proxy.
+                    .validate_token_by_port(self.listener_port, &token)
                     .await
                 {
                     Ok(l) => l,
@@ -150,15 +157,44 @@ impl ConnectHandler {
                     return Err(AppError::Security(format!("Domain not allowed: {host}")));
                 }
 
+                let active = lease
+                    .active_tunnels
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                if active >= MAX_CONCURRENT_TUNNELS {
+                    lease
+                        .active_tunnels
+                        .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                    Self::send_response(stream, "429", "Too Many Tunnels").await?;
+                    return Err(AppError::Validation(
+                        "Tunnel concurrency limit exceeded".to_owned(),
+                    ));
+                }
+                let _tunnel_guard = TunnelGuard {
+                    active_tunnels: &lease.active_tunnels,
+                };
+
+                let resolved_ips = DnsPolicy::new().resolve_and_validate(&host).await?;
+
                 let remote = format!("{host}:{port}");
+                let mut remote_stream = None;
+                for ip in resolved_ips {
+                    let socket = std::net::SocketAddr::new(ip, port);
+                    match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(socket)).await {
+                        Ok(Ok(connection)) => {
+                            remote_stream = Some(connection);
+                            break;
+                        }
+                        Ok(Err(_)) | Err(_) => continue,
+                    }
+                }
+                let mut remote_stream = remote_stream
+                    .ok_or_else(|| AppError::Network(format!("Connect failed: {remote}")))?;
+
+                // Do not acknowledge CONNECT until the destination is
+                // reachable.  A premature 200 lets an untrusted child treat
+                // a failed policy/connection as an established tunnel.
                 Self::send_response(stream, "200", "Connection established").await?;
                 stream.flush().await.ok();
-
-                let mut remote_stream =
-                    tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&remote))
-                        .await
-                        .map_err(|_| AppError::Network("Connect timeout".to_owned()))?
-                        .map_err(|e| AppError::Network(format!("Connect failed: {e}")))?;
 
                 info!(%host, port, "CONNECT tunnel established");
 
@@ -168,7 +204,8 @@ impl ConnectHandler {
                 let client_to_remote = tokio::io::copy(&mut ri, &mut wj);
                 let remote_to_client = tokio::io::copy(&mut rj, &mut wi);
 
-                tokio::select! {
+                tokio::time::timeout(IDLE_TUNNEL_TIMEOUT, async {
+                    tokio::select! {
                     result = client_to_remote => {
                         if let Err(e) = result {
                             warn!("client->remote copy: {e}");
@@ -179,7 +216,10 @@ impl ConnectHandler {
                             warn!("remote->client copy: {e}");
                         }
                     }
-                }
+                    }
+                })
+                .await
+                .ok();
 
                 info!(%host, port, "CONNECT tunnel closed");
                 return Ok(());
@@ -221,6 +261,17 @@ impl ConnectHandler {
             .await
             .map_err(|e| AppError::Network(format!("Failed to send response: {e}")))?;
         Ok(())
+    }
+}
+
+struct TunnelGuard<'a> {
+    active_tunnels: &'a std::sync::atomic::AtomicUsize,
+}
+
+impl Drop for TunnelGuard<'_> {
+    fn drop(&mut self) {
+        self.active_tunnels
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
     }
 }
 

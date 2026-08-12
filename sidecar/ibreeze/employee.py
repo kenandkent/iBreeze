@@ -157,9 +157,8 @@ async def create_department(
     normalized_name = _normalize_name(data.name)
     normalized_leader = _normalize_name(data.leader_name)
 
-    own_txn = not db.in_transaction
-    if own_txn:
-        await db.execute("BEGIN IMMEDIATE")
+    if not db.in_transaction:
+        raise RuntimeError("WRITE_QUEUE_REQUIRED")
     await db.execute("PRAGMA defer_foreign_keys = ON")
     try:
         cursor = await db.execute(
@@ -250,12 +249,8 @@ async def create_department(
             extra={"leader_employee_id": leader_id},
         )
         result = await get_department(db, company_id, department_id)
-        if own_txn:
-            await db.commit()
         return result
     except Exception:
-        if own_txn:
-            await db.rollback()
         raise
     finally:
         cursor = await db.execute("PRAGMA defer_foreign_keys")
@@ -400,9 +395,8 @@ async def create_employee(
     if data.workflow_role != WorkflowRole.MEMBER:
         raise ValueError("STATE_TRANSITION_INVALID")
     normalized_name = _normalize_name(data.display_name)
-    own_txn = not db.in_transaction
-    if own_txn:
-        await db.execute("BEGIN IMMEDIATE")
+    if not db.in_transaction:
+        raise RuntimeError("WRITE_QUEUE_REQUIRED")
     try:
         cursor = await db.execute(
             """SELECT id FROM departments
@@ -447,12 +441,8 @@ async def create_employee(
             extra={"department_id": department_id},
         )
         result = await get_employee(db, company_id, employee_id)
-        if own_txn:
-            await db.commit()
         return result
     except Exception:
-        if own_txn:
-            await db.rollback()
         raise
 
 

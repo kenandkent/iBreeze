@@ -20,8 +20,23 @@
     "from_state": {
       "type": "string",
       "enum": [
-        "pending",
-        "in_progress",
+        "draft",
+        "analyzing",
+        "awaiting_user_confirmation",
+        "approved",
+        "revision_requested",
+        "rejected",
+        "dispatching",
+        "checking_resources",
+        "executing",
+        "reviewing",
+        "fixing",
+        "final_review",
+        "waiting_dependency",
+        "waiting_resource",
+        "waiting_permission",
+        "paused",
+        "cancelling",
         "completed",
         "failed",
         "cancelled"
@@ -30,12 +45,28 @@
     "to_state": {
       "type": "string",
       "enum": [
-        "pending",
-        "in_progress",
+        "draft",
+        "analyzing",
+        "awaiting_user_confirmation",
+        "approved",
+        "revision_requested",
+        "rejected",
+        "dispatching",
+        "checking_resources",
+        "executing",
+        "reviewing",
+        "fixing",
+        "final_review",
+        "waiting_dependency",
+        "waiting_resource",
+        "waiting_permission",
+        "paused",
+        "cancelling",
         "completed",
         "failed",
         "cancelled"
       ]
     }
-  }
+  },
+  "required": ["company_id", "aggregate_id", "version", "from_state", "to_state"]
 }

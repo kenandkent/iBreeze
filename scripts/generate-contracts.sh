@@ -127,6 +127,11 @@ rsync -a --delete "$TMP_DIR/admin-web-api/" "$OUTPUT_ROOT/apps/admin-web/src/gen
 mkdir -p "$OUTPUT_ROOT/packages/contracts/openapi"
 cp "$TMP_DIR/openapi.json" "$OUTPUT_ROOT/packages/contracts/openapi/openapi.json"
 
+# Method-kind lookup files are generated from the same registry and must be
+# part of this atomic generation, otherwise rsync --delete would remove the
+# lookup consumed by the desktop runtime.
+IBREEZE_OUTPUT_ROOT="$OUTPUT_ROOT" python3 "$ROOT_DIR/scripts/generate-method-kinds.py"
+
 # Remove verify step — handled by check-contract-drift.sh
 
 echo "=== Contract Generation Complete ==="

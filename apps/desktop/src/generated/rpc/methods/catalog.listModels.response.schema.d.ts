@@ -10,6 +10,9 @@ export interface CatalogListmodelsResponse {
     model_id: string;
     name: string;
     provider: string;
+    provider_release_id?: string;
+    model_binding_id?: string;
+    provider_protocol?: "openai_responses" | "anthropic_messages" | "openai_chat_completions";
     capabilities?: string[];
   }[];
 }

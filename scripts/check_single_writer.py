@@ -2,7 +2,7 @@
 """Scan for single-writer violations in the sidecar codebase.
 
 Enforces:
-- BEGIN IMMEDIATE only in persistence/unit_of_work.py, persistence/write_queue.py, persistence/migrator.py
+- BEGIN IMMEDIATE only in persistence/write_queue.py, persistence/migrator.py
 - Business modules must not call .commit(), .rollback(), or BEGIN IMMEDIATE
 - Worker modules must not import writer connection
 """
@@ -17,14 +17,8 @@ SIDECAR = Path(__file__).resolve().parent.parent / "sidecar"
 IBREEZE = SIDECAR / "ibreeze"
 
 ALLOWED_BEGIN_IMMEDIATE = {
-    IBREEZE / "persistence" / "unit_of_work.py",
     IBREEZE / "persistence" / "write_queue.py",
     IBREEZE / "persistence" / "migrator.py",
-    # Legacy bridge modules — needed for PRAGMA defer_foreign_keys within transactions
-    # These will be removed when the legacy handlers are fully migrated to the new
-    # CommandBus/UoW pattern (see handler_registry.py).
-    IBREEZE / "company.py",
-    IBREEZE / "employee.py",
 }
 
 EXCLUDE_DIRS = {"__pycache__", ".git", "tests", "migrations", ".mypy_cache"}
@@ -78,18 +72,7 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
             if path not in ALLOWED_BEGIN_IMMEDIATE:
                 violations.append((lineno, "BEGIN_IMMEDIATE", f"BEGIN IMMEDIATE in {path.name}"))
 
-        if path in BUSINESS_MODULES or (
-            IBREEZE in path.parents
-            and path.suffix == ".py"
-            and path not in ALLOWED_BEGIN_IMMEDIATE
-            and "persistence" not in path.parts
-            and "rpc_server" not in path.name
-            and "workers" not in path.parts
-            and "application" not in path.parts
-        ):
-            # Also skip legacy bridge modules (ALLOWED_BEGIN_IMMEDIATE) from commit/rollback check
-            if path in ALLOWED_BEGIN_IMMEDIATE:
-                continue
+        if path.suffix == ".py" and path not in ALLOWED_BEGIN_IMMEDIATE and path.name not in {"migrator.py"} and path != IBREEZE / "persistence" / "connection.py":
             if RE_COMMIT.search(line):
                 violations.append((lineno, "COMMIT", f".commit() in business module {path.name}"))
             if RE_ROLLBACK.search(line):
@@ -114,7 +97,7 @@ def main() -> int:
         for filepath, lineno, rule, detail in all_violations:
             print(f"  {filepath}:{lineno} [{rule}] {detail}")
         print("\nRules:")
-        print("  - BEGIN IMMEDIATE only in persistence/unit_of_work.py, persistence/write_queue.py, persistence/migrator.py")
+        print("  - BEGIN IMMEDIATE only in persistence/write_queue.py, persistence/migrator.py")
         print("  - Business modules must not call .commit() or .rollback()")
         return 1
 

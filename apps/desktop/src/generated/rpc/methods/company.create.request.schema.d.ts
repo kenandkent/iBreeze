@@ -7,5 +7,7 @@
 
 export interface CompanyCreateRequest {
   name: string;
-  description?: string;
+  introduction: string;
+  general_manager_name: string;
+  base_profile_version_id: string;
 }

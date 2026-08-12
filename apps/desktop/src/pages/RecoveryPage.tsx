@@ -3,6 +3,7 @@ import { Card, Typography, Button, Space, Result, message } from 'antd';
 import { WarningOutlined, ReloadOutlined, RollbackOutlined, ExportOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../utils/logger';
+import { createRpcRequest } from '../shared/rpcClient';
 
 const { Title, Text } = Typography;
 
@@ -15,7 +16,7 @@ export default function RecoveryPage() {
 
   const checkOnMount = async () => {
     try {
-      const ok = await invoke<boolean>('updater_verify_launch');
+      const ok = await createRpcRequest<boolean>('updater.verifyLaunch');
       setVerified(ok);
       if (ok) {
         logger.info('RecoveryPage', 'verify_ok');
@@ -30,7 +31,7 @@ export default function RecoveryPage() {
     setVerifying(true);
     try {
       logger.info('RecoveryPage', 'retry_verify');
-      const ok = await invoke<boolean>('updater_verify_launch');
+      const ok = await createRpcRequest<boolean>('updater.verifyLaunch');
       setVerified(ok);
       if (ok) {
         message.success('验证通过，即将返回系统');
@@ -50,7 +51,7 @@ export default function RecoveryPage() {
     setRestoring(true);
     try {
       logger.info('RecoveryPage', 'restore_stable');
-      await invoke<boolean>('updater_restore_stable');
+      await createRpcRequest<boolean>('updater.restoreStable');
       message.success('已恢复至稳定版本，即将重启');
       setTimeout(() => window.location.replace('/login'), 1500);
     } catch (e) {

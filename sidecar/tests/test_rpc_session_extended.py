@@ -137,7 +137,7 @@ class TestIpcSession:
                 session.cancel()
 
         with patch("ibreeze.rpc.session.asyncio.sleep", side_effect=fake_sleep):
-            await session.start_heartbeat(asyncio.StreamReader())
+            await session.start_heartbeat()
         assert call_count >= 2
 
     async def test_start_heartbeat_stops_on_exception(self, session: IpcSession):
@@ -160,5 +160,5 @@ class TestIpcSession:
                     raise ConnectionError("lost")
 
             session.notify = failing_notify
-            await session.start_heartbeat(asyncio.StreamReader())
+            await session.start_heartbeat()
             # Should have broken out due to missed heartbeats

@@ -11,6 +11,12 @@ import pytest
 from ibreeze.runtime.transport import ReverseRpcTransport
 
 
+class _ProbeSession:
+    async def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        assert method == "credential.probe"
+        return {"available": False}
+
+
 class TestNoDirectHttpCalls:
     """Verify transport does not make direct HTTP calls to providers."""
 
@@ -28,9 +34,14 @@ class TestNoDirectHttpCalls:
     @pytest.mark.asyncio
     async def test_probe_uses_credential_probe(self) -> None:
         """probe() must only use credential.probe reverse method."""
-        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
-            await t.probe()
+        t = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            provider_release_id="provider-1",
+            model_binding_id="binding-1",
+            session=_ProbeSession(),
+        )
+        assert await t.probe() is False
         assert t._rpc.last_method == "credential.probe"
 
     def test_transport_has_no_aiohttp_session(self) -> None:
@@ -57,6 +68,12 @@ class TestNoDirectHttpCalls:
         with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
             await t.complete(({"role": "user", "content": "hi"},), ())
         assert t._rpc.last_method in allowed
-        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
-            await t.probe()
-        assert t._rpc.last_method in allowed
+        probe = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            provider_release_id="provider-1",
+            model_binding_id="binding-1",
+            session=_ProbeSession(),
+        )
+        assert await probe.probe() is False
+        assert probe._rpc.last_method in allowed

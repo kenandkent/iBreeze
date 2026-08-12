@@ -16,6 +16,9 @@
           "name": {
             "type": "string"
           },
+          "agent_key": {
+            "type": "string"
+          },
           "version": {
             "type": "string"
           },

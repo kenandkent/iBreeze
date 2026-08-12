@@ -173,8 +173,9 @@ class TestExceptionClasses:
 
 
 class TestDataclasses:
-    def test_pending_request_defaults(self):
-        loop = asyncio.get_event_loop()
+    @pytest.mark.asyncio
+    async def test_pending_request_defaults(self):
+        loop = asyncio.get_running_loop()
         future = loop.create_future()
         pr = PendingRequest(deadline=100.0, response_future=future)
         assert pr.deadline == 100.0

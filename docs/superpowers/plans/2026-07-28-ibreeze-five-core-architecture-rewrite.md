@@ -99,6 +99,7 @@ pub struct MethodMeta {
 ```rust
 pub struct RuntimeProcessStartRequest {
     pub run_id: Uuid,
+    pub workspace_grant_id: Uuid,
     pub execution_snapshot_sha256: String,
     pub agent_release_id: Uuid,
     pub agent_type: AgentType,
@@ -1093,7 +1094,7 @@ Run:
 uv run --directory sidecar pytest tests/application tests/workers tests/observability/test_health.py tests/backup/test_barrier.py -v --cov=ibreeze.application --cov=ibreeze.workers --cov=ibreeze.observability --cov-branch --cov-fail-under=100
 ```
 
-Expected: 全部 PASS；关闭顺序为拒绝新 RPC、停止新 lease、drain 写队列、停止 Worker、checkpoint、关闭读池、关闭 writer、释放锁。
+Expected: 全部 PASS；关闭顺序为拒绝新 RPC、停止新 lease、停止 Worker、drain 写队列、checkpoint、关闭读池、关闭 writer、释放锁。先停止 Worker 是为了禁止新的写请求进入队列，再由 WriteQueue 完成已接收事务的排空。
 
 - [ ] **Step 8: 更新文档并提交**
 
@@ -1575,7 +1576,7 @@ pub struct ExternalWriteReceipt {
 }
 ```
 
-请求字段固定为 `approval_id/run_id/operation/target_realpath/expected_old_sha256/source_relative_path/source_sha256/source_size/expires_at`。Rust 必须重新 realpath、拒绝 symlink、验证旧状态和 staging source，生成只允许单一目标的临时 Seatbelt Profile；成功后删除 staging 和临时权限。相同 approval 在目标仍为 old state 时只执行一次，在目标已等于 requested result 时只读重建等价 receipt，第三种状态返回 `APPROVAL_TARGET_CHANGED`。
+请求字段固定为 `approval_id/workspace_grant_id/run_id/operation/target_realpath/expected_old_sha256/source_relative_path/source_sha256/source_size/expires_at`。人工审批 target 固定绑定 `workspace_grant_id/target_realpath/operation/expected_old_sha256/source_sha256` 并保存 canonical JSON hash；Rust 必须重新解析 Workspace Grant、realpath、拒绝 symlink、验证旧状态和 `${profile_root}/external-write-staging/{approval_id}/` 下的 staging source，生成只允许单一目标的临时 Seatbelt Profile；成功后删除 staging 和临时权限。相同 approval 在目标仍为 old state 时只执行一次，在目标已等于 requested result 时只读重建等价 receipt，第三种状态返回 `APPROVAL_TARGET_CHANGED`。
 
 - [ ] **Step 8: 在真实 macOS 执行 Seatbelt 与外部写验收**
 

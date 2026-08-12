@@ -49,7 +49,7 @@ async def check_idempotency(
 ) -> dict[str, Any] | None:
     """Check RPC idempotency key. Uses the `idempotency` table (single global key)."""
     cursor = await db.execute(
-        """SELECT status, response_json, error_code
+        """SELECT status, response_json, error_code, request_sha256
            FROM idempotency
            WHERE idempotency_key=?""",
         (idempotency_key,),
@@ -57,6 +57,8 @@ async def check_idempotency(
     row = await cursor.fetchone()
     if row is None:
         return None
+    if row["request_sha256"] != request_sha256:
+        raise RuntimeError("IDEMPOTENCY_CONFLICT")
     if row["status"] == "completed" and row["response_json"]:
         return {"response": row["response_json"]}
     if row["status"] == "failed":
@@ -81,6 +83,8 @@ async def claim_idempotency(
     expires = (
         (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
     )
+    from sqlite3 import IntegrityError
+
     try:
         await db.execute(
             """INSERT INTO idempotency
@@ -89,11 +93,11 @@ async def claim_idempotency(
                VALUES (?, ?, 'processing', NULL, NULL, ?, ?)""",
             (idempotency_key, request_sha256, now, expires),
         )
-        await db.commit()
         return True
-    except Exception:
-        await db.rollback()
-        return False
+    except IntegrityError as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            return False
+        raise
 
 
 async def complete_idempotency(
@@ -119,4 +123,3 @@ async def complete_idempotency(
         f"UPDATE idempotency SET status=?, {result_field} WHERE idempotency_key=?",
         (status, result_value, idempotency_key),
     )
-    await db.commit()

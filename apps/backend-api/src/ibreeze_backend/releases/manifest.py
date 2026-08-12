@@ -41,7 +41,12 @@ async def build_manifest(
 
 
 def compute_manifest_signature(manifest_bytes: bytes, private_key: Ed25519PrivateKey) -> str:
-    """Sign manifest bytes with Ed25519 and return Base64-encoded signature."""
+    """Sign manifest bytes with Ed25519 and return padded standard Base64.
+
+    The desktop updater decodes release-manifest signatures with the standard
+    RFC 4648 alphabet.  Keeping the padding is part of that wire contract and
+    avoids ambiguous decoding of a 64-byte Ed25519 signature.
+    """
     signature = private_key.sign(manifest_bytes)
     return base64.b64encode(signature).decode("ascii")
 

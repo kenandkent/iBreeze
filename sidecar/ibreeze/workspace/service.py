@@ -230,6 +230,11 @@ async def apply_workspace(
 
     ws = await get_workspace(db, company_id, workspace_id)
 
+    if ws.status != "ready_to_apply":
+        raise ValueError("STATE_TRANSITION_INVALID")
+    if ws.version != expected_version:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+
     integration_path = ws.integration_worktree_path
     integration_branch = ws.integration_branch_name
 
@@ -239,6 +244,28 @@ async def apply_workspace(
         raise ValueError("WORKSPACE_NOT_FOUND")
     if status_result["stdout"].strip():
         raise ValueError("WORKSPACE_DIRTY")
+    integration_branch_result = await git_command(
+        "symbolic-ref", "--quiet", "--short", "HEAD", cwd=integration_path
+    )
+    if not integration_branch_result["success"] or integration_branch_result["stdout"].strip() != integration_branch:
+        raise ValueError("WORKSPACE_ACCESS_DENIED")
+
+    # J.3 applies only to the user's unchanged worktree.  Never merge into a
+    # path or branch that drifted after plan confirmation.
+    user_status_result = await git_command("status", "--porcelain", cwd=ws.repository_root)
+    user_branch_result = await git_command(
+        "symbolic-ref", "--quiet", "--short", "HEAD", cwd=ws.repository_root
+    )
+    user_head_result = await git_command("rev-parse", "HEAD", cwd=ws.repository_root)
+    if (
+        not user_status_result["success"]
+        or user_status_result["stdout"].strip()
+        or not user_branch_result["success"]
+        or user_branch_result["stdout"].strip() != ws.user_branch_name
+        or not user_head_result["success"]
+        or user_head_result["stdout"].strip() != ws.baseline_commit_sha
+    ):
+        raise ValueError("WORKSPACE_ACCESS_DENIED")
 
     # Attempt merge into integration branch (conflict means abort, not apply)
     merge_result = await git_command(
@@ -283,18 +310,20 @@ async def apply_workspace(
         }
 
     # Conflict: abort merge, leave workspace for manual resolution
-    await git_command("merge", "--abort", cwd=ws.repository_root)
     conflict_files = await get_merge_conflicts(ws.repository_root)
+    await git_command("merge", "--abort", cwd=ws.repository_root)
 
     # Mark ready for manual apply
-    await db.execute(
+    cursor = await db.execute(
         """UPDATE task_workspaces
            SET status='ready_to_apply',
                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
                version=version+1
-           WHERE id=? AND company_id=?""",
-        (workspace_id, company_id),
+           WHERE id=? AND company_id=? AND version=? AND status='ready_to_apply'""",
+        (workspace_id, company_id, expected_version),
     )
+    if cursor.rowcount != 1:
+        raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
     return {
         "workspace_id": workspace_id,
         "status": "ready_to_apply",

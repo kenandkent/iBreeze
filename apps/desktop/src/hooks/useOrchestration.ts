@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Task, Run } from '../types';
+import type { RuntimeRunRequest } from '../generated/rpc/methods/runtime.run.request.schema';
 import { createRpcRequest } from '../shared/rpcClient';
 import { queryKeys, useQueryCtx } from '../shared/queryKeys';
 import { logger } from '../utils/logger';
@@ -66,10 +67,10 @@ export function useRunTask() {
   const queryClient = useQueryClient();
   const ctx = useQueryCtx();
   return useMutation({
-    mutationFn: async (taskId: string) => {
+    mutationFn: async (request: RuntimeRunRequest) => {
       const start = performance.now();
       try {
-        const result = await createRpcRequest('runtime.run', { id: taskId });
+        const result = await createRpcRequest('runtime.run', request as unknown as Record<string, unknown>);
         logger.logHookSuccess('useOrchestration', 'runtime.run', performance.now() - start);
         return result;
       } catch (e) {

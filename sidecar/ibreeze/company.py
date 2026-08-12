@@ -143,10 +143,9 @@ async def create_company(
     if row:
         raise ValueError("NAME_EXISTS")
 
-    # ── 2. 事务由 WriteQueue 管理；无活跃事务时自己管理 ────────────
-    own_txn = not db.in_transaction
-    if own_txn:
-        await db.execute("BEGIN IMMEDIATE")
+    # All writes must run inside the WriteQueue-owned transaction.
+    if not db.in_transaction:
+        raise RuntimeError("WRITE_QUEUE_REQUIRED")
     # ── 3. 设置 defer_foreign_keys=ON（仅 H.5 事务允许）────────────────
     fk_cur = await db.execute("PRAGMA defer_foreign_keys")
     fk_row = await _fetchall(fk_cur)
@@ -406,11 +405,7 @@ async def create_company(
             version=1,
         )
 
-        if own_txn:
-            await db.commit()
     except Exception:
-        if own_txn:
-            await db.rollback()
         raise
     finally:
         # ── 15. 确保 defer_foreign_keys 恢复 OFF ──────────────────────────
@@ -436,9 +431,8 @@ async def rename_company(
     now = _now_iso()
     normalized_name = _normalize_name(data.name) if data.name else None
 
-    own_txn = not db.in_transaction
-    if own_txn:
-        await db.execute("BEGIN IMMEDIATE")
+    if not db.in_transaction:
+        raise RuntimeError("WRITE_QUEUE_REQUIRED")
     # ── 设置 defer_foreign_keys（由 WriteQueue 管理事务外层）───────────
     await db.execute("PRAGMA defer_foreign_keys = ON")
 
@@ -558,13 +552,9 @@ async def rename_company(
             updated_at=_parse_datetime(now),
             version=new_version,
         )
-        if own_txn:
-            await db.commit()
         return result
 
     except Exception:
-        if own_txn:
-            await db.rollback()
         raise
     finally:
         fk_cur = await db.execute("PRAGMA defer_foreign_keys")

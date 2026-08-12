@@ -26,8 +26,11 @@
             "type": "string",
             "enum": [
               "open",
+              "fixing",
               "resolved",
-              "dismissed"
+              "verified",
+              "closed",
+              "rejected"
             ]
           },
           "category": {
@@ -35,6 +38,18 @@
           },
           "description": {
             "type": "string"
+          },
+          "verifier_employee_id": {
+            "oneOf": [
+              {"type": "string", "format": "uuid"},
+              {"type": "null"}
+            ]
+          },
+          "rejection_reason": {
+            "oneOf": [
+              {"type": "string", "maxLength": 2000},
+              {"type": "null"}
+            ]
           }
         },
         "required": [
@@ -42,7 +57,9 @@
           "severity",
           "state",
           "category",
-          "description"
+          "description",
+          "verifier_employee_id",
+          "rejection_reason"
         ],
         "additionalProperties": false
       }

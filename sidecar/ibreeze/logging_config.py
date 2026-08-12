@@ -3,7 +3,7 @@
 Usage:
     from ibreeze.logging_config import setup_logging, get_logger
     setup_logging()
-    logger = get_logger("ibreeze.rpc_server")
+    logger = get_logger("ibreeze.rpc.production_server")
 """
 
 from __future__ import annotations

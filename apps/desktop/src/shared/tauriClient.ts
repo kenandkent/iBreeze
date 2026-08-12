@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { createRpcRequest } from "./rpcClient";
 
 export interface ValidateOriginResult {
   valid: boolean;
@@ -48,46 +48,49 @@ export interface CloseProfileResult {
 export async function validateOrigin(
   origin: string,
 ): Promise<ValidateOriginResult> {
-  return invoke<ValidateOriginResult>("backend_validate_origin", { origin });
+  return createRpcRequest<ValidateOriginResult>("backend.validateOrigin", { origin });
 }
 
 export async function register(input: {
   email: string;
   password: string;
 }): Promise<RegisterResult> {
-  return invoke<RegisterResult>("auth_register", input);
+  return createRpcRequest<RegisterResult>("auth.register", input);
 }
 
 export async function login(input: {
   email: string;
   password: string;
 }): Promise<LoginResult> {
-  return invoke<LoginResult>("auth_login", input);
+  return createRpcRequest<LoginResult>("auth.login", input);
 }
 
 export async function changePassword(input: {
   currentPassword: string;
   newPassword: string;
 }): Promise<LoginResult> {
-  return invoke<LoginResult>("auth_change_password", input);
+  return createRpcRequest<LoginResult>("auth.changePassword", {
+    current_password: input.currentPassword,
+    new_password: input.newPassword,
+  });
 }
 
 export async function logout(): Promise<LogoutResult> {
-  return invoke<LogoutResult>("auth_logout");
+  return createRpcRequest<LogoutResult>("auth.logout");
 }
 
 export async function listOfflineProfiles(): Promise<ListOfflineProfilesResult> {
-  return invoke<ListOfflineProfilesResult>("auth_list_offline_profiles");
+  return createRpcRequest<ListOfflineProfilesResult>("auth.listOfflineProfiles");
 }
 
 export async function openProfile(
   profileDirectoryId: string,
 ): Promise<OpenProfileResult> {
-  return invoke<OpenProfileResult>("auth_open_profile", {
-    profileDirectoryId,
+  return createRpcRequest<OpenProfileResult>("auth.openProfile", {
+    profile_directory_id: profileDirectoryId,
   });
 }
 
 export async function closeProfile(): Promise<CloseProfileResult> {
-  return invoke<CloseProfileResult>("auth_close_profile");
+  return createRpcRequest<CloseProfileResult>("auth.closeProfile");
 }

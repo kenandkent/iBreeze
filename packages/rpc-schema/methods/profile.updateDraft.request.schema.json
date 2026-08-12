@@ -17,6 +17,21 @@
     },
     "api_model": {
       "type": "string"
+    },
+    "credential_ref": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "provider_release_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "model_binding_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "provider_protocol": {
+      "enum": ["openai_responses", "anthropic_messages", "openai_chat_completions"]
     }
   },
   "additionalProperties": false,

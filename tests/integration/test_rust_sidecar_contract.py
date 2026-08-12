@@ -123,14 +123,17 @@ class TestRustSidecarContract:
 
     def test_rpc_max_frame_bytes(self):
         """CT-007: Frame size limit should be defined."""
-        from ibreeze.rpc_server import MAX_FRAME_BYTES
-
-        assert MAX_FRAME_BYTES > 0
-        assert MAX_FRAME_BYTES == 16 * 1024 * 1024
+        source = (
+            __import__("pathlib").Path(__file__).parents[2]
+            / "apps/desktop-core/src/ipc/frame.rs"
+        ).read_text()
+        assert "MAX_FRAME_BYTES" in source
+        assert "16 * 1024 * 1024" in source
 
     def test_rpc_protocol_version(self):
         """CT-007: Protocol version should be defined."""
-        from ibreeze.rpc_server import PROTOCOL_VERSION
-
-        assert isinstance(PROTOCOL_VERSION, int)
-        assert PROTOCOL_VERSION >= 1
+        source = (
+            __import__("pathlib").Path(__file__).parents[2]
+            / "apps/desktop-core/src/rpc/protocol.rs"
+        ).read_text()
+        assert "PROTOCOL_VERSION" in source

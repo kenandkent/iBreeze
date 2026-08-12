@@ -127,6 +127,33 @@ async def env(db: Any) -> dict[str, str]:
         " VALUES (?,?,?,?,?,'awaiting_user_confirmation',?,?,1)",
         (task_id, company_id, "Build feature", conv_id, _id(), now, now),
     )
+    workspace_grant_id = _id()
+    workspace_id = _id()
+    await db.execute(
+        "INSERT INTO workspace_grants"
+        " (id, company_id, normalized_path, security_bookmark, path_type, status, created_at)"
+        " VALUES (?,?,?,?,'code_repository','active',?)",
+        (workspace_grant_id, company_id, f"/tmp/ibreeze-{workspace_grant_id}", b"test-bookmark", now),
+    )
+    await db.execute(
+        "INSERT INTO task_workspaces"
+        " (id, company_id, company_task_id, workspace_grant_id, repository_root,"
+        " baseline_commit_sha, user_branch_name, integration_branch_name,"
+        " integration_worktree_path, status, created_at, updated_at, version)"
+        " VALUES (?,?,?,?,?,?,?,?,'/tmp/ibreeze-integration','active',?,?,1)",
+        (
+            workspace_id,
+            company_id,
+            task_id,
+            workspace_grant_id,
+            f"/tmp/ibreeze-{workspace_grant_id}",
+            "a" * 40,
+            "main",
+            "ibreeze/integration",
+            now,
+            now,
+        ),
+    )
 
     plan_body = json.dumps({
         "company_id": company_id,
@@ -189,7 +216,9 @@ class TestConfirmAndDispatch:
         )
         result = await confirm_and_dispatch(db, command)
         assert result["status"] == "confirmed"
-        assert result["company_task_version"] == 2
+        # Confirmation and dispatch record each allowed CompanyTask edge:
+        # awaiting → approved → dispatching → checking_resources → executing.
+        assert result["company_task_version"] == 5
 
         cursor = await db.execute(
             "SELECT status, version FROM company_tasks WHERE id=? AND company_id=?",
@@ -197,7 +226,7 @@ class TestConfirmAndDispatch:
         )
         task = await cursor.fetchone()
         assert task["status"] == "executing"
-        assert task["version"] == 2
+        assert task["version"] == 5
 
         cursor = await db.execute(
             "SELECT id FROM department_tasks WHERE company_task_id=? AND company_id=?",
@@ -316,7 +345,7 @@ class TestConfirmAndDispatch:
             await confirm_and_dispatch(db, command)
 
     @pytest.mark.asyncio
-    async def test_catalog_auto_create(self, db: Any, env: dict[str, str]) -> None:
+    async def test_missing_catalog_waits_without_bootstrap(self, db: Any, env: dict[str, str]) -> None:
         await db.execute("DELETE FROM catalog_cache_releases")
         plan_artifact_id = _id()
         command = ConfirmPlanCommand(
@@ -327,8 +356,39 @@ class TestConfirmAndDispatch:
             expected_version=1,
         )
         result = await confirm_and_dispatch(db, command)
-        assert result["status"] == "confirmed"
+        assert result["status"] == "waiting_resource"
 
         cursor = await db.execute("SELECT release_id FROM catalog_cache_releases WHERE status='active'")
         row = await cursor.fetchone()
-        assert row is not None
+        assert row is None
+
+    @pytest.mark.asyncio
+    async def test_unavailable_employee_waits_without_partial_dispatch(self, db: Any, env: dict[str, str]) -> None:
+        await db.execute(
+            "UPDATE employees SET status='inactive' WHERE id=? AND company_id=?",
+            (env["employee_id"], env["company_id"]),
+        )
+        command = ConfirmPlanCommand(
+            company_id=env["company_id"],
+            company_task_id=env["task_id"],
+            plan_artifact_id=_id(),
+            plan_sha256=env["plan_sha256"],
+            expected_version=1,
+        )
+
+        result = await confirm_and_dispatch(db, command)
+
+        assert result == {"status": "waiting_resource", "company_task_version": 1}
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS count FROM department_tasks WHERE company_task_id=?",
+            (env["task_id"],),
+        )
+        row = await cursor.fetchone()
+        assert row["count"] == 0
+        cursor = await db.execute(
+            "SELECT status, version FROM company_tasks WHERE id=?",
+            (env["task_id"],),
+        )
+        row = await cursor.fetchone()
+        assert row["status"] == "awaiting_user_confirmation"
+        assert row["version"] == 1

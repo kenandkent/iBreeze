@@ -34,12 +34,11 @@ class TestCompanyServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_rpc_method_registration(self):
-        """Verify all RPC methods are properly registered."""
-        import ibreeze.rpc_server
+        """Verify the generated registry contains the production method set."""
+        from ibreeze.rpc.public_contracts import PUBLIC_METHODS
 
-        server = ibreeze.rpc_server.RPCServer.__new__(ibreeze.rpc_server.RPCServer)
-        server.methods = {}
-        ibreeze.rpc_server.RPCServer._register = lambda self: None
+        assert "system.handshake" in PUBLIC_METHODS
+        assert "company.create" in PUBLIC_METHODS
 
 
 class TestKnowledgeServiceIntegration:

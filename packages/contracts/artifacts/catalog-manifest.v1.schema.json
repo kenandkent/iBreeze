@@ -3,67 +3,87 @@
   "$id": "https://ibreeze.ai/schemas/catalog-manifest.v1",
   "title": "CatalogManifest",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
-    "release_id": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "release_sequence": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "minimum_client_version": {
-      "type": "string"
-    },
-    "signature_algorithm": {
-      "type": "string",
-      "const": "Ed25519"
-    },
+    "release_id": { "type": "string", "format": "uuid" },
+    "release_sequence": { "type": "integer", "minimum": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "minimum_client_version": { "type": "string", "minLength": 1 },
+    "signature_algorithm": { "type": "string", "const": "Ed25519" },
+    "signing_key_id": { "type": "string", "minLength": 1 },
     "resources": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "resource_type": {
-            "type": "string"
+          "type": { "enum": ["agent", "model", "provider", "skill"] },
+          "id": { "type": "string", "format": "uuid" },
+          "key": { "type": "string", "minLength": 1 },
+          "display_name": { "type": "string", "minLength": 1 },
+          "catalog_revision": { "type": "integer", "minimum": 1 },
+          "version": { "type": "integer", "minimum": 1 },
+          "object_key": { "type": "string", "minLength": 1 },
+          "object_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size": { "type": "integer", "minimum": 0 },
+          "description": { "type": "string" },
+          "network_domains": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
           },
-          "resource_id": {
-            "type": "string",
-            "format": "uuid"
+          "version_ranges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "min_version": { "type": "string", "minLength": 1 },
+                "max_version_exclusive": { "type": "string", "minLength": 1 },
+                "executable_names": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "supported_platforms": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                "probe_argv": { "type": "array", "items": { "type": "string" } },
+                "network_domains": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                "capability_tags": { "type": "array", "items": { "type": "string" } },
+                "adapter_contract_version": { "type": "integer", "minimum": 1 }
+              },
+              "required": ["min_version", "max_version_exclusive", "executable_names", "supported_platforms", "probe_argv", "network_domains", "capability_tags", "adapter_contract_version"]
+            }
           },
-          "resource_version": {
-            "type": "string"
+          "provider_key": { "type": "string", "minLength": 1 },
+          "model_key": { "type": "string", "minLength": 1 },
+          "context_window": { "type": "integer", "minimum": 1 },
+          "max_output_tokens": { "type": "integer", "minimum": 1 },
+          "supports_tools": { "type": "boolean" },
+          "supports_streaming": { "type": "boolean" },
+          "supports_vision": { "type": "boolean" },
+          "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "skill_version_id": { "type": "string", "format": "uuid" },
+          "skill_version": { "type": "integer", "minimum": 1 },
+          "protocol": {
+            "enum": ["openai_responses", "anthropic_messages", "openai_chat_completions"]
           },
-          "object_key": {
-            "type": "string"
-          },
-          "object_sha256": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{64}$"
-          },
-          "size": {
-            "type": "integer",
-            "minimum": 0
+          "base_url": { "type": "string", "format": "uri", "minLength": 1 },
+          "auth_scheme": { "enum": ["bearer", "x-api-key"] },
+          "model_bindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "binding_id": { "type": "string", "format": "uuid" },
+                "model_id": { "type": "string", "format": "uuid" },
+                "provider_model_name": { "type": "string", "minLength": 1 },
+                "request_defaults": { "type": "object" }
+              },
+              "required": ["binding_id", "model_id", "provider_model_name", "request_defaults"]
+            }
           }
         },
-        "required": [
-          "resource_type",
-          "resource_id",
-          "resource_version",
-          "object_key",
-          "object_sha256",
-          "size"
-        ],
-        "additionalProperties": false
+        "required": ["type", "id", "key", "catalog_revision", "version", "object_key", "object_sha256", "size"]
       }
     },
-    "signature": {
-      "type": "string"
-    }
+    "signature": { "type": "string", "minLength": 1 }
   },
   "required": [
     "release_id",
@@ -71,8 +91,8 @@
     "created_at",
     "minimum_client_version",
     "signature_algorithm",
+    "signing_key_id",
     "resources",
     "signature"
-  ],
-  "additionalProperties": false
+  ]
 }

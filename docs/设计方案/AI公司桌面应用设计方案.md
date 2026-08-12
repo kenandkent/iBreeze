@@ -701,6 +701,15 @@ Employee(api_model)
 
 API Model 是职员模型底座；Built-in Agent Runtime 是其任务执行引擎。两者不得混称为同一 Adapter。
 
+Runtime Gateway 的 `runtime.run` 不是任务编排入口，而是快照执行入口。请求必须携带
+`company_id`、`agent_id`、`company_task_id`、`conversation_id`、
+`availability_snapshot_id`、`execution_snapshot_id`、`model_id`、`run_purpose` 和
+`adapter_type`；服务端逐项校验快照归属、有效期、职员状态及任务关联后才创建 Run，并在同一写事务写入
+`run.queued` 的 RunEvent、DomainEvent、Outbox 和 RuntimeQueue。用户任务必须先经过
+`task.confirmPlan`，不得用任务 ID 直接创建未绑定快照的 Run。生产 RPC 必须委托
+`ibreeze.runtime.gateway.start` 这一唯一 Run 创建实现；请求中的模型和适配器必须与
+ExecutionSnapshot 的不可变运行绑定一致，其他模块禁止直接插入 `agent_runs`。
+
 ### 14.2 从 Codex CLI 抽象的通用能力
 
 - Agent Loop；
@@ -1760,7 +1769,7 @@ Rust Desktop Core
 
 WebView 禁止直接访问文件系统、数据库、Keychain、后台 API 和 CLI。访问后台 API 的 HTTP Client 在 Rust Core 中实现；目录响应经 Rust 验签后才传给 Sidecar。
 
-Sidecar 的 CLI Adapter 只生成并解析 Invocation/RuntimeEvent；CLI 进程、管道、进程组、Seatbelt Profile 和 Egress Lease 由 Rust Process Supervisor 持有。Sidecar 禁止直接调用 `asyncio.create_subprocess_exec`、`subprocess` 或 `os.exec*` 启动 Agent。
+Sidecar 的 CLI Adapter 只生成并解析 Invocation/RuntimeEvent；CLI 进程、管道、进程组、Seatbelt Profile 和 Egress Lease 由 Rust Process Supervisor 持有。Sidecar 禁止直接调用 `asyncio.create_subprocess_exec`、`subprocess` 或 `os.exec*` 启动 Agent 或模型。Workspace 的 Git 操作是独立的受控基础设施边界，只能通过 `sidecar/ibreeze/workspace/git_ops.py` 的固定 argv 执行器调用 Git，cwd 必须来自已确认的 `task_workspaces.repository_root`/受管 Worktree 记录，不接受模型、Prompt 或前端传入的可执行命令；该执行器不得用于启动 Agent、Shell 或模型 HTTP 请求。
 
 ### F.3 Sidecar 启动
 
@@ -1824,7 +1833,7 @@ JSON-RPC 请求必须包含：
 
 RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`；Rust 只允许发送无 id 的 `credential.http.event`、`runtime.process.registered`、`runtime.process.output`、`runtime.process.exited` 通知。允许集合固定在 `packages/rpc-schema/reverse-methods.v1.json`，任一端收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。Rust 启动进程前必须用当前 ipc session、已验签 Catalog、ExecutionSnapshot、Workspace/Network policy hash 重新验证 Invocation；Sidecar 不持有或启动 CLI 进程。
 
-`host.externalWrite.execute` 仅可由当前 Sidecar session 发起，params 固定为 `{approval_id,run_id,operation,target_realpath,expected_old_sha256,source_relative_path,source_sha256,source_size,expires_at}`，其中 `operation` 只允许 `create_file/replace_file/delete_file/create_directory`；create/replace 必须提供位于 `${profile_root}/external-write-staging/{approval_id}/` 下的无 symlink source 及 hash/size，delete/create_directory 的 source 三字段必须为 null。Rust 重新规范化目标、校验过期时间、旧目标 hash 和 source，使用只允许该单一目标的临时 Seatbelt Profile 执行，销毁 staging 与临时权限后返回 `{approval_id,run_id,operation,target_realpath,result_state_sha256,completed_at,receipt_sha256}`；`result_state_sha256` 是目标存在性、类型和内容hash的RFC 8785状态对象SHA-256，`receipt_sha256` 是其余response字段的RFC 8785 SHA-256。相同approval重试时，若目标仍是expected old state且尚未过期则执行一次，若已经等于requested result state则即使刚过期也只读重建等价receipt，其他状态返回 `APPROVAL_TARGET_CHANGED`，从而覆盖“动作完成但响应丢失”且绝不在过期后产生新副作用。Rust 不读取或修改业务 SQLite；Sidecar 校验 receipt 的全部绑定字段与哈希后，才按 H.11 消费审批。
+`host.externalWrite.execute` 仅可由当前 Sidecar session 发起，params 固定为 `{approval_id,workspace_grant_id,run_id,operation,target_realpath,expected_old_sha256,source_relative_path,source_sha256,source_size,expires_at}`，其中 `workspace_grant_id` 是 Rust 当前 Profile 中已解析且未过期的 Workspace Grant，不能用人工审批 ID 替代；`operation` 只允许 `create_file/replace_file/delete_file/create_directory`。人工审批的 `target_json` 固定为 `{target_realpath,operation,expected_old_sha256,source_sha256,workspace_grant_id}` 并保存该 canonical JSON 的 SHA-256；create/replace 必须提供位于 `${profile_root}/external-write-staging/{approval_id}/` 下的无 symlink source 及 hash/size，delete/create_directory 的 source 三字段必须为 null。Rust 重新规范化目标、校验 Workspace Grant、过期时间、旧目标状态 hash 和 source，使用只允许该单一目标的临时 Seatbelt Profile 执行，销毁 staging 与临时权限后返回 `{approval_id,run_id,operation,target_realpath,result_state_sha256,completed_at,receipt_sha256}`；`result_state_sha256` 是目标存在性、类型、大小和内容 hash 的 RFC 8785 状态对象 SHA-256，`receipt_sha256` 是上述 response 字段 canonical JSON 的 SHA-256。相同 approval 重试时，若目标仍是 expected old state 且尚未过期则最多执行一次；若已经等于已记录的 result state，则即使刚过期也只读重建等价 receipt；其他状态返回 `APPROVAL_TARGET_CHANGED`，从而覆盖“动作完成但响应丢失”且绝不在过期后产生新副作用。Rust 不读取或修改业务 SQLite；Sidecar 必须逐字段校验 approval target、receipt 绑定字段和哈希后，才按 H.11 消费审批。
 
 ### F.5 心跳与重启
 
@@ -4182,7 +4191,7 @@ resume(run_id: UUID) -> RunHandle
 get_status(run_id: UUID) -> AgentRun
 ```
 
-禁止其他模块直接调用 `asyncio.create_subprocess_exec` 或模型 HTTP API。
+禁止其他模块直接调用 `asyncio.create_subprocess_exec` 或模型 HTTP API 来启动 Agent/模型。唯一例外是 Workspace Git 固定 argv 执行器：它只接受代码中定义的 Git 子命令、数据库绑定的仓库 cwd，不经过 Shell，不允许 remote/fetch/push/reset/force 等越权操作，也不得被 Runtime 或 Tool Registry 复用。
 
 ### I.2 CLI 版本门禁
 
@@ -4381,7 +4390,7 @@ Read the attached task.md and execute every instruction.
 
 每个受支持 CLI 版本必须通过：Workspace 写成功、外部普通文件只读、其他公司不可读、其他职员私有区不可读、外部写失败、直接公网连接失败、只允许代理白名单 HTTPS、后台进程不能逃逸和认证文件不能被 Agent 工具输出。
 
-常驻 CLI 子进程的 Seatbelt Profile 永远不加入 Workspace 外写权限。审批通过后的外部写入只能经 F.4 `host.externalWrite.execute` 由 Rust Tool Executor 启动一次性子进程或原子文件操作执行：根据 `human_approvals.target_json` 生成只含一个规范化目标的临时 SBPL allow 规则并校验旧/新哈希。Rust 删除临时 Profile和staging后返回receipt，Sidecar在同一事务完成ToolExecution并把审批置 `consumed`。CLI 自身即使在审批后也不能直接写该路径。
+常驻 CLI 子进程的 Seatbelt Profile 永远不加入 Workspace 外写权限。审批通过后的外部写入只能经 F.4 `host.externalWrite.execute` 由 Rust Tool Executor 启动一次性子进程或原子文件操作执行：根据 `human_approvals.target_json` 中的 `workspace_grant_id`、规范化目标、operation 和旧/新 hash 生成只含一个目标的临时 SBPL allow 规则。Rust 删除临时 Profile 和 staging 后返回 receipt，Sidecar 在同一事务完成 ToolExecution 并把审批置 `consumed`。CLI 自身即使在审批后也不能直接写该路径，人工 approval 也不能替代 Workspace Grant。
 
 ### I.8.1 CLI Network Egress Broker
 
@@ -4448,14 +4457,15 @@ build_context
 - 最多并行 4 个声明为 read-only 且路径集合不冲突的工具。
 - Tool Call 必须来自协议结构化字段；正文代码块不执行。
 - 达到限制返回 `RUN_LIMIT_REACHED`。
+- v1 API Model 只暴露 `read_file`、`list_files`、`search_text` 三个只读工具；不暴露 `write_file`、`apply_patch`、`run_shell`、`git_commit` 等变更工具。需要 Workspace 外写时必须创建 H.11 人工审批并走 I.13/F.4 单目标 receipt 流程。
 
 ### I.12 Tool Registry
 
 | Tool | 输入要点 | 实现与限制 |
 |---|---|---|
-| `list_directory` | path、depth | 最大 depth 5、最多 5000 条 |
-| `read_file` | path、offset、length | 单次最多 1 MiB |
-| `search_text` | query、paths、glob | 固定 `rg --json` 参数数组 |
+| `list_files` | path、pattern、limit | API Model v1 只读工具；最多 1000 条文件结果，拒绝 symlink |
+| `read_file` | path、offset、length | API Model v1 只读工具；单次最多 1 MiB |
+| `search_text` | query、paths、glob | API Model v1 只读工具；最多 100 条结果，拒绝 `..`、symlink 和 Workspace 外路径 |
 | `apply_patch` | unified diff | 先验证全部目标，再临时文件+原子 rename |
 | `create_file` | path、content | 目标存在即失败 |
 | `delete_path` | path | 仅 Run Workspace，先进入本地任务 Trash |
@@ -4463,9 +4473,9 @@ build_context
 | `run_shell` | script、cwd、timeout | `/bin/zsh -lc`，Seatbelt 包裹 |
 | `git_status/diff/commit` | 固定字段 | 固定 Git 参数，禁止 remote/force |
 | `report_progress` | message、percent | percent 0..100 |
-| `request_external_write` | path、operation、hash | 只创建审批 |
+| `request_external_write` | path、operation、hash | CLI/Permission Gateway 工具；只创建审批，不执行写入 |
 
-所有输入由 JSON Schema 校验。输出超过 1 MiB 写 Artifact；返回摘要、大小和引用。工具前后均写 Checkpoint。
+所有输入由 JSON Schema 校验。输出超过 1 MiB 写 Artifact；返回摘要、大小和引用。工具前后均写 Checkpoint。`list_directory`、`apply_patch`、`create_file`、`delete_path`、`run_process`、`run_shell`、`git_*` 属于 CLI 原生 Agent 能力；API Model v1 不注册这些名称，Rust/Sidecar 也会在 Provider 请求和 ToolPolicy 层拒绝未注册工具。
 
 ### I.13 Workspace 外单次审批
 
@@ -4480,7 +4490,7 @@ run_id
 expires_at（最长 10 分钟）
 ```
 
-外部写 `target_json` 必须通过 `packages/contracts/approvals/external-write-target.v1.schema.json`，其字段与上述绑定及F.4请求逐字一致。`operation` 只允许 `create_file/replace_file/delete_file/create_directory`。create/replace 的新内容先由 Sidecar 写入 `${profile_root}/external-write-staging/{approval_id}/content`，权限 `0600`，fsync 后把相对路径、SHA-256 和 size 交给 F.4 的 `host.externalWrite.execute`；delete/create_directory 不创建 source。Rust 执行前重新解析路径并计算旧哈希，变化返回 `APPROVAL_TARGET_CHANGED`；执行后先销毁 staging 和临时 Seatbelt Profile再返回 receipt。批准只适用一次动作，不创建目录级永久授权，Rust 不直接改变 HumanApproval 状态。
+外部写 `target_json` 必须通过 `packages/contracts/approvals/external-write-target.v1.schema.json`，固定字段为 `{target_realpath,operation,expected_old_sha256,source_sha256,workspace_grant_id}`，并以 canonical JSON 计算 `target_sha256`；F.4 请求在此基础上增加 `approval_id/run_id/source_relative_path/source_size/expires_at`。`operation` 只允许 `create_file/replace_file/delete_file/create_directory`。create/replace 的新内容先由 Sidecar 写入 `${profile_root}/external-write-staging/{approval_id}/content`，权限 `0600`，fsync 后把相对路径、SHA-256 和 size 交给 F.4 的 `host.externalWrite.execute`；delete/create_directory 不创建 source。Rust 执行前重新解析路径并计算旧状态 hash，变化返回 `APPROVAL_TARGET_CHANGED`；执行后先销毁 staging 和临时 Seatbelt Profile 再返回 receipt。批准只适用一次动作，不创建目录级永久授权，Rust 不直接改变 HumanApproval 状态。
 
 不确定恢复 `target_json` 必须通过 `packages/contracts/approvals/uncertain-recovery-target.v1.schema.json`，固定为 `{run_id,tool_execution_id,action:'retry_once',input_sha256,prior_started_at}`。用户允许时，Sidecar在单一事务把原 ToolExecution 保持 `uncertain`、创建具有新 `tool_call_id` 但相同 input hash 的一次性重试记录、把审批置 `consumed` 并将 AgentRun 从 `waiting_approval` 转 `retrying`；相同approval不能创建第二个重试。用户拒绝或审批过期时不重放工具，审批进入denied/expired且AgentRun进入failed，failure code 保持 `RUN_RECOVERY_UNCERTAIN`。外部写审批被拒绝时，Sidecar写入 rejected Tool result并回到原 `resume_state`；pending过期直接写rejected result并恢复。allowed外部写到期时，expiry worker必须先调用F.4只读对账：已达requested result则保存receipt并consume，仍为old state才转expired并恢复，第三种状态转expired、保持ToolExecution uncertain并把Run置failed等待用户处理。已allowed但receipt未落库的审批继续显示在待处理列表，重复相同 `approval.resolve` 只重试F.4幂等执行，不重复用户决策。
 
@@ -4525,7 +4535,7 @@ git rev-parse --git-path rebase-apply
 
 v1 的一个软件 CompanyTask 必须且只能绑定一个 Git 仓库。工作区必须干净、处于命名分支、且无 merge/rebase/cherry-pick；detached HEAD 同样拒绝。`MERGE_HEAD/CHERRY_PICK_HEAD` 能解析或 `rebase-merge/rebase-apply` 路径存在即视为进行中。否则任务进入 `waiting_resource`，用户自行处理；iBreeze 禁止自动 stash、WIP commit、reset 或 checkout 用户文件。
 
-用户确认计划时，Rust 解析 security bookmark 并返回规范化仓库根；Sidecar 在同一事务创建 `task_workspaces`，锁定 `workspace_grant_id/repository_root/baseline_commit_sha/user_branch_name`，预生成 integration branch/path。`repository_root` 必须等于 grant 的 `normalized_path`，后续所有 Worktree 命令从该记录读取，不接受模型或前端传入替代路径。
+用户确认计划时，Rust 解析 security bookmark 并返回规范化仓库根；Sidecar 在同一事务创建 `task_workspaces`，锁定 `workspace_grant_id/repository_root/baseline_commit_sha/user_branch_name`，预生成 integration branch/path。`repository_root` 必须等于 grant 的 `normalized_path`，后续所有 Worktree 命令从该记录读取，不接受模型或前端传入替代路径。`task.confirmPlan` 的单个 WriteQueue 事务同时校验计划哈希、创建全部 Task/AvailabilitySnapshot/ExecutionSnapshot/Run，并按 `awaiting_user_confirmation → approved → dispatching → checking_resources → executing` 逐边写入 CompanyTask 状态事件；Catalog 不可用时返回 `waiting_resource`，不得生成本地占位 Catalog。
 
 同一规范化路径在整个本地 Profile 中只能属于一个 active company grant；选择已被其他公司占用的路径返回 `WORKSPACE_ACCESS_DENIED` 且不泄露对方公司内容。Grant 仅在没有非终态 TaskWorkspace/AgentRun 时可撤销，撤销后原公司历史 Artifact 仍可读，但不能恢复或新建该路径上的 Run；其他公司必须重新通过文件选择器授权，不能复用旧 security bookmark。
 

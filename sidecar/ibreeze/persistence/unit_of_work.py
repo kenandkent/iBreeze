@@ -43,32 +43,32 @@ class UnitOfWork:
         company_id: UUID | None = None,
         ttl_days: int = 30,
     ) -> Any:
+        if not self._connection.in_transaction:
+            raise RuntimeError("WRITE_QUEUE_REQUIRED")
+        effective_key = getattr(idempotency_key, "idempotency_key", idempotency_key)
         session = WriteSession(connection=self._connection, company_id=company_id)
-        if idempotency_key:
-            cached = await self._idempotency.lookup(session, idempotency_key, request_sha256)
+        if effective_key:
+            cached = await self._idempotency.lookup(session, effective_key, request_sha256)
             if cached is not None:
+                if "response" in cached:
+                    return json.loads(cached["response"])
+                if "error" in cached:
+                    raise RuntimeError(cached["error"])
                 return cached
-        await self._connection.execute("BEGIN IMMEDIATE")
-        try:
-            if idempotency_key:
-                claimed = await self._idempotency.claim(
-                    session,
-                    idempotency_key,
-                    request_sha256,
-                    ttl=timedelta(days=ttl_days),
-                )
-                if not claimed:
-                    await self._connection.rollback()
-                    raise RuntimeError("IDEMPOTENCY_CLAIM_FAILED")
-            result = await command(session)
-            await self._event_store.append_all(session, result.events)
-            await self._outbox.enqueue_all(session, result.outbox)
-            if idempotency_key:
-                resp = result.response
-                response_json = json.dumps(resp, default=str) if not isinstance(resp, str) else resp
-                await self._idempotency.complete(session, idempotency_key, response_json=response_json)
-            await self._connection.commit()
-        except Exception:
-            await self._connection.rollback()
-            raise
+        if effective_key:
+            claimed = await self._idempotency.claim(
+                session,
+                effective_key,
+                request_sha256,
+                ttl=timedelta(days=ttl_days),
+            )
+            if not claimed:
+                raise RuntimeError("IDEMPOTENCY_CLAIM_FAILED")
+        result = await command(session)
+        await self._event_store.append_all(session, result.events)
+        await self._outbox.enqueue_all(session, result.outbox)
+        if effective_key:
+            resp = result.response
+            response_json = json.dumps(resp, default=str) if not isinstance(resp, str) else resp
+            await self._idempotency.complete(session, effective_key, response_json=response_json)
         return result.response

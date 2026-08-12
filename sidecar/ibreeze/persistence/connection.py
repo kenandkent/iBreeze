@@ -49,6 +49,7 @@ async def _open_read_connection(path: Path) -> aiosqlite.Connection:
     conn.row_factory = aiosqlite.Row
     for pragma in _RUN_PRAGMAS:
         await conn.execute(pragma)
+    await conn.execute("PRAGMA query_only = ON")
     return conn
 
 

@@ -38,6 +38,7 @@ fn reverse_method_allowlist_coverage() {
 fn external_write_request_roundtrip() {
     let request = ibreeze_desktop_core::rpc::reverse::ExternalWriteRequest {
         approval_id: Uuid::new_v4(),
+        workspace_grant_id: Uuid::new_v4(),
         run_id: Uuid::new_v4(),
         operation: ibreeze_desktop_core::rpc::reverse::ExternalWriteOperation::CreateFile,
         target_realpath: "/Users/test/workspace/output.txt".to_owned(),
@@ -76,27 +77,22 @@ fn external_write_response_has_all_fields() {
     assert_eq!(json["operation"], "replace_file");
 }
 
-/// CT-012: runtime.processRegistered/Exited notification schema
+/// CT-012: process lifecycle notifications are Rust → Sidecar notifications.
+/// They are emitted by `ProcessSupervisor` through `SidecarClient::notify` and
+/// therefore intentionally have no Rust-side request DTO to deserialize.
 #[test]
-fn process_event_schema() {
-    let event = ibreeze_desktop_core::rpc::reverse::ProcessEvent {
-        pid: 12345,
-        pgid: 12345,
-        start_time: "2026-07-26T10:00:00Z".to_owned(),
-        executable: "/usr/local/bin/ibreeze-sidecar".to_owned(),
-        parent_pid: 1000,
-    };
-
-    let json = serde_json::to_value(&event).expect("serialize");
-    assert_eq!(json["pid"], 12345);
-    assert_eq!(json["pgid"], 12345);
-    assert!(json.get("start_time").unwrap().is_string());
-    assert_eq!(json["parent_pid"], 1000);
-
-    let deserialized: ibreeze_desktop_core::rpc::reverse::ProcessEvent =
-        serde_json::from_value(json).expect("deserialize");
-    assert_eq!(deserialized.pid, 12345);
-    assert_eq!(deserialized.executable, "/usr/local/bin/ibreeze-sidecar");
+fn process_notification_methods_are_allowlisted() {
+    let notifications = ibreeze_desktop_core::rpc::reverse::ALLOWED_REVERSE_NOTIFICATIONS;
+    for method in [
+        "runtime.process.registered",
+        "runtime.process.output",
+        "runtime.process.exited",
+    ] {
+        assert!(
+            notifications.contains(&method),
+            "{method} must be allowlisted"
+        );
+    }
 }
 
 /// Verify that unknown fields are rejected in reverse RPC requests

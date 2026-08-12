@@ -10,6 +10,18 @@ from ibreeze.observability.health import HealthSnapshot, ProfileHealth
 from ibreeze.workers.spec import WorkerHealth
 
 
+def _wire_profile_queue(lifecycle: ApplicationLifecycle, writer: AsyncMock) -> AsyncMock:
+    """Execute queued profile callbacks against the mocked writer."""
+    queue = AsyncMock()
+
+    async def submit(**kwargs):
+        return await kwargs["execute"](writer)
+
+    queue.submit.side_effect = submit
+    lifecycle._write_queue = queue
+    return queue
+
+
 class TestApplicationLifecycleInit:
     def test_init_defaults(self):
         profile_path = Path("/tmp/test.db")
@@ -98,8 +110,8 @@ class TestApplicationLifecycleProperties:
 
 class TestApplicationLifecycleStart:
     @pytest.mark.asyncio
-    async def test_start_success(self):
-        profile_path = Path("/tmp/test.db")
+    async def test_start_success(self, tmp_path):
+        profile_path = tmp_path / "test.db"
 
         mock_prepared = MagicMock()
         mock_writer = AsyncMock()
@@ -115,9 +127,7 @@ class TestApplicationLifecycleStart:
             patch("ibreeze.application.lifecycle.WriteQueue", return_value=mock_write_queue) as m_wq_cls,
             patch("ibreeze.application.lifecycle.UnitOfWork", return_value=mock_uow) as m_uow_cls,
             patch("ibreeze.application.lifecycle.WorkerSupervisor", return_value=mock_ws_instance) as m_ws_cls,
-            patch("ibreeze.application.lifecycle.register_legacy_handlers", return_value=5) as m_reg_legacy,
-            patch("ibreeze.application.lifecycle.set_reverse_rpc_socket_path") as m_set_sock,
-            patch("ibreeze.application.lifecycle.mark_sidecar_own_socket") as m_mark_sock,
+            patch("ibreeze.application.lifecycle.register_public_handlers", return_value=None) as m_reg_public,
         ):
             mock_rp_cls.open = AsyncMock(return_value=mock_read_pool)
 
@@ -140,17 +150,20 @@ class TestApplicationLifecycleStart:
             mock_rp_cls.open.assert_called_once_with(profile_path)
             m_wq_cls.assert_called_once_with(mock_writer)
             m_uow_cls.assert_called_once_with(connection=mock_writer)
-            m_ws_cls.assert_called_once_with(writer=mock_writer, write_queue=mock_write_queue)
+            m_ws_cls.assert_called_once_with(
+                writer=mock_writer,
+                write_queue=mock_write_queue,
+                read_pool=mock_read_pool,
+                command_bus=lc.command_bus,
+            )
             mock_ws_instance.start.assert_called_once()
-            m_reg_legacy.assert_called_once_with(lc._dispatcher, mock_writer, profile_path, write_queue=mock_write_queue)
-            m_set_sock.assert_called_once_with("/tmp/sock")
-            m_mark_sock.assert_called_once_with("/tmp/sock")
+            m_reg_public.assert_called_once_with(lc)
             lc._ensure_profile_identity.assert_called_once()
             lc._init_review_completion_handlers.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_no_socket_path(self):
-        profile_path = Path("/tmp/test.db")
+    async def test_start_no_socket_path(self, tmp_path):
+        profile_path = tmp_path / "test.db"
 
         with (
             patch("ibreeze.application.lifecycle.prepare") as mock_prepare,
@@ -159,9 +172,7 @@ class TestApplicationLifecycleStart:
             patch("ibreeze.application.lifecycle.WriteQueue"),
             patch("ibreeze.application.lifecycle.UnitOfWork"),
             patch("ibreeze.application.lifecycle.WorkerSupervisor") as m_ws_cls,
-            patch("ibreeze.application.lifecycle.register_legacy_handlers", return_value=0),
-            patch("ibreeze.application.lifecycle.set_reverse_rpc_socket_path") as m_set_sock,
-            patch("ibreeze.application.lifecycle.mark_sidecar_own_socket") as m_mark_sock,
+            patch("ibreeze.application.lifecycle.register_public_handlers", return_value=None),
         ):
             mock_prepared = MagicMock()
             mock_prepare.return_value = mock_prepared
@@ -176,11 +187,9 @@ class TestApplicationLifecycleStart:
             await lc.start()
 
             assert lc._phase == LifecyclePhase.HANDSHAKE_READY
-            m_set_sock.assert_not_called()
-            m_mark_sock.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_start_registers_system_handlers(self):
+    async def test_start_registers_system_handlers(self, tmp_path):
         mock_read_pool = MagicMock()
 
         with (
@@ -190,12 +199,12 @@ class TestApplicationLifecycleStart:
             patch("ibreeze.application.lifecycle.WriteQueue"),
             patch("ibreeze.application.lifecycle.UnitOfWork"),
             patch("ibreeze.application.lifecycle.WorkerSupervisor") as m_ws_cls,
-            patch("ibreeze.application.lifecycle.register_legacy_handlers", return_value=0),
+            patch("ibreeze.application.lifecycle.register_public_handlers", return_value=None),
         ):
             mock_rp_cls.open = AsyncMock(return_value=mock_read_pool)
             m_ws_cls.return_value = AsyncMock()
 
-            lc = ApplicationLifecycle(Path("/tmp/test.db"))
+            lc = ApplicationLifecycle(tmp_path / "test.db")
             lc._ensure_profile_identity = AsyncMock()
             lc._init_review_completion_handlers = AsyncMock()
 
@@ -226,19 +235,19 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
-        lc._write_queue = AsyncMock()
+        queue = _wire_profile_queue(lc, mock_writer)
 
         with patch("ibreeze.application.lifecycle._now_iso", return_value="2026-07-30T12:00:00Z"):
             await lc._ensure_profile_identity()
 
         mock_writer.execute.assert_any_call(
             "SELECT id, schema_epoch, backend_origin, app_user_id, "
-            "masked_identifier, device_id, created_at, last_opened_at "
+            "masked_identifier, device_id "
             "FROM local_profile"
         )
         # Verify UPDATE goes through WriteQueue instead of direct writer
-        lc._write_queue.submit.assert_awaited_once_with(
-            command_name="update_profile_opened_at",
+        queue.submit.assert_awaited_once_with(
+            command_name="ensure_profile_identity",
             trace_id=ANY,
             deadline_at=ANY,
             execute=ANY,
@@ -263,6 +272,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
+        _wire_profile_queue(lc, mock_writer)
 
         with pytest.raises(RuntimeError, match="PROFILE_NOT_FOUND: no local_profile record"):
             await lc._ensure_profile_identity()
@@ -286,6 +296,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
+        _wire_profile_queue(lc, mock_writer)
 
         with pytest.raises(RuntimeError, match="backend_origin"):
             await lc._ensure_profile_identity()
@@ -315,6 +326,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
+        _wire_profile_queue(lc, mock_writer)
 
         with pytest.raises(RuntimeError) as exc_info:
             await lc._ensure_profile_identity()
@@ -342,7 +354,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
-        lc._write_queue = AsyncMock()
+        queue = _wire_profile_queue(lc, mock_writer)
 
         fake_uuid = "00000000-0000-0000-0000-000000000001"
         with (
@@ -351,8 +363,8 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         ):
             await lc._ensure_profile_identity()
 
-        lc._write_queue.submit.assert_awaited_once_with(
-            command_name="init_profile",
+        queue.submit.assert_awaited_once_with(
+            command_name="ensure_profile_identity",
             trace_id=ANY,
             deadline_at=ANY,
             execute=ANY,
@@ -377,7 +389,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
-        lc._write_queue = AsyncMock()
+        queue = _wire_profile_queue(lc, mock_writer)
 
         fake_uuid = "00000000-0000-0000-0000-000000000001"
         with (
@@ -399,7 +411,13 @@ class TestApplicationLifecycleEnsureProfileIdentity:
             "last_opened_at) "
             "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)"
         )
-        mock_writer.execute.assert_called_with(
+        queue.submit.assert_awaited_once_with(
+            command_name="ensure_profile_identity",
+            trace_id=ANY,
+            deadline_at=ANY,
+            execute=ANY,
+        )
+        mock_writer.execute.assert_any_call(
             expected_sql,
             (fake_uuid, "1.2.3", "https://example.com",
              "user-1", "mask-1", "dev-1",
@@ -416,6 +434,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
+        _wire_profile_queue(lc, mock_writer)
 
         with pytest.raises(RuntimeError, match="PROFILE_NOT_FOUND: no local_profile record"):
             await lc._ensure_profile_identity()
@@ -439,6 +458,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
+        _wire_profile_queue(lc, mock_writer)
 
         with pytest.raises(RuntimeError, match="PROFILE_SCHEMA_UNSUPPORTED: schema_epoch=2"):
             await lc._ensure_profile_identity()
@@ -570,14 +590,9 @@ class TestApplicationLifecycleInitReviewCompletionHandlers:
 
         with (
             patch("ibreeze.application.lifecycle.ReviewRepository"),
-            patch("ibreeze.application.lifecycle.StartReviewHandler"),
-            patch("ibreeze.application.lifecycle.StartIssueFixHandler"),
             patch("ibreeze.application.lifecycle.ResolveIssueHandler"),
             patch("ibreeze.application.lifecycle.SubmitReviewGuards"),
             patch("ibreeze.application.lifecycle.SubmitReviewHandler"),
-            patch("ibreeze.application.lifecycle.VerifyIssueHandler"),
-            patch("ibreeze.application.lifecycle.CloseIssueHandler"),
-            patch("ibreeze.application.lifecycle.RejectIssueHandler"),
             patch("ibreeze.application.lifecycle.AcceptEmployeeTaskHandler"),
             patch("ibreeze.application.lifecycle.EmployeeGate"),
             patch("ibreeze.application.lifecycle.CompleteDepartmentTaskHandler"),
@@ -587,23 +602,12 @@ class TestApplicationLifecycleInitReviewCompletionHandlers:
         ):
             await lc._init_review_completion_handlers()
 
-        expected_review = [
-            "review.start",
-            "review.startIssueFix",
-            "review.resolveIssue",
-            "review.submit",
-            "review.verifyIssue",
-            "review.closeIssue",
-            "review.rejectIssue",
-        ]
-        expected_completion = [
-            "completion.acceptEmployeeTask",
-            "completion.completeDepartmentTask",
-            "completion.completeCompanyTask",
-        ]
-        for method in expected_review + expected_completion:
+        expected_review = ["review.resolveIssue", "review.submit", "review.listIssues", "review.rerun"]
+        for method in expected_review:
             assert lc._dispatcher.has_method(method), f"{method} not registered"
-        assert lc._dispatcher.method_count == 10
+        assert lc._dispatcher.method_count == 4
+        for command_name in ("StartReview", "StartIssueFix", "VerifyIssue", "CloseIssue", "RejectIssue"):
+            assert command_name in lc.command_bus._handlers
 
     @pytest.mark.asyncio
     async def test_registers_handlers_without_external_patches(self):
@@ -612,17 +616,11 @@ class TestApplicationLifecycleInitReviewCompletionHandlers:
 
         await lc._init_review_completion_handlers()
 
-        assert lc._dispatcher.has_method("review.start")
         assert lc._dispatcher.has_method("review.submit")
-        assert lc._dispatcher.has_method("review.closeIssue")
-        assert lc._dispatcher.has_method("review.rejectIssue")
-        assert lc._dispatcher.has_method("review.verifyIssue")
         assert lc._dispatcher.has_method("review.resolveIssue")
-        assert lc._dispatcher.has_method("review.startIssueFix")
-        assert lc._dispatcher.has_method("completion.acceptEmployeeTask")
-        assert lc._dispatcher.has_method("completion.completeDepartmentTask")
-        assert lc._dispatcher.has_method("completion.completeCompanyTask")
-        assert lc._dispatcher.method_count == 10
+        assert lc._dispatcher.has_method("review.listIssues")
+        assert lc._dispatcher.has_method("review.rerun")
+        assert lc._dispatcher.method_count == 4
 
 
 class TestApplicationLifecycleDispatcher:
@@ -666,8 +664,8 @@ class _PhaseTrackingLifecycle(ApplicationLifecycle):
 
 class TestApplicationLifecyclePhaseTransitions:
     @pytest.mark.asyncio
-    async def test_phase_transitions_through_all_states(self):
-        profile_path = Path("/tmp/test.db")
+    async def test_phase_transitions_through_all_states(self, tmp_path):
+        profile_path = tmp_path / "test.db"
 
         with (
             patch("ibreeze.application.lifecycle.prepare"),
@@ -676,9 +674,7 @@ class TestApplicationLifecyclePhaseTransitions:
             patch("ibreeze.application.lifecycle.WriteQueue"),
             patch("ibreeze.application.lifecycle.UnitOfWork"),
             patch("ibreeze.application.lifecycle.WorkerSupervisor") as m_ws_cls,
-            patch("ibreeze.application.lifecycle.register_legacy_handlers", return_value=0),
-            patch("ibreeze.application.lifecycle.set_reverse_rpc_socket_path"),
-            patch("ibreeze.application.lifecycle.mark_sidecar_own_socket"),
+            patch("ibreeze.application.lifecycle.register_public_handlers", return_value=None),
         ):
             mock_rp_cls.open = AsyncMock(return_value=MagicMock())
             m_ws_cls.return_value = AsyncMock()

@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::rpc::api_client::{AuthKeyset, CatalogKeyset, SigningKey};
+use crate::rpc::api_client::{AuthKeyset, CatalogKeyset, CatalogManifest, SigningKey};
 
 const OFFLINE_AUDIENCE: &str = "ibreeze-offline";
 
@@ -106,6 +106,36 @@ pub fn verify_auth_keyset(
         &jwk_verifying_key(signing_key)?,
         &payload,
         &keyset.signature,
+    )
+}
+
+/// Verify the signed catalog manifest before any resource is used.  The
+/// backend signs the manifest without `signing_key_id` and `signature`; this
+/// function reconstructs that exact payload and resolves the signer from the
+/// already trusted catalog keyset.
+pub fn verify_catalog_manifest(
+    manifest: &CatalogManifest,
+    catalog_keys: &[SigningKey],
+) -> Result<(), AppError> {
+    if manifest.signature_algorithm != "Ed25519" || manifest.release_sequence == 0 {
+        return Err(AppError::Security("CATALOG_MANIFEST_INVALID".to_owned()));
+    }
+    let signing_key = catalog_keys
+        .iter()
+        .find(|key| key.kid == manifest.signing_key_id && key.status == "active")
+        .ok_or_else(|| AppError::Security("CATALOG_MANIFEST_SIGNER_UNTRUSTED".to_owned()))?;
+    let payload = canonical_bytes(json!({
+        "release_id": manifest.release_id,
+        "release_sequence": manifest.release_sequence,
+        "created_at": manifest.created_at,
+        "minimum_client_version": manifest.minimum_client_version,
+        "signature_algorithm": manifest.signature_algorithm,
+        "resources": manifest.resources.clone(),
+    }))?;
+    verify_signature(
+        &jwk_verifying_key(signing_key)?,
+        &payload,
+        &manifest.signature,
     )
 }
 

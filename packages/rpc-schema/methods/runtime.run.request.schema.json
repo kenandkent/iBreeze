@@ -12,13 +12,74 @@
       "type": "string",
       "format": "uuid"
     },
+    "company_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "availability_snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "execution_snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "message": {
       "type": "string"
+    },
+    "run_purpose": {
+      "type": "string",
+      "enum": [
+        "interactive_turn",
+        "company_plan",
+        "task_execution",
+        "review",
+        "verification",
+        "repair",
+        "merge",
+        "summary"
+      ]
+    },
+    "adapter_type": {
+      "type": "string",
+      "enum": [
+        "codex_cli",
+        "claude_code",
+        "opencode",
+        "api_model"
+      ]
+    },
+    "work_item_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "department_task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "employee_task_id": {
+      "type": "string",
+      "format": "uuid"
     }
   },
   "additionalProperties": false,
   "required": [
     "company_id",
-    "agent_id"
+    "agent_id",
+    "company_task_id",
+    "conversation_id",
+    "availability_snapshot_id",
+    "execution_snapshot_id",
+    "model_id",
+    "run_purpose",
+    "adapter_type"
   ]
 }

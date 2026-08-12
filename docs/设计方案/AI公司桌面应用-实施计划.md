@@ -6,7 +6,7 @@
 
 **规范性补充：** `docs/设计方案/iBreeze五项核心架构重构设计方案.md` 固定 Canonical Contract Registry、Credential/HTTP/Egress Broker、Profile Persistence Kernel、CLI Runtime/Seatbelt 和 Review/Completion 状态机的最终实现边界。对应任务必须同时满足该文档；正式实现不得包含占位实现、双轨 Schema、非公开 RPC 或兼容层。
 
-**字段级执行计划：** `docs/superpowers/plans/2026-07-28-ibreeze-five-core-architecture-rewrite.md` 把上述五项子系统拆成可独立测试、Review 和提交的字段级任务。实施这五项子系统时必须按该计划的 Task 1–19 依赖顺序执行；本文件继续负责完整产品的阶段关系和其余模块，不得用本文件中粒度较粗的描述跳过字段级计划的失败测试、删除项或阶段出口。
+**字段级执行计划：** 本文件已经包含五项核心子系统的字段、协议、依赖、测试和发布门禁；第三方只以本文件和《iBreeze五项核心架构重构设计方案.md》为实施依据，不得引用历史执行记录或复核报告作为额外规范。
 
 **架构：** 桌面端由 React WebView、Tauri/Rust Core 和唯一 Python Sidecar 组成，全部公司、部门、职员、任务、会话、运行、知识与审计数据保存在本地 Profile。中心后台只负责认证、用户管理和签名发布 Agent、Model、Provider、Skill、兼容规则目录；后台不接收桌面业务数据。所有跨语言边界先定义 JSON Schema/OpenAPI，再生成类型并实现，禁止三端手写同名 DTO。
 
@@ -847,10 +847,11 @@ ibreeze/
 
 **文件：**
 
-- 创建：`apps/desktop-core/src/process/{sidecar.rs,registry.rs,signals.rs}`
-- 创建：`apps/desktop-core/src/ipc/{framing.rs,client.rs,handshake.rs,router.rs}`
-- 创建：`apps/desktop-core/tests/{framing.rs,handshake.rs,supervisor.rs}`
-- 创建：`tests/fixtures/fake-sidecar/`
+- 修改：`apps/desktop-core/src/sidecar.rs`（SidecarSupervisor、启动/停止、握手健康检查）
+- 修改：`apps/desktop-core/src/ipc/{frame.rs,dispatcher.rs,error.rs,mod.rs}`
+- 修改：`apps/desktop-core/src/rpc/{sidecar.rs,protocol.rs}`（认证会话、多路复用、反向请求）
+- 验证：`apps/desktop-core/tests/rpc_reverse.rs`、`tests/integration/test_rust_sidecar_contract.py`
+- 验证：`sidecar/ibreeze/rpc/{frame.py,multiplexer.py,session.py,production_server.py}`
 
 **产生接口：** F.3–F.5 的 Sidecar 生命周期和 `system.handshake/health/shutdown`；4-byte big-endian frame；单连接、单对象、16 MiB 上限。
 
@@ -975,9 +976,9 @@ ibreeze/
 
 **文件：**
 
-- 创建：`apps/desktop-core/src/security/{bookmarks.rs,path_policy.rs,external_write.rs}`
+- 修改：`apps/desktop-core/src/security/{external_write.rs,grant_store.rs,mod.rs}`
 - 创建：`apps/desktop-core/src/commands/{workspace.rs,external.rs}`（`external.rs`仅实现只读系统打开 `external_open`）
-- 创建：`apps/desktop-core/src/ipc/reverse/external_write.rs`
+- 修改：`apps/desktop-core/src/rpc/reverse.rs`（唯一反向方法表与外部写处理入口）
 - 创建：`apps/desktop-core/tests/{path_policy.rs,external_write.rs}`
 
 **产生接口：** `workspace_select` 返回 opaque grant id；`readonly_file_select` 返回只读 grant；F.4内部反向RPC `host.externalWrite.execute`，不注册WebView Command。
@@ -992,7 +993,7 @@ ibreeze/
 
 - [ ] **步骤 3：实现单次外部写执行器**
 
-  严格校验 F.4 params、当前 `ipc_session_id`、operation、canonical target、old hash、staging相对路径/new content hash/size和expiry；为单一目标生成临时Seatbelt权限。执行后先销毁staging和临时权限，再返回绑定全部字段的receipt及RFC8785 SHA-256；Rust不读取SQLite、不改变approval状态，Sidecar在P6-T05校验receipt后消费。
+  严格校验 F.4 params、当前 `ipc_session_id`、`workspace_grant_id`、operation、canonical target、old state hash、staging相对路径/source content hash/size和expiry；人工审批 target 固定绑定 `workspace_grant_id/target_realpath/operation/expected_old_sha256/source_sha256` 并保存 canonical JSON hash。为单一目标生成临时 Seatbelt 权限。执行后先销毁 staging 和临时权限，再返回绑定全部字段的 receipt 及 RFC8785 SHA-256；Rust 不读取 SQLite、不改变 approval 状态，Sidecar 在 P6-T05 校验 receipt 后消费。
 
 - [ ] **步骤 4：验证并提交**
 
@@ -1011,7 +1012,7 @@ ibreeze/
 **文件：**
 
 - 创建：`apps/desktop-core/src/broker/{egress.rs,dns_policy.rs,lease.rs,credential.rs,http.rs,http_stream.rs}`
-- 创建：`apps/desktop-core/src/runtime/{process_supervisor.rs,process_registry.rs,seatbelt.rs,invocation.rs,cancellation.rs}`
+- 修改：`apps/desktop-core/src/process/{mod.rs,seatbelt.rs}`（唯一 CLI 进程组监管与 Seatbelt 实现）
 - 创建：`apps/desktop-core/tests/{egress_proxy.rs,credential_broker.rs,ssrf.rs,process_supervisor.rs,seatbelt.rs}`
 
 **产生接口：** 每 Run loopback CONNECT proxy；Sidecar 反向 RPC 只允许 `credential.http.start/cancel/probe`、`host.externalWrite.execute`、`runtime.process.start/cancel/status`；Rust 只发送 `credential.http.event`、`runtime.process.registered/output/exited` notification，集合逐字来自 `reverse-methods.v1.json`。
@@ -1140,8 +1141,8 @@ ibreeze/
 
 **文件：**
 
-- 创建：`sidecar/ibreeze/rpc/{server.py,framing.py,registry.py,context.py,errors.py,schema.py}`
-- 创建：`sidecar/tests/rpc/{test_protocol.py,test_registry.py,test_schema.py,test_direction.py}`
+- 修改：`sidecar/ibreeze/rpc/{production_server.py,frame.py,multiplexer.py,session.py,dispatcher.py,public_contracts.py}`
+- 验证：`sidecar/tests/test_rpc_session_extended.py`、`sidecar/tests/test_application_lifecycle.py`
 
 **产生接口：** J.14中 `sidecar` 所有权的公开方法注册表；F.3–F.5三个 `supervisor_only` 方法；反向调用白名单。`rust_core` 方法不得在Sidecar注册。
 
@@ -1425,7 +1426,7 @@ ibreeze/
 - 创建：`sidecar/ibreeze/application/task_intake.py`
 - 创建：`sidecar/tests/tasks/{test_schema.py,test_state_machines.py,test_plan_versions.py,test_snapshots.py,test_task_intake.py}`
 
-**产生接口：** `conversation.submitUserMessage`、`task.confirmPlan/requestPlanRevision/rejectPlan/pause/resume/cancel/get/list/getGraph/getEvidence`；submit DTO 固定含互斥的 `target_task_id/supersedes_task_id`；H.6和H.7完整状态。
+**产生接口：** `conversation.submitUserMessage`、`task.confirmPlan/requestPlanRevision/rejectPlan/pause/resume/cancel/get/list/getGraph/getEvidence`；submit DTO 固定含互斥的 `target_task_id/supersedes_task_id`；`task.confirmPlan` 必须在一个 WriteQueue 事务中校验 plan id/hash/version、验证 active Catalog 和 workspace grant，创建全部快照、Task、Run、runtime_queue，并按 `awaiting_user_confirmation → approved → dispatching → checking_resources → executing` 逐边记录 CompanyTask 事件；无 verified Catalog 时只返回 `waiting_resource`，禁止自动 bootstrap；H.6和H.7完整状态。
 
 - [ ] **步骤 1：把迁移表转为参数化失败测试**
 
@@ -1525,7 +1526,7 @@ ibreeze/
 
 - [ ] **步骤 1：写 Gateway边界失败测试**
 
-  静态扫描禁止整个Sidecar调用`asyncio.create_subprocess_exec`、`subprocess`、`os.exec*`或模型HTTP；start缺snapshot、过期availability、hash不一致、非法purpose均失败；Runtime Foundation迁移逐字创建H.11运行子表/HumanApproval及H.12 Artifact核心表、任务索引和不可变Trigger，验证可写Artifact、VerificationResult、ToolExecution和pending HumanApproval且不存在缺失父表，直接UPDATE/DELETE Artifact必须失败。
+  静态扫描禁止Runtime、CLI Adapter、Tool Registry和其他业务模块调用`asyncio.create_subprocess_exec`、`subprocess`、`os.exec*`或模型HTTP启动Agent/模型；仅允许Workspace Git固定argv执行器在数据库绑定的仓库cwd执行受限Git操作，且该执行器不得被Runtime复用。start缺snapshot、过期availability、hash不一致、非法purpose均失败；Runtime Foundation迁移逐字创建H.11运行子表/HumanApproval及H.12 Artifact核心表、任务索引和不可变Trigger，验证可写Artifact、VerificationResult、ToolExecution和pending HumanApproval且不存在缺失父表，直接UPDATE/DELETE Artifact必须失败。
 
 - [ ] **步骤 2：实现 Run创建和状态迁移**
 
@@ -1548,6 +1549,14 @@ ibreeze/
   ```
 
 **完成标准：** 所有Agent执行经过唯一Gateway；状态、进程和事件可在崩溃后对账。
+
+`runtime.run` 的请求字段固定为 `company_id`、`agent_id`、`company_task_id`、
+`conversation_id`、`availability_snapshot_id`、`execution_snapshot_id`、`model_id`、
+`run_purpose`、`adapter_type`，可选 `message/work_item_id/department_task_id/employee_task_id`。
+实现必须重新校验快照归属、有效期、职员和会话状态，并在同一 WriteQueue 事务写入 `run.queued`
+RunEvent、DomainEvent、Outbox 和 RuntimeQueue；不接受只含任务 ID 的启动请求。
+生产 RPC 委托 `ibreeze.runtime.gateway.start` 唯一创建实现，模型和适配器必须与
+ExecutionSnapshot 的不可变 `runtime_binding_json` 一致，其他模块不得直接插入 `agent_runs`。
 
 ### P5-T02：Codex CLI Adapter
 
@@ -1875,7 +1884,7 @@ ibreeze/
 
 - [ ] **步骤 1：写生命周期失败测试**：唯一允许边为 pending→allowed/denied/expired、allowed→consumed/expired，denied/expired/consumed均为终态；覆盖重复resolve、allowed执行pending重试、响应丢失后目标已达成的receipt重建、过期allow、跨公司、非owner、target hash改变和旧expected_version失败。
 - [ ] **步骤 2：实现审批创建**：只由Permission Gateway/Recovery创建，target_json分别通过I.13两个固定Schema并存canonical hash；前端不能任意创建。
-- [ ] **步骤 3：实现外部写resolve与Rust握手**：数据库allowed后请求Rust执行；外部写ToolExecution必须记录同Run、同target hash的`approval_id`，其他工具不得绑定审批。只有Rust返回目标、动作、result state和receipt hash均匹配的receipt，才在同一事务完成ToolExecution并把allowed审批置consumed；无receipt保持allowed且`listPending.execution_pending=true`，重复相同allow只走F.4幂等重试。
+- [ ] **步骤 3：实现外部写resolve与Rust握手**：数据库 allowed 后请求 Rust 执行；外部写 ToolExecution 必须记录同 Run、同 `target_sha256` 的 `approval_id`，并把 approval target 中的 `workspace_grant_id` 原样带入 F.4 请求，其他工具不得绑定审批。只有 Rust 返回目标、动作、run、result state 和 receipt hash 均匹配的 receipt，才在同一事务完成 ToolExecution 并把 allowed 审批置 consumed；无 receipt 保持 allowed 且 `listPending.execution_pending=true`，重复相同 allow 只走 F.4 幂等重试。
 - [ ] **步骤 4：实现不确定恢复与expiry决策**：不确定恢复allow在单一事务为同input hash创建唯一一次新ToolExecution、消费审批并把Run转retrying，deny/expired不重放并把Run置failed。外部写pending过期直接reject并恢复；allowed过期前先用F.4只读对账，目标已达成则consume，仍为old state才expired并恢复，第三种状态保持ToolExecution uncertain并把Run置failed。
 - [ ] **步骤 5：验证并提交**：
 

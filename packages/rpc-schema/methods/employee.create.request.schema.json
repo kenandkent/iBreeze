@@ -7,10 +7,31 @@
     "company_id": {
       "type": "string",
       "format": "uuid"
+    },
+    "department_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "base_profile_version_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "workflow_role": {
+      "type": "string",
+      "enum": ["department_leader", "member", "reviewer"]
     }
   },
   "additionalProperties": false,
   "required": [
-    "company_id"
+    "company_id",
+    "department_id",
+    "display_name",
+    "base_profile_version_id",
+    "workflow_role"
   ]
 }

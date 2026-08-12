@@ -5,6 +5,7 @@ P5-T04: 公平持久调度器，按公司公平性 + 优先级 + FIFO 排序。
 
 from __future__ import annotations
 
+import sqlite3
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -81,29 +82,43 @@ async def acquire_lease(
     conv_id = conversation_id or None
     run_id_val = run_id or None
 
-    await db.execute(
-        """INSERT INTO runtime_leases
-        (id, queue_id, job_id, run_id, employee_id, company_id,
-         conversation_id, acquired_at, heartbeat_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?, '+' || ? || ' seconds'))""",
-        (
-            lease_id,
-            queue_id,
-            job_id,
-            run_id_val,
-            emp_id,
-            company_id,
-            conv_id,
-            now,
-            now,
-            now,
-            ttl_seconds,
-        ),
-    )
-    await db.execute(
-        "UPDATE runtime_queue SET status = 'leased', leased_at = ? WHERE id = ?",
+    queue = await (
+        await db.execute(
+            "SELECT status, job_id, company_id FROM runtime_queue WHERE id=?",
+            (queue_id,),
+        )
+    ).fetchone()
+    if queue is None or queue["status"] != "ready" or queue["job_id"] != job_id or queue["company_id"] != company_id:
+        return None
+    try:
+        await db.execute(
+            """INSERT INTO runtime_leases
+            (id, queue_id, job_id, run_id, employee_id, company_id,
+             conversation_id, acquired_at, heartbeat_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?, '+' || ? || ' seconds'))""",
+            (
+                lease_id,
+                queue_id,
+                job_id,
+                run_id_val,
+                emp_id,
+                company_id,
+                conv_id,
+                now,
+                now,
+                now,
+                ttl_seconds,
+            ),
+        )
+    except sqlite3.IntegrityError:
+        return None
+    cursor = await db.execute(
+        "UPDATE runtime_queue SET status = 'leased', leased_at = ? WHERE id = ? AND status='ready'",
         (now, queue_id),
     )
+    if cursor.rowcount != 1:
+        await db.execute("DELETE FROM runtime_leases WHERE id=?", (lease_id,))
+        return None
     return lease_id
 
 

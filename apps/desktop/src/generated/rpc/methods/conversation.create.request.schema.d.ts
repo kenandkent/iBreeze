@@ -7,4 +7,5 @@
 
 export interface ConversationCreateRequest {
   company_id: string;
+  title: string;
 }

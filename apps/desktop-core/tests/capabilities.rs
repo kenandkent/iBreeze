@@ -82,7 +82,27 @@ fn command_names_are_unique() {
     let lib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
     let content = std::fs::read_to_string(&lib_path).expect("src/lib.rs must be readable");
 
+    // The WebView exposes a single authenticated JSON-RPC boundary plus a
+    // small, explicit set of OS capability commands. Auth, backend
+    // validation, health, and recovery are routed through rpc_request.
     let commands = [
+        "rpc_request",
+        "workspace_select",
+        "readonly_file_select",
+        "external_open",
+        "diagnostics_export",
+        "updater_check",
+        "updater_install",
+    ];
+
+    for cmd in &commands {
+        assert!(
+            content.contains(cmd),
+            "lib.rs must register command '{cmd}'"
+        );
+    }
+
+    for removed in [
         "backend_validate_origin",
         "auth_register",
         "auth_login",
@@ -91,21 +111,12 @@ fn command_names_are_unique() {
         "auth_list_offline_profiles",
         "auth_open_profile",
         "auth_close_profile",
-        "rpc_request",
-        "workspace_select",
-        "readonly_file_select",
-        "external_open",
-        "diagnostics_export",
-        "updater_check",
-        "updater_install",
         "updater_verify_launch",
         "updater_restore_stable",
-    ];
-
-    for cmd in &commands {
+    ] {
         assert!(
-            content.contains(cmd),
-            "lib.rs must register command '{cmd}'"
+            !content.contains(&format!("generate_handler![{removed}")),
+            "{removed} must not be exposed as a direct Tauri command"
         );
     }
 }

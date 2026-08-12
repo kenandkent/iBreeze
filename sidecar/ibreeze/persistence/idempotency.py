@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -18,12 +19,15 @@ class IdempotencyStore:
         if idempotency_key is None:
             return None
         cursor = await session.connection.execute(
-            "SELECT status, response_json, error_code FROM idempotency WHERE idempotency_key=?",
+            "SELECT status, response_json, error_code, request_sha256 "
+            "FROM idempotency WHERE idempotency_key=?",
             (idempotency_key,),
         )
         row = await cursor.fetchone()
         if row is None:
             return None
+        if row["request_sha256"] != request_sha256:
+            raise RuntimeError("IDEMPOTENCY_CONFLICT")
         if row["status"] == "completed" and row["response_json"]:
             return {"response": row["response_json"]}
         if row["status"] == "failed":
@@ -51,8 +55,10 @@ class IdempotencyStore:
                 (idempotency_key, request_sha256, now_str, expires_at),
             )
             return True
-        except Exception:
-            return False
+        except sqlite3.IntegrityError as exc:
+            if "UNIQUE constraint failed" in str(exc):
+                return False
+            raise
 
     async def complete(
         self,

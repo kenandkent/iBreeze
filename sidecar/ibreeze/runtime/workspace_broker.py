@@ -102,6 +102,7 @@ async def execute_external_write(
     rpc: Any,
     *,
     approval_id: str,
+    workspace_grant_id: str,
     run_id: str,
     operation: str,
     target_realpath: str,
@@ -118,6 +119,7 @@ async def execute_external_write(
     """
     request = {
         "approval_id": approval_id,
+        "workspace_grant_id": workspace_grant_id,
         "run_id": run_id,
         "operation": operation,
         "target_realpath": target_realpath,

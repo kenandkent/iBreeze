@@ -41,6 +41,7 @@ class TestExecuteExternalWrite:
         await execute_external_write(
             mock_rpc,
             approval_id=str(uuid.uuid4()),
+            workspace_grant_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),
             operation="create_file",
             target_realpath="/Users/test/output.txt",
@@ -52,10 +53,12 @@ class TestExecuteExternalWrite:
 
     async def test_sends_required_fields(self, mock_rpc: AsyncMock) -> None:
         approval_id = str(uuid.uuid4())
+        workspace_grant_id = str(uuid.uuid4())
         run_id = str(uuid.uuid4())
         await execute_external_write(
             mock_rpc,
             approval_id=approval_id,
+            workspace_grant_id=workspace_grant_id,
             run_id=run_id,
             operation="replace_file",
             target_realpath="/Users/test/existing.txt",
@@ -65,6 +68,7 @@ class TestExecuteExternalWrite:
         args, _ = mock_rpc.call.call_args
         payload = args[1]
         assert payload["approval_id"] == approval_id
+        assert payload["workspace_grant_id"] == workspace_grant_id
         assert payload["run_id"] == run_id
         assert payload["operation"] == "replace_file"
         assert payload["target_realpath"] == "/Users/test/existing.txt"
@@ -74,6 +78,7 @@ class TestExecuteExternalWrite:
         await execute_external_write(
             mock_rpc,
             approval_id=str(uuid.uuid4()),
+            workspace_grant_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),
             operation="create_file",
             target_realpath="/tmp/test.txt",
@@ -89,6 +94,7 @@ class TestExecuteExternalWrite:
         response = await execute_external_write(
             mock_rpc,
             approval_id=str(uuid.uuid4()),
+            workspace_grant_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),
             operation="create_file",
             target_realpath="/tmp/test.txt",
@@ -105,6 +111,7 @@ class TestExecuteExternalWrite:
             await execute_external_write(
                 mock_rpc,
                 approval_id=str(uuid.uuid4()),
+                workspace_grant_id=str(uuid.uuid4()),
                 run_id=str(uuid.uuid4()),
                 operation="create_file",
                 target_realpath="/tmp/test.txt",
@@ -115,6 +122,7 @@ class TestExecuteExternalWrite:
         await execute_external_write(
             mock_rpc,
             approval_id=str(uuid.uuid4()),
+            workspace_grant_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),
             operation="replace_file",
             target_realpath="/Users/test/target.txt",

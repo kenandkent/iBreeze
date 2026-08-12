@@ -289,16 +289,11 @@ export interface ReviewReport {
 }
 
 export interface ReviewIssue {
-  id: string;
-  company_id: string;
-  artifact_id: string;
-  review_report_id: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  issue_id: string;
+  severity: 'blocker' | 'high' | 'medium' | 'low';
+  state: 'open' | 'fixing' | 'resolved' | 'verified' | 'closed' | 'rejected';
+  category: string;
   description: string;
-  file_path?: string;
-  line_number?: number;
-  status: 'open' | 'resolved' | 'dismissed';
-  created_at: string;
 }
 
 // Plan types

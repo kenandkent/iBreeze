@@ -14,7 +14,8 @@ from ibreeze.persistence.write_queue import WriteEnvelope, WriteQueue
 
 
 class TestWriteEnvelope:
-    def test_is_expired_true(self) -> None:
+    @pytest.mark.asyncio
+    async def test_is_expired_true(self) -> None:
         envelope = WriteEnvelope(
             "test", UUID(int=0),
             datetime.now(UTC) - timedelta(hours=1),
@@ -22,7 +23,8 @@ class TestWriteEnvelope:
         )
         assert envelope.is_expired() is True
 
-    def test_is_expired_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_is_expired_false(self) -> None:
         envelope = WriteEnvelope(
             "test", UUID(int=0),
             datetime.now(UTC).replace(year=9999),
@@ -30,7 +32,8 @@ class TestWriteEnvelope:
         )
         assert envelope.is_expired() is False
 
-    def test_result_property(self) -> None:
+    @pytest.mark.asyncio
+    async def test_result_property(self) -> None:
         envelope = WriteEnvelope(
             "test", UUID(int=0),
             datetime.now(UTC).replace(year=9999),
@@ -90,7 +93,10 @@ class TestWriteQueue:
         await queue.stop()
 
     async def test_barrier_timeout(self, mock_conn: AsyncMock) -> None:
-        with patch.object(WriteQueue, "_run", return_value=asyncio.sleep(0)):
+        async def idle_run() -> None:
+            await asyncio.sleep(0)
+
+        with patch.object(WriteQueue, "_run", side_effect=idle_run):
             queue = WriteQueue(mock_conn, capacity=32)
             with pytest.raises(RuntimeError, match="BACKUP_WRITE_BARRIER_TIMEOUT"):
                 await queue.barrier(timeout=0.1)

@@ -52,6 +52,10 @@ def sample_issue_row(issue_id: UUID, company_id: UUID) -> dict:
         "category": "functional",
         "status": "open",
         "version": 1,
+        "assignee_employee_id": None,
+        "verifier_employee_id": None,
+        "rejection_reason": None,
+        "evidence_refs_json": "[]",
     }
 
 
@@ -61,7 +65,7 @@ class TestLockAssignment:
         mock_cursor.fetchone = AsyncMock(return_value=sample_assignment_row)
         mock_db_session.execute.return_value = mock_cursor
 
-        result = await repo.lock_assignment(mock_db_session, assignment_id)
+        result = await repo.lock_assignment(mock_db_session, assignment_id, company_id)
 
         assert isinstance(result, ReviewAssignment)
         assert result.id == assignment_id
@@ -76,14 +80,14 @@ class TestLockAssignment:
         mock_db_session.execute.return_value = mock_cursor
 
         with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
-            await repo.lock_assignment(mock_db_session, assignment_id)
+            await repo.lock_assignment(mock_db_session, assignment_id, company_id=uuid.uuid4())
 
     async def test_selects_without_for_update(self, repo, mock_db_session, assignment_id, sample_assignment_row):
         mock_cursor = AsyncMock()
         mock_cursor.fetchone = AsyncMock(return_value=sample_assignment_row)
         mock_db_session.execute.return_value = mock_cursor
 
-        await repo.lock_assignment(mock_db_session, assignment_id)
+        await repo.lock_assignment(mock_db_session, assignment_id, company_id)
 
         sql = mock_db_session.execute.call_args[0][0]
         assert "FOR UPDATE" not in sql.upper()
@@ -96,7 +100,7 @@ class TestLockIssue:
         mock_cursor.fetchone = AsyncMock(return_value=sample_issue_row)
         mock_db_session.execute.return_value = mock_cursor
 
-        result = await repo.lock_issue(mock_db_session, issue_id)
+        result = await repo.lock_issue(mock_db_session, issue_id, company_id)
 
         assert isinstance(result, ReviewIssue)
         assert result.id == issue_id
@@ -110,14 +114,14 @@ class TestLockIssue:
         mock_db_session.execute.return_value = mock_cursor
 
         with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
-            await repo.lock_issue(mock_db_session, issue_id)
+            await repo.lock_issue(mock_db_session, issue_id, company_id=uuid.uuid4())
 
     async def test_selects_without_for_update(self, repo, mock_db_session, issue_id, sample_issue_row):
         mock_cursor = AsyncMock()
         mock_cursor.fetchone = AsyncMock(return_value=sample_issue_row)
         mock_db_session.execute.return_value = mock_cursor
 
-        await repo.lock_issue(mock_db_session, issue_id)
+        await repo.lock_issue(mock_db_session, issue_id, company_id)
 
         sql = mock_db_session.execute.call_args[0][0]
         assert "FOR UPDATE" not in sql.upper()
@@ -214,7 +218,9 @@ class TestTransitionIssue:
             mock_cursor.rowcount = 1
             mock_db_session.execute.return_value = mock_cursor
 
-            result = await repo.transition_issue(mock_db_session, issue, "rejected")
+            result = await repo.transition_issue(
+                mock_db_session, issue, "rejected", rejection_reason="not applicable",
+            )
             assert result.state == "rejected"
 
     async def test_raises_state_transition_invalid(self, repo, mock_db_session, issue_id, company_id):

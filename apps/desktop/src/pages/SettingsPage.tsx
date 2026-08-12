@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Tabs, Typography, Form, Input, Button, Switch, Space, message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
+import { createRpcRequest } from '../shared/rpcClient';
 import { logger } from '../utils/logger';
 
 const { Title } = Typography;
@@ -101,9 +102,9 @@ export default function SettingsPage() {
     setChangingPwd(true);
     try {
       logger.info('SettingsPage', 'change_password_start');
-      await invoke('auth_change_password', {
-        currentPassword: values.current_password,
-        newPassword: values.new_password,
+      await createRpcRequest('auth.changePassword', {
+        current_password: values.current_password,
+        new_password: values.new_password,
       });
       message.success('密码修改成功');
       pwdForm.resetFields();

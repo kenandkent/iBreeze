@@ -22,10 +22,8 @@ use tauri::Manager;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::commands::{
-    auth_change_password, auth_close_profile, auth_list_offline_profiles, auth_login, auth_logout,
-    auth_open_profile, auth_register, backend_validate_origin, diagnostics_export, external_open,
-    readonly_file_select, rpc_request, system_health, updater_check, updater_install,
-    updater_restore_stable, updater_verify_launch, workspace_select, AppState,
+    diagnostics_export, external_open, readonly_file_select, rpc_request, updater_check,
+    updater_install, workspace_select, AppState,
 };
 use crate::store::LocalStore;
 
@@ -97,24 +95,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            backend_validate_origin,
-            auth_register,
-            auth_login,
-            auth_change_password,
-            auth_logout,
-            auth_list_offline_profiles,
-            auth_open_profile,
-            auth_close_profile,
             rpc_request,
-            system_health,
             workspace_select,
             readonly_file_select,
             external_open,
             diagnostics_export,
             updater_check,
             updater_install,
-            updater_verify_launch,
-            updater_restore_stable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running iBreeze");

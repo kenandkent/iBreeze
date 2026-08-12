@@ -18,4 +18,4 @@ def test_agent_runtime_is_valid():
     assert "cancel" in content
     assert "get_status" in content
     assert "probe_agent" in content
-    assert "execute_single_run" in content
+    assert "RuntimeExecutionService" in content

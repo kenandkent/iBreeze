@@ -6,15 +6,29 @@
   "properties": {
     "name": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 200
     },
-    "description": {
+    "introduction": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 2000
+    },
+    "general_manager_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "base_profile_version_id": {
+      "type": "string",
+      "format": "uuid"
     }
   },
   "required": [
-    "name"
+    "name",
+    "introduction",
+    "general_manager_name",
+    "base_profile_version_id"
   ],
   "additionalProperties": false
 }

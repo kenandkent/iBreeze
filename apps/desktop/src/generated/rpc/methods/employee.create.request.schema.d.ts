@@ -7,4 +7,8 @@
 
 export interface EmployeeCreateRequest {
   company_id: string;
+  department_id: string;
+  display_name: string;
+  base_profile_version_id: string;
+  workflow_role: "department_leader" | "member" | "reviewer";
 }

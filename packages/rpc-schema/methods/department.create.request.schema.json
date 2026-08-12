@@ -7,10 +7,33 @@
     "company_id": {
       "type": "string",
       "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "function_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "leader_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "base_profile_version_id": {
+      "type": "string",
+      "format": "uuid"
     }
   },
   "additionalProperties": false,
   "required": [
-    "company_id"
+    "company_id",
+    "name",
+    "function_description",
+    "leader_name",
+    "base_profile_version_id"
   ]
 }

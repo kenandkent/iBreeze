@@ -454,7 +454,9 @@ async def list_agent_models_endpoint(
         if model and model.status == "published":
             models.append(
                 {
+                    "binding_id": str(binding.id),
                     "id": str(model.id),
+                    "model_id": str(model.id),
                     "provider_key": model.provider_key,
                     "model_key": model.model_key,
                     "display_name": model.display_name,
@@ -537,7 +539,9 @@ async def list_provider_models_endpoint(
         if model and model.status == "published":
             models.append(
                 {
+                    "binding_id": str(binding.id),
                     "id": str(model.id),
+                    "model_id": str(model.id),
                     "provider_key": model.provider_key,
                     "model_key": model.model_key,
                     "display_name": model.display_name,
@@ -545,6 +549,8 @@ async def list_provider_models_endpoint(
                     "supports_tools": model.supports_tools,
                     "supports_streaming": model.supports_streaming,
                     "supports_vision": model.supports_vision,
+                    "provider_model_name": binding.provider_model_name,
+                    "request_defaults": binding.request_defaults,
                 }
             )
 

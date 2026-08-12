@@ -4,13 +4,19 @@
 //! multiple concurrent `call()`s can have their responses matched by ID
 //! rather than relying on serial request-response ordering.
 //!
-//! The reader task also handles reverse JSON-RPC requests from the sidecar
-//! (identified by a `"sidecar:"`-prefixed id), dispatches them through the
-//! reverse handler table, and writes the response frames back.
+//! The reader task also handles reverse JSON-RPC requests from the sidecar,
+//! dispatches them through the reverse handler table, and writes the response
+//! frames back.  Direction is determined by the JSON-RPC shape (`method` for a
+//! request, `result`/`error` for a response), never by an id naming convention.
 
 use std::collections::HashMap;
+use std::fmt;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use hmac::{Hmac, Mac};
@@ -22,8 +28,9 @@ use sha2::Sha256;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixStream;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex, Semaphore};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -46,8 +53,9 @@ struct HandshakeResponse {
 }
 
 type PendingMap = HashMap<String, oneshot::Sender<Result<JsonRpcResponse, AppError>>>;
+const MAX_REVERSE_INFLIGHT: usize = 256;
+pub type DisconnectHook = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
-#[derive(Debug)]
 pub struct SidecarClient {
     socket_path: PathBuf,
     writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
@@ -56,6 +64,18 @@ pub struct SidecarClient {
     pending: Arc<Mutex<PendingMap>>,
     reader_task: Mutex<Option<JoinHandle<()>>>,
     reverse_table: Arc<ReverseMethodTable>,
+    disconnect_hook: Mutex<Option<DisconnectHook>>,
+    disconnect_notified: Arc<AtomicBool>,
+}
+
+impl fmt::Debug for SidecarClient {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SidecarClient")
+            .field("socket_path", &self.socket_path)
+            .field("window_session_id", &self.window_session_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SidecarClient {
@@ -68,6 +88,8 @@ impl SidecarClient {
             pending: Arc::new(Mutex::new(HashMap::new())),
             reader_task: Mutex::new(None),
             reverse_table,
+            disconnect_hook: Mutex::new(None),
+            disconnect_notified: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -81,6 +103,16 @@ impl SidecarClient {
         app_version: &str,
         launch_id: Uuid,
     ) -> Result<(), AppError> {
+        // A reconnect always starts from a clean authenticated stream.  The
+        // old reader must be stopped and all pending calls must be failed
+        // before a new writer is installed; otherwise responses from the
+        // previous generation can be correlated with the new session.
+        if self.ipc_session_id.lock().await.is_some()
+            || self.reader_task.lock().await.is_some()
+            || self.writer.lock().await.is_some()
+        {
+            self.disconnect().await;
+        }
         if startup_token.len() != 32 {
             return Err(AppError::Security(
                 "IPC startup token must contain 32 bytes".to_owned(),
@@ -91,6 +123,7 @@ impl SidecarClient {
             .map_err(|error| AppError::Sidecar(format!("connect UDS: {error}")))?;
 
         let (reader, writer_half) = stream.into_split();
+        self.disconnect_notified.store(false, Ordering::SeqCst);
         {
             let mut w = self.writer.lock().await;
             *w = Some(writer_half);
@@ -99,8 +132,20 @@ impl SidecarClient {
 
         let pending = Arc::clone(&self.pending);
         let rev_table = Arc::clone(&self.reverse_table);
+        let disconnect_hook = self.disconnect_hook.lock().await.clone();
+        let disconnect_notified = Arc::clone(&self.disconnect_notified);
+        let reverse_semaphore = Arc::new(Semaphore::new(MAX_REVERSE_INFLIGHT));
         let handle = tokio::spawn(async move {
-            Self::reader_loop(reader, reader_writer, pending, rev_table).await;
+            Self::reader_loop(
+                reader,
+                reader_writer,
+                pending,
+                rev_table,
+                disconnect_hook,
+                disconnect_notified,
+                reverse_semaphore,
+            )
+            .await;
         });
         *self.reader_task.lock().await = Some(handle);
 
@@ -126,8 +171,9 @@ impl SidecarClient {
             RpcMeta {
                 trace_id: Uuid::new_v4(),
                 ipc_session_id: None,
-                window_session_id: self.window_session_id,
+                window_session_id: Some(self.window_session_id),
                 idempotency_key: None,
+                deadline_at: None,
             },
         );
         let response: HandshakeResponse = self.exchange(request).await?;
@@ -159,14 +205,44 @@ impl SidecarClient {
             RpcMeta {
                 trace_id: Uuid::new_v4(),
                 ipc_session_id: Some(session),
-                window_session_id: self.window_session_id,
+                window_session_id: Some(self.window_session_id),
                 idempotency_key,
+                deadline_at: Some(
+                    (chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339(),
+                ),
             },
         );
         self.exchange(request).await
     }
 
+    /// Send a Rust→Sidecar notification on the already authenticated stream.
+    /// Notifications deliberately have no id and therefore cannot consume a
+    /// pending response slot or be mistaken for a reverse request.
+    pub async fn notify(&self, method: &str, params: Value) -> Result<(), AppError> {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        }))
+        .map_err(|error| AppError::Internal(error.to_string()))?;
+        if payload.is_empty() || payload.len() > MAX_FRAME_BYTES {
+            return Err(AppError::Validation(
+                "RPC notification exceeds frame limit".to_owned(),
+            ));
+        }
+        let mut writer_guard = self.writer.lock().await;
+        let writer = writer_guard
+            .as_mut()
+            .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
+        Self::write_frame(writer, &payload).await
+    }
+
+    pub async fn bind_disconnect_hook(&self, hook: DisconnectHook) {
+        *self.disconnect_hook.lock().await = Some(hook);
+    }
+
     pub async fn disconnect(&self) {
+        self.notify_disconnect().await;
         // Cancel the background reader task.
         {
             let mut task = self.reader_task.lock().await;
@@ -182,6 +258,17 @@ impl SidecarClient {
             }
         }
         *self.ipc_session_id.lock().await = None;
+        *self.writer.lock().await = None;
+    }
+
+    async fn notify_disconnect(&self) {
+        if self.disconnect_notified.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let hook = self.disconnect_hook.lock().await.clone();
+        if let Some(hook) = hook {
+            hook().await;
+        }
     }
 
     async fn exchange<T: DeserializeOwned>(&self, request: JsonRpcRequest) -> Result<T, AppError> {
@@ -196,18 +283,34 @@ impl SidecarClient {
         let (tx, rx) = oneshot::channel();
         {
             let mut pending = self.pending.lock().await;
+            if pending.len() >= 256 {
+                return Err(AppError::Sidecar("IPC_PENDING_REQUEST_LIMIT".to_owned()));
+            }
             pending.insert(request_id.clone(), tx);
         }
         {
             let mut writer_guard = self.writer.lock().await;
             let writer = writer_guard
                 .as_mut()
-                .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()))?;
-            Self::write_frame(writer, &payload).await?;
+                .ok_or_else(|| AppError::Sidecar("Sidecar is disconnected".to_owned()));
+            let write_result = match writer {
+                Ok(writer) => Self::write_frame(writer, &payload).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = write_result {
+                self.pending.lock().await.remove(&request_id);
+                return Err(error);
+            }
         }
-        let inner: Result<JsonRpcResponse, AppError> = rx
-            .await
-            .map_err(|_| AppError::Sidecar("Sidecar reader task terminated".to_owned()))?;
+        let inner: Result<JsonRpcResponse, AppError> =
+            match timeout(Duration::from_secs(30), rx).await {
+                Ok(result) => result
+                    .map_err(|_| AppError::Sidecar("Sidecar reader task terminated".to_owned()))?,
+                Err(_) => {
+                    self.pending.lock().await.remove(&request_id);
+                    return Err(AppError::Sidecar("IPC_DEADLINE_EXCEEDED".to_owned()));
+                }
+            };
         let response: JsonRpcResponse = inner?;
         if response.jsonrpc != "2.0" || response.id != request_id {
             return Err(AppError::Sidecar(
@@ -250,6 +353,9 @@ impl SidecarClient {
         writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
         pending: Arc<Mutex<PendingMap>>,
         reverse_table: Arc<ReverseMethodTable>,
+        disconnect_hook: Option<DisconnectHook>,
+        disconnect_notified: Arc<AtomicBool>,
+        reverse_semaphore: Arc<Semaphore>,
     ) {
         while let Ok(n) = reader.read_u32().await {
             let size = n as usize;
@@ -260,48 +366,117 @@ impl SidecarClient {
             if reader.read_exact(&mut buf).await.is_err() {
                 break;
             }
-            let response: JsonRpcResponse = match serde_json::from_slice(&buf) {
-                Ok(r) => r,
+            let value: Value = match serde_json::from_slice(&buf) {
+                Ok(value) => value,
                 Err(_) => break,
             };
 
-            if response.id.starts_with("sidecar:") {
-                let request: JsonRpcRequest = match serde_json::from_slice(&buf) {
-                    Ok(r) => r,
-                    Err(_) => break,
+            if let Some(method) = value
+                .get("method")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+            {
+                // Reverse notifications intentionally omit both `id` and
+                // `meta`.  They must be dispatched without trying to
+                // deserialize into the normal request DTO (which requires
+                // both fields), otherwise one heartbeat would tear down the
+                // authenticated IPC reader and fail every pending call.
+                let request_id = match value.get("id") {
+                    None => None,
+                    Some(Value::String(id)) => Some(id.clone()),
+                    Some(_) => break,
                 };
-                let result = reverse_table
-                    .dispatch(&request.method, request.params)
-                    .await;
-                let response_payload = match result {
-                    Ok(value) => serde_json::to_vec(&serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": request.id,
-                        "result": value,
-                    })),
-                    Err(error) => serde_json::to_vec(&serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": request.id,
-                        "error": {
-                            "code": -32000,
-                            "message": error.to_string(),
-                        },
-                    })),
+                let params = value.get("params").cloned().unwrap_or(Value::Null);
+                let permit = match reverse_semaphore.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        if let Some(request_id) = request_id {
+                            let payload = serde_json::to_vec(&serde_json::json!({
+                                "jsonrpc": "2.0",
+                                "id": request_id,
+                                "error": {
+                                    "code": -32000,
+                                    "message": "IPC_BACKPRESSURE",
+                                },
+                            }));
+                            if let Ok(payload) = payload {
+                                let mut writer_guard = writer.lock().await;
+                                if let Some(w) = writer_guard.as_mut() {
+                                    if Self::write_frame(w, &payload).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
                 };
-                let payload = match response_payload {
-                    Ok(p) => p,
-                    Err(_) => break,
-                };
-                let mut writer_guard = writer.lock().await;
-                if let Some(w) = writer_guard.as_mut() {
-                    let _ = Self::write_frame(w, &payload).await;
-                }
+                let writer = writer.clone();
+                let reverse_table = reverse_table.clone();
+                tokio::spawn(async move {
+                    let result = reverse_table.dispatch(&method, params).await;
+                    let Some(request_id) = request_id else {
+                        if let Err(error) = result {
+                            tracing::debug!(%error, "reverse notification handler failed");
+                        }
+                        drop(permit);
+                        return;
+                    };
+                    let response_payload = match result {
+                        Ok(value) => serde_json::to_vec(&serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": value,
+                        })),
+                        Err(error) => serde_json::to_vec(&serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {
+                                "code": -32000,
+                                "message": error.to_string(),
+                            },
+                        })),
+                    };
+                    if let Ok(payload) = response_payload {
+                        let mut writer_guard = writer.lock().await;
+                        if let Some(w) = writer_guard.as_mut() {
+                            let _ = Self::write_frame(w, &payload).await;
+                        }
+                    }
+                    drop(permit);
+                });
                 continue;
             }
 
+            let response: JsonRpcResponse = match serde_json::from_value(value) {
+                Ok(response) => response,
+                Err(_) => break,
+            };
             let mut pending = pending.lock().await;
             if let Some(tx) = pending.remove(&response.id) {
                 let _ = tx.send(Ok(response));
+            }
+        }
+
+        // A malformed frame or an EOF terminates the reader without going
+        // through `disconnect()`.  Every caller waiting on the pending map
+        // must be released immediately; otherwise the oneshot sender stays
+        // owned by the map forever and the RPC future hangs until process
+        // shutdown.  The writer is also cleared so subsequent calls fail
+        // closed instead of writing to a half-closed stream.
+        {
+            let mut pending_guard = pending.lock().await;
+            for (_, tx) in pending_guard.drain() {
+                let _ = tx.send(Err(AppError::Sidecar("Sidecar connection lost".to_owned())));
+            }
+        }
+        *writer.lock().await = None;
+        // The owning SidecarClient may still be alive while the socket peer
+        // disappears.  Notify the runtime supervisor exactly once so active
+        // process groups and egress leases are revoked on an unexpected EOF.
+        if !disconnect_notified.swap(true, Ordering::SeqCst) {
+            if let Some(hook) = disconnect_hook {
+                hook().await;
             }
         }
     }

@@ -24,6 +24,11 @@
       "type": "string",
       "format": "uuid",
       "description": "Idempotency key for write methods; null for read methods"
+    },
+    "deadline_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Absolute request deadline used by the IPC multiplexer"
     }
   },
   "required": ["trace_id"],

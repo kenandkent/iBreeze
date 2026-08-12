@@ -7,7 +7,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ibreeze_backend.catalog.models import AgentCatalog, ModelCatalog, ProviderCatalog
+from ibreeze_backend.catalog.models import (
+    AgentCatalog,
+    AgentVersionRange,
+    ModelCatalog,
+    ProviderCatalog,
+    ProviderModelBinding,
+)
 from ibreeze_backend.models.skill import Skill, SkillVersion
 from ibreeze_backend.observability.logging_config import get_logger
 from ibreeze_backend.releases.canonical_json import canonical_bytes
@@ -37,105 +43,123 @@ def _object_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _freeze_resource(payload: dict[str, Any]) -> dict[str, Any]:
-    serialized = canonical_bytes(payload)
-    return {
-        "object_key": "",
-        "object_sha256": _object_sha256(serialized),
-        "size": len(serialized),
-    }
+def _finalize_resource(entry: dict[str, Any]) -> dict[str, Any]:
+    """Digest exactly the canonical bytes that are uploaded for this entry."""
+    body = dict(entry)
+    body.pop("object_sha256", None)
+    body.pop("size", None)
+    serialized = canonical_bytes(body)
+    entry["object_sha256"] = _object_sha256(serialized)
+    entry["size"] = len(serialized)
+    return entry
+
+
+def _freeze_resource(entry: dict[str, Any]) -> dict[str, Any]:
+    """Finalize an already assembled resource entry.
+
+    This small primitive is kept public within the module so release tests and
+    catalog extensions can verify the exact digest/size rule without having to
+    construct a concrete Agent/Model/Provider ORM object.
+    """
+    body = dict(entry)
+    body.setdefault("object_key", "")
+    return _finalize_resource(body)
 
 
 def _resource_object_key(resource_type: str, resource_id: uuid.UUID, sequence: int) -> str:
     return f"catalog/releases/{sequence}/{resource_type}s/{resource_id}.json"
 
 
-def _freeze_agent(agent: AgentCatalog, sequence: int) -> dict[str, Any]:
+def _freeze_agent(
+    agent: AgentCatalog,
+    sequence: int,
+    version_ranges: list[AgentVersionRange] | None = None,
+) -> dict[str, Any]:
+    version_ranges = version_ranges or []
     payload: dict[str, Any] = {
         "key": agent.key,
         "display_name": agent.display_name,
         "description": agent.description,
         "catalog_revision": agent.catalog_revision,
         "version": agent.version,
+        "version_ranges": [
+            {
+                "min_version": item.min_version,
+                "max_version_exclusive": item.max_version_exclusive,
+                "executable_names": item.executable_names,
+                "supported_platforms": item.supported_platforms,
+                "probe_argv": item.probe_argv,
+                "network_domains": item.network_domains,
+                "capability_tags": item.capability_tags,
+                "adapter_contract_version": item.adapter_contract_version,
+            }
+            for item in version_ranges
+        ],
     }
-    bundle = _freeze_resource(payload)
-    bundle["object_key"] = _resource_object_key("agent", agent.id, sequence)
-    return {
+    entry = {
         "type": "agent",
         "id": str(agent.id),
         "key": agent.key,
         "catalog_revision": agent.catalog_revision,
         "display_name": agent.display_name,
         "version": agent.version,
-        "object_key": bundle["object_key"],
-        "object_sha256": bundle["object_sha256"],
-        "size": bundle["size"],
+        "object_key": _resource_object_key("agent", agent.id, sequence),
+        "description": agent.description,
+        "version_ranges": payload["version_ranges"],
+        "network_domains": sorted(
+            {
+                domain
+                for item in payload["version_ranges"]
+                for domain in item["network_domains"]
+            }
+        ),
     }
+    return _finalize_resource(entry)
 
 
 def _freeze_model(model: ModelCatalog, sequence: int) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "provider_key": model.provider_key,
-        "model_key": model.model_key,
-        "display_name": model.display_name,
-        "context_window": model.context_window,
-        "max_output_tokens": model.max_output_tokens,
-        "catalog_revision": model.catalog_revision,
-        "version": model.version,
-        "supports_tools": model.supports_tools,
-        "supports_streaming": model.supports_streaming,
-        "supports_vision": model.supports_vision,
-    }
-    bundle = _freeze_resource(payload)
-    bundle["object_key"] = _resource_object_key("model", model.id, sequence)
-    return {
+    entry = {
         "type": "model",
         "id": str(model.id),
         "key": f"{model.provider_key}/{model.model_key}",
         "catalog_revision": model.catalog_revision,
         "display_name": model.display_name,
         "version": model.version,
-        "object_key": bundle["object_key"],
-        "object_sha256": bundle["object_sha256"],
-        "size": bundle["size"],
+        "object_key": _resource_object_key("model", model.id, sequence),
+        "provider_key": model.provider_key,
+        "model_key": model.model_key,
+        "context_window": model.context_window,
+        "max_output_tokens": model.max_output_tokens,
+        "supports_tools": model.supports_tools,
+        "supports_streaming": model.supports_streaming,
+        "supports_vision": model.supports_vision,
     }
+    return _finalize_resource(entry)
 
 
-def _freeze_provider(provider: ProviderCatalog, sequence: int) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "key": provider.key,
-        "display_name": provider.display_name,
-        "protocol": provider.protocol,
-        "base_url": provider.base_url,
-        "auth_scheme": provider.auth_scheme,
-        "catalog_revision": provider.catalog_revision,
-        "version": provider.version,
-    }
-    bundle = _freeze_resource(payload)
-    bundle["object_key"] = _resource_object_key("provider", provider.id, sequence)
-    return {
+def _freeze_provider(
+    provider: ProviderCatalog,
+    sequence: int,
+    model_bindings: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    model_bindings = model_bindings or []
+    entry = {
         "type": "provider",
         "id": str(provider.id),
         "key": provider.key,
         "catalog_revision": provider.catalog_revision,
         "display_name": provider.display_name,
         "version": provider.version,
-        "object_key": bundle["object_key"],
-        "object_sha256": bundle["object_sha256"],
-        "size": bundle["size"],
+        "protocol": provider.protocol,
+        "base_url": provider.base_url,
+        "auth_scheme": provider.auth_scheme,
+        "model_bindings": model_bindings,
+        "object_key": _resource_object_key("provider", provider.id, sequence),
     }
+    return _finalize_resource(entry)
 
 
 def _freeze_skill(skill: Skill, version: SkillVersion | None, sequence: int) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "key": skill.key,
-        "display_name": skill.display_name,
-        "description": skill.description,
-        "catalog_revision": skill.catalog_revision,
-        "version": skill.version,
-    }
-    bundle = _freeze_resource(payload)
-    bundle["object_key"] = _resource_object_key("skill", skill.id, sequence)
     entry: dict[str, Any] = {
         "type": "skill",
         "id": str(skill.id),
@@ -143,15 +167,14 @@ def _freeze_skill(skill: Skill, version: SkillVersion | None, sequence: int) -> 
         "catalog_revision": skill.catalog_revision,
         "display_name": skill.display_name,
         "version": skill.version,
-        "object_key": bundle["object_key"],
-        "object_sha256": bundle["object_sha256"],
-        "size": bundle["size"],
+        "object_key": _resource_object_key("skill", skill.id, sequence),
+        "description": skill.description,
     }
     if version:
         entry["content_sha256"] = version.content_sha256
         entry["skill_version_id"] = str(version.id)
         entry["skill_version"] = version.version
-    return entry
+    return _finalize_resource(entry)
 
 
 async def freeze_resources(db: AsyncSession, release_id: uuid.UUID, sequence: int) -> list[dict[str, Any]]:
@@ -160,7 +183,10 @@ async def freeze_resources(db: AsyncSession, release_id: uuid.UUID, sequence: in
 
     agents_result = await db.execute(select(AgentCatalog).where(AgentCatalog.status == "published"))
     for agent in agents_result.scalars().all():
-        resources.append(_freeze_agent(agent, sequence))
+        ranges_result = await db.execute(
+            select(AgentVersionRange).where(AgentVersionRange.agent_id == agent.id)
+        )
+        resources.append(_freeze_agent(agent, sequence, list(ranges_result.scalars().all())))
 
     models_result = await db.execute(select(ModelCatalog).where(ModelCatalog.status == "published"))
     for model in models_result.scalars().all():
@@ -168,7 +194,24 @@ async def freeze_resources(db: AsyncSession, release_id: uuid.UUID, sequence: in
 
     providers_result = await db.execute(select(ProviderCatalog).where(ProviderCatalog.status == "published"))
     for provider in providers_result.scalars().all():
-        resources.append(_freeze_provider(provider, sequence))
+        bindings_result = await db.execute(
+            select(ProviderModelBinding).where(ProviderModelBinding.provider_id == provider.id)
+        )
+        model_bindings: list[dict[str, Any]] = []
+        for binding in bindings_result.scalars().all():
+            model_result = await db.execute(select(ModelCatalog).where(ModelCatalog.id == binding.model_id))
+            model_catalog = model_result.scalar_one_or_none()
+            if model_catalog is None or model_catalog.status != "published":
+                continue
+            model_bindings.append(
+                {
+                    "binding_id": str(binding.id),
+                    "model_id": str(binding.model_id),
+                    "provider_model_name": binding.provider_model_name,
+                    "request_defaults": binding.request_defaults,
+                }
+            )
+        resources.append(_freeze_provider(provider, sequence, model_bindings))
 
     skills_result = await db.execute(select(Skill).where(Skill.status == "published"))
     for skill in skills_result.scalars().all():
@@ -194,10 +237,16 @@ def upload_resource_bundles(resources: list[dict[str, Any]], manifest_bytes: byt
         object_key: str = resource["object_key"]
         if not object_key:
             continue
+        body = dict(resource)
+        object_sha256 = body.pop("object_sha256", None)
+        size = body.pop("size", None)
+        serialized = canonical_bytes(body)
+        if object_sha256 != _object_sha256(serialized) or size != len(serialized):
+            raise ValueError("CATALOG_RESOURCE_DIGEST_MISMATCH")
         client.put_object(
             Bucket=bucket,
             Key=object_key,
-            Body=canonical_bytes(resource),
+            Body=serialized,
             ContentType="application/json",
         )
         uploaded.append(object_key)

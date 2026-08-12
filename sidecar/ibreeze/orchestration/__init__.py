@@ -11,16 +11,11 @@ from ibreeze.orchestration.collaboration import (
     SubTask,
     create_subtasks,
 )
+from ibreeze.orchestration.confirm_plan import ConfirmPlanCommand, confirm_and_dispatch
 from ibreeze.orchestration.department_matcher import (
     DepartmentCandidate,
     DepartmentResponsibilityProfile,
     match_departments,
-)
-from ibreeze.orchestration.dispatcher import dispatch_company_task
-from ibreeze.orchestration.execution_chain import (
-    confirm_plan,
-    modify_plan,
-    request_plan_confirmation,
 )
 from ibreeze.orchestration.plan_generator import generate_company_plan
 from ibreeze.orchestration.plan_validator import (
@@ -70,10 +65,10 @@ __all__ = [
     "WorkflowPhase",
     "WorkflowStep",
     "WorkflowTemplate",
-    "confirm_plan",
+    "ConfirmPlanCommand",
+    "confirm_and_dispatch",
     "create_role_behavior",
     "create_subtasks",
-    "dispatch_company_task",
     "generate_company_plan",
     "generate_company_review",
     "generate_department_report",
@@ -82,8 +77,6 @@ __all__ = [
     "get_workflow_template",
     "list_workflow_templates",
     "match_departments",
-    "modify_plan",
-    "request_plan_confirmation",
     "run_availability_checks",
     "validate_plan",
 ]

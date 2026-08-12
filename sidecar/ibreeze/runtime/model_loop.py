@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -176,7 +177,9 @@ class ModelRuntime:
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": result,
+                        "content": result
+                        if isinstance(result, str)
+                        else json.dumps(result, ensure_ascii=False, sort_keys=True),
                     }
                 )
 

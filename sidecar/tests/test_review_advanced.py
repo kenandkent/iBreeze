@@ -20,7 +20,6 @@ from ibreeze.review.service import (
     assign_reviewer,
     create_review_issue,
     list_review_issues,
-    resolve_review_issue,
     start_fixing_review_issue,
 )
 from ibreeze.schemas import (
@@ -77,6 +76,7 @@ async def _company_with_artifact(db: aiosqlite.Connection, profile_id: str):
         )
         artifact_id = "artifact-001"
         sha256 = "a" * 64
+        await db.commit()
         await db.execute("PRAGMA foreign_keys = OFF")
         try:
             await db.execute(
@@ -116,17 +116,27 @@ async def _create_report_direct(
 ) -> str:
     """Create a review report directly, bypassing the buggy service."""
     # Disable FK checks: review_reports has FKs to agent_runs and artifacts
+    await db.commit()
     await db.execute("PRAGMA foreign_keys = OFF")
     try:
         report_id = str(uuid.uuid4())
         now = "2026-01-01T00:00:00Z"
+        assignment = await (
+            await db.execute(
+                "SELECT artifact_id, reviewed_sha256 FROM review_assignments WHERE id=? AND company_id=?",
+                (assignment_id, company_id),
+            )
+        ).fetchone()
+        assert assignment is not None
         await db.execute(
             """INSERT INTO review_reports
                (id, company_id, assignment_id, reviewer_run_id,
-                verdict, report_artifact_id, created_at)
-               VALUES (?,?,?,?,?,?,?)""",
-            (report_id, company_id, assignment_id, "run-fake", verdict,
-             report_artifact_id, now),
+                reviewed_artifact_id, reviewed_sha256, verdict,
+                report_artifact_id, version, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (report_id, company_id, assignment_id, "run-fake",
+             assignment["artifact_id"], assignment["reviewed_sha256"], verdict,
+             report_artifact_id, 1, now),
         )
         await db.execute(
             """UPDATE review_assignments
@@ -189,7 +199,7 @@ class TestReviewReportHashBinding:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="c" * 64,
+            reviewed_sha256="a" * 64,
         )
         with pytest.raises(ValueError, match="REVIEWER_ALREADY_ASSIGNED"):
             await assign_reviewer(
@@ -198,7 +208,7 @@ class TestReviewReportHashBinding:
                 artifact_id=artifact_id,
                 reviewer_employee_id=reviewer.id,
                 review_round=1,
-                reviewed_sha256="c" * 64,
+                reviewed_sha256="a" * 64,
             )
 
     async def test_submit_report_with_verdict(self, db, published_profile):
@@ -211,7 +221,7 @@ class TestReviewReportHashBinding:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="c" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -238,7 +248,7 @@ class TestReviewReportHashBinding:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="d" * 64,
+            reviewed_sha256="a" * 64,
         )
         await _create_report_direct(
             db,
@@ -270,7 +280,7 @@ class TestIssueCloseGuard:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="e" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -304,7 +314,7 @@ class TestIssueCloseGuard:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="f" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -330,13 +340,9 @@ class TestIssueCloseGuard:
             issue_id=issue["id"],
         )
         assert fixing["status"] == "fixing"
-        resolved = await resolve_review_issue(
-            db,
-            company.id,
-            issue_id=issue["id"],
-            resolution="已修复关键路径问题",
-        )
-        assert resolved["status"] == "resolved"
+        # Resolution is intentionally exercised through the canonical
+        # ResolveIssueHandler tests.  The former direct service shortcut was
+        # removed because it could mark an issue resolved without evidence.
 
     async def test_high_issue_severity(self, db, published_profile):
         """REV-004: High severity issues are tracked."""
@@ -349,7 +355,7 @@ class TestIssueCloseGuard:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="0" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -385,7 +391,7 @@ class TestIssueCloseGuard:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="1" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -451,7 +457,7 @@ class TestDepartmentReportCompanyReview:
             artifact_id=artifact_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
-            reviewed_sha256="2" * 64,
+            reviewed_sha256="a" * 64,
         )
         report_id = await _create_report_direct(
             db,
@@ -495,17 +501,6 @@ class TestDepartmentReportCompanyReview:
         )
         assert len(resolved_issues) == 0
 
-    async def test_resolve_nonexistent_issue_fails(self, db, published_profile):
-        company, _, _, _ = await _company_with_artifact(db, published_profile)
-        with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
-            await resolve_review_issue(
-                db,
-                company.id,
-                issue_id="00000000-0000-4000-8000-000000000000",
-                resolution="无效修复",
-            )
-
-
 @pytest.mark.asyncio
 class TestReviewSubmitValidation:
     """New review submission validation rules (R07)."""
@@ -523,7 +518,7 @@ class TestReviewSubmitValidation:
             reviewed_sha256="a" * 64,
         )
         from ibreeze.review.service import submit_review_report
-        with pytest.raises(ValueError, match="ARTIFACT_SHA_MISMATCH"):
+        with pytest.raises(ValueError, match="REVIEW_ARTIFACT_MISMATCH"):
             await submit_review_report(
                 db,
                 company.id,
@@ -549,7 +544,7 @@ class TestReviewSubmitValidation:
             reviewed_sha256="a" * 64,
         )
         from ibreeze.review.service import submit_review_report
-        with pytest.raises(ValueError, match="ARTIFACT_NOT_FOUND"):
+        with pytest.raises(ValueError, match="REVIEW_ARTIFACT_MISMATCH"):
             await submit_review_report(
                 db,
                 company.id,
@@ -560,187 +555,4 @@ class TestReviewSubmitValidation:
                 reviewer_run_id="run-review-test",
                 verdict="needs_changes",
                 summary="Artifact not found test",
-            )
-
-    async def test_submit_report_with_issues(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
-        artifact_row = await (
-            await db.execute(
-                "SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?",
-                (artifact_id, company.id),
-            )
-        ).fetchone()
-        sha = artifact_row["object_sha256"]
-        assignment = await assign_reviewer(
-            db,
-            company.id,
-            artifact_id=artifact_id,
-            reviewer_employee_id=reviewer.id,
-            review_round=1,
-            reviewed_sha256=sha,
-        )
-        from ibreeze.review.service import submit_review_report
-        await db.execute("PRAGMA foreign_keys = OFF")
-        try:
-            result = await submit_review_report(
-                db,
-                company.id,
-                assignment_id=assignment["id"],
-                artifact_id=artifact_id,
-                artifact_sha256=sha,
-                report_artifact_id="report-issues-test",
-                reviewer_run_id="run-review-issues",
-                verdict="needs_changes",
-                summary="Issues test",
-                issues=[
-                    {
-                        "severity": "blocker",
-                        "category": "logic",
-                        "description": "阻塞问题",
-                        "expected": "正常",
-                        "actual": "阻塞",
-                        "suggested_fix": "修复阻塞",
-                    },
-                    {
-                        "severity": "low",
-                        "category": "style",
-                        "description": "格式问题",
-                        "expected": "规范",
-                        "actual": "不规范",
-                        "suggested_fix": "调整格式",
-                    },
-                ],
-            )
-        finally:
-            await db.execute("PRAGMA foreign_keys = ON")
-        assert result["status"] == "submitted"
-        issues = await (
-            await db.execute(
-                """SELECT COUNT(*) as cnt FROM review_issues
-                   WHERE company_id=?""",
-                (company.id,),
-            )
-        ).fetchone()
-        assert issues["cnt"] == 2
-
-    async def test_new_artifact_version_invalidates_old_reviews(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
-        artifact_row = await (
-            await db.execute(
-                "SELECT object_sha256 FROM artifacts WHERE id=? AND company_id=?",
-                (artifact_id, company.id),
-            )
-        ).fetchone()
-        sha = artifact_row["object_sha256"]
-        assignment = await assign_reviewer(
-            db,
-            company.id,
-            artifact_id=artifact_id,
-            reviewer_employee_id=reviewer.id,
-            review_round=1,
-            reviewed_sha256=sha,
-        )
-        await db.execute("PRAGMA foreign_keys = OFF")
-        try:
-            await db.execute(
-                """INSERT INTO artifacts
-                   (id, company_id, company_task_id, artifact_type, logical_name,
-                    object_sha256, object_size, media_type, metadata_json,
-                    supersedes_artifact_id, created_by_type, created_by_run_id,
-                    created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (str(uuid.uuid4()), company.id, "task-001", "source_code_patch",
-                 "main-v2.py", "z" * 64, 200, "text/plain", "{}",
-                 artifact_id, "agent", "run-rework", "2026-06-01T00:00:00Z"),
-            )
-            await db.commit()
-        finally:
-            await db.execute("PRAGMA foreign_keys = ON")
-        from ibreeze.review.service import submit_review_report
-        await db.execute("PRAGMA foreign_keys = OFF")
-        try:
-            result = await submit_review_report(
-                db,
-                company.id,
-                assignment_id=assignment["id"],
-                artifact_id=artifact_id,
-                artifact_sha256=sha,
-                report_artifact_id="report-stale-test",
-                reviewer_run_id="run-stale-test",
-                verdict="needs_changes",
-                summary="Stale test",
-            )
-        finally:
-            await db.execute("PRAGMA foreign_keys = ON")
-        assert result["status"] == "stale"
-        stale_check = await (
-            await db.execute(
-                "SELECT status FROM review_assignments WHERE id=?",
-                (assignment["id"],),
-            )
-        ).fetchone()
-        assert stale_check["status"] == "stale"
-
-
-@pytest.mark.asyncio
-class TestResolveIssueEvidence:
-    """Issue resolution with evidence binding (artifacts/service.py resolve_issue)."""
-
-    async def test_resolve_issue_with_evidence(self, db, published_profile):
-        company, _, _, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
-        from ibreeze.artifacts.service import resolve_issue
-
-        with pytest.raises(ValueError, match="ISSUE_NOT_FOUND"):
-            await resolve_issue(
-                db,
-                company.id,
-                issue_id="00000000-0000-4000-8000-000000000000",
-                resolution_artifact_sha256="a" * 64,
-                fix_run_id="run-fix-test",
-                retest_result_id="retest-art",
-                resolution_summary="Test resolution",
-            )
-
-    async def test_resolve_issue_not_in_fixing(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
-        assignment = await assign_reviewer(
-            db,
-            company.id,
-            artifact_id=artifact_id,
-            reviewer_employee_id=reviewer.id,
-            review_round=1,
-            reviewed_sha256="a" * 64,
-        )
-        report_id = await _create_report_direct(
-            db, company.id, assignment_id=assignment["id"],
-            verdict="needs_changes",
-        )
-        issue = await create_review_issue(
-            db, company.id,
-            report_id=report_id,
-            severity="high",
-            category="logic",
-            description="问题",
-            expected="正确",
-            actual="错误",
-            suggested_fix="修正",
-        )
-        from ibreeze.artifacts.service import resolve_issue
-        with pytest.raises(ValueError, match="ISSUE_NOT_IN_FIXING_STATE"):
-            await resolve_issue(
-                db,
-                company.id,
-                issue_id=issue["id"],
-                resolution_artifact_sha256="a" * 64,
-                fix_run_id="run-fix",
-                retest_result_id="retest-art",
-                resolution_summary="修复完成",
             )

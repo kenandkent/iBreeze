@@ -8,5 +8,16 @@
 export interface RuntimeRunRequest {
   company_id: string;
   agent_id: string;
+  company_task_id: string;
+  conversation_id: string;
+  availability_snapshot_id: string;
+  execution_snapshot_id: string;
+  model_id: string;
   message?: string;
+  run_purpose:
+    "interactive_turn" | "company_plan" | "task_execution" | "review" | "verification" | "repair" | "merge" | "summary";
+  adapter_type: "codex_cli" | "claude_code" | "opencode" | "api_model";
+  work_item_id?: string;
+  department_task_id?: string;
+  employee_task_id?: string;
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ async def _run(
     socket_path: Path,
     profile_root: Path,
     app_version: str,
+    launch_id: str,
     startup_token: bytes,
     backend_origin: str,
     app_user_id: str,
@@ -26,10 +28,15 @@ async def _run(
     device_id: str,
     profile_mode: str,
 ) -> None:
+    # The profile root is supplied by Rust and is read-only metadata for the
+    # Sidecar's execution planner.  The Rust Catalog snapshot in this
+    # directory is the only source used to derive the process egress policy.
+    os.environ["IBREEZE_PROFILE_ROOT"] = str(profile_root)
     app = SidecarApplication(
         socket_path=socket_path,
         profile_root=profile_root,
         app_version=app_version,
+        launch_id=launch_id,
         startup_token=startup_token,
         backend_origin=backend_origin,
         app_user_id=app_user_id,
@@ -59,6 +66,7 @@ async def _run(
 )
 @click.option("--app-version", required=True)
 @click.option("--protocol-version", required=True, type=int)
+@click.option("--launch-id", required=True, type=click.UUID)
 @click.option("--backend-origin", required=True)
 @click.option("--app-user-id", required=True, type=click.UUID)
 @click.option("--masked-identifier", required=True)
@@ -73,6 +81,7 @@ def main(
     profile_root: Path,
     app_version: str,
     protocol_version: int,
+    launch_id: object,
     backend_origin: str,
     app_user_id: object,
     masked_identifier: str,
@@ -96,6 +105,7 @@ def main(
             socket_path=socket_path,
             profile_root=profile_root,
             app_version=app_version,
+            launch_id=str(launch_id),
             startup_token=startup_token,
             backend_origin=backend_origin,
             app_user_id=str(app_user_id),

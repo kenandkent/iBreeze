@@ -7,4 +7,9 @@
 
 export interface CompanyListRequest {
   status?: "active" | "archived";
+  filter?: {
+    [k: string]: any | undefined;
+  };
+  cursor?: string | null;
+  limit?: number;
 }

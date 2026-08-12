@@ -9,6 +9,13 @@ import pytest
 from ibreeze.runtime.transport import ReverseRpcTransport, create_transport
 
 
+class _ProbeSession:
+    async def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        assert method == "credential.probe"
+        self.params = params
+        return {"available": False}
+
+
 class TestRunSpecNeverContainsApiKey:
     """Verify that RunSpec construction never embeds api_key."""
 
@@ -66,10 +73,17 @@ class TestTransportNoApiKey:
 
     @pytest.mark.asyncio
     async def test_transport_probe_params_no_api_key(self) -> None:
-        t = ReverseRpcTransport(credential_ref="cred-1", model="gpt-4o")
-        with pytest.raises(RuntimeError, match="Credential Broker is not configured"):
-            await t.probe()
+        t = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            provider_release_id="provider-1",
+            model_binding_id="binding-1",
+            session=_ProbeSession(),
+        )
+        assert await t.probe() is False
         params = t._rpc.last_params
         assert params is not None
         assert "api_key" not in params
         assert params.get("credential_ref") == "cred-1"
+        assert params.get("provider_release_id") == "provider-1"
+        assert params.get("model_binding_id") == "binding-1"

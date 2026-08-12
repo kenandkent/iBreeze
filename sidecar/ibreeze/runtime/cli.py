@@ -1,13 +1,15 @@
-"""Shell-free CLI adapters for Codex CLI, Claude Code and OpenCode."""
+"""Shell-free CLI adapters backed by the Rust ProcessSupervisor."""
 
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
+
+from ibreeze.runtime.process_supervisor import get_supervisor
 
 AdapterName = Literal["codex_cli", "claude_code", "opencode"]
 
@@ -49,50 +51,20 @@ async def probe_agent(
             version=None,
             failure_code="AGENT_EXECUTABLE_NOT_FOUND",
         )
-    try:
-        process = await asyncio.create_subprocess_exec(
-            executable,
-            "--version",
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=_minimal_environment(),
-            start_new_session=True,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=timeout_seconds,
-        )
-    except TimeoutError:
-        process.kill()
-        await process.wait()
-        return AgentProbe(
-            adapter_type=adapter_type,
-            available=False,
-            executable_path=executable,
-            version=None,
-            failure_code="AGENT_PROBE_TIMED_OUT",
-        )
-    if process.returncode != 0:
-        return AgentProbe(
-            adapter_type=adapter_type,
-            available=False,
-            executable_path=executable,
-            version=None,
-            failure_code="AGENT_AUTH_UNAVAILABLE",
-        )
-    version = (stdout or stderr).decode("utf-8", errors="replace").strip()
+    # Probing must not launch an unbound process.  The Rust supervisor performs
+    # the authoritative snapshot/catalog checks at real run start; this
+    # preflight only reports whether the allow-listed binary is discoverable.
     return AgentProbe(
         adapter_type=adapter_type,
         available=True,
         executable_path=executable,
-        version=version[:500],
+        version=None,
         failure_code=None,
     )
 
 
 class CliAdapter:
-    """Execute an approved argv in an already-authorized Run Workspace."""
+    """Build and execute an approved argv through Rust."""
 
     def __init__(
         self,
@@ -113,60 +85,39 @@ class CliAdapter:
         workspace: str | Path,
         timeout_seconds: float,
         stdin: bytes = b"",
+        run_id: str | None = None,
     ) -> ProcessResult:
         root = Path(workspace).resolve(strict=True)
         if not root.is_dir():
             raise ValueError("WORKSPACE_ACCESS_DENIED")
-        process = await asyncio.create_subprocess_exec(
-            self._executable,
-            *arguments,
-            cwd=root,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=_minimal_environment(),
-            start_new_session=True,
+        supervisor = get_supervisor()
+        actual_run_id = run_id or str(uuid4())
+        await supervisor.start(
+            actual_run_id,
+            [self._executable, *arguments],
+            cwd=str(root),
+            timeout=max(1, int(timeout_seconds)),
+            stdin=stdin,
         )
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(stdin),
-                timeout=timeout_seconds,
-            )
-            timed_out = False
-        except TimeoutError:
-            process.terminate()
-            try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
-            except TimeoutError:
-                process.kill()
-                stdout, stderr = await process.communicate()
-            timed_out = True
+        result = await supervisor.wait(actual_run_id, timeout=max(1, int(timeout_seconds)))
+        stdout = str(result.get("stdout", "")).encode("utf-8", errors="replace")
+        stderr = str(result.get("stderr", "")).encode("utf-8", errors="replace")
         if len(stdout) + len(stderr) > self._max_output_bytes:
             raise ValueError("AGENT_OUTPUT_LIMIT_EXCEEDED")
         return ProcessResult(
-            exit_code=process.returncode if process.returncode is not None else -1,
+            exit_code=int(result.get("exit_code", -1)),
             stdout=stdout,
             stderr=stderr,
-            timed_out=timed_out,
+            timed_out=result.get("status") == "timed_out" or result.get("error") == "timeout",
         )
 
 
 def _minimal_environment() -> dict[str, str]:
-    allowed = {
-        "PATH",
-        "LANG",
-        "LC_ALL",
-        "TERM",
-        "TMPDIR",
-        "USER",
-        "SHELL",
-    }
+    allowed = {"PATH", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL"}
     return {key: value for key, value in os.environ.items() if key in allowed}
 
 
 class CodexCliAdapter:
-    """Adapter for OpenAI Codex CLI."""
-
     def __init__(self, executable: str | Path | None = None) -> None:
         path = executable or shutil.which("codex")
         if path is None:
@@ -184,32 +135,20 @@ class CodexCliAdapter:
         model: str = "codex-mini-latest",
         approval_mode: str = "suggest",
         timeout_seconds: float = 300,
+        run_id: str | None = None,
     ) -> ProcessResult:
-        arguments = [
-            "--model",
-            model,
-            "--approval-mode",
-            approval_mode,
-            "--quiet",
-            prompt,
-        ]
         return await self._adapter.run(
-            arguments,
+            ["--model", model, "--approval-mode", approval_mode, "--quiet", prompt],
             workspace=workspace,
             timeout_seconds=timeout_seconds,
+            run_id=run_id,
         )
 
-    async def cancel(self, process: asyncio.subprocess.Process) -> None:
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5)
-        except TimeoutError:
-            process.kill()
+    async def cancel(self, run_id: str) -> None:
+        await get_supervisor().kill(run_id)
 
 
 class ClaudeCodeAdapter:
-    """Adapter for Anthropic Claude Code CLI."""
-
     def __init__(self, executable: str | Path | None = None) -> None:
         path = executable or shutil.which("claude")
         if path is None:
@@ -227,32 +166,20 @@ class ClaudeCodeAdapter:
         model: str = "claude-sonnet-4-20250514",
         permission_mode: str = "acceptEdits",
         timeout_seconds: float = 300,
+        run_id: str | None = None,
     ) -> ProcessResult:
-        arguments = [
-            "--model",
-            model,
-            "--permission-mode",
-            permission_mode,
-            "--print",
-            prompt,
-        ]
         return await self._adapter.run(
-            arguments,
+            ["--model", model, "--permission-mode", permission_mode, "--print", prompt],
             workspace=workspace,
             timeout_seconds=timeout_seconds,
+            run_id=run_id,
         )
 
-    async def cancel(self, process: asyncio.subprocess.Process) -> None:
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5)
-        except TimeoutError:
-            process.kill()
+    async def cancel(self, run_id: str) -> None:
+        await get_supervisor().kill(run_id)
 
 
 class OpenCodeAdapter:
-    """Adapter for OpenCode CLI."""
-
     def __init__(self, executable: str | Path | None = None) -> None:
         path = executable or shutil.which("opencode")
         if path is None:
@@ -269,36 +196,22 @@ class OpenCodeAdapter:
         workspace: str | Path,
         model: str = "anthropic/claude-sonnet-4-20250514",
         timeout_seconds: float = 300,
+        run_id: str | None = None,
     ) -> ProcessResult:
-        arguments = [
-            "--model",
-            model,
-            "--non-interactive",
-            prompt,
-        ]
         return await self._adapter.run(
-            arguments,
+            ["--model", model, "--non-interactive", prompt],
             workspace=workspace,
             timeout_seconds=timeout_seconds,
+            run_id=run_id,
         )
 
-    async def cancel(self, process: asyncio.subprocess.Process) -> None:
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5)
-        except TimeoutError:
-            process.kill()
+    async def cancel(self, run_id: str) -> None:
+        await get_supervisor().kill(run_id)
 
 
 def create_adapter(
     adapter_type: AdapterName,
     executable: str | Path | None = None,
 ) -> CodexCliAdapter | ClaudeCodeAdapter | OpenCodeAdapter:
-    """Factory function to create the appropriate CLI adapter."""
-    adapters = {
-        "codex_cli": CodexCliAdapter,
-        "claude_code": ClaudeCodeAdapter,
-        "opencode": OpenCodeAdapter,
-    }
-    adapter_cls = adapters[adapter_type]
-    return adapter_cls(executable)  # type: ignore[return-value]
+    adapters = {"codex_cli": CodexCliAdapter, "claude_code": ClaudeCodeAdapter, "opencode": OpenCodeAdapter}
+    return adapters[adapter_type](executable)  # type: ignore[return-value]

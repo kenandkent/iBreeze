@@ -54,6 +54,8 @@ class WriteQueue:
         deadline_at: datetime,
         execute: Callable[[aiosqlite.Connection], Awaitable[_T]],
     ) -> _T:
+        if not self._running:
+            raise RuntimeError("LOCAL_WRITE_QUEUE_STOPPED")
         envelope = WriteEnvelope(
             command_name=command_name,
             trace_id=trace_id,
@@ -109,21 +111,30 @@ class WriteQueue:
                     if not self._running:
                         break
                     continue
+                # A caller may have been cancelled while waiting for this
+                # envelope.  Do not execute a write whose result can no
+                # longer be observed, and never mutate a cancelled Future.
+                if envelope.future.cancelled():
+                    self._queue.task_done()
+                    continue
                 if envelope.is_expired():
-                    envelope.future.set_exception(RuntimeError("IPC_DEADLINE_EXCEEDED"))
+                    if not envelope.future.done():
+                        envelope.future.set_exception(RuntimeError("IPC_DEADLINE_EXCEEDED"))
                     self._queue.task_done()
                     continue
                 try:
                     await self._connection.execute("BEGIN IMMEDIATE")
                     result = await envelope.execute(self._connection)
                     await self._connection.commit()
-                    envelope.future.set_result(result)
+                    if not envelope.future.done():
+                        envelope.future.set_result(result)
                 except Exception as e:
                     try:
                         await self._connection.rollback()
                     except Exception:
                         pass
-                    envelope.future.set_exception(e)
+                    if not envelope.future.done():
+                        envelope.future.set_exception(e)
                 finally:
                     self._queue.task_done()
         except asyncio.CancelledError:

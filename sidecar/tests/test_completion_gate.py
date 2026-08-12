@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock
+from uuid import UUID
 
 import aiosqlite
 import pytest
@@ -253,15 +255,18 @@ class TestEmployeeTaskGate:
             reviewed_sha256="a" * 64,
         )
         report_id = str(uuid.uuid4())
+        await db.commit()
         await db.execute("PRAGMA foreign_keys = OFF")
         try:
             await db.execute(
                 """INSERT INTO review_reports
                    (id, company_id, assignment_id, reviewer_run_id,
-                    verdict, report_artifact_id, created_at)
-                   VALUES (?,?,?,?,?,?,?)""",
+                    reviewed_artifact_id, reviewed_sha256, verdict,
+                    report_artifact_id, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
                 (report_id, company.id, assignment["id"], "run-review",
-                 "needs_changes", "report-art-1", "2026-01-01T00:00:00Z"),
+                 art_id, "a" * 64, "needs_changes", "report-art-1",
+                 "2026-01-01T00:00:00Z"),
             )
             await db.execute(
                 """UPDATE review_assignments
@@ -311,15 +316,18 @@ class TestEmployeeTaskGate:
             reviewed_sha256="a" * 64,
         )
         report_id = str(uuid.uuid4())
+        await db.commit()
         await db.execute("PRAGMA foreign_keys = OFF")
         try:
             await db.execute(
                 """INSERT INTO review_reports
                    (id, company_id, assignment_id, reviewer_run_id,
-                    verdict, report_artifact_id, created_at)
-                   VALUES (?,?,?,?,?,?,?)""",
+                    reviewed_artifact_id, reviewed_sha256, verdict,
+                    report_artifact_id, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
                 (report_id, company.id, assignment["id"], "run-review",
-                 "needs_changes", "report-art-2", "2026-01-01T00:00:00Z"),
+                 art_id, "a" * 64, "needs_changes", "report-art-2",
+                 "2026-01-01T00:00:00Z"),
             )
             await db.commit()
         finally:
@@ -465,10 +473,12 @@ class TestCompanyTaskGate:
             await db.execute(
                 """INSERT INTO review_reports
                    (id, company_id, assignment_id, reviewer_run_id,
-                    verdict, report_artifact_id, created_at)
-                   VALUES (?,?,?,?,?,?,?)""",
+                    reviewed_artifact_id, reviewed_sha256, verdict,
+                    report_artifact_id, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
                 (report_id, company.id, rev_id, "run-review",
-                 "pass", "report-art-pass", "2026-01-01T00:00:00Z"),
+                 art_id, "f" * 64, "pass", "report-art-pass",
+                 "2026-01-01T00:00:00Z"),
             )
             await db.execute(
                 """INSERT INTO artifacts
@@ -521,3 +531,51 @@ class TestCompanyTaskGate:
 
         blockers = await CompanyGate().blockers(db, uuid.UUID(ct_id), uuid.UUID(company.id))
         assert len(blockers) > 0
+
+
+class TestGateRemainingBranches:
+    """Drive the blockers aggregation for the conditions the DB fixtures above
+    do not construct, by stubbing each private gate predicate."""
+
+    @pytest.mark.asyncio
+    async def test_employee_gate_active_run(self) -> None:
+        gate = EmployeeGate()
+        gate._active_run_or_approval = AsyncMock(return_value=True)
+        blockers = await gate.blockers(AsyncMock(), UUID(int=1), UUID(int=2))
+        assert "active_run_or_approval" in blockers
+
+    @pytest.mark.asyncio
+    async def test_department_gate_all_remaining_conditions(self) -> None:
+        gate = DepartmentGate()
+        gate._merge_task_not_accepted = AsyncMock(return_value=True)
+        gate._department_review_not_passed = AsyncMock(return_value=True)
+        gate._blocking_issues_open = AsyncMock(return_value=True)
+        gate._verification_not_passed = AsyncMock(return_value=True)
+        gate._downstream_deliverables_not_published = AsyncMock(return_value=True)
+        gate._active_run_or_approval = AsyncMock(return_value=True)
+        blockers = await gate.blockers(AsyncMock(), UUID(int=1), UUID(int=2))
+        assert {
+            "merge_task_not_accepted",
+            "department_review_not_passed",
+            "blocking_issues_open",
+            "verification_not_passed",
+            "downstream_deliverables_not_published",
+            "active_run_or_approval",
+        }.issubset(blockers)
+
+    @pytest.mark.asyncio
+    async def test_company_gate_all_remaining_conditions(self) -> None:
+        gate = CompanyGate()
+        gate._department_reviews_not_passed = AsyncMock(return_value=True)
+        gate._cross_department_review_not_passed = AsyncMock(return_value=True)
+        gate._blocking_issues_open = AsyncMock(return_value=True)
+        gate._workspace_not_ready = AsyncMock(return_value=True)
+        gate._active_run_or_approval = AsyncMock(return_value=True)
+        blockers = await gate.blockers(AsyncMock(), UUID(int=1), UUID(int=2))
+        assert {
+            "department_reviews_not_passed",
+            "cross_department_review_not_passed",
+            "blocking_issues_open",
+            "workspace_not_ready",
+            "active_run_or_approval",
+        }.issubset(blockers)

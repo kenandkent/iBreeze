@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 
 import aiosqlite
 
+from ibreeze.application.command_bus import InternalCommandBus
+from ibreeze.persistence.connection import ReadPool
 from ibreeze.persistence.write_queue import WriteQueue
 from ibreeze.workers.analysis import AnalysisWorker
 from ibreeze.workers.outbox import OutboxWorker
@@ -32,9 +34,13 @@ class WorkerSupervisor:
         self,
         writer: aiosqlite.Connection,
         write_queue: WriteQueue,
+        read_pool: ReadPool | None = None,
+        command_bus: InternalCommandBus | None = None,
     ) -> None:
         self._writer = writer
         self._write_queue = write_queue
+        self._read_pool = read_pool
+        self._command_bus = command_bus
         self._workers: list[WorkerEntry] = []
         self._tasks: list[asyncio.Task[None]] = []
 
@@ -49,7 +55,18 @@ class WorkerSupervisor:
             EventCompactionWorker,
         ]
         for cls in worker_defs:
-            entry = WorkerEntry(worker=cls(write_queue=self._write_queue))
+            worker: BaseWorker
+            if cls is OutboxWorker:
+                worker = cls(write_queue=self._write_queue, command_bus=self._command_bus)
+            elif cls is RuntimeWorker:
+                worker = cls(
+                    write_queue=self._write_queue,
+                    read_pool=self._read_pool,
+                    command_bus=self._command_bus,
+                )
+            else:
+                worker = cls(write_queue=self._write_queue)
+            entry = WorkerEntry(worker=worker)
             self._workers.append(entry)
             task = asyncio.create_task(self._run_worker(entry))
             self._tasks.append(task)
@@ -89,6 +106,10 @@ class WorkerSupervisor:
                     worker._state = "healthy"
                     await worker.work()
                     worker.mark_success()
+                    # Workers are polling loops.  Keep an idle worker from
+                    # spinning the event loop and continuously enqueuing
+                    # empty write transactions.
+                    await asyncio.sleep(1.0)
             except asyncio.CancelledError:
                 worker._state = "stopped"
                 return

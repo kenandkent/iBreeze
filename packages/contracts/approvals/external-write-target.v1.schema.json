@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/approvals/external-write-target.v1.schema.json",
+  "title": "External write approval target",
+  "description": "Canonical target binding shared by Sidecar approvals and the Rust external-write reverse RPC.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "target_realpath",
+    "operation",
+    "expected_old_sha256",
+    "source_sha256",
+    "workspace_grant_id"
+  ],
+  "properties": {
+    "target_realpath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/[^\\u0000\\r\\n]*$"
+    },
+    "operation": {
+      "type": "string",
+      "enum": ["create_file", "replace_file", "delete_file", "create_directory"]
+    },
+    "expected_old_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "workspace_grant_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"enum": ["create_file", "replace_file"]}}
+      },
+      "then": {
+        "required": ["source_sha256"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"operation": {"enum": ["delete_file", "create_directory"]}}
+      },
+      "then": {
+        "properties": {"source_sha256": {"type": "null"}}
+      }
+    }
+  ]
+}

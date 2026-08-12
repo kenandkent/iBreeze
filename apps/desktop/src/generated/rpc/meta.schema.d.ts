@@ -25,4 +25,8 @@ export interface RPCMeta {
    * Idempotency key for write methods; null for read methods
    */
   idempotency_key?: string;
+  /**
+   * Absolute request deadline used by the IPC multiplexer
+   */
+  deadline_at?: string;
 }

@@ -343,8 +343,9 @@ pub struct Company {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Company {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub base_profile_version_id: String,
+    pub general_manager_name: String,
+    pub introduction: String,
     pub name: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -373,6 +374,12 @@ pub struct Company {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Company {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<FilterStruct>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<StatusEnum>,
 }
@@ -409,6 +416,7 @@ pub struct Conversation {
 #[serde(deny_unknown_fields)]
 pub struct Conversation {
     pub company_id: String,
+    pub title: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -449,6 +457,8 @@ pub struct Conversation {
     pub company_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<FilterStruct>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
 }
@@ -508,7 +518,11 @@ pub struct Department {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Department {
+    pub base_profile_version_id: String,
     pub company_id: String,
+    pub function_description: String,
+    pub leader_name: String,
+    pub name: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -539,6 +553,8 @@ pub struct Department {
     pub company_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<FilterStruct>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
 }
@@ -691,7 +707,11 @@ pub struct Employee {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Employee {
+    pub base_profile_version_id: String,
     pub company_id: String,
+    pub department_id: String,
+    pub display_name: String,
+    pub workflow_role: WorkflowRoleEnum,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -722,6 +742,8 @@ pub struct Employee {
     pub company_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<FilterStruct>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
 }
@@ -948,7 +970,15 @@ pub struct Profile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_profile: Option<BaseProfileStruct>,
     pub company_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credential_ref: Option<String>,
     pub employee_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_binding_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_protocol: Option<ProviderProtocolEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_release_id: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1040,7 +1070,15 @@ pub struct Profile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_model: Option<String>,
     pub company_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credential_ref: Option<String>,
     pub draft_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_binding_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_protocol: Option<ProviderProtocolEnum>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_release_id: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1132,6 +1170,7 @@ pub struct Review {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Review {
+    pub company_id: String,
     pub review_id: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1142,6 +1181,7 @@ pub struct Review {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Review {
+    pub company_id: String,
     pub review_id: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1153,8 +1193,12 @@ pub struct Review {
 #[serde(deny_unknown_fields)]
 pub struct Review {
     pub company_id: String,
+    pub expected_version: i64,
+    pub fix_run_id: String,
     pub issue_id: String,
-    pub resolution: String,
+    pub resolution_artifact_sha256: String,
+    pub resolution_summary: String,
+    pub retest_result_id: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1183,19 +1227,14 @@ pub struct Review {
 #[serde(deny_unknown_fields)]
 pub struct RpcMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ipc_session_id: Option<String>,
     pub trace_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_session_id: Option<String>,
-}
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RpcOwnership {
-    pub rust_core: Vec<String>,
-    pub sidecar: Vec<String>,
-    pub supervisor_only: Vec<String>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1306,10 +1345,23 @@ pub struct Runtime {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
+    pub adapter_type: AdapterTypeEnum,
     pub agent_id: String,
+    pub availability_snapshot_id: String,
     pub company_id: String,
+    pub company_task_id: String,
+    pub conversation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub department_task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub employee_task_id: Option<String>,
+    pub execution_snapshot_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    pub model_id: String,
+    pub run_purpose: RunPurposeEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub work_item_id: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

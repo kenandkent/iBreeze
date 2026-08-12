@@ -6,5 +6,6 @@
  */
 
 export interface ReviewListissuesRequest {
+  company_id: string;
   review_id: string;
 }

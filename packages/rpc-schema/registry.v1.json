@@ -18,6 +18,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "method": {
             "type": "string"

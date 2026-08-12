@@ -1,6 +1,6 @@
 [package]
 name = "ibreeze-desktop-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 
@@ -20,6 +20,7 @@ reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
+semver = "1"
 thiserror = "2"
 secrecy = "0.10"
 zeroize = { version = "1", features = ["derive", "serde"] }

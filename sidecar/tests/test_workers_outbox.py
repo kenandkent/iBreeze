@@ -86,8 +86,20 @@ class TestOutboxWorkerWorkSuccess:
     async def test_inner_deliver_with_rows(self, mock_logger):
         conn = AsyncMock()
         cursor = AsyncMock()
-        row_1 = {"id": "evt-1"}
-        row_2 = {"id": "evt-2"}
+        row_1 = {
+            "id": "evt-1",
+            "topic": "company_task.status_changed",
+            "payload_json": "{}",
+            "domain_event_id": "domain-1",
+            "attempts": 0,
+        }
+        row_2 = {
+            "id": "evt-2",
+            "topic": "company_task.status_changed",
+            "payload_json": "{}",
+            "domain_event_id": "domain-2",
+            "attempts": 0,
+        }
         cursor.fetchall = AsyncMock(return_value=[row_1, row_2])
         conn.execute = AsyncMock(return_value=cursor)
         conn.commit = AsyncMock()
@@ -108,8 +120,9 @@ class TestOutboxWorkerWorkSuccess:
         ]
         assert len(update_calls) == 2
 
-        # Should commit once
-        conn.commit.assert_awaited_once()
+        # WriteQueue owns the transaction boundary; the worker never commits
+        # the connection directly.
+        conn.commit.assert_not_awaited()
 
         mock_logger.info.assert_called_once_with(
             "OutboxWorker delivered %d events", 2
@@ -146,6 +159,151 @@ class TestOutboxWorkerWorkSuccess:
         assert "status = 'pending'" in str(captured_sql)
         assert "next_attempt_at <= ?" in str(captured_sql)
         assert "LIMIT ?" in str(captured_sql)
+
+
+class TestOutboxWorkerMalformedRows:
+    """Cover the malformed / filtered / dispatch branches of the deliver loop."""
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_marks_non_string_topic_row(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {"id": "evt-x", "topic": 123, "payload_json": "{}", "attempts": 0}
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq)
+        await w.work()
+
+        updates = [str(c.args) for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
+        assert any("MALFORMED_OUTBOX_ROW" in u for u in updates)
+        mock_logger.info.assert_not_called()
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_fails_unknown_topic(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {"id": "evt-y", "topic": "foo.bar", "payload_json": "{}", "attempts": 0}
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq)
+        await w.work()
+
+        updates = [str(c.args) for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
+        assert any("UNKNOWN_OUTBOX_TOPIC:foo.bar" in u for u in updates)
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_fails_malformed_payload(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {"id": "evt-z", "topic": "run.completed", "payload_json": "{bad", "attempts": 0}
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq)
+        await w.work()
+
+        updates = [str(c.args) for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
+        assert any("MALFORMED_OUTBOX_PAYLOAD" in u for u in updates)
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_skips_when_state_outside_trigger(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {
+            "id": "evt-a",
+            "topic": "employee_task.status_changed",
+            "payload_json": '{"to_state":"submitted"}',
+            "attempts": 0,
+        }
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq)
+        await w.work()
+
+        updates = [str(c.args) for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
+        assert any("delivered" in u for u in updates)
+        mock_logger.info.assert_called_once_with("OutboxWorker delivered %d events", 1)
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_dispatches_internal_command(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {
+            "id": "evt-b",
+            "topic": "employee_task.status_changed",
+            "payload_json": '{"to_state":"accepted","company_id":"c1","aggregate_id":"t1","expected_version":1}',
+            "attempts": 0,
+        }
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+        bus = AsyncMock()
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq, command_bus=bus)
+        await w.work()
+
+        bus.dispatch.assert_awaited_once()
+        args, kwargs = bus.dispatch.await_args
+        assert args[0] == "EvaluateDepartmentReadiness"
+        assert kwargs["connection"] is conn
+        updates = [str(c.args) for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
+        assert any("delivered" in u for u in updates)
+
+    @patch("ibreeze.workers.outbox.logger")
+    async def test_raises_when_bus_missing(self, mock_logger):
+        conn = AsyncMock()
+        cursor = AsyncMock()
+        row = {
+            "id": "evt-c",
+            "topic": "employee_task.status_changed",
+            "payload_json": '{"to_state":"accepted","company_id":"c1","aggregate_id":"t1","expected_version":1}',
+            "attempts": 0,
+        }
+        cursor.fetchall = AsyncMock(return_value=[row])
+        conn.execute = AsyncMock(return_value=cursor)
+
+        async def submit_side_effect(*args, **_kwargs):
+            _, _, _, fn = args
+            return await fn(conn)
+
+        wq = AsyncMock()
+        wq.submit = AsyncMock(side_effect=submit_side_effect)
+        w = OutboxWorker(write_queue=wq)
+        await w.work()
+
+        mock_logger.exception.assert_called_once_with("OutboxWorker deliver failed")
 
 
 class TestOutboxWorkerWorkException:

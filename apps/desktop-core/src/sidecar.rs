@@ -130,6 +130,8 @@ impl SidecarSupervisor {
             .arg(app_version)
             .arg("--protocol-version")
             .arg(PROTOCOL_VERSION.to_string())
+            .arg("--launch-id")
+            .arg(launch_id.to_string())
             .arg("--backend-origin")
             .arg(profile.backend_origin)
             .arg("--app-user-id")
@@ -241,13 +243,20 @@ impl SidecarSupervisor {
 
     pub async fn check_health(&self) -> Result<(), AppError> {
         let client = self.client().await?;
-        tokio::time::timeout(
+        let health = tokio::time::timeout(
             HEALTH_TIMEOUT,
             client.call::<Value>("system.health", serde_json::json!({}), None),
         )
         .await
-        .map_err(|_| AppError::Sidecar("Sidecar health check timed out".to_owned()))?
-        .map(|_: Value| ())
+        .map_err(|_| AppError::Sidecar("Sidecar health check timed out".to_owned()))??;
+        match health.get("status").and_then(Value::as_str) {
+            Some("healthy") => Ok(()),
+            Some("degraded") => Err(AppError::Sidecar("SIDECAR_DEGRADED".to_owned())),
+            Some(status) => Err(AppError::Sidecar(format!("SIDECAR_UNHEALTHY:{status}"))),
+            None => Err(AppError::Sidecar(
+                "SIDECAR_HEALTH_CONTRACT_INVALID".to_owned(),
+            )),
+        }
     }
 
     pub async fn is_throttled(&self) -> bool {

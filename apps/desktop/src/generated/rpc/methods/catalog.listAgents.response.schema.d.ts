@@ -9,6 +9,7 @@ export interface CatalogListagentsResponse {
   agents: {
     agent_id: string;
     name: string;
+    agent_key?: string;
     version: string;
     capabilities?: string[];
   }[];

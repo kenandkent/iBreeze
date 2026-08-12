@@ -85,7 +85,7 @@ async def test_api_model_rejects_unbounded_loop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cli_adapter_uses_argv_and_workspace(
+async def test_cli_adapter_requires_rust_execution_snapshot(
     tmp_path: Path,
 ) -> None:
     executable = tmp_path / "agent"
@@ -96,15 +96,12 @@ async def test_cli_adapter_uses_argv_and_workspace(
     executable.chmod(0o700)
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    result = await CliAdapter(executable).run(
-        ["argument with spaces"],
-        workspace=workspace,
-        timeout_seconds=2,
-    )
-    assert result.exit_code == 0
-    assert result.stdout.decode() == f"{workspace}|argument with spaces"
-    assert result.stderr == b""
-    assert result.timed_out is False
+    with pytest.raises(ValueError, match="AGENT_TYPE_UNSUPPORTED"):
+        await CliAdapter(executable).run(
+            ["argument with spaces"],
+            workspace=workspace,
+            timeout_seconds=2,
+        )
 
 
 def test_cli_adapter_rejects_non_executable(tmp_path: Path) -> None:

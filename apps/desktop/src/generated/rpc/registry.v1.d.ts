@@ -12,7 +12,7 @@ export interface CanonicalRPCMethodRegistry {
   version: 1;
   methods: {
     method: string;
-    owner: "rust" | "sidecar" | "supervisor";
+    owner: "rust_core" | "sidecar" | "supervisor_only";
     kind: "read" | "write" | "stream";
     scope: "none" | "profile" | "company";
     request_schema: string;
@@ -20,6 +20,5 @@ export interface CanonicalRPCMethodRegistry {
     idempotency_ttl_seconds: number;
     allowed_errors: string[];
     empty_request: boolean;
-    [k: string]: any | undefined;
   }[];
 }

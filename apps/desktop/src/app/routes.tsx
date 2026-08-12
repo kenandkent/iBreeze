@@ -154,6 +154,10 @@ export const routes: RouteObject[] = [
         element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
       },
       {
+        path: 'reviews/:reviewId',
+        element: <SuspenseWrapper><ReviewPage /></SuspenseWrapper>,
+      },
+      {
         path: 'audit-logs',
         element: <SuspenseWrapper><AuditLogPage /></SuspenseWrapper>,
       },

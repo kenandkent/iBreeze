@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -21,7 +22,7 @@ class TestOutboxWriter:
         writer = OutboxWriter()
         session = AsyncMock()
         session.connection = AsyncMock()
-        record = OutboxRecord(topic="test.topic", payload_json='{"key": "value"}')
+        record = OutboxRecord(topic="test.topic", payload_json='{"key": "value"}', domain_event_id=uuid4())
         await writer.enqueue_all(session, (record,))
         session.connection.execute.assert_called_once()
 
@@ -30,8 +31,8 @@ class TestOutboxWriter:
         session = AsyncMock()
         session.connection = AsyncMock()
         records = (
-            OutboxRecord(topic="t1", payload_json="{}"),
-            OutboxRecord(topic="t2", payload_json="{}"),
+            OutboxRecord(topic="t1", payload_json="{}", domain_event_id=uuid4()),
+            OutboxRecord(topic="t2", payload_json="{}", domain_event_id=uuid4()),
         )
         await writer.enqueue_all(session, records)
         assert session.connection.execute.call_count == 2

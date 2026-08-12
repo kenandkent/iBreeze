@@ -88,7 +88,9 @@ async def handle_frame(
         except (ValueError, TypeError):
             pass
 
-    is_reverse = isinstance(rpc_id, str) and rpc_id.startswith("sidecar:")
+    # Method registration, not the caller-controlled id, defines the
+    # reverse-RPC direction.
+    is_reverse = reverse_table.has_method(method)
 
     try:
         if is_reverse:

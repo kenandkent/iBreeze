@@ -10,6 +10,10 @@ export interface ProfileCreatedraftRequest {
   employee_id: string;
   agent_cli?: string;
   api_model?: string;
+  credential_ref?: string;
+  provider_release_id?: string;
+  model_binding_id?: string;
+  provider_protocol?: "openai_responses" | "anthropic_messages" | "openai_chat_completions";
   base_profile?: {
     [k: string]: any | undefined;
   };

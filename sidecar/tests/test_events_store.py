@@ -32,7 +32,7 @@ class TestDomainEventStore:
             trace_id="trace-1",
         )
         await store.append_all(session, (event,))
-        assert session.connection.execute.call_count == 2
+        assert session.connection.execute.call_count == 1
 
     async def test_append_all_multiple(self):
         store = DomainEventStore()
@@ -61,7 +61,7 @@ class TestDomainEventStore:
             ),
         )
         await store.append_all(session, events)
-        assert session.connection.execute.call_count == 4
+        assert session.connection.execute.call_count == 2
 
     async def test_append_all_without_company_id(self):
         store = DomainEventStore()
@@ -78,6 +78,6 @@ class TestDomainEventStore:
             trace_id="trace-1",
         )
         await store.append_all(session, (event,))
-        assert session.connection.execute.call_count == 2
+        assert session.connection.execute.call_count == 1
         call_kwargs = session.connection.execute.call_args_list[0]
         assert call_kwargs[0][1][1] is None

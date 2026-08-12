@@ -59,8 +59,8 @@ export const queryKeys = {
   auditLogList: (ctx: QueryCtx) =>
     [...queryKeys.all(ctx), 'auditLogs'] as const,
 
-  reviewIssueList: (ctx: QueryCtx, companyId: string, artifactId: string) =>
-    [...queryKeys.all(ctx), companyId, 'reviewIssues', artifactId] as const,
+  reviewIssueList: (ctx: QueryCtx, companyId: string, reviewId: string) =>
+    [...queryKeys.all(ctx), companyId, 'reviewIssues', reviewId] as const,
 
   orchestrationList: (ctx: QueryCtx) =>
     [...queryKeys.all(ctx), 'orchestrations'] as const,

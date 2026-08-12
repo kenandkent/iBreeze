@@ -90,10 +90,14 @@ describe('systemHealth', () => {
     vi.clearAllMocks();
   });
 
-  it('calls system_health invoke directly', async () => {
+  it('calls system.health through the canonical RPC command', async () => {
     mockInvoke.mockResolvedValue({ status: 'ok' });
     const result = await systemHealth();
-    expect(mockInvoke).toHaveBeenCalledWith('system_health');
+    expect(mockInvoke).toHaveBeenCalledWith('rpc_request', {
+      method: 'system.health',
+      params: {},
+      idempotency_key: null,
+    });
     expect(result).toEqual({ status: 'ok' });
   });
 });

@@ -13,8 +13,10 @@ pub const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 pub struct RpcMeta {
     pub trace_id: Uuid,
     pub ipc_session_id: Option<Uuid>,
-    pub window_session_id: Uuid,
+    pub window_session_id: Option<Uuid>,
     pub idempotency_key: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,8 +89,9 @@ mod tests {
             RpcMeta {
                 trace_id: Uuid::new_v4(),
                 ipc_session_id: Some(Uuid::new_v4()),
-                window_session_id: Uuid::new_v4(),
+                window_session_id: Some(Uuid::new_v4()),
                 idempotency_key: None,
+                deadline_at: None,
             },
         );
         assert!(request.id.starts_with("core:"));

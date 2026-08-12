@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
@@ -36,6 +37,7 @@ class TestIdempotencyStore:
             "status": "completed",
             "response_json": '{"ok": true}',
             "error_code": None,
+            "request_sha256": "sha",
         }
         session.connection.execute.return_value = cursor
         store = IdempotencyStore()
@@ -48,6 +50,7 @@ class TestIdempotencyStore:
             "status": "failed",
             "response_json": None,
             "error_code": "BAD_REQUEST",
+            "request_sha256": "sha",
         }
         session.connection.execute.return_value = cursor
         store = IdempotencyStore()
@@ -60,6 +63,7 @@ class TestIdempotencyStore:
             "status": "processing",
             "response_json": None,
             "error_code": None,
+            "request_sha256": "sha",
         }
         session.connection.execute.return_value = cursor
         store = IdempotencyStore()
@@ -75,7 +79,9 @@ class TestIdempotencyStore:
         session.connection.execute.assert_called_once()
 
     async def test_claim_returns_false_on_duplicate(self, session):
-        session.connection.execute.side_effect = Exception("UNIQUE constraint")
+        session.connection.execute.side_effect = sqlite3.IntegrityError(
+            "UNIQUE constraint failed: idempotency.idempotency_key"
+        )
         store = IdempotencyStore()
         result = await store.claim(session, "key1", "sha")
         assert result is False

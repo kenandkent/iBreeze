@@ -7,4 +7,8 @@
 
 export interface DepartmentCreateRequest {
   company_id: string;
+  name: string;
+  function_description: string;
+  leader_name: string;
+  base_profile_version_id: string;
 }

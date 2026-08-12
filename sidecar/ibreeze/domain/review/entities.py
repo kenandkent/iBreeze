@@ -46,3 +46,7 @@ class ReviewIssue:
     ]
     state: str
     version: int
+    assignee_employee_id: UUID | None = None
+    evidence_refs: tuple[str, ...] = ()
+    verifier_employee_id: UUID | None = None
+    rejection_reason: str | None = None

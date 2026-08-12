@@ -34,6 +34,7 @@ pub struct CatalogManifest {
     pub resources: Vec<ItemStruct>,
     pub signature: String,
     pub signature_algorithm: String,
+    pub signing_key_id: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -73,6 +74,24 @@ pub struct ReviewReport {
     pub reviewer_employee_id: String,
     pub run_id: String,
     pub submitted_at: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalWriteTarget {
+    pub expected_old_sha256: String,
+    pub operation: OperationEnum,
+    pub source_sha256: String,
+    pub target_realpath: String,
+    pub workspace_grant_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UncertainRecoveryTarget {
+    pub action: serde_json::Value,
+    pub input_sha256: String,
+    pub prior_started_at: String,
+    pub run_id: String,
+    pub tool_execution_id: String,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -181,16 +200,11 @@ pub struct Company {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompanyTask {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregate_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_state: Option<FromStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_state: Option<ToStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<i64>,
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
+    pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -233,16 +247,11 @@ pub struct Department {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DepartmentTask {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregate_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_state: Option<FromStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_state: Option<ToStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<i64>,
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
+    pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -279,16 +288,11 @@ pub struct Employee {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EmployeeTask {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aggregate_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub company_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_state: Option<FromStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_state: Option<ToStateEnum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<i64>,
+    pub aggregate_id: String,
+    pub company_id: String,
+    pub from_state: FromStateEnum,
+    pub to_state: ToStateEnum,
+    pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -372,20 +376,21 @@ pub struct Review {
     pub assignment_id: String,
     pub company_id: String,
     pub reviewer_employee_id: String,
-    pub verdict: VerdictEnum,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Review {
     pub aggregate_id: String,
-    pub assignee_employee_id: String,
+    pub assignee_employee_id: serde_json::Value,
     pub company_id: String,
     pub evidence_refs: Vec<String>,
     pub from_state: FromStateEnum,
     pub issue_id: String,
+    pub rejection_reason: serde_json::Value,
     pub severity: SeverityEnum,
     pub to_state: ToStateEnum,
+    pub verifier_employee_id: serde_json::Value,
     pub version: i64,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

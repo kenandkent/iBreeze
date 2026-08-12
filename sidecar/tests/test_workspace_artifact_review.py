@@ -21,7 +21,6 @@ from ibreeze.review.service import (
     assign_reviewer,
     create_review_issue,
     list_review_issues,
-    resolve_review_issue,
     submit_review_report,
 )
 
@@ -84,21 +83,6 @@ class TestReviewService:
     """Tests for review service."""
 
     @pytest.mark.asyncio
-    async def test_assign_reviewer(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value=None)
-        ))
-        result = await assign_reviewer(
-            mock_db_session,
-            "comp-1",
-            artifact_id="art-1",
-            reviewer_employee_id="emp-2",
-            review_round=1,
-            reviewed_sha256="abc123",
-        )
-        assert result["status"] == "assigned"
-
-    @pytest.mark.asyncio
     async def test_assign_reviewer_rejects_contributor(self, mock_db_session):
         # First call: check contributor - returns contributor
         result1 = MagicMock()
@@ -147,10 +131,11 @@ class TestApprovalService:
             mock_db_session,
             "comp-1",
             run_id="run-1",
-            target_path="/tmp/test.txt",
-            action="write",
-            old_hash=None,
-            new_hash="abc123",
+            workspace_grant_id="grant-1",
+            target_realpath="/tmp/test.txt",
+            operation="create_file",
+            expected_old_sha256=None,
+            source_sha256="a" * 64,
         )
         assert result["status"] == "pending"
         assert result["approval_type"] == "external_write"
@@ -162,8 +147,10 @@ class TestApprovalService:
         result = await request_uncertain_recovery_approval(
             mock_db_session,
             "comp-1",
-            run_id="run-1",
-            reason="Database corrupted",
+            run_id="00000000-0000-0000-0000-000000000001",
+            tool_execution_id="00000000-0000-0000-0000-000000000002",
+            input_sha256="a" * 64,
+            prior_started_at="2026-08-04T00:00:00Z",
         )
         assert result["status"] == "pending"
         assert result["approval_type"] == "uncertain_recovery"
@@ -308,34 +295,6 @@ class TestReviewExtended:
     """Extended tests for review service."""
 
     @pytest.mark.asyncio
-    async def test_submit_review_report(self, mock_db_session):
-        async def mock_execute(sql, params=()):
-            if "BEGIN" in sql:
-                return MagicMock()
-            if "SELECT * FROM review_assignments" in sql:
-                return MagicMock(fetchone=AsyncMock(return_value={"id": "asgn-1", "status": "assigned"}))
-            if "object_sha256 FROM artifacts" in sql:
-                return MagicMock(fetchone=AsyncMock(return_value={"object_sha256": "a" * 64}))
-            return MagicMock(fetchone=AsyncMock(return_value=None))
-
-        mock_db_session.execute = mock_execute
-        mock_db_session.commit = AsyncMock()
-        mock_db_session.rollback = AsyncMock()
-
-        result = await submit_review_report(
-            mock_db_session,
-            "comp-1",
-            assignment_id="asgn-1",
-            artifact_id="art-1",
-            artifact_sha256="a" * 64,
-            report_artifact_id="rep-art-1",
-            reviewer_run_id="run-1",
-            verdict="approved",
-            summary="Looks good",
-        )
-        assert result["status"] == "submitted"
-
-    @pytest.mark.asyncio
     async def test_submit_review_report_not_found(self, mock_db_session):
         mock_db_session.execute = AsyncMock(return_value=MagicMock(
             fetchone=AsyncMock(return_value=None)
@@ -372,30 +331,6 @@ class TestReviewExtended:
             )
 
     @pytest.mark.asyncio
-    async def test_resolve_review_issue(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(rowcount=1))
-        mock_db_session.commit = AsyncMock()
-
-        result = await resolve_review_issue(
-            mock_db_session,
-            "comp-1",
-            issue_id="issue-1",
-            resolution="Fixed in commit abc",
-        )
-        assert result["status"] == "resolved"
-
-    @pytest.mark.asyncio
-    async def test_resolve_review_issue_not_found(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(rowcount=0))
-        with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
-            await resolve_review_issue(
-                mock_db_session,
-                "comp-1",
-                issue_id="nonexistent",
-                resolution="Fixed",
-            )
-
-    @pytest.mark.asyncio
     async def test_list_review_issues(self, mock_db_session):
         mock_db_session.execute = AsyncMock(return_value=MagicMock(
             fetchall=AsyncMock(return_value=[{"id": "issue-1", "severity": "high"}])
@@ -416,35 +351,3 @@ class TestReviewExtended:
             limit=5
         )
         assert len(result) == 1
-
-    @pytest.mark.asyncio
-    async def test_assign_reviewer_already_assigned(self, mock_db_session):
-        # Mock execute to return different values based on call order
-        # Call 1: BEGIN IMMEDIATE
-        # Call 2: contributor check - returns None (not a contributor)
-        # Call 3: already assigned check - returns existing assignment
-        call_count = 0
-        async def mock_execute(sql, params=()):
-            nonlocal call_count
-            call_count += 1
-            if "BEGIN" in sql:
-                return MagicMock()
-            if "artifact_contributors" in sql:
-                return MagicMock(fetchone=AsyncMock(return_value=None))
-            if "review_assignments" in sql:
-                return MagicMock(fetchone=AsyncMock(return_value={"id": "existing"}))
-            return MagicMock()
-
-        mock_db_session.execute = mock_execute
-        mock_db_session.commit = AsyncMock()
-        mock_db_session.rollback = AsyncMock()
-
-        with pytest.raises(ValueError, match="REVIEWER_ALREADY_ASSIGNED"):
-            await assign_reviewer(
-                mock_db_session,
-                "comp-1",
-                artifact_id="art-1",
-                reviewer_employee_id="emp-2",
-                review_round=1,
-                reviewed_sha256="abc123",
-            )

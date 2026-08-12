@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import uuid
 from unittest.mock import ANY, AsyncMock, Mock, patch
 from uuid import UUID
 
 import pytest
 
+from ibreeze.application.review_aggregation import AggregationOutcome
 from ibreeze.application.review_handlers import (
     CloseIssueHandler,
     RejectIssueHandler,
@@ -28,7 +30,27 @@ from ibreeze.domain.review.commands import (
 )
 from ibreeze.domain.review.entities import ReviewAssignment, ReviewIssue, ReviewReport
 from ibreeze.domain.review.repository import ReviewRepository
+from ibreeze.persistence.types import DomainEventRecord, OutboxRecord
 from ibreeze.persistence.unit_of_work import CommandResult
+
+_REAL_MOCK = Mock
+_DEFAULT_COMPANY_ID = UUID("00000000-0000-0000-0000-000000000099")
+
+
+def Mock(*args, **kwargs):  # noqa: N802
+    """Create request mocks with the required company scope by default."""
+    spec = kwargs.get("spec")
+    if spec in {
+        StartReview,
+        SubmitReview,
+        StartIssueFix,
+        ResolveIssue,
+        VerifyIssue,
+        CloseIssue,
+        RejectIssue,
+    }:
+        kwargs.setdefault("company_id", _DEFAULT_COMPANY_ID)
+    return _REAL_MOCK(*args, **kwargs)
 
 
 @pytest.fixture
@@ -38,6 +60,7 @@ def repo():
     repo.lock_issue = AsyncMock()
     repo.transition = AsyncMock()
     repo.transition_issue = AsyncMock()
+    repo.resolve_issue_with_evidence = AsyncMock()
     repo.create_report = AsyncMock()
     repo.create_issues = AsyncMock()
     return repo
@@ -125,204 +148,156 @@ class TestSubmitReviewGuards:
         return Mock(spec=ReviewRepository)
 
     async def _assert_guards_ok(self, guards_repo, session, assignment, request):
-        guards = SubmitReviewGuards(guards_repo)
-        await guards.validate(session, assignment, request)
+        await SubmitReviewGuards(guards_repo).validate(session, assignment, request)
 
     async def _assert_guards_raises(self, guards_repo, session, assignment, request, expected_msg):
-        guards = SubmitReviewGuards(guards_repo)
         with pytest.raises(ValueError, match=expected_msg):
-            await guards.validate(session, assignment, request)
+            await SubmitReviewGuards(guards_repo).validate(session, assignment, request)
+
+    @staticmethod
+    def _session(
+        request: SubmitReview,
+        reviewer_employee_id: UUID,
+        *,
+        contributor: bool = False,
+    ) -> AsyncMock:
+        session = AsyncMock()
+
+        async def execute(sql: str, _params: tuple[object, ...] = ()):
+            if "FROM agent_runs" in sql:
+                row = {
+                    "employee_id": str(reviewer_employee_id),
+                    "run_purpose": "review",
+                    "status": "succeeded",
+                    "company_id": str(request.company_id),
+                }
+            elif "object_sha256" in sql:
+                row = {
+                    "object_sha256": request.reviewed_sha256,
+                    "is_current": 1,
+                    "company_id": str(request.company_id),
+                }
+            elif "artifact_type" in sql:
+                row = {
+                    "artifact_type": "review_report",
+                    "company_id": str(request.company_id),
+                    "created_by_type": "agent",
+                    "created_by_run_id": str(request.reviewer_run_id),
+                }
+            elif "artifact_contributors" in sql:
+                row = {"1": 1} if contributor else None
+            elif "FROM employees" in sql:
+                row = {"1": 1}
+            elif "FROM artifacts" in sql:
+                row = {"1": 1}
+            else:
+                row = None
+            return _fetchone_cursor(row)
+
+        session.execute = AsyncMock(side_effect=execute)
+        return session
+
+    @staticmethod
+    def _request(assignment: ReviewAssignment, verdict: str, issues: tuple[ReviewIssueInput, ...], company_id: UUID):
+        return SubmitReview(
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=assignment.artifact_id,
+            reviewed_sha256=assignment.artifact_sha256,
+            report_artifact_id=uuid.uuid4(),
+            verdict=verdict,
+            issues=issues,
+            expected_assignment_version=assignment.version,
+        )
+
+    @staticmethod
+    def _issue(assignment: ReviewAssignment, *, severity: str = "high", category: str = "functional"):
+        return ReviewIssueInput(
+            client_issue_id=uuid.uuid4(), severity=severity, category=category,
+            description="test", expected="ok", actual="bad",
+            evidence_refs=(assignment.artifact_id,), suggested_fix="fix",
+            assignee_employee_id=None,
+        )
 
     async def test_valid_pass_verdict(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        request = Mock(
-            spec=SubmitReview,
-            company_id=company_id,
-            assignment_id=assignment.id,
-            artifact_id=uuid.uuid4(),
-            reviewer_employee_id=uuid.uuid4(),
-            expected_assignment_version=1,
-            verdict="pass",
-            issues=(),
+        request = self._request(assignment, "pass", (), company_id)
+        await self._assert_guards_ok(
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
         )
-        await self._assert_guards_ok(guards_repo, session, assignment, request)
 
     async def test_valid_needs_changes_verdict(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="in_review", version=1)
-        issue_input = Mock(
-            spec=ReviewIssueInput,
-            severity="high",
-            category="functional",
-            description="test",
-            expected="ok",
-            actual="bad",
-            evidence_refs=(),
-            suggested_fix="fix it",
-            assignee_employee_id=None,
+        request = self._request(assignment, "needs_changes", (self._issue(assignment),), company_id)
+        await self._assert_guards_ok(
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
         )
-        request = Mock(
-            spec=SubmitReview,
-            company_id=company_id,
-            assignment_id=assignment.id,
-            artifact_id=uuid.uuid4(),
-            reviewer_employee_id=uuid.uuid4(),
-            expected_assignment_version=1,
-            verdict="needs_changes",
-            issues=(issue_input,),
-        )
-        await self._assert_guards_ok(guards_repo, session, assignment, request)
 
     async def test_valid_failed_verdict(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        blocker = Mock(
-            spec=ReviewIssueInput,
-            severity="blocker",
-            category="review_execution",
-            description="blocker exec",
-            expected="",
-            actual="",
-            evidence_refs=(),
-            suggested_fix="",
-            assignee_employee_id=None,
+        issue = self._issue(assignment, severity="blocker", category="review_execution")
+        request = self._request(assignment, "failed", (issue,), company_id)
+        await self._assert_guards_ok(
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
         )
-        request = Mock(
-            spec=SubmitReview,
-            company_id=company_id,
-            assignment_id=assignment.id,
-            artifact_id=uuid.uuid4(),
-            reviewer_employee_id=uuid.uuid4(),
-            expected_assignment_version=1,
-            verdict="failed",
-            issues=(blocker,),
-        )
-        await self._assert_guards_ok(guards_repo, session, assignment, request)
 
     async def test_state_not_assigned_nor_in_review(self, guards_repo, company_id):
-        session = AsyncMock()
         assignment = _make_assignment(company_id=company_id, state="submitted", version=1)
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="pass",
-            issues=(),
-        )
-        await self._assert_guards_raises(
-            guards_repo, session, assignment, request, "STATE_TRANSITION_INVALID",
-        )
+        request = self._request(assignment, "pass", (), company_id)
+        await self._assert_guards_raises(guards_repo, AsyncMock(), assignment, request, "STATE_TRANSITION_INVALID")
 
     async def test_version_mismatch(self, guards_repo, company_id):
-        session = AsyncMock()
         assignment = _make_assignment(company_id=company_id, state="assigned", version=2)
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="pass",
-            issues=(),
+        request = SubmitReview(
+            company_id=company_id, assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=assignment.artifact_id,
+            reviewed_sha256=assignment.artifact_sha256, report_artifact_id=uuid.uuid4(),
+            verdict="pass", issues=(), expected_assignment_version=1,
         )
-        await self._assert_guards_raises(
-            guards_repo, session, assignment, request, "OPTIMISTIC_LOCK_CONFLICT",
-        )
+        await self._assert_guards_raises(guards_repo, AsyncMock(), assignment, request, "OPTIMISTIC_LOCK_CONFLICT")
 
     async def test_self_assignment(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor({"1": 1}))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        request = Mock(
-            spec=SubmitReview,
-            assignment_id=assignment.id,
-            expected_assignment_version=1,
-            verdict="pass",
-            issues=(),
-        )
+        request = self._request(assignment, "pass", (), company_id)
         await self._assert_guards_raises(
-            guards_repo, session, assignment, request, "REVIEW_SELF_ASSIGNMENT",
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id, contributor=True),
+            assignment,
+            request,
+            "REVIEW_SELF_ASSIGNMENT",
         )
 
     async def test_verdict_pass_with_issues(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="pass",
-            issues=(Mock(spec=ReviewIssueInput),),
-        )
+        request = self._request(assignment, "pass", (self._issue(assignment),), company_id)
         await self._assert_guards_raises(
-            guards_repo, session, assignment, request, "VERDICT_PASS_WITH_ISSUES",
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            "VERDICT_PASS_WITH_ISSUES",
         )
 
     async def test_verdict_needs_changes_without_issues(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="needs_changes",
-            issues=(),
-        )
+        request = self._request(assignment, "needs_changes", (), company_id)
         await self._assert_guards_raises(
-            guards_repo, session, assignment, request,
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
             "VERDICT_NEEDS_CHANGES_WITHOUT_ISSUES",
         )
 
     async def test_verdict_failed_missing_blocker_review_exec(self, guards_repo, company_id):
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        non_blocker = Mock(
-            spec=ReviewIssueInput,
-            severity="high",
-            category="functional",
-            description="test",
-            expected="",
-            actual="",
-            evidence_refs=(),
-            suggested_fix="",
-            assignee_employee_id=None,
-        )
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="failed",
-            issues=(non_blocker,),
-        )
+        request = self._request(assignment, "failed", (self._issue(assignment),), company_id)
         await self._assert_guards_raises(
-            guards_repo, session, assignment, request,
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
             "VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION",
         )
 
     async def test_verdict_failed_blocker_wrong_category(self, guards_repo, company_id):
-        """Blocker issue exists but category is not review_execution — should fail."""
-        session = AsyncMock()
-        session.execute = AsyncMock(return_value=_fetchone_cursor(None))
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
-        blocker_wrong_cat = Mock(
-            spec=ReviewIssueInput,
-            severity="blocker",
-            category="security",
-            description="test",
-            expected="",
-            actual="",
-            evidence_refs=(),
-            suggested_fix="",
-            assignee_employee_id=None,
-        )
-        request = Mock(
-            spec=SubmitReview,
-            expected_assignment_version=1,
-            verdict="failed",
-            issues=(blocker_wrong_cat,),
-        )
+        issue = self._issue(assignment, severity="blocker", category="security")
+        request = self._request(assignment, "failed", (issue,), company_id)
         await self._assert_guards_raises(
-            guards_repo, session, assignment, request,
+            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
             "VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION",
         )
 
@@ -365,7 +340,7 @@ class TestStartReviewHandler:
 
         assert result["id"] == str(assignment.id)
         assert result["status"] == "in_review"
-        repo.lock_assignment.assert_awaited_once_with(ANY, request.assignment_id)
+        repo.lock_assignment.assert_awaited_once_with(ANY, request.assignment_id, request.company_id)
         repo.transition.assert_awaited_once_with(ANY, assignment, "in_review")
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
@@ -392,7 +367,7 @@ class TestStartReviewHandler:
             await self._run(uow, repo, request)
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
-    async def test_returns_command_result_with_events(self, mock_hash, repo, uow):
+    async def test_start_review_has_no_additional_events(self, mock_hash, repo, uow):
         assignment = _make_assignment(state="assigned", version=1)
         result_assignment = _make_assignment(
             id=assignment.id, company_id=assignment.company_id,
@@ -419,11 +394,9 @@ class TestStartReviewHandler:
 
         await handler.handle("ctx", request)
 
-        assert len(events_captured) == 1
-        assert events_captured[0]["event_type"] == "review.assigned"
-        assert events_captured[0]["aggregate_id"] == str(assignment.id)
-        assert events_captured[0]["from_state"] == "assigned"
-        assert events_captured[0]["to_state"] == "in_review"
+        # Assignment creation already emits review.assigned.  Starting the
+        # review only changes the aggregate state inside this command.
+        assert events_captured == []
 
 # ─── SubmitReviewHandler ──────────────────────────────────────────────────────
 
@@ -493,14 +466,7 @@ class TestSubmitReviewHandler:
 
         result = await handler.handle("ctx", request)
 
-        assert result["assignment"]["id"] == str(assignment.id)
-        assert result["assignment"]["state"] == "submitted"
-        assert result["assignment"]["version"] == 2
-        assert result["report"]["id"] == str(report.id)
-        assert result["report"]["verdict"] == "needs_changes"
-        assert len(result["issues"]) == 2
-        assert result["issues"][0]["id"] == str(issue1.id)
-        assert result["issues"][1]["id"] == str(issue2.id)
+        assert result == {"review_id": str(report.id)}
 
         guards.validate.assert_awaited_once()
         repo.create_report.assert_awaited_once()
@@ -544,9 +510,7 @@ class TestSubmitReviewHandler:
         uow.execute = AsyncMock(side_effect=fake_execute)
 
         result = await handler.handle("ctx", request)
-        assert result["assignment"]["state"] == "submitted"
-        assert result["report"]["verdict"] == "pass"
-        assert result["issues"] == []
+        assert result == {"review_id": str(report.id)}
 
     async def _run(self, uow, repo, guards, request):
         handler = SubmitReviewHandler(repo, guards, uow)
@@ -628,15 +592,125 @@ class TestSubmitReviewHandler:
         assert ev["event_type"] == "review.submitted"
         assert ev["aggregate_id"] == str(assignment.id)
         assert ev["aggregate_type"] == "review_assignment"
-        assert ev["from_state"] == "in_review"
-        assert ev["to_state"] == "submitted"
+        payload = json.loads(ev.payload_json)
+        assert payload["assignment_id"] == str(assignment.id)
+        assert payload["verdict"] == "pass"
         assert ev["company_id"] == str(company_id)
 
         assert len(captured["outbox"]) == 1
         ob = captured["outbox"][0]
-        assert ob["command_type"] == "EvaluateEmployeeAcceptance"
-        assert ob["payload"]["assignment_id"] == str(assignment.id)
-        assert ob["payload"]["company_id"] == str(company_id)
+        assert ob.topic == "review.submitted"
+        assert json.loads(ob.payload_json)["assignment_id"] == str(assignment.id)
+        assert json.loads(ob.payload_json)["company_id"] == str(company_id)
+
+    @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
+    async def test_appends_auto_rerun_event_to_command_result(self, mock_hash, repo, uow, company_id):
+        """F1 wiring: when the aggregation produces an auto round+1, the submit
+        handler appends its review.assigned event + outbox to the CommandResult
+        so the UoW persists them atomically with the report."""
+        assignment = _make_assignment(state="in_review", version=1)
+        repo.lock_assignment.return_value = assignment
+        guards = AsyncMock(spec=SubmitReviewGuards)
+        guards.validate = AsyncMock()
+
+        report = _make_report(company_id=company_id, assignment_id=assignment.id, verdict="pass")
+        repo.create_report.return_value = report
+        repo.create_issues.return_value = ()
+        result_assignment = _make_assignment(
+            id=assignment.id, company_id=company_id,
+            state="submitted", version=2,
+        )
+        repo.transition.return_value = result_assignment
+
+        rerun_event = DomainEventRecord(
+            event_id=uuid.uuid4(), event_type="review.assigned",
+            aggregate_type="review_assignment", aggregate_id=uuid.uuid4(),
+            aggregate_version=1, company_id=company_id,
+            payload_json='{"assignment_id":"rr"}', trace_id=str(uuid.uuid4()),
+        )
+        rerun_outbox = OutboxRecord(
+            topic="review.assigned",
+            payload_json=rerun_event.payload_json,
+            domain_event_id=rerun_event.event_id,
+        )
+        aggregation = AsyncMock()
+        aggregation.on_report_submitted.return_value = AggregationOutcome(
+            fused=Mock(), rerun_event=rerun_event, rerun_outbox=rerun_outbox,
+        )
+
+        handler = SubmitReviewHandler(repo, guards, uow, aggregation=aggregation)
+        request = Mock(
+            spec=SubmitReview,
+            company_id=company_id, assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
+            verdict="pass", issues=(),
+            expected_assignment_version=1,
+        )
+
+        captured = {}
+
+        async def fake_execute(context, sha, command):
+            session = _make_session()
+            cmd_result = await command(session)
+            captured["events"] = cmd_result.events
+            captured["outbox"] = cmd_result.outbox
+            return cmd_result.response
+
+        uow.execute = AsyncMock(side_effect=fake_execute)
+
+        await handler.handle("ctx", request)
+
+        aggregation.on_report_submitted.assert_awaited_once()
+        assert [ev["event_type"] for ev in captured["events"]] == ["review.submitted", "review.assigned"]
+        assert len(captured["outbox"]) == 2
+        assert captured["outbox"][1].topic == "review.assigned"
+        assert captured["outbox"][1].payload_json == rerun_event.payload_json
+        assert captured["outbox"][1].domain_event_id == rerun_event.event_id
+
+    @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
+    async def test_no_aggregation_keeps_single_review_submitted_event(self, mock_hash, repo, uow, company_id):
+        """Backward compatibility: without an aggregation service the handler
+        emits exactly one review.submitted event (no rerun wiring)."""
+        assignment = _make_assignment(state="in_review", version=1)
+        repo.lock_assignment.return_value = assignment
+        guards = AsyncMock(spec=SubmitReviewGuards)
+        guards.validate = AsyncMock()
+
+        report = _make_report(company_id=company_id, assignment_id=assignment.id, verdict="pass")
+        repo.create_report.return_value = report
+        repo.create_issues.return_value = ()
+        result_assignment = _make_assignment(
+            id=assignment.id, company_id=company_id,
+            state="submitted", version=2,
+        )
+        repo.transition.return_value = result_assignment
+
+        handler = SubmitReviewHandler(repo, guards, uow)
+        request = Mock(
+            spec=SubmitReview,
+            company_id=company_id, assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
+            verdict="pass", issues=(),
+            expected_assignment_version=1,
+        )
+
+        captured = {}
+
+        async def fake_execute(context, sha, command):
+            session = _make_session()
+            cmd_result = await command(session)
+            captured["events"] = cmd_result.events
+            captured["outbox"] = cmd_result.outbox
+            return cmd_result.response
+
+        uow.execute = AsyncMock(side_effect=fake_execute)
+
+        await handler.handle("ctx", request)
+
+        assert [ev["event_type"] for ev in captured["events"]] == ["review.submitted"]
+        assert len(captured["outbox"]) == 1
 
 
 # ─── StartIssueFixHandler ─────────────────────────────────────────────────────
@@ -672,9 +746,8 @@ class TestStartIssueFixHandler:
 
         result = await self._run(uow, repo, request)
 
-        assert result["id"] == str(issue.id)
-        assert result["state"] == "fixing"
-        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id)
+        assert result == {"success": True}
+        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
         repo.transition_issue.assert_awaited_once_with(ANY, issue, "fixing")
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
@@ -730,7 +803,8 @@ class TestStartIssueFixHandler:
         assert ev["issue_id"] == str(issue.id)
         assert ev["from_state"] == "open"
         assert ev["to_state"] == "fixing"
-        assert captured["outbox"] == ()
+        assert len(captured["outbox"]) == 1
+        assert captured["outbox"][0].topic == "review.issue_changed"
 
 
 # ─── ResolveIssueHandler ──────────────────────────────────────────────────────
@@ -759,15 +833,14 @@ class TestResolveIssueHandler:
             id=issue.id, severity=issue.severity,
             state="resolved", version=2,
         )
-        repo.transition_issue.return_value = result_issue
+        repo.resolve_issue_with_evidence.return_value = result_issue
 
         request = Mock(spec=ResolveIssue, issue_id=issue.id, expected_version=1)
         result = await self._run(uow, repo, request)
 
-        assert result["id"] == str(issue.id)
-        assert result["state"] == "resolved"
-        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id)
-        repo.transition_issue.assert_awaited_once_with(ANY, issue, "resolved")
+        assert result == {"success": True}
+        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
+        repo.resolve_issue_with_evidence.assert_awaited_once()
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
     async def test_raises_resource_not_found(self, mock_hash, repo, uow):
@@ -786,7 +859,7 @@ class TestResolveIssueHandler:
     async def test_raises_state_transition_invalid(self, mock_hash, repo, uow):
         issue = _make_issue(state="fixing", version=1)
         repo.lock_issue.return_value = issue
-        repo.transition_issue.side_effect = ValueError("STATE_TRANSITION_INVALID")
+        repo.resolve_issue_with_evidence.side_effect = ValueError("STATE_TRANSITION_INVALID")
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await self._run(uow, repo, Mock(spec=ResolveIssue, issue_id=issue.id, expected_version=1))
 
@@ -795,7 +868,7 @@ class TestResolveIssueHandler:
         issue = _make_issue(state="fixing", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(id=issue.id, severity=issue.severity, state="resolved", version=2)
-        repo.transition_issue.return_value = result_issue
+        repo.resolve_issue_with_evidence.return_value = result_issue
 
         handler = ResolveIssueHandler(repo, uow)
         request = Mock(spec=ResolveIssue, issue_id=issue.id, expected_version=1)
@@ -818,7 +891,8 @@ class TestResolveIssueHandler:
         assert ev["event_type"] == "review.issue_changed"
         assert ev["from_state"] == "fixing"
         assert ev["to_state"] == "resolved"
-        assert captured["outbox"] == ()
+        assert len(captured["outbox"]) == 1
+        assert captured["outbox"][0].topic == "review.issue_changed"
 
 
 # ─── VerifyIssueHandler ───────────────────────────────────────────────────────
@@ -853,10 +927,11 @@ class TestVerifyIssueHandler:
         request = Mock(spec=VerifyIssue, issue_id=issue.id, expected_version=1)
         result = await self._run(uow, repo, request)
 
-        assert result["response"]["id"] == str(issue.id)
-        assert result["response"]["state"] == "verified"
-        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id)
-        repo.transition_issue.assert_awaited_once_with(ANY, issue, "verified")
+        assert result == {"id": str(issue.id), "state": "verified"}
+        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
+        repo.transition_issue.assert_awaited_once_with(
+            ANY, issue, "verified", verifier_employee_id=request.verifier_employee_id,
+        )
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
     async def test_raises_resource_not_found(self, mock_hash, repo, uow):
@@ -880,7 +955,7 @@ class TestVerifyIssueHandler:
             await self._run(uow, repo, Mock(spec=VerifyIssue, issue_id=issue.id, expected_version=1))
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
-    async def test_returns_dict_with_events_and_outbox(self, mock_hash, repo, uow):
+    async def test_returns_command_result_with_events_and_outbox(self, mock_hash, repo, uow):
         issue = _make_issue(state="resolved", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
@@ -898,19 +973,22 @@ class TestVerifyIssueHandler:
             session = _make_session()
             cmd_result = await command(session)
             captured["result_type"] = type(cmd_result).__name__
-            return cmd_result
+            captured["events"] = cmd_result.events
+            captured["outbox"] = cmd_result.outbox
+            return cmd_result.response
 
         uow.execute = AsyncMock(side_effect=fake_execute)
 
         result = await handler.handle("ctx", request)
 
-        assert captured["result_type"] == "dict"
-        assert len(result["events"]) == 1
-        ev = result["events"][0]
+        assert captured["result_type"] == "CommandResult"
+        assert result == {"id": str(issue.id), "state": "verified"}
+        assert len(captured["events"]) == 1
+        ev = captured["events"][0]
         assert ev["event_type"] == "review.issue_changed"
         assert ev["from_state"] == "resolved"
         assert ev["to_state"] == "verified"
-        assert result["outbox"] == ()
+        assert len(captured["outbox"]) == 1
 
 
 # ─── CloseIssueHandler ────────────────────────────────────────────────────────
@@ -945,9 +1023,8 @@ class TestCloseIssueHandler:
         request = Mock(spec=CloseIssue, issue_id=issue.id, expected_version=1)
         result = await self._run(uow, repo, request)
 
-        assert result["id"] == str(issue.id)
-        assert result["state"] == "closed"
-        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id)
+        assert result == {"id": str(issue.id), "state": "closed"}
+        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
         repo.transition_issue.assert_awaited_once_with(ANY, issue, "closed")
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
@@ -1006,9 +1083,10 @@ class TestCloseIssueHandler:
 
         assert len(captured["outbox"]) == 1
         ob = captured["outbox"][0]
-        assert ob["command_type"] == "EvaluateAffectedTask"
-        assert ob["payload"]["issue_id"] == str(issue.id)
-        assert ob["payload"]["company_id"] == str(issue.company_id)
+        assert ob.topic == "review.issue_changed"
+        ob_payload = json.loads(ob.payload_json)
+        assert ob_payload["issue_id"] == str(issue.id)
+        assert ob_payload["company_id"] == str(issue.company_id)
 
 
 # ─── RejectIssueHandler ───────────────────────────────────────────────────────
@@ -1043,10 +1121,11 @@ class TestRejectIssueHandler:
         request = Mock(spec=RejectIssue, issue_id=issue.id, expected_version=1)
         result = await self._run(uow, repo, request)
 
-        assert result["id"] == str(issue.id)
-        assert result["state"] == "rejected"
-        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id)
-        repo.transition_issue.assert_awaited_once_with(ANY, issue, "rejected")
+        assert result == {"id": str(issue.id), "state": "rejected"}
+        repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
+        repo.transition_issue.assert_awaited_once_with(
+            ANY, issue, "rejected", rejection_reason=request.rejection_reason,
+        )
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
     async def test_raises_resource_not_found(self, mock_hash, repo, uow):
@@ -1097,4 +1176,4 @@ class TestRejectIssueHandler:
         assert ev["event_type"] == "review.issue_changed"
         assert ev["from_state"] == "open"
         assert ev["to_state"] == "rejected"
-        assert captured["outbox"] == ()
+        assert len(captured["outbox"]) == 1

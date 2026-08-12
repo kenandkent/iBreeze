@@ -30,6 +30,7 @@ pub struct FileGrant {
 pub struct GrantStore {
     grants: RwLock<HashMap<Uuid, FileGrant>>,
     bookmarks: RwLock<HashMap<Uuid, PathBuf>>,
+    profile_root: RwLock<Option<PathBuf>>,
 }
 
 impl GrantStore {
@@ -37,6 +38,7 @@ impl GrantStore {
         Self {
             grants: RwLock::new(HashMap::new()),
             bookmarks: RwLock::new(HashMap::new()),
+            profile_root: RwLock::new(None),
         }
     }
 
@@ -70,6 +72,15 @@ impl GrantStore {
         };
 
         self.grants.write().await.insert(grant_id, grant.clone());
+        if matches!(kind, GrantKind::Workspace) {
+            // Workspace grants are also the security-scoped bookmark root used
+            // by the one-shot external-write reverse RPC.  Keeping the same
+            // UUID means the Sidecar never sends an untrusted filesystem root.
+            self.bookmarks
+                .write()
+                .await
+                .insert(grant_id, grant.canonical_path.clone());
+        }
         info!(grant_id = %grant_id, kind = ?kind, "grant.created");
         Ok(grant)
     }
@@ -103,6 +114,48 @@ impl GrantStore {
         Ok(canonical)
     }
 
+    pub async fn resolve_workspace_grant(&self, grant_id: Uuid) -> Result<PathBuf, AppError> {
+        let grant = self.get_grant(grant_id).await?;
+        if grant.kind != GrantKind::Workspace {
+            return Err(AppError::Security("WORKSPACE_GRANT_REQUIRED".to_owned()));
+        }
+        let canonical = grant.canonical_path.canonicalize().map_err(|error| {
+            AppError::Security(format!("Grant path is no longer accessible: {error}"))
+        })?;
+        let metadata = std::fs::metadata(&canonical).map_err(|error| {
+            AppError::Security(format!("Grant metadata is unavailable: {error}"))
+        })?;
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        if metadata.dev() != grant.device || metadata.ino() != grant.inode {
+            return Err(AppError::Security("WORKSPACE_GRANT_STALE".to_owned()));
+        }
+        Ok(canonical)
+    }
+
+    pub async fn bind_profile_root(&self, root: Option<PathBuf>) -> Result<(), AppError> {
+        let canonical = match root {
+            Some(path) => {
+                let canonical = path
+                    .canonicalize()
+                    .map_err(|error| AppError::Storage(error.to_string()))?;
+                validate_path_safety(&canonical)?;
+                Some(canonical)
+            }
+            None => None,
+        };
+        *self.profile_root.write().await = canonical;
+        Ok(())
+    }
+
+    pub async fn profile_root(&self) -> Result<PathBuf, AppError> {
+        self.profile_root
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::Security("PROFILE_NOT_OPEN".to_owned()))
+    }
+
     pub async fn consume_grant(&self, grant_id: Uuid) -> Result<PathBuf, AppError> {
         let mut grants = self.grants.write().await;
         let grant = grants
@@ -119,12 +172,14 @@ impl GrantStore {
 
     pub async fn remove_grant(&self, grant_id: &Uuid) {
         self.grants.write().await.remove(grant_id);
+        self.bookmarks.write().await.remove(grant_id);
         info!(grant_id = %grant_id, "grant.removed");
     }
 
     pub async fn clear(&self) {
         self.grants.write().await.clear();
         self.bookmarks.write().await.clear();
+        *self.profile_root.write().await = None;
         warn!("grants.all_cleared");
     }
 

@@ -8,8 +8,12 @@
       "type": "string",
       "format": "uuid"
     },
+    "filter": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "cursor": {
-      "type": "string"
+      "type": ["string", "null"]
     },
     "limit": {
       "type": "integer",

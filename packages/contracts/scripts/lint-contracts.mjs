@@ -13,6 +13,7 @@ const SCHEMA_DIRS = [
   "events",
   "domain-events",
   "artifacts",
+  "approvals",
   "skill",
   "../rpc-schema",
 ];

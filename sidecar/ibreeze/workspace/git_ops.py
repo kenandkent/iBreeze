@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 from typing import Any
 
 
 async def git_command(*args: str, cwd: str | None = None) -> dict[str, Any]:
-    """Execute a git command and return result."""
+    """Execute one fixed-argv Git operation and return its result.
+
+    This is the controlled Workspace Git executor, not an Agent/Model process
+    launcher.  Callers never pass a shell string; each workspace service
+    operation supplies a literal argv and a database-owned cwd.
+    """
     try:
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -23,11 +30,11 @@ async def git_command(*args: str, cwd: str | None = None) -> dict[str, Any]:
             "stderr": stderr.decode(errors="replace"),
             "success": proc.returncode == 0,
         }
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError) as exc:
         return {
             "exit_code": -1,
             "stdout": "",
-            "stderr": "git not found",
+            "stderr": str(exc),
             "success": False,
         }
 
@@ -46,17 +53,28 @@ async def create_worktree(
 
     Branch naming spec: ibreeze/{task_id}/{employee_id}/{attempt}
     """
-    import os
-
     if task_id and employee_id:
         branch_name = f"ibreeze/{task_id}/{employee_id}/{attempt}"
 
-    worktree_path = os.path.join(base_dir, "worktrees", worktree_name)
+    if not worktree_name or os.path.basename(worktree_name) != worktree_name:
+        return {"path": "", "branch": branch_name, "success": False, "error": "INVALID_WORKTREE_NAME"}
+    worktree_root = Path(base_dir).resolve() / "worktrees"
+    worktree_path = worktree_root / worktree_name
+    if worktree_path.parent != worktree_root:
+        return {"path": str(worktree_path), "branch": branch_name, "success": False, "error": "INVALID_WORKTREE_PATH"}
 
-    await git_command("branch", branch_name, base_branch, cwd=base_dir)
-    result = await git_command("worktree", "add", worktree_path, branch_name, cwd=base_dir)
+    branch_result = await git_command("branch", branch_name, base_branch, cwd=base_dir)
+    if not branch_result["success"]:
+        return {
+            "path": str(worktree_path),
+            "branch": branch_name,
+            "success": False,
+            "error": branch_result["stderr"] or "BRANCH_CREATE_FAILED",
+        }
+
+    result = await git_command("worktree", "add", str(worktree_path), branch_name, cwd=base_dir)
     return {
-        "path": worktree_path,
+        "path": str(worktree_path),
         "branch": branch_name,
         "success": result["success"],
         "error": result["stderr"] if not result["success"] else None,
@@ -65,10 +83,10 @@ async def create_worktree(
 
 async def remove_worktree(base_dir: str, worktree_name: str) -> dict[str, Any]:
     """Remove a git worktree."""
-    import os
-
-    worktree_path = os.path.join(base_dir, "worktrees", worktree_name)
-    result = await git_command("worktree", "remove", worktree_path, "--force", cwd=base_dir)
+    if not worktree_name or os.path.basename(worktree_name) != worktree_name:
+        return {"success": False, "error": "INVALID_WORKTREE_NAME"}
+    worktree_path = Path(base_dir).resolve() / "worktrees" / worktree_name
+    result = await git_command("worktree", "remove", str(worktree_path), cwd=base_dir)
     return {
         "success": result["success"],
         "error": result["stderr"] if not result["success"] else None,

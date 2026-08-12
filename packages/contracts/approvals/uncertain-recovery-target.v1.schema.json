@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.io/schemas/approvals/uncertain-recovery-target.v1.schema.json",
+  "title": "Uncertain recovery approval target",
+  "description": "Canonical target binding for a single retry of an uncertain tool side effect.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "tool_execution_id", "action", "input_sha256", "prior_started_at"],
+  "properties": {
+    "run_id": {"type": "string", "format": "uuid"},
+    "tool_execution_id": {"type": "string", "format": "uuid"},
+    "action": {"const": "retry_once"},
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prior_started_at": {"type": "string", "format": "date-time"}
+  }
+}

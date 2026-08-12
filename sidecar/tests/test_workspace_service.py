@@ -197,7 +197,7 @@ class TestOpenWorkspace:
 
     async def test_invalid_state(self, db):
         await db.execute("PRAGMA foreign_keys = OFF")
-        inserted = await _insert_workspace(db, status="active")
+        inserted = await _insert_workspace(db, status="ready_to_apply")
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await open_workspace(db, "co-1", inserted["id"], expected_version=1)
 
@@ -323,7 +323,11 @@ class TestApplyWorkspace:
 
         mock_git = AsyncMock()
         mock_git.side_effect = [
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # status --porcelain
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # integration status
+            {"success": True, "stdout": "main\n", "stderr": "", "exit_code": 0},  # integration branch
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # user status
+            {"success": True, "stdout": "feature/test\n", "stderr": "", "exit_code": 0},  # user branch
+            {"success": True, "stdout": "a" * 40 + "\n", "stderr": "", "exit_code": 0},  # user baseline
             {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # merge --no-ff --no-commit
             {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # commit
             {"success": True, "stdout": "abc123\n", "stderr": "", "exit_code": 0},  # rev-parse HEAD
@@ -337,12 +341,16 @@ class TestApplyWorkspace:
 
     async def test_conflict_path(self, db):
         await db.execute("PRAGMA foreign_keys = OFF")
-        inserted = await _insert_workspace(db, status="active")
+        inserted = await _insert_workspace(db, status="ready_to_apply")
         ws_id = inserted["id"]
 
         mock_git = AsyncMock()
         mock_git.side_effect = [
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # status --porcelain (clean)
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # integration status
+            {"success": True, "stdout": "main\n", "stderr": "", "exit_code": 0},  # integration branch
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # user status
+            {"success": True, "stdout": "feature/test\n", "stderr": "", "exit_code": 0},  # user branch
+            {"success": True, "stdout": "a" * 40 + "\n", "stderr": "", "exit_code": 0},  # user baseline
             {"success": False, "stdout": "", "stderr": "conflict", "exit_code": 1},  # merge fails
             {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # merge --abort
         ]
@@ -361,7 +369,7 @@ class TestApplyWorkspace:
 
     async def test_dirty_workspace(self, db):
         await db.execute("PRAGMA foreign_keys = OFF")
-        inserted = await _insert_workspace(db, status="active")
+        inserted = await _insert_workspace(db, status="ready_to_apply")
         ws_id = inserted["id"]
 
         mock_git = AsyncMock()
@@ -375,7 +383,7 @@ class TestApplyWorkspace:
 
     async def test_missing_workspace_path(self, db):
         await db.execute("PRAGMA foreign_keys = OFF")
-        inserted = await _insert_workspace(db, status="active")
+        inserted = await _insert_workspace(db, status="ready_to_apply")
         ws_id = inserted["id"]
 
         mock_git = AsyncMock()

@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import { Table, Button, Space, Tag, Typography, Modal } from 'antd';
-import { PlayCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Typography } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Task } from '../types';
-import { useListTasks, useRunTask } from '../hooks/useOrchestration';
+import { useListTasks } from '../hooks/useOrchestration';
 import { formatTime } from '../utils/formatters';
 import { logger } from '../utils/logger';
 
@@ -14,24 +14,6 @@ export default function OrchestrationPage() {
 
   const companyId = '';
   const { data: tasks, isLoading } = useListTasks(companyId);
-  const runMutation = useRunTask();
-
-  const handleRun = (taskId: string) => {
-    Modal.confirm({
-      title: '确认运行',
-      content: '确定要运行此任务吗？',
-      onOk: async () => {
-        try {
-          logger.info('OrchestrationPage', 'run_start', { taskId });
-          await runMutation.mutateAsync(taskId);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          logger.error('OrchestrationPage', 'run_failed', msg, { taskId });
-        }
-      },
-    });
-  };
-
   const columns: ColumnsType<Task> = [
     { title: '任务', dataIndex: 'id', key: 'id' },
     { title: '类型', dataIndex: 'type', key: 'type' },
@@ -50,10 +32,10 @@ export default function OrchestrationPage() {
     {
       title: '操作',
       key: 'actions',
-      render: (_, record) => (
+      render: () => (
         <Space>
           <Button size="small" icon={<EyeOutlined />}>详情</Button>
-          <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleRun(record.id)}>运行</Button>
+          <Button size="small" disabled title="请先在任务详情完成计划确认">运行</Button>
         </Space>
       ),
     },

@@ -125,3 +125,20 @@ class TestSensitiveFileExclusion:
         excluded = manifest.get("sensitive_excluded", [])
         assert "secrets.json" in excluded
         assert ".env" in excluded
+
+    async def test_cas_files_walked_and_excluded(self, db_with_data, tmp_dir):
+        """CAS directory traversal: normal files archived, sensitive/oversized skipped."""
+        cas_path = tmp_dir / "cas"
+        (cas_path / "blobs").mkdir(parents=True)
+        (cas_path / "blobs" / "ok.bin").write_bytes(b"data")
+        (cas_path / "blobs" / ".env").write_text("TOKEN=x")
+        (cas_path / "blobs" / "big.bin").write_bytes(b"x" * (100 * 1024 * 1024 + 1))
+        backup_dir = tmp_dir / "backups"
+        result = await create_backup(db_with_data, backup_dir, cas_path=cas_path)
+        manifest_path = next((backup_dir / result["backup_id"]).glob("*.manifest.json"))
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+        paths = [entry["path"] for entry in manifest["files"]]
+        assert any(p.endswith("ok.bin") for p in paths)
+        assert not any(p.endswith(".env") for p in paths)
+        assert not any(p.endswith("big.bin") for p in paths)

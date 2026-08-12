@@ -8,5 +8,9 @@
 export interface ReviewResolveissueRequest {
   company_id: string;
   issue_id: string;
-  resolution: string;
+  resolution_artifact_sha256: string;
+  fix_run_id: string;
+  retest_result_id: string;
+  resolution_summary: string;
+  expected_version: number;
 }

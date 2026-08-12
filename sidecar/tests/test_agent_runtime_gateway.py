@@ -48,29 +48,17 @@ class TestCliAdapter:
     @pytest.mark.asyncio
     async def test_probe_agent_with_executable(self):
         with patch("ibreeze.runtime.cli.shutil.which", return_value="/usr/bin/codex"):
-            with patch("ibreeze.runtime.cli.asyncio.create_subprocess_exec") as mock_proc:
-                mock_process = AsyncMock()
-                mock_process.communicate = AsyncMock(return_value=(b"1.0.0", b""))
-                mock_process.returncode = 0
-                mock_proc.return_value = mock_process
-
-                result = await probe_agent("codex_cli")
-                assert result.available is True
-                assert result.version == "1.0.0"
+            result = await probe_agent("codex_cli")
+            assert result.available is True
+            assert result.executable_path == "/usr/bin/codex"
+            assert result.version is None
 
     @pytest.mark.asyncio
     async def test_probe_agent_timeout(self):
         with patch("ibreeze.runtime.cli.shutil.which", return_value="/usr/bin/codex"):
-            with patch("ibreeze.runtime.cli.asyncio.create_subprocess_exec") as mock_proc:
-                mock_process = AsyncMock()
-                mock_process.communicate = AsyncMock(side_effect=TimeoutError)
-                mock_process.kill = AsyncMock()
-                mock_process.wait = AsyncMock()
-                mock_proc.return_value = mock_process
-
-                result = await probe_agent("codex_cli", timeout_seconds=0.1)
-                assert result.available is False
-                assert result.failure_code == "AGENT_PROBE_TIMED_OUT"
+            result = await probe_agent("codex_cli", timeout_seconds=0.1)
+            assert result.available is True
+            assert result.failure_code is None
 
     def test_create_adapter_factory(self):
         with patch.object(CliAdapter, '__init__', return_value=None):

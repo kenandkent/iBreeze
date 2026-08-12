@@ -25,16 +25,22 @@
       "type": "string",
       "enum": [
         "open",
+        "fixing",
         "resolved",
-        "dismissed"
+        "verified",
+        "closed",
+        "rejected"
       ]
     },
     "to_state": {
       "type": "string",
       "enum": [
         "open",
+        "fixing",
         "resolved",
-        "dismissed"
+        "verified",
+        "closed",
+        "rejected"
       ]
     },
     "severity": {
@@ -47,8 +53,22 @@
       ]
     },
     "assignee_employee_id": {
-      "type": "string",
-      "format": "uuid"
+      "oneOf": [
+        {"type": "string", "format": "uuid"},
+        {"type": "null"}
+      ]
+    },
+    "verifier_employee_id": {
+      "oneOf": [
+        {"type": "string", "format": "uuid"},
+        {"type": "null"}
+      ]
+    },
+    "rejection_reason": {
+      "oneOf": [
+        {"type": "string", "maxLength": 2000},
+        {"type": "null"}
+      ]
     },
     "evidence_refs": {
       "type": "array",
@@ -67,6 +87,8 @@
     "to_state",
     "severity",
     "assignee_employee_id",
+    "verifier_employee_id",
+    "rejection_reason",
     "evidence_refs"
   ]
 }

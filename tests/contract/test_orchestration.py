@@ -15,7 +15,7 @@ def test_orchestration_is_valid():
     content = init_path.read_text()
     compile(content, str(init_path), "exec")
     assert "generate_company_plan" in content
-    assert "dispatch_company_task" in content
+    assert "confirm_and_dispatch" in content
     assert "validate_plan" in content
-    assert "confirm_plan" in content
+    assert "ConfirmPlanCommand" in content
     assert "list_workflow_templates" in content

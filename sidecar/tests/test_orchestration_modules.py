@@ -1,4 +1,4 @@
-"""Tests for orchestration modules: execution_chain, report_generator,
+"""Tests for orchestration modules: report_generator,
 plan_generator, role_behavior, availability_checker."""
 
 from __future__ import annotations
@@ -16,11 +16,6 @@ from ibreeze.orchestration.availability_checker import (
     check_model,
     check_workspace,
     run_availability_checks,
-)
-from ibreeze.orchestration.execution_chain import (
-    confirm_plan,
-    modify_plan,
-    request_plan_confirmation,
 )
 from ibreeze.orchestration.plan_generator import generate_company_plan
 from ibreeze.orchestration.report_generator import (
@@ -179,93 +174,6 @@ async def orch_env(db: aiosqlite.Connection):
         "employee_id": employee_id,
         "dept_id": dept_id,
     }
-
-
-# ── execution_chain ──────────────────────────────────────────────────
-@pytest.mark.asyncio
-class TestExecutionChain:
-    async def test_request_plan_confirmation(self, db, orch_env):
-        task_id = str(uuid.uuid4())
-        plan_id = await _create_task_with_plan(db, orch_env["company_id"], task_id, "draft")
-        result = await request_plan_confirmation(
-            db,
-            company_id=orch_env["company_id"],
-            task_id=task_id,
-            plan_version_id=plan_id,
-            employee_id=orch_env["employee_id"],
-        )
-        assert result["status"] == "pending"
-        assert result["approval_id"]
-
-    async def test_request_plan_confirmation_not_found(self, db, orch_env):
-        with pytest.raises(ValueError, match="PLAN_NOT_FOUND"):
-            await request_plan_confirmation(
-                db, company_id=orch_env["company_id"],
-                task_id="x", plan_version_id="y",
-                employee_id=orch_env["employee_id"],
-            )
-
-    async def test_request_plan_confirmation_not_draft(self, db, orch_env):
-        task_id = str(uuid.uuid4())
-        plan_id = await _create_task_with_plan(db, orch_env["company_id"], task_id, "approved")
-        with pytest.raises(ValueError, match="PLAN_NOT_CONFIRMABLE"):
-            await request_plan_confirmation(
-                db, company_id=orch_env["company_id"],
-                task_id=task_id, plan_version_id=plan_id,
-                employee_id=orch_env["employee_id"],
-            )
-
-    async def test_confirm_plan_approved(self, db, orch_env):
-        task_id = str(uuid.uuid4())
-        plan_id = await _create_task_with_plan(db, orch_env["company_id"], task_id, "draft")
-        # Create the approval first
-        req = await request_plan_confirmation(
-            db, company_id=orch_env["company_id"],
-            task_id=task_id, plan_version_id=plan_id,
-            employee_id=orch_env["employee_id"],
-        )
-        result = await confirm_plan(
-            db, company_id=orch_env["company_id"],
-            approval_id=req["approval_id"],
-            employee_id=orch_env["employee_id"],
-            decision="approved",
-        )
-        assert result["decision"] == "approved"
-
-    async def test_confirm_plan_rejected(self, db, orch_env):
-        task_id = str(uuid.uuid4())
-        plan_id = await _create_task_with_plan(db, orch_env["company_id"], task_id, "draft")
-        req = await request_plan_confirmation(
-            db, company_id=orch_env["company_id"],
-            task_id=task_id, plan_version_id=plan_id,
-            employee_id=orch_env["employee_id"],
-        )
-        result = await confirm_plan(
-            db, company_id=orch_env["company_id"],
-            approval_id=req["approval_id"],
-            employee_id=orch_env["employee_id"],
-            decision="rejected",
-        )
-        assert result["decision"] == "rejected"
-
-    async def test_modify_plan(self, db, orch_env):
-        task_id = str(uuid.uuid4())
-        plan_id = await _create_task_with_plan(db, orch_env["company_id"], task_id, "draft")
-        result = await modify_plan(
-            db, company_id=orch_env["company_id"],
-            plan_version_id=plan_id,
-            modifications={"new_key": "new_value"},
-        )
-        assert result["new_version_id"]
-        assert result["modified_at"]
-
-    async def test_modify_nonexistent_plan(self, db, orch_env):
-        with pytest.raises(ValueError, match="PLAN_NOT_FOUND"):
-            await modify_plan(
-                db, company_id=orch_env["company_id"],
-                plan_version_id="nonexistent",
-                modifications={},
-            )
 
 
 # ── report_generator ─────────────────────────────────────────────────

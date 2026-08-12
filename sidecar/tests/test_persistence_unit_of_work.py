@@ -12,6 +12,7 @@ from ibreeze.persistence.unit_of_work import CommandResult, UnitOfWork
 class TestUnitOfWork:
     async def test_execute_without_idempotency_key(self):
         conn = AsyncMock()
+        conn.in_transaction = True
 
         async def fake_command(session: WriteSession) -> CommandResult:
             return CommandResult(response={"ok": True})
@@ -19,11 +20,12 @@ class TestUnitOfWork:
         uow = UnitOfWork(connection=conn)
         result = await uow.execute(None, "sha", fake_command)
         assert result == {"ok": True}
-        conn.execute.assert_called_once_with("BEGIN IMMEDIATE")
-        conn.commit.assert_called_once()
+        conn.execute.assert_not_called()
+        conn.commit.assert_not_called()
 
     async def test_execute_with_idempotency_key_hit(self):
         conn = AsyncMock()
+        conn.in_transaction = True
 
         async def fake_command(session: WriteSession) -> CommandResult:
             return CommandResult(response={"ok": True})
@@ -38,6 +40,7 @@ class TestUnitOfWork:
 
     async def test_execute_idempotency_miss(self):
         conn = AsyncMock()
+        conn.in_transaction = True
 
         async def fake_command(session: WriteSession) -> CommandResult:
             return CommandResult(response={"ok": True})
@@ -51,10 +54,11 @@ class TestUnitOfWork:
         assert result == {"ok": True}
         uow._idempotency.claim.assert_awaited_once()
         uow._idempotency.complete.assert_awaited_once()
-        conn.commit.assert_called_once()
+        conn.commit.assert_not_called()
 
     async def test_execute_idempotency_claim_fails(self):
         conn = AsyncMock()
+        conn.in_transaction = True
 
         async def fake_command(session: WriteSession) -> CommandResult:
             return CommandResult(response={"ok": True})
@@ -66,10 +70,11 @@ class TestUnitOfWork:
 
         with pytest.raises(RuntimeError, match="IDEMPOTENCY_CLAIM_FAILED"):
             await uow.execute("key1", "sha", fake_command)
-        conn.rollback.assert_awaited()
+        conn.rollback.assert_not_awaited()
 
     async def test_execute_rollback_on_error(self):
         conn = AsyncMock()
+        conn.in_transaction = True
 
         async def fake_command(session: WriteSession) -> CommandResult:
             raise ValueError("something went wrong")
@@ -77,10 +82,11 @@ class TestUnitOfWork:
         uow = UnitOfWork(connection=conn)
         with pytest.raises(ValueError, match="something went wrong"):
             await uow.execute(None, "sha", fake_command)
-        conn.rollback.assert_called_once()
+        conn.rollback.assert_not_called()
 
     async def test_execute_with_events_and_outbox(self):
         conn = AsyncMock()
+        conn.in_transaction = True
         uow = UnitOfWork(connection=conn)
         uow._event_store = AsyncMock()
         uow._outbox = AsyncMock()

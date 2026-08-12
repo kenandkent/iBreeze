@@ -26,11 +26,6 @@ exclusions:
     design_reference: "P1-T01"
     approved_by: "system"
 
-  - path: "sidecar/migrations/"
-    reason: "SQLite migration SQL files - not Python executable"
-    design_reference: "P3-T01"
-    approved_by: "system"
-
   - path: "apps/backend-api/migrations/"
     reason: "Alembic migration Python files - not application code"
     design_reference: "P1-T01"

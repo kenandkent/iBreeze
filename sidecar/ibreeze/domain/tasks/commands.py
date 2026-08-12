@@ -12,6 +12,21 @@ class AcceptEmployeeTask:
 
 
 @dataclass(frozen=True, slots=True)
+class SubmitEmployeeTask:
+    company_id: UUID
+    task_id: UUID
+    run_id: UUID
+    expected_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class StartEmployeeTask:
+    company_id: UUID
+    task_id: UUID
+    expected_version: int
+
+
+@dataclass(frozen=True, slots=True)
 class CompleteDepartmentTask:
     company_id: UUID
     task_id: UUID

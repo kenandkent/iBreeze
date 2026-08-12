@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
 
 from ibreeze.application.lifecycle import ApplicationLifecycle, LifecyclePhase
@@ -27,11 +26,13 @@ class SidecarApplication:
         masked_identifier: str,
         device_id: str,
         profile_mode: str,
+        launch_id: str = "",
     ) -> None:
         database_path = profile_root / "profile.db"
         self._database_path = database_path
         self._socket_path = str(socket_path)
         self._app_version = app_version
+        self._launch_id = launch_id
         self._startup_token = startup_token
         self._backend_origin = backend_origin
         self._app_user_id = app_user_id
@@ -42,23 +43,27 @@ class SidecarApplication:
         self._rpc_server: ProductionRpcServer | None = None
 
     async def start(self) -> None:
-        self._lifecycle = ApplicationLifecycle(
-            self._database_path,
-            socket_path=self._socket_path,
-            backend_origin=self._backend_origin,
-            app_user_id=self._app_user_id,
-            masked_identifier=self._masked_identifier,
-            device_id=self._device_id,
-            app_version=self._app_version,
-            profile_mode=self._profile_mode,
-        )
+        lifecycle_kwargs = {
+            "socket_path": self._socket_path,
+            "backend_origin": self._backend_origin,
+            "app_user_id": self._app_user_id,
+            "masked_identifier": self._masked_identifier,
+            "device_id": self._device_id,
+            "app_version": self._app_version,
+            "profile_mode": self._profile_mode,
+        }
+        # Older embedded launchers did not pass a launch id; keep that
+        # constructor shape compatible while production Rust always does.
+        if self._launch_id:
+            lifecycle_kwargs["launch_id"] = self._launch_id
+        self._lifecycle = ApplicationLifecycle(self._database_path, **lifecycle_kwargs)
         await self._lifecycle.start()
         self._rpc_server = ProductionRpcServer(
             lifecycle=self._lifecycle,
             socket_path=Path(self._socket_path),
             startup_token=self._startup_token,
             app_version=self._app_version,
-            launch_id=str(uuid.uuid4()),
+            launch_id=self._launch_id,
         )
         await self._rpc_server.start()
 

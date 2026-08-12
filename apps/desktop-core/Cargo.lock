@@ -1869,7 +1869,7 @@ dependencies = [
 
 [[package]]
 name = "ibreeze-desktop-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "base64 0.22.1",
@@ -1887,6 +1887,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rfd",
  "secrecy",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

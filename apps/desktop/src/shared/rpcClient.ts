@@ -6,7 +6,8 @@ export function createRpcRequest<T = unknown>(
   params: Record<string, unknown> = {},
   idempotencyKey?: string,
 ): Promise<T> {
-  const idempotency_key = isReadOperation(operationId)
+  const localReadOperation = operationId === 'system.health' || operationId === 'updater.verifyLaunch';
+  const idempotency_key = isReadOperation(operationId) || localReadOperation
     ? null
     : (idempotencyKey ?? crypto.randomUUID());
 
@@ -18,5 +19,9 @@ export function createRpcRequest<T = unknown>(
 }
 
 export async function systemHealth(): Promise<{ status: string }> {
-  return invoke<{ status: string }>('system_health');
+  return invoke<{ status: string }>('rpc_request', {
+    method: 'system.health',
+    params: {},
+    idempotency_key: null,
+  });
 }

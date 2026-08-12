@@ -8,6 +8,12 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
+/// A subscriber is deliberately bounded.  A provider that produces data
+/// faster than the authenticated IPC consumer can drain it must fail closed
+/// instead of allowing an unbounded allocation in the desktop process.
+pub const STREAM_SUBSCRIBER_CAPACITY: usize = 64;
+pub const MAX_STREAM_HISTORY: usize = 4096;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BrokerEventKind {
     #[serde(rename = "output_text_delta")]
@@ -47,7 +53,7 @@ struct StreamState {
     next_sequence: u64,
     events: Vec<BrokerEvent>,
     completed: bool,
-    subscribers: Vec<mpsc::UnboundedSender<BrokerEvent>>,
+    subscribers: Vec<mpsc::Sender<BrokerEvent>>,
 }
 
 pub struct HttpStreamManager {
@@ -61,33 +67,35 @@ impl HttpStreamManager {
         }
     }
 
-    pub async fn create_stream(&self, request_id: Uuid) -> mpsc::UnboundedReceiver<BrokerEvent> {
+    pub async fn create_stream(&self, request_id: Uuid) {
         let mut streams = self.streams.write().await;
-        let (tx, rx) = mpsc::unbounded_channel();
         streams.insert(
             request_id,
             StreamState {
                 next_sequence: 1,
                 events: Vec::new(),
                 completed: false,
-                subscribers: vec![tx],
+                subscribers: Vec::new(),
             },
         );
-        rx
     }
 
     pub async fn subscribe(
         &self,
         request_id: Uuid,
-    ) -> Result<mpsc::UnboundedReceiver<BrokerEvent>, AppError> {
+    ) -> Result<mpsc::Receiver<BrokerEvent>, AppError> {
         let mut streams = self.streams.write().await;
         let state = streams
             .get_mut(&request_id)
             .ok_or_else(|| AppError::NotFound("Stream not found".to_owned()))?;
-        let (tx, rx) = mpsc::unbounded_channel();
+        if state.events.len() > STREAM_SUBSCRIBER_CAPACITY {
+            return Err(AppError::Sidecar("IPC_BACKPRESSURE".to_owned()));
+        }
+        let (tx, rx) = mpsc::channel(STREAM_SUBSCRIBER_CAPACITY);
 
         for event in &state.events {
-            let _ = tx.send(event.clone());
+            tx.try_send(event.clone())
+                .map_err(|_| AppError::Sidecar("IPC_BACKPRESSURE".to_owned()))?;
         }
 
         if state.completed {
@@ -99,42 +107,54 @@ impl HttpStreamManager {
         Ok(rx)
     }
 
-    pub fn push_event(&self, request_id: Uuid, event: BrokerEventKind, payload: Value) {
-        let mut streams = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.streams.write())
-        });
-        if let Some(state) = streams.get_mut(&request_id) {
-            let broker_event = BrokerEvent {
-                request_id,
-                sequence: state.next_sequence,
-                event,
-                payload,
-                received_at: Utc::now(),
-            };
-            state.next_sequence += 1;
-            state.events.push(broker_event.clone());
-            state
-                .subscribers
-                .retain(|tx| tx.send(broker_event.clone()).is_ok());
-        }
+    pub fn push_event(
+        &self,
+        request_id: Uuid,
+        event: BrokerEventKind,
+        payload: Value,
+    ) -> Result<(), AppError> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.push_event_async(request_id, event, payload))
+        })
     }
 
-    pub async fn push_event_async(&self, request_id: Uuid, event: BrokerEventKind, payload: Value) {
+    pub async fn push_event_async(
+        &self,
+        request_id: Uuid,
+        event: BrokerEventKind,
+        payload: Value,
+    ) -> Result<(), AppError> {
         let mut streams = self.streams.write().await;
-        if let Some(state) = streams.get_mut(&request_id) {
-            let broker_event = BrokerEvent {
-                request_id,
-                sequence: state.next_sequence,
-                event,
-                payload,
-                received_at: Utc::now(),
-            };
-            state.next_sequence += 1;
-            state.events.push(broker_event.clone());
-            state
-                .subscribers
-                .retain(|tx| tx.send(broker_event.clone()).is_ok());
+        let state = streams
+            .get_mut(&request_id)
+            .ok_or_else(|| AppError::NotFound("Stream not found".to_owned()))?;
+        if state.completed {
+            return Ok(());
         }
+        if state.events.len() >= MAX_STREAM_HISTORY {
+            state.completed = true;
+            state.subscribers.clear();
+            return Err(AppError::Sidecar("IPC_BACKPRESSURE".to_owned()));
+        }
+
+        let broker_event = BrokerEvent {
+            request_id,
+            sequence: state.next_sequence,
+            event,
+            payload,
+            received_at: Utc::now(),
+        };
+        for subscriber in &state.subscribers {
+            if subscriber.try_send(broker_event.clone()).is_err() {
+                state.completed = true;
+                state.subscribers.clear();
+                return Err(AppError::Sidecar("IPC_BACKPRESSURE".to_owned()));
+            }
+        }
+        state.next_sequence += 1;
+        state.events.push(broker_event);
+        Ok(())
     }
 
     pub async fn get_events(&self, request_id: Uuid) -> Result<Vec<BrokerEvent>, AppError> {
@@ -192,7 +212,7 @@ mod tests {
     async fn create_and_get_events() {
         let manager = HttpStreamManager::new();
         let request_id = Uuid::new_v4();
-        let _rx = manager.create_stream(request_id).await;
+        manager.create_stream(request_id).await;
 
         manager
             .push_event_async(
@@ -200,14 +220,16 @@ mod tests {
                 BrokerEventKind::OutputTextDelta,
                 serde_json::json!({"text": "Hello"}),
             )
-            .await;
+            .await
+            .unwrap();
         manager
             .push_event_async(
                 request_id,
                 BrokerEventKind::Completed,
                 serde_json::json!({"status": "ok"}),
             )
-            .await;
+            .await
+            .unwrap();
 
         let events = manager.get_events(request_id).await.unwrap();
         assert_eq!(events.len(), 2);
@@ -221,7 +243,8 @@ mod tests {
     async fn subscribe_receives_events() {
         let manager = HttpStreamManager::new();
         let request_id = Uuid::new_v4();
-        let mut rx = manager.create_stream(request_id).await;
+        manager.create_stream(request_id).await;
+        let mut rx = manager.subscribe(request_id).await.unwrap();
 
         manager
             .push_event_async(
@@ -229,7 +252,8 @@ mod tests {
                 BrokerEventKind::Usage,
                 serde_json::json!({"tokens": 10}),
             )
-            .await;
+            .await
+            .unwrap();
 
         let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
             .await
@@ -242,7 +266,7 @@ mod tests {
     async fn complete_marks_stream_finished() {
         let manager = HttpStreamManager::new();
         let request_id = Uuid::new_v4();
-        let _rx = manager.create_stream(request_id).await;
+        manager.create_stream(request_id).await;
         assert!(!manager.is_completed(request_id).await);
         manager.complete_async(request_id).await;
         assert!(manager.is_completed(request_id).await);
@@ -252,7 +276,7 @@ mod tests {
     async fn drop_stream_removes_it() {
         let manager = HttpStreamManager::new();
         let request_id = Uuid::new_v4();
-        let _rx = manager.create_stream(request_id).await;
+        manager.create_stream(request_id).await;
         assert_eq!(manager.active_count().await, 1);
         manager.drop_stream(request_id).await;
         assert_eq!(manager.active_count().await, 0);
@@ -262,7 +286,7 @@ mod tests {
     async fn subscribe_receives_past_events() {
         let manager = HttpStreamManager::new();
         let request_id = Uuid::new_v4();
-        let _rx = manager.create_stream(request_id).await;
+        manager.create_stream(request_id).await;
 
         manager
             .push_event_async(
@@ -270,7 +294,8 @@ mod tests {
                 BrokerEventKind::OutputTextDelta,
                 serde_json::json!({"text": "past"}),
             )
-            .await;
+            .await
+            .unwrap();
 
         let mut rx = manager.subscribe(request_id).await.unwrap();
         let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())

@@ -131,22 +131,25 @@ async fn ssrf_guard_rejects_redirect_loop() {
 
 #[tokio::test]
 async fn egress_lease_url_validation() {
-    let broker = ibreeze_desktop_core::security::egress::EgressBroker::new();
-    let run_id = Uuid::new_v4();
-    broker
-        .create_lease(run_id, vec!["example.com".to_owned()])
-        .await
-        .expect("create lease");
-
-    let result = broker
-        .validate_url("https://www.example.com/v1/data", run_id)
-        .await;
+    let result = ibreeze_desktop_core::security::ssrf_guard::validate_outbound_url(
+        "https://www.example.com/v1/data",
+        &["example.com".to_owned()],
+    )
+    .await;
     assert!(result.is_ok(), "allowed domain should pass: {:?}", result);
 
-    let result = broker.validate_url("https://evil.com/hack", run_id).await;
+    let result = ibreeze_desktop_core::security::ssrf_guard::validate_outbound_url(
+        "https://evil.com/hack",
+        &["example.com".to_owned()],
+    )
+    .await;
     assert!(result.is_err(), "disallowed domain should be rejected");
 
-    let result = broker.validate_url("http://10.0.0.1/private", run_id).await;
+    let result = ibreeze_desktop_core::security::ssrf_guard::validate_outbound_url(
+        "http://10.0.0.1/private",
+        &["example.com".to_owned()],
+    )
+    .await;
     assert!(
         result.is_err(),
         "private IP should be rejected even without domain check"
@@ -155,10 +158,8 @@ async fn egress_lease_url_validation() {
 
 #[tokio::test]
 async fn egress_lease_url_validation_rejects_invalid_lease() {
-    let broker = ibreeze_desktop_core::security::egress::EgressBroker::new();
-    let unknown_run = Uuid::new_v4();
-    let result = broker
-        .validate_url("https://example.com", unknown_run)
+    let result = ibreeze_desktop_core::broker::egress::EgressBroker::new()
+        .validate_token(Uuid::new_v4(), "invalid")
         .await;
     assert!(result.is_err(), "unknown run should fail");
 }

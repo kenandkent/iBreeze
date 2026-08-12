@@ -9,8 +9,10 @@ export interface ReviewListissuesResponse {
   issues: {
     issue_id: string;
     severity: "blocker" | "high" | "medium" | "low";
-    state: "open" | "resolved" | "dismissed";
+    state: "open" | "fixing" | "resolved" | "verified" | "closed" | "rejected";
     category: string;
     description: string;
+    verifier_employee_id: string | null;
+    rejection_reason: string | null;
   }[];
 }

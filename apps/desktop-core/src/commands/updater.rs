@@ -142,7 +142,7 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
             let package_bytes = std::fs::read(&package_path)
                 .map_err(|e| AppError::Storage(format!("read package: {e}")))?;
 
-            let trusted_keys = load_trusted_signing_keys(&state).await?;
+            let trusted_keys = load_trusted_signing_keys(state.inner()).await?;
 
             match validate_manifest(&manifest, &current_version, &trusted_keys, &package_bytes) {
                 Ok(()) => {
@@ -195,8 +195,7 @@ pub async fn updater_install(state: State<'_, AppState>) -> Result<UpdaterInstal
     }
 }
 
-#[tauri::command]
-pub async fn updater_verify_launch(state: State<'_, AppState>) -> Result<bool, AppError> {
+pub async fn updater_verify_launch_impl(state: &AppState) -> Result<bool, AppError> {
     let update_store = UpdateStore::new(state.store.base_path().to_path_buf());
     let socket_path = if state.supervisor.is_running().await {
         let client = state.supervisor.client().await?;
@@ -210,8 +209,13 @@ pub async fn updater_verify_launch(state: State<'_, AppState>) -> Result<bool, A
     Ok(result)
 }
 
+#[tauri::command]
+pub async fn updater_verify_launch(state: State<'_, AppState>) -> Result<bool, AppError> {
+    updater_verify_launch_impl(state.inner()).await
+}
+
 async fn load_trusted_signing_keys(
-    state: &State<'_, AppState>,
+    state: &AppState,
 ) -> Result<Vec<crate::rpc::api_client::SigningKey>, AppError> {
     let profile_directory_id = state
         .auth
@@ -224,8 +228,7 @@ async fn load_trusted_signing_keys(
     verify_catalog_keyset(&keyset, state.development_mode, false)
 }
 
-#[tauri::command]
-pub async fn updater_restore_stable(state: State<'_, AppState>) -> Result<bool, AppError> {
+pub async fn updater_restore_stable_impl(state: &AppState) -> Result<bool, AppError> {
     info!("command.updater_restore_stable.start");
     let update_store = UpdateStore::new(state.store.base_path().to_path_buf());
     let marker = update_store
@@ -237,4 +240,9 @@ pub async fn updater_restore_stable(state: State<'_, AppState>) -> Result<bool, 
     update_store.delete_pending_marker()?;
     info!(version = %marker.old_version, "UPDATE_RESTORED_STABLE");
     Ok(true)
+}
+
+#[tauri::command]
+pub async fn updater_restore_stable(state: State<'_, AppState>) -> Result<bool, AppError> {
+    updater_restore_stable_impl(state.inner()).await
 }

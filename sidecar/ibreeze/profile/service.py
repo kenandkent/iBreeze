@@ -28,11 +28,24 @@ async def create_draft(
     agent_cli: str,
     api_model: str,
     base_profile: dict[str, object],
+    credential_ref: str = "",
+    provider_release_id: str = "",
+    model_binding_id: str = "",
+    provider_protocol: str = "",
 ) -> dict[str, object]:
     """Create a new profile draft version."""
     profile_id = _id()
     version_id = _id()
     now = _now()
+
+    employee = await _one(
+        await db.execute(
+            "SELECT id FROM employees WHERE id=? AND company_id=?",
+            (employee_id, company_id),
+        )
+    )
+    if employee is None:
+        raise ValueError("EMPLOYEE_NOT_FOUND")
 
     existing = await _one(
         await db.execute(
@@ -46,6 +59,14 @@ async def create_draft(
 
     normalized_name = str(base_profile.get("name", "")).strip().lower()
 
+    runtime_binding = {
+        "agent_cli": agent_cli,
+        "api_model": api_model,
+        "credential_ref": credential_ref,
+        "provider_release_id": provider_release_id,
+        "model_binding_id": model_binding_id,
+        "provider_protocol": provider_protocol,
+    }
     await db.execute(
         """INSERT INTO employee_base_profiles
            (id, company_id, name, normalized_name, description, status,
@@ -79,7 +100,7 @@ async def create_draft(
             base_profile.get("name", ""),
             base_profile.get("description", ""),
             "agent_cli" if agent_cli else "api_model",
-            json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
+            json.dumps(runtime_binding, sort_keys=True),
             base_profile.get("system_prompt", ""),
             json.dumps(base_profile.get("capability_tags", [])),
             json.dumps(base_profile.get("tool_policy", {})),
@@ -114,27 +135,54 @@ async def update_draft(
     *,
     agent_cli: str,
     api_model: str,
+    credential_ref: str | None = None,
+    provider_release_id: str | None = None,
+    model_binding_id: str | None = None,
+    provider_protocol: str | None = None,
 ) -> dict[str, object]:
     """Update an existing draft."""
     now = _now()
 
     draft = await _one(
         await db.execute(
-            """SELECT * FROM employee_base_profile_versions
-               WHERE id=? AND status='draft'""",
-            (draft_id,),
+            """SELECT v.* FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.id=? AND v.status='draft' AND p.company_id=?""",
+            (draft_id, company_id),
         )
     )
     if draft is None:
         raise ValueError("DRAFT_NOT_FOUND")
 
+    try:
+        runtime_binding = json.loads(draft["runtime_binding_json"] or "{}")
+    except (TypeError, ValueError):
+        runtime_binding = {}
+    updates = {
+        "agent_cli": agent_cli,
+        "api_model": api_model,
+        "credential_ref": credential_ref,
+        "provider_release_id": provider_release_id,
+        "model_binding_id": model_binding_id,
+        "provider_protocol": provider_protocol,
+    }
+    for key, value in updates.items():
+        if value is not None and value != "":
+            runtime_binding[key] = value
+    runtime_binding = {
+        str(key): value for key, value in runtime_binding.items()
+    }
     await db.execute(
         """UPDATE employee_base_profile_versions
            SET runtime_binding_json=?
-           WHERE id=? AND status='draft'""",
+           WHERE id=? AND status='draft'
+             AND profile_id IN (
+                 SELECT id FROM employee_base_profiles WHERE company_id=?
+             )""",
         (
-            json.dumps({"agent_cli": agent_cli, "api_model": api_model}),
+            json.dumps(runtime_binding, sort_keys=True),
             draft_id,
+            company_id,
         ),
     )
 
@@ -153,8 +201,8 @@ async def get_profile(
     """Return profile with versions."""
     profile = await _one(
         await db.execute(
-            "SELECT * FROM employee_base_profiles WHERE id=?",
-            (profile_id,),
+            "SELECT * FROM employee_base_profiles WHERE id=? AND company_id=?",
+            (profile_id, company_id),
         )
     )
     if profile is None:
@@ -212,9 +260,10 @@ async def bind_skill(
 
     draft = await _one(
         await db.execute(
-            """SELECT id FROM employee_base_profile_versions
-               WHERE profile_id=? AND status='draft'""",
-            (profile_id,),
+            """SELECT v.id FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.profile_id=? AND v.status='draft' AND p.company_id=?""",
+            (profile_id, company_id),
         )
     )
     if draft is None:
@@ -281,9 +330,10 @@ async def unbind_skill(
     """Remove a skill binding from profile."""
     draft = await _one(
         await db.execute(
-            """SELECT id FROM employee_base_profile_versions
-               WHERE profile_id=? AND status='draft'""",
-            (profile_id,),
+            """SELECT v.id FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.profile_id=? AND v.status='draft' AND p.company_id=?""",
+            (profile_id, company_id),
         )
     )
     if draft is None:
@@ -312,9 +362,10 @@ async def validate_draft(
     """Validate draft has required fields."""
     draft = await _one(
         await db.execute(
-            """SELECT * FROM employee_base_profile_versions
-               WHERE id=? AND status='draft'""",
-            (draft_id,),
+            """SELECT v.* FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.id=? AND v.status='draft' AND p.company_id=?""",
+            (draft_id, company_id),
         )
     )
     if draft is None:
@@ -332,6 +383,17 @@ async def validate_draft(
         errors.append("missing_runtime_binding")
     if not d.get("catalog_release_id"):
         errors.append("missing_catalog_release")
+    try:
+        binding = json.loads(d.get("runtime_binding_json") or "{}")
+    except (TypeError, ValueError):
+        binding = {}
+        errors.append("invalid_runtime_binding")
+    if d.get("profile_type") == "api_model":
+        for field in ("credential_ref", "provider_release_id", "model_binding_id", "provider_protocol"):
+            if not isinstance(binding.get(field), str) or not binding[field].strip():
+                errors.append(f"missing_{field}")
+    elif d.get("profile_type") == "agent_cli" and not str(binding.get("agent_cli", "")).strip():
+        errors.append("missing_agent_cli")
 
     return {
         "draft_id": draft_id,
@@ -350,9 +412,10 @@ async def publish_draft(
 
     draft = await _one(
         await db.execute(
-            """SELECT * FROM employee_base_profile_versions
-               WHERE id=? AND status='draft'""",
-            (draft_id,),
+            """SELECT v.* FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.id=? AND v.status='draft' AND p.company_id=?""",
+            (draft_id, company_id),
         )
     )
     if draft is None:
@@ -361,15 +424,18 @@ async def publish_draft(
     await db.execute(
         """UPDATE employee_base_profile_versions
            SET status='published', published_at=?
-           WHERE id=? AND status='draft'""",
-        (now, draft_id),
+           WHERE id=? AND status='draft'
+             AND profile_id IN (
+                 SELECT id FROM employee_base_profiles WHERE company_id=?
+             )""",
+        (now, draft_id, company_id),
     )
 
     await db.execute(
         """UPDATE employee_base_profiles
            SET current_version_id=?, updated_at=?
-           WHERE id=?""",
-        (draft_id, now, draft["profile_id"]),
+           WHERE id=? AND company_id=?""",
+        (draft_id, now, draft["profile_id"], company_id),
     )
 
     return {
@@ -389,9 +455,10 @@ async def retire_version(
 
     version = await _one(
         await db.execute(
-            """SELECT * FROM employee_base_profile_versions
-               WHERE id=? AND status='published'""",
-            (version_id,),
+            """SELECT v.* FROM employee_base_profile_versions v
+               JOIN employee_base_profiles p ON p.id=v.profile_id
+               WHERE v.id=? AND v.status='published' AND p.company_id=?""",
+            (version_id, company_id),
         )
     )
     if version is None:
@@ -400,8 +467,11 @@ async def retire_version(
     await db.execute(
         """UPDATE employee_base_profile_versions
            SET status='retired'
-           WHERE id=? AND status='published'""",
-        (version_id,),
+           WHERE id=? AND status='published'
+             AND profile_id IN (
+                 SELECT id FROM employee_base_profiles WHERE company_id=?
+             )""",
+        (version_id, company_id),
     )
 
     return {
@@ -420,8 +490,8 @@ async def retire_profile(
 
     profile = await _one(
         await db.execute(
-            "SELECT id FROM employee_base_profiles WHERE id=?",
-            (profile_id,),
+            "SELECT id FROM employee_base_profiles WHERE id=? AND company_id=?",
+            (profile_id, company_id),
         )
     )
     if profile is None:
@@ -430,30 +500,39 @@ async def retire_profile(
     draft = await _one(
         await db.execute(
             """SELECT id FROM employee_base_profile_versions
-               WHERE profile_id=? AND status='draft'""",
-            (profile_id,),
+               WHERE profile_id=? AND status='draft'
+                 AND profile_id IN (
+                     SELECT id FROM employee_base_profiles WHERE company_id=?
+                 )""",
+            (profile_id, company_id),
         )
     )
     if draft is not None:
         await db.execute(
             """UPDATE employee_base_profile_versions
                SET status='retired'
-               WHERE profile_id=? AND status='draft'""",
-            (profile_id,),
+               WHERE profile_id=? AND status='draft'
+                 AND profile_id IN (
+                     SELECT id FROM employee_base_profiles WHERE company_id=?
+                 )""",
+            (profile_id, company_id),
         )
 
     await db.execute(
         """UPDATE employee_base_profile_versions
            SET status='retired'
-           WHERE profile_id=? AND status='published'""",
-        (profile_id,),
+           WHERE profile_id=? AND status='published'
+             AND profile_id IN (
+                 SELECT id FROM employee_base_profiles WHERE company_id=?
+             )""",
+        (profile_id, company_id),
     )
 
     await db.execute(
         """UPDATE employee_base_profiles
            SET status='retired', current_version_id=NULL, updated_at=?
-           WHERE id=?""",
-        (now, profile_id),
+           WHERE id=? AND company_id=?""",
+        (now, profile_id, company_id),
     )
 
     return {

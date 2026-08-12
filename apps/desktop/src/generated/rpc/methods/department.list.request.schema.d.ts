@@ -7,6 +7,9 @@
 
 export interface DepartmentListRequest {
   company_id: string;
-  cursor?: string;
+  filter?: {
+    [k: string]: any | undefined;
+  };
+  cursor?: string | null;
   limit?: number;
 }

@@ -4,7 +4,7 @@
 
 文档状态：正式目标架构
 
-适用基线：Git `9a158ff`
+适用基线：当前 `main` 分支工作树；发布时以合并后的提交 SHA 固化
 
 目标读者：架构师、Rust 开发、Python 开发、桌面开发、测试、安全与第三方实施团队
 
@@ -12,8 +12,6 @@
 
 - `docs/设计方案/AI公司桌面应用设计方案.md`
 - `docs/设计方案/AI公司桌面应用-实施计划.md`
-- `docs/superpowers/plans/2026-07-28-ibreeze-five-core-architecture-rewrite.md`
-- `docs/review报告/AI公司桌面应用-二次全量复核报告.md`
 
 ## 1. 文档效力与实施边界
 
@@ -148,12 +146,15 @@ RPC 与错误码以 `packages/rpc-schema` 为唯一根；Domain Event 与业务 
 ```text
 apps/desktop-core/src/
 ├── ipc/
-│   ├── connection.rs
 │   ├── frame.rs
-│   ├── multiplexer.rs
 │   ├── dispatcher.rs
-│   ├── pending.rs
-│   └── session.rs
+│   ├── error.rs
+│   └── mod.rs
+├── rpc/
+│   ├── api_client.rs
+│   ├── protocol.rs
+│   ├── reverse.rs
+│   └── sidecar.rs
 ├── broker/
 │   ├── credential.rs
 │   ├── http.rs
@@ -175,7 +176,10 @@ apps/desktop-core/src/
 └── generated/contracts/
 ```
 
-删除现有 `rpc/reverse.rs`；反向方法的生成路由固定由 `ipc/dispatcher.rs` 实现，Credential、Egress、Process 与 External Write 业务逻辑分别委托给唯一所有权模块。
+保留 `rpc/reverse.rs` 作为反向业务方法的唯一实现；认证 IPC 会话与请求/响应复用由
+`rpc/sidecar.rs` 完成，方法分发由 `ipc/dispatcher.rs` 完成。禁止再创建第二个
+`reverse_client`、legacy bridge 或反向 dispatcher；Credential、Egress、Process 与
+External Write 业务逻辑分别委托给唯一所有权模块。
 
 ### 4.3 Python Sidecar Domain Kernel
 
@@ -196,10 +200,13 @@ sidecar/ibreeze/
 │   ├── outbox.py
 │   └── migrations/001_initial.sql
 ├── rpc/
-│   ├── server.py
+│   ├── production_server.py
+│   ├── session.py
+│   ├── multiplexer.py
+│   ├── frame.py
+│   ├── public_contracts.py
 │   ├── dispatcher.py
-│   ├── validation.py
-│   └── reverse_client.py
+│   └── __init__.py
 ├── runtime/
 │   ├── gateway.py
 │   ├── run_service.py
@@ -538,6 +545,7 @@ credential.http.event
 ```json
 {
   "run_id": "uuid",
+  "workspace_grant_id": "uuid",
   "execution_snapshot_sha256": "64-char-lower-hex",
   "agent_release_id": "uuid",
   "agent_type": "codex_cli|claude_code|opencode",
@@ -621,6 +629,9 @@ Rust 按实际读取顺序为 stdout/stderr 共用一个单调 sequence；单个
   "start_time": "RFC3339-Z",
   "exit_code": "integer|null",
   "signal": "integer|null",
+  "status": "running|exited|timed_out|cancelled",
+  "timed_out": false,
+  "cancellation_requested": false,
   "last_sequence": 10,
   "ended_at": "RFC3339-Z|null"
 }
@@ -650,6 +661,14 @@ Rust Credential HTTP Broker 负责：
 - 清零凭据和临时请求缓冲。
 
 Sidecar 禁止传入 Authorization、API Key、完整 Provider URL 或任意 Header。
+
+Runtime Gateway 的 `runtime.run` 只接受已持久化的执行快照：请求必须包含
+`company_id`、`agent_id`、`company_task_id`、`conversation_id`、
+`availability_snapshot_id`、`execution_snapshot_id`、`model_id`、`run_purpose` 和
+`adapter_type`。服务端必须校验快照归属、有效期、职员状态与任务关联，成功后在同一写事务
+写入 `run.queued` RunEvent、DomainEvent、Outbox 和 RuntimeQueue；客户端不得只凭任务 ID 创建 Run。
+生产 RPC 委托 `ibreeze.runtime.gateway.start` 唯一创建实现；请求中的模型和适配器必须与
+ExecutionSnapshot 的不可变运行绑定一致，其他模块禁止直接插入 `agent_runs`。
 
 ### 7.2 反向 RPC
 
@@ -1254,8 +1273,8 @@ class WorkerHealth:
 stop accepting new RPC
 → cancel/finish active streams
 → stop leasing new runtime work
-→ drain WriteQueue（最长 10 秒）
 → stop workers
+→ drain WriteQueue（最长 10 秒）
 → checkpoint WAL
 → close read pool
 → close writer

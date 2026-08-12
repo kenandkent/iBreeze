@@ -24,14 +24,6 @@
     "reviewer_employee_id": {
       "type": "string",
       "format": "uuid"
-    },
-    "verdict": {
-      "type": "string",
-      "enum": [
-        "pass",
-        "needs_changes",
-        "failed"
-      ]
     }
   },
   "required": [
@@ -39,7 +31,6 @@
     "aggregate_id",
     "version",
     "assignment_id",
-    "reviewer_employee_id",
-    "verdict"
+    "reviewer_employee_id"
   ]
 }

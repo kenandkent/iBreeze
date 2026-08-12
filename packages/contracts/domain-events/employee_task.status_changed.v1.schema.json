@@ -20,9 +20,14 @@
     "from_state": {
       "type": "string",
       "enum": [
-        "pending",
-        "in_progress",
-        "completed",
+        "assigned",
+        "ready",
+        "running",
+        "submitted",
+        "peer_reviewing",
+        "accepted",
+        "changes_requested",
+        "waiting_resource",
         "failed",
         "cancelled"
       ]
@@ -30,12 +35,18 @@
     "to_state": {
       "type": "string",
       "enum": [
-        "pending",
-        "in_progress",
-        "completed",
+        "assigned",
+        "ready",
+        "running",
+        "submitted",
+        "peer_reviewing",
+        "accepted",
+        "changes_requested",
+        "waiting_resource",
         "failed",
         "cancelled"
       ]
     }
-  }
+  },
+  "required": ["company_id", "aggregate_id", "version", "from_state", "to_state"]
 }
