@@ -1,3 +1,10 @@
+"""Compatibility migration helper used by isolated unit tests only.
+
+Production startup uses :mod:`ibreeze.persistence.migrator` exclusively.  The
+helper remains deliberately out of the application lifecycle so one profile
+cannot be initialized by two ledger formats.
+"""
+
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +32,31 @@ MIGRATIONS: list[Migration] = [
         version=1,
         filename="001_initial.sql",
         sql="file://migrations/001_initial.sql",
-        sha256="bb0fddf3a67911087b4d209826ec1e5246be925acf206e076b6ddc2a6c1ac2e7",
+        sha256="f1a645c33219e7269b00b24ddd18502ef2683a17ce1133b4f80bccb0d22210ab",
+    ),
+    Migration(
+        version=2,
+        filename="002_review_assignment_version.sql",
+        sql="file://migrations/002_review_assignment_version.sql",
+        sha256="fa6db7c3355810bfdb7b62943ae0653df827f530117f3593a261975924663ed3",
+    ),
+    Migration(
+        version=3,
+        filename="003_review_report_version.sql",
+        sql="file://migrations/003_review_report_version.sql",
+        sha256="93ad9c15572bcfff60adf35f231190eaf523b27653e21d7218b6647bfd58eba0",
+    ),
+    Migration(
+        version=4,
+        filename="004_resolution_evidence.sql",
+        sql="file://migrations/004_resolution_evidence.sql",
+        sha256="7656d743d4aba23d8651cfa4ea8372c25bb87d3020dba9e1b341504d2b6813e3",
+    ),
+    Migration(
+        version=5,
+        filename="005_multi_agent_aggregation.sql",
+        sql="file://migrations/005_multi_agent_aggregation.sql",
+        sha256="b68033ade6d3a670725c230336a9b92fbd12b093fe220599df2a685b06b2ccfe",
     ),
 ]
 

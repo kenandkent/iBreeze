@@ -2,20 +2,50 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
-from uuid import UUID
+from dataclasses import asdict, is_dataclass
+from typing import Any, cast
+from uuid import UUID, uuid4
 
 from ibreeze.domain.tasks.commands import (
     AcceptEmployeeTask,
     CompleteCompanyTask,
     CompleteDepartmentTask,
+    StartEmployeeTask,
+    SubmitEmployeeTask,
 )
+from ibreeze.persistence.types import DomainEventRecord, OutboxRecord
 from ibreeze.persistence.unit_of_work import CommandResult
 
 
 def _hash(obj: Any) -> str:
-    raw = json.dumps(obj, sort_keys=True, separators=(",", ":"))
+    raw = json.dumps(
+        asdict(cast(Any, obj)) if is_dataclass(obj) else obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _event(event_type: str, aggregate_type: str, task_id: UUID, company_id: UUID,
+           version: int, from_state: str, to_state: str) -> DomainEventRecord:
+    payload = {
+        "company_id": str(company_id),
+        "aggregate_id": str(task_id),
+        "version": version,
+        "from_state": from_state,
+        "to_state": to_state,
+    }
+    return DomainEventRecord(
+        event_id=uuid4(), event_type=event_type, aggregate_type=aggregate_type,
+        aggregate_id=task_id, aggregate_version=version, company_id=company_id,
+        payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
+        trace_id=str(uuid4()),
+    )
+
+
+def _outbox(topic: str, payload: dict[str, Any], event: DomainEventRecord) -> OutboxRecord:
+    return OutboxRecord(topic=topic, payload_json=event.payload_json, domain_event_id=event.event_id)
 
 
 class EmployeeGate:
@@ -73,10 +103,14 @@ class EmployeeGate:
             """SELECT 1 FROM employee_tasks et
                JOIN department_tasks dt ON dt.id=et.department_task_id AND dt.company_id=et.company_id
                JOIN artifacts a ON a.company_task_id=dt.company_task_id AND a.company_id=dt.company_id
-               LEFT JOIN verifications v ON v.artifact_id=a.id AND v.company_id=a.company_id
                WHERE et.id=? AND et.company_id=?
                AND a.is_current=1
-               AND (v.id IS NULL OR v.status!='passed')
+               AND NOT EXISTS (
+                   SELECT 1 FROM verifications v
+                   WHERE v.artifact_id=a.id
+                   AND v.company_id=a.company_id
+                   AND v.status='passed'
+               )
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -89,6 +123,8 @@ class EmployeeGate:
                JOIN department_tasks dt ON dt.company_task_id=a.company_task_id AND dt.company_id=a.company_id
                JOIN employee_tasks et ON et.department_task_id=dt.id AND et.company_id=dt.company_id
                WHERE et.id=? AND et.company_id=?
+               AND a.is_current=1
+               AND ra.reviewed_sha256=a.object_sha256
                AND ra.status NOT IN ('submitted', 'stale', 'cancelled')
                LIMIT 1""",
             (str(task_id), str(company_id)),
@@ -103,6 +139,9 @@ class EmployeeGate:
                JOIN department_tasks dt ON dt.company_task_id=a.company_task_id AND dt.company_id=a.company_id
                JOIN employee_tasks et ON et.department_task_id=dt.id AND et.company_id=dt.company_id
                WHERE et.id=? AND et.company_id=?
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND rr.verdict!='pass'
                LIMIT 1""",
             (str(task_id), str(company_id)),
@@ -118,8 +157,12 @@ class EmployeeGate:
                JOIN department_tasks dt ON dt.company_task_id=a.company_task_id AND dt.company_id=a.company_id
                JOIN employee_tasks et ON et.department_task_id=dt.id AND et.company_id=dt.company_id
                WHERE et.id=? AND et.company_id=?
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND ri.severity IN ('blocker','high')
                AND ri.status NOT IN ('closed', 'rejected')
+               AND ri.superseded_by_artifact_id IS NULL
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -145,11 +188,18 @@ class EmployeeGate:
                LEFT JOIN agent_runs ar ON ar.employee_task_id=et.id
                    AND ar.company_id=et.company_id
                    AND ar.status IN ('queued','running')
-               LEFT JOIN approvals ap ON ap.company_task_id=dt.company_task_id
-                   AND ap.company_id=dt.company_id
-                   AND ap.status NOT IN ('consumed','expired')
                WHERE et.id=? AND et.company_id=?
-               AND (ar.id IS NOT NULL OR ap.id IS NOT NULL)
+               AND (
+                   ar.id IS NOT NULL
+                   OR EXISTS (
+                       SELECT 1 FROM agent_runs ar2
+                       JOIN human_approvals ha ON ha.run_id=ar2.id
+                           AND ha.company_id=ar2.company_id
+                       WHERE ar2.employee_task_id=et.id
+                         AND ar2.company_id=et.company_id
+                         AND ha.status IN ('pending','allowed')
+                   )
+               )
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -214,10 +264,14 @@ class DepartmentGate:
         cursor = await session.execute(
             """SELECT 1 FROM review_reports rr
                JOIN review_assignments ra ON ra.id=rr.assignment_id
-               JOIN department_tasks dt ON dt.company_task_id=(
-                   SELECT company_task_id FROM artifacts WHERE id=ra.artifact_id
-               )
+               JOIN artifacts a ON a.id=ra.artifact_id AND a.company_id=ra.company_id
+               JOIN department_tasks dt ON dt.company_task_id=a.company_task_id
+                   AND dt.company_id=a.company_id
                WHERE dt.id=? AND dt.company_id=?
+               AND a.artifact_type='department_report'
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND rr.verdict!='pass'
                LIMIT 1""",
             (str(task_id), str(company_id)),
@@ -229,12 +283,16 @@ class DepartmentGate:
             """SELECT 1 FROM review_issues ri
                JOIN review_reports rr ON rr.id=ri.review_report_id
                JOIN review_assignments ra ON ra.id=rr.assignment_id
-               JOIN department_tasks dt ON dt.company_task_id=(
-                   SELECT company_task_id FROM artifacts WHERE id=ra.artifact_id
-               )
+               JOIN artifacts a ON a.id=ra.artifact_id AND a.company_id=ra.company_id
+               JOIN department_tasks dt ON dt.company_task_id=a.company_task_id
+                   AND dt.company_id=a.company_id
                WHERE dt.id=? AND dt.company_id=?
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND ri.severity IN ('blocker','high')
                AND ri.status NOT IN ('closed', 'rejected')
+               AND ri.superseded_by_artifact_id IS NULL
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -244,10 +302,16 @@ class DepartmentGate:
         cursor = await session.execute(
             """SELECT 1 FROM department_tasks dt
                JOIN artifacts a ON a.company_task_id=dt.company_task_id
-               LEFT JOIN verifications v ON v.artifact_id=a.id
                WHERE dt.id=? AND dt.company_id=?
+               AND a.company_id=dt.company_id
+               AND a.is_current=1
                AND a.artifact_type IN ('test_case','test_result')
-               AND (v.id IS NULL OR v.status!='passed')
+               AND NOT EXISTS (
+                   SELECT 1 FROM verifications v
+                   WHERE v.artifact_id=a.id
+                   AND v.company_id=a.company_id
+                   AND v.status='passed'
+               )
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -269,11 +333,18 @@ class DepartmentGate:
                LEFT JOIN agent_runs ar ON ar.company_task_id=dt.company_task_id
                    AND ar.company_id=dt.company_id
                    AND ar.status IN ('queued','running')
-               LEFT JOIN approvals ap ON ap.company_task_id=dt.company_task_id
-                   AND ap.company_id=dt.company_id
-                   AND ap.status NOT IN ('consumed','expired')
                WHERE dt.id=? AND dt.company_id=?
-               AND (ar.id IS NOT NULL OR ap.id IS NOT NULL)
+               AND (
+                   ar.id IS NOT NULL
+                   OR EXISTS (
+                       SELECT 1 FROM agent_runs ar2
+                       JOIN human_approvals ha ON ha.run_id=ar2.id
+                           AND ha.company_id=ar2.company_id
+                       WHERE ar2.company_task_id=dt.company_task_id
+                         AND ar2.company_id=dt.company_id
+                         AND ha.status IN ('pending','allowed')
+                   )
+               )
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -318,6 +389,9 @@ class CompanyGate:
                JOIN artifacts a ON a.id=ra.artifact_id
                WHERE a.company_task_id=? AND a.company_id=?
                AND a.artifact_type='department_report'
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND rr.verdict!='pass'
                LIMIT 1""",
             (str(task_id), str(company_id)),
@@ -331,6 +405,9 @@ class CompanyGate:
                JOIN artifacts a ON a.id=ra.artifact_id
                WHERE a.company_task_id=? AND a.company_id=?
                AND a.artifact_type IN ('consolidated_review','cross_department_review')
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND rr.verdict!='pass'
                LIMIT 1""",
             (str(task_id), str(company_id)),
@@ -344,8 +421,12 @@ class CompanyGate:
                JOIN review_assignments ra ON ra.id=rr.assignment_id
                JOIN artifacts a ON a.id=ra.artifact_id
                WHERE a.company_task_id=? AND a.company_id=?
+               AND a.is_current=1
+               AND ra.status NOT IN ('stale', 'cancelled')
+               AND rr.reviewed_sha256=a.object_sha256
                AND ri.severity IN ('blocker','high')
                AND ri.status NOT IN ('closed', 'rejected')
+               AND ri.superseded_by_artifact_id IS NULL
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -391,11 +472,18 @@ class CompanyGate:
                LEFT JOIN agent_runs ar ON ar.company_task_id=ct.id
                    AND ar.company_id=ct.company_id
                    AND ar.status IN ('queued','running')
-               LEFT JOIN approvals ap ON ap.company_task_id=ct.id
-                   AND ap.company_id=ct.company_id
-                   AND ap.status NOT IN ('consumed','expired')
                WHERE ct.id=? AND ct.company_id=?
-               AND (ar.id IS NOT NULL OR ap.id IS NOT NULL)
+               AND (
+                   ar.id IS NOT NULL
+                   OR EXISTS (
+                       SELECT 1 FROM agent_runs ar2
+                       JOIN human_approvals ha ON ha.run_id=ar2.id
+                           AND ha.company_id=ar2.company_id
+                       WHERE ar2.company_task_id=ct.id
+                         AND ar2.company_id=ct.company_id
+                         AND ha.status IN ('pending','allowed')
+                   )
+               )
                LIMIT 1""",
             (str(task_id), str(company_id)),
         )
@@ -421,26 +509,36 @@ class AcceptEmployeeTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            event = _event("employee_task.status_changed", "employee_task", request.task_id,
+                           request.company_id, task["version"] + 1, task["status"], "accepted")
+            payload = {
+                "company_id": str(request.company_id),
+                "aggregate_id": str(request.task_id),
+                "version": task["version"] + 1,
+                "from_state": task["status"],
+                "to_state": "accepted",
+                "task_id": str(request.task_id),
+            }
+            # The second outbox row advances the sequential-refinement graph:
+            # it lets AdvanceEmployeeTaskGraph dispatch dependent segments whose
+            # upstream is now accepted, inside the same Outbox transaction.
+            graph_payload = {
+                "company_id": str(request.company_id),
+                "aggregate_id": str(request.task_id),
+                "version": task["version"] + 1,
+                "to_state": "accepted",
+                "task_id": str(request.task_id),
+            }
             return CommandResult(
                 response={"id": str(request.task_id), "status": "accepted"},
-                events=(
-                    {
-                        "event_type": "employee_task.status_changed",
-                        "aggregate_id": str(request.task_id),
-                        "from_state": task["status"],
-                        "to_state": "accepted",
-                        "version": task["version"] + 1,
-                        "company_id": str(request.company_id),
-                    },
-                ),
+                events=(event,),
                 outbox=(
-                    {
-                        "command_type": "EvaluateDepartmentReadiness",
-                        "payload": {
-                            "task_id": str(request.task_id),
-                            "company_id": str(request.company_id),
-                        },
-                    },
+                    _outbox("employee_task.status_changed", payload, event),
+                    OutboxRecord(
+                        topic="employee_task.graph_advance",
+                        payload_json=json.dumps(graph_payload, sort_keys=True, separators=(",", ":")),
+                        domain_event_id=event.event_id,
+                    ),
                 ),
             )
 
@@ -456,6 +554,135 @@ class AcceptEmployeeTaskHandler:
         if row is None:
             raise ValueError("RESOURCE_NOT_FOUND")
         return dict(row)
+
+
+class StartEmployeeTaskHandler:
+    """Move an assigned employee task into execution exactly once."""
+
+    def __init__(self, uow: Any) -> None:
+        self._uow = uow
+
+    async def handle(self, context: Any, request: StartEmployeeTask) -> Any:
+        async def command(session: Any) -> Any:
+            cursor = await session.execute(
+                "SELECT id, status, version FROM employee_tasks WHERE id=? AND company_id=? LIMIT 1",
+                (str(request.task_id), str(request.company_id)),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise ValueError("RESOURCE_NOT_FOUND")
+            task = dict(row)
+            if task["status"] == "running":
+                return CommandResult(response={"id": str(request.task_id), "status": "running"})
+            if task["status"] not in {"assigned", "ready"} or int(task["version"]) != request.expected_version:
+                raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            next_version = int(task["version"]) + 1
+            updated = await session.execute(
+                """UPDATE employee_tasks
+                   SET status='running', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ'), version=?
+                   WHERE id=? AND company_id=? AND status IN ('assigned','ready') AND version=?""",
+                (next_version, str(request.task_id), str(request.company_id), int(task["version"])),
+            )
+            if updated.rowcount != 1:
+                raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            event = _event(
+                "employee_task.status_changed",
+                "employee_task",
+                request.task_id,
+                request.company_id,
+                next_version,
+                task["status"],
+                "running",
+            )
+            payload = {
+                "company_id": str(request.company_id),
+                "aggregate_id": str(request.task_id),
+                "version": next_version,
+                "from_state": task["status"],
+                "to_state": "running",
+                "task_id": str(request.task_id),
+            }
+            return CommandResult(
+                response={"id": str(request.task_id), "status": "running"},
+                events=(event,),
+                outbox=(_outbox("employee_task.status_changed", payload, event),),
+            )
+
+        return await self._uow.execute(context, _hash(request), command)
+
+
+class SubmitEmployeeTaskHandler:
+    """Convert a successful Run into an employee submission.
+
+    A Run ending successfully is evidence that the Agent loop ended; it is
+    not acceptance of the business task.  This handler is the only component
+    allowed to make the first business transition after ``run.completed``.
+    Review and acceptance remain separate commands and gates.
+    """
+
+    def __init__(self, uow: Any) -> None:
+        self._uow = uow
+
+    async def handle(self, context: Any, request: SubmitEmployeeTask) -> Any:
+        async def command(session: Any) -> Any:
+            cursor = await session.execute(
+                """SELECT id, status, version FROM employee_tasks
+                   WHERE id=? AND company_id=? LIMIT 1""",
+                (str(request.task_id), str(request.company_id)),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise ValueError("RESOURCE_NOT_FOUND")
+            task = dict(row)
+            current = task["status"]
+            if current in {"submitted", "peer_reviewing", "accepted"}:
+                return CommandResult(
+                    response={"id": str(request.task_id), "status": current},
+                    events=(),
+                    outbox=(),
+                )
+            if current != "running" or int(task["version"]) != request.expected_version:
+                raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            updated_version = int(task["version"]) + 1
+            updated = await session.execute(
+                """UPDATE employee_tasks
+                   SET status='submitted', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ'),
+                       version=?
+                   WHERE id=? AND company_id=? AND status='running' AND version=?""",
+                (
+                    updated_version,
+                    str(request.task_id),
+                    str(request.company_id),
+                    int(task["version"]),
+                ),
+            )
+            if updated.rowcount != 1:
+                raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            event = _event(
+                "employee_task.status_changed",
+                "employee_task",
+                request.task_id,
+                request.company_id,
+                updated_version,
+                "running",
+                "submitted",
+            )
+            payload = {
+                "company_id": str(request.company_id),
+                "aggregate_id": str(request.task_id),
+                "version": updated_version,
+                "from_state": "running",
+                "to_state": "submitted",
+                "task_id": str(request.task_id),
+                "run_id": str(request.run_id),
+            }
+            return CommandResult(
+                response={"id": str(request.task_id), "status": "submitted"},
+                events=(event,),
+                outbox=(_outbox("employee_task.status_changed", payload, event),),
+            )
+
+        return await self._uow.execute(context, _hash(request), command)
 
 
 class CompleteDepartmentTaskHandler:
@@ -477,27 +704,20 @@ class CompleteDepartmentTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            event = _event("department_task.status_changed", "department_task", request.task_id,
+                           request.company_id, task["version"] + 1, task["status"], "completed")
+            payload = {
+                "company_id": str(request.company_id),
+                "aggregate_id": str(request.task_id),
+                "version": task["version"] + 1,
+                "from_state": task["status"],
+                "to_state": "completed",
+                "task_id": str(request.task_id),
+            }
             return CommandResult(
                 response={"id": str(request.task_id), "status": "completed"},
-                events=(
-                    {
-                        "event_type": "department_task.status_changed",
-                        "aggregate_id": str(request.task_id),
-                        "from_state": task["status"],
-                        "to_state": "completed",
-                        "version": task["version"] + 1,
-                        "company_id": str(request.company_id),
-                    },
-                ),
-                outbox=(
-                    {
-                        "command_type": "EvaluateCompanyReadiness",
-                        "payload": {
-                            "task_id": str(request.task_id),
-                            "company_id": str(request.company_id),
-                        },
-                    },
-                ),
+                events=(event,),
+                outbox=(_outbox("department_task.status_changed", payload, event),),
             )
 
         return await self._uow.execute(context, _hash(request), command)
@@ -533,19 +753,19 @@ class CompleteCompanyTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
+            event = _event("company_task.status_changed", "company_task", request.task_id,
+                           request.company_id, task["version"] + 1, task["status"], "completed")
             return CommandResult(
                 response={"id": str(request.task_id), "status": "completed"},
-                events=(
-                    {
-                        "event_type": "company_task.status_changed",
-                        "aggregate_id": str(request.task_id),
-                        "from_state": task["status"],
-                        "to_state": "completed",
-                        "version": task["version"] + 1,
-                        "company_id": str(request.company_id),
-                    },
-                ),
-                outbox=(),
+                events=(event,),
+                outbox=(_outbox("company_task.status_changed", {
+                    "company_id": str(request.company_id),
+                    "aggregate_id": str(request.task_id),
+                    "version": task["version"] + 1,
+                    "from_state": task["status"],
+                    "to_state": "completed",
+                    "task_id": str(request.task_id),
+                }, event),),
             )
 
         return await self._uow.execute(context, _hash(request), command)

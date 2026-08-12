@@ -49,6 +49,12 @@ class SubmitReview:
 
 
 @dataclass(frozen=True, slots=True)
+class RerunReview:
+    company_id: UUID
+    review_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class StartIssueFix:
     company_id: UUID
     issue_id: UUID
