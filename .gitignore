@@ -80,8 +80,8 @@ apps/desktop-core/src/generated/**/*.d.ts
 apps/desktop-core/src/generated/**/*.py
 apps/desktop-core/src/generated/**/*.ts
 
-# Sidecar (generated from JSON Schema)
-sidecar/ibreeze/generated/
+# Sidecar (generated from JSON Schema) — committed like desktop/desktop-core/admin-web
+# (main-language generated artifacts are tracked; only cross-language ones are ignored)
 
 # Admin Web (TypeScript only: .d.ts, .ts)
 apps/admin-web/src/generated/contracts/

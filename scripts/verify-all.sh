@@ -158,7 +158,7 @@ run_e2e() {
     echo "--- e2e tests ---"
     e2e_dir="$ROOT_DIR/tests/e2e"
     if [ -d "$e2e_dir" ] && ls "$e2e_dir"/*.py &>/dev/null 2>&1; then
-        uv run pytest "$e2e_dir" -v --tb=short
+        uv run --directory apps/backend-api pytest "$e2e_dir" -v --tb=short
     else
         echo "(no e2e test files found in $e2e_dir)"
     fi
@@ -181,7 +181,10 @@ run_drift() {
         if [ -d "$ROOT_DIR/$d" ]; then test_dirs="$test_dirs $ROOT_DIR/$d"; fi
     done
     if [ -n "$test_dirs" ]; then
-        uv run pytest $test_dirs -v
+        # --project keeps cwd at repo root (tests/scripts/test_verify_all.py
+        # resolves scripts paths relative to the repo root); --directory would
+        # switch cwd into sidecar and break those relative paths.
+        uv run --project "$ROOT_DIR/sidecar" pytest $test_dirs -v
     else
         echo "(no test directories found)"
     fi
