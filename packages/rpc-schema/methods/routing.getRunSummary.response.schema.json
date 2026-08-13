@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/routing.getRunSummary.response.v1",
+  "title": "RoutingGetRunSummaryResponse",
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "run_id":{"type":"string"},"run_status":{"type":"string"},"routing_mode":{"type":["string","null"]},"rollout_stage":{"type":"string"},"decision_count":{"type":"integer"},"single_count":{"type":"integer"},"ensemble_count":{"type":"integer"},"fallback_hops":{"type":"integer"},"total_prompt_tokens":{"type":"integer"},"total_completion_tokens":{"type":"integer"},"total_tokens":{"type":"integer"},"p50_latency_ms":{"type":["number","null"]},"p95_latency_ms":{"type":["number","null"]},"actual_models":{"type":"array"},"control":{"type":"object"}
+  },
+  "required":["run_id","run_status","routing_mode","rollout_stage","decision_count","single_count","ensemble_count","fallback_hops","total_prompt_tokens","total_completion_tokens","total_tokens","p50_latency_ms","p95_latency_ms","actual_models","control"]
+}

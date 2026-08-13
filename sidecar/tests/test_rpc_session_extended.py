@@ -75,6 +75,7 @@ class TestIpcSession:
             return original_register(rid, deadline)
 
         session._multiplexer.register_pending = capture_register
+
         # Resolve immediately
         async def resolve_soon():
             await asyncio.sleep(0.01)
@@ -98,8 +99,10 @@ class TestIpcSession:
         written_data = writer.write.call_args[0][0]
         # Verify it's a valid frame
         import struct
+
         struct.unpack(">I", written_data[:4])[0]
         import json
+
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["method"] == "sys.ping"
         assert payload["jsonrpc"] == "2.0"
@@ -109,6 +112,7 @@ class TestIpcSession:
         written_data = writer.write.call_args[0][0]
         import json
         import struct
+
         struct.unpack(">I", written_data[:4])[0]
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["id"] == "rpc:123"
@@ -120,6 +124,7 @@ class TestIpcSession:
         written_data = writer.write.call_args[0][0]
         import json
         import struct
+
         struct.unpack(">I", written_data[:4])[0]
         payload = json.loads(written_data[4:].decode("utf-8"))
         assert payload["id"] == "rpc:456"

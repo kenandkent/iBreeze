@@ -28,9 +28,7 @@ class RuntimeWorker(BaseWorker):
         super().__init__(write_queue=write_queue)
         self._read_pool = read_pool
         self._executor = (
-            RuntimeExecutionService(read_pool, write_queue, command_bus)
-            if read_pool is not None and write_queue is not None
-            else None
+            RuntimeExecutionService(read_pool, write_queue, command_bus) if read_pool is not None and write_queue is not None else None
         )
 
     async def work(self) -> None:
@@ -39,10 +37,9 @@ class RuntimeWorker(BaseWorker):
             # read-only diagnostic transaction for isolated fixtures; the
             # production lifecycle always supplies both dependencies.
             if self._write_queue is not None:
+
                 async def inspect_ready(conn: Any) -> int:
-                    cursor = await conn.execute(
-                        "SELECT id FROM runtime_queue WHERE status='ready' LIMIT 10"
-                    )
+                    cursor = await conn.execute("SELECT id FROM runtime_queue WHERE status='ready' LIMIT 10")
                     rows = await cursor.fetchall()
                     return len(rows)
 

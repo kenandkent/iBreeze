@@ -14,14 +14,16 @@ from ibreeze.workers.spec import BaseWorker
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 50
-_PROJECTION_ONLY_TOPICS = frozenset({
-    "run.queued",
-    "run.started",
-    "run.failed",
-    "run.cancelled",
-    "review.assigned",
-    "company_task.status_changed",
-})
+_PROJECTION_ONLY_TOPICS = frozenset(
+    {
+        "run.queued",
+        "run.started",
+        "run.failed",
+        "run.cancelled",
+        "review.assigned",
+        "company_task.status_changed",
+    }
+)
 
 
 class OutboxWorker(BaseWorker):

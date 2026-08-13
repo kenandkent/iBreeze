@@ -53,9 +53,7 @@ class TestOutboxWorkerWorkSuccess:
         wq.submit = AsyncMock(return_value=5)
         w = OutboxWorker(write_queue=wq)
         await w.work()
-        mock_logger.info.assert_called_once_with(
-            "OutboxWorker delivered %d events", 5
-        )
+        mock_logger.info.assert_called_once_with("OutboxWorker delivered %d events", 5)
 
     @patch("ibreeze.workers.outbox.logger")
     async def test_does_not_log_when_delivered_count_zero(self, mock_logger):
@@ -114,19 +112,14 @@ class TestOutboxWorkerWorkSuccess:
         await w.work()
 
         # Should update outbox for each row
-        update_calls = [
-            c for c in conn.execute.await_args_list
-            if "UPDATE outbox" in str(c.args)
-        ]
+        update_calls = [c for c in conn.execute.await_args_list if "UPDATE outbox" in str(c.args)]
         assert len(update_calls) == 2
 
         # WriteQueue owns the transaction boundary; the worker never commits
         # the connection directly.
         conn.commit.assert_not_awaited()
 
-        mock_logger.info.assert_called_once_with(
-            "OutboxWorker delivered %d events", 2
-        )
+        mock_logger.info.assert_called_once_with("OutboxWorker delivered %d events", 2)
 
     @patch("ibreeze.workers.outbox.logger")
     async def test_inner_deliver_selects_pending_before_now(self, mock_logger):
@@ -313,9 +306,7 @@ class TestOutboxWorkerWorkException:
         wq.submit = AsyncMock(side_effect=RuntimeError("db down"))
         w = OutboxWorker(write_queue=wq)
         await w.work()
-        mock_logger.exception.assert_called_once_with(
-            "OutboxWorker deliver failed"
-        )
+        mock_logger.exception.assert_called_once_with("OutboxWorker deliver failed")
 
     @patch("ibreeze.workers.outbox.logger")
     async def test_does_not_re_raise(self, mock_logger):

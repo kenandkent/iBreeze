@@ -139,8 +139,15 @@ class TestEventNormalizer:
 class TestKnowledgeGeneration:
     @pytest.mark.asyncio
     async def test_get_active_generation_found_and_missing(self) -> None:
-        row = {"id": "g1", "model_key": "m", "vector_dimension": 3, "source_event_sequence": 1,
-               "status": "active", "created_at": "t", "activated_at": "t"}
+        row = {
+            "id": "g1",
+            "model_key": "m",
+            "vector_dimension": 3,
+            "source_event_sequence": 1,
+            "status": "active",
+            "created_at": "t",
+            "activated_at": "t",
+        }
         db = AsyncMock()
         db.execute = AsyncMock(return_value=AsyncMock(fetchone=AsyncMock(return_value=row)))
         assert await get_active_generation(db, "c1") == row

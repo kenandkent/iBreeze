@@ -53,22 +53,28 @@ class TestArchivePathTraversal:
 
     def test_rejects_traversal_in_member_name(self, tmp_dir):
         archive = os.path.join(tmp_dir, "traversal.tar.zst")
-        _create_tar_zst(archive, [
-            {"name": "data/profile.db", "data": b"fake db"},
-            {"name": "manifest.json", "data": b'{"test": true}'},
-            {"name": "../etc/passwd", "data": b"root:x:0:0:"},
-        ])
+        _create_tar_zst(
+            archive,
+            [
+                {"name": "data/profile.db", "data": b"fake db"},
+                {"name": "manifest.json", "data": b'{"test": true}'},
+                {"name": "../etc/passwd", "data": b"root:x:0:0:"},
+            ],
+        )
         result = verify_backup_package(archive)
         assert result["traversal_issues"] == ["../etc/passwd"]
         assert result["valid"] is False
 
     def test_rejects_nested_traversal(self, tmp_dir):
         archive = os.path.join(tmp_dir, "nested_traversal.tar.zst")
-        _create_tar_zst(archive, [
-            {"name": "data/profile.db", "data": b"fake db"},
-            {"name": "manifest.json", "data": b'{"test": true}'},
-            {"name": "cas/../../secrets.json", "data": b"secret"},
-        ])
+        _create_tar_zst(
+            archive,
+            [
+                {"name": "data/profile.db", "data": b"fake db"},
+                {"name": "manifest.json", "data": b'{"test": true}'},
+                {"name": "cas/../../secrets.json", "data": b"secret"},
+            ],
+        )
         result = verify_backup_package(archive)
         assert len(result["traversal_issues"]) > 0
 
@@ -78,10 +84,13 @@ class TestArchiveMemberValidation:
 
     def test_valid_archive_passes(self, tmp_dir):
         archive = os.path.join(tmp_dir, "valid.tar.zst")
-        _create_tar_zst(archive, [
-            {"name": "data/profile.db", "data": b"fake db"},
-            {"name": "manifest.json", "data": b'{"test": true}'},
-        ])
+        _create_tar_zst(
+            archive,
+            [
+                {"name": "data/profile.db", "data": b"fake db"},
+                {"name": "manifest.json", "data": b'{"test": true}'},
+            ],
+        )
         result = verify_backup_package(archive)
         assert result["valid"] is True
         assert result["manifest_found"] is True
@@ -93,6 +102,7 @@ class TestSensitiveFileExclusion:
 
     def test_sensitive_exclude_list_present(self):
         from ibreeze.backup.service import _SENSITIVE_FILES
+
         assert "secrets.json" in _SENSITIVE_FILES
         assert ".env" in _SENSITIVE_FILES
         assert "credentials.json" in _SENSITIVE_FILES

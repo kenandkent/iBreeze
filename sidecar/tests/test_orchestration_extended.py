@@ -34,9 +34,7 @@ class TestAvailabilityChecker:
 
     @pytest.mark.asyncio
     async def test_check_health(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"1": 1})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"1": 1})))
         result = await check_health(mock_db_session, company_id="comp-1")
         assert result.status == CheckStatus.PASS
 
@@ -48,26 +46,20 @@ class TestAvailabilityChecker:
 
     @pytest.mark.asyncio
     async def test_check_workspace(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"cnt": 2})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"cnt": 2})))
         result = await check_workspace(mock_db_session, company_id="comp-1")
         assert result.status == CheckStatus.PASS
         assert "2 workspace(s)" in result.message
 
     @pytest.mark.asyncio
     async def test_check_workspace_none_available(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"cnt": 0})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"cnt": 0})))
         result = await check_workspace(mock_db_session, company_id="comp-1")
         assert result.status == CheckStatus.FAIL
 
     @pytest.mark.asyncio
     async def test_check_concurrency_slot(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"cnt": 2})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"cnt": 2})))
         result = await check_concurrency_slot(
             mock_db_session,
             company_id="comp-1",
@@ -78,9 +70,7 @@ class TestAvailabilityChecker:
 
     @pytest.mark.asyncio
     async def test_check_concurrency_slot_full(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"cnt": 5})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"cnt": 5})))
         result = await check_concurrency_slot(
             mock_db_session,
             company_id="comp-1",
@@ -90,9 +80,7 @@ class TestAvailabilityChecker:
 
     @pytest.mark.asyncio
     async def test_run_availability_checks(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"cnt": 2})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"cnt": 2})))
         result = await run_availability_checks(
             mock_db_session,
             company_id="comp-1",

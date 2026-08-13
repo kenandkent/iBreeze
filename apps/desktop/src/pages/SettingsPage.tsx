@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Card, Tabs, Typography, Form, Input, Button, Switch, Space, message } from 'antd';
+import { Card, Tabs, Typography, Form, Input, Button, Switch, Space, message, Table, Tag } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { createRpcRequest } from '../shared/rpcClient';
 import { logger } from '../utils/logger';
+import CredentialSettings from '../components/CredentialSettings';
+import { useClearExpiredHealth, useDeploymentHealth } from '../hooks/useRouting';
+import { formatNumber, formatTime } from '../utils/formatters';
 
 const { Title } = Typography;
 
@@ -80,6 +83,17 @@ function AboutTab() {
       </Space>
     </Space>
   );
+}
+
+function RoutingHealthTab() {
+  const companyId = window.location.pathname.match(/\/companies\/([^/]+)/)?.[1] ?? '';
+  const health = useDeploymentHealth(companyId);
+  const clearExpired = useClearExpiredHealth(companyId);
+  return <Space direction="vertical" style={{ width: '100%' }}>
+    <Typography.Paragraph type="secondary">仅展示当前公司的 Deployment Health；active bench 和 credential_invalid 不能在界面中绕过。</Typography.Paragraph>
+    <Button loading={clearExpired.isPending} disabled={!companyId} onClick={() => clearExpired.mutate()}>清除已过期健康记录</Button>
+    <Table loading={health.isLoading} rowKey={(row) => `${row.provider_release_id}:${row.model_binding_id}:${row.credential_slot}`} dataSource={health.data?.items ?? []} pagination={false} columns={[{ title: 'Provider', dataIndex: 'provider_release_id' }, { title: 'Model Binding', dataIndex: 'model_binding_id' }, { title: 'Credential Slot', dataIndex: 'credential_slot' }, { title: '状态', dataIndex: 'availability_state', render: (value: string) => <Tag color={value === 'ready' ? 'green' : 'red'}>{value}</Tag> }, { title: 'Strike', dataIndex: 'consecutive_strikes', render: (value: number) => formatNumber(value) }, { title: 'Bench 截止', dataIndex: 'benched_until', render: (value: string | null) => formatTime(value) }, { title: '最后失败', dataIndex: 'last_failure_kind' }, { title: '最后成功', dataIndex: 'last_success_at', render: (value: string | null) => formatTime(value) }]} />
+  </Space>;
 }
 
 export default function SettingsPage() {
@@ -166,6 +180,16 @@ export default function SettingsPage() {
           </Form.Item>
         </Form>
       ),
+    },
+    {
+      key: 'credentials',
+      label: 'Provider 凭据',
+      children: <CredentialSettings />,
+    },
+    {
+      key: 'routing-health',
+      label: '路由健康',
+      children: <RoutingHealthTab />,
     },
     {
       key: 'about',

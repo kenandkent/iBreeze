@@ -55,6 +55,7 @@ exclude = ["ibreeze/generated"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+"ibreeze/routing/rpc.py" = ["E501"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

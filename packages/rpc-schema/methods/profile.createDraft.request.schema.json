@@ -35,6 +35,9 @@
     },
     "base_profile": {
       "type": "object"
+    },
+    "routing_policy": {
+      "$ref": "https://ibreeze.ai/schemas/routing-policy-rpc.v1"
     }
   },
   "additionalProperties": false,

@@ -12,5 +12,8 @@ export interface ProfileListResponse {
     status: "draft" | "published" | "retired";
     version: number;
     updated_at: string;
+    profile_type: "agent_cli" | "api_model";
+    current_version_id: string | null;
+    current_version_status: "draft" | "published" | "retired";
   }[];
 }

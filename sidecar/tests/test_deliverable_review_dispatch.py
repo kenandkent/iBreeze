@@ -93,9 +93,7 @@ async def review_env(db: Any) -> dict[str, str]:
         (dept_rev_id, dept_id, company_id, _sha256("eng"), now),
     )
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'department','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'department','active',?)",
         (dept_conv_id, company_id, now),
     )
     await db.execute(
@@ -122,9 +120,7 @@ async def review_env(db: Any) -> dict[str, str]:
     alice_id = await _employee("Alice")
     bob_id = await _employee("Bob")
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'company','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'company','active',?)",
         (conv_id, company_id, now),
     )
     await db.execute(
@@ -199,17 +195,14 @@ async def _rows(db: Any, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
 async def _assignments(db: Any, env: dict[str, str]) -> list[Any]:
     return await _rows(
         db,
-        "SELECT reviewer_employee_id, review_round, status FROM review_assignments"
-        " WHERE company_id=? ORDER BY reviewer_employee_id",
+        "SELECT reviewer_employee_id, review_round, status FROM review_assignments WHERE company_id=? ORDER BY reviewer_employee_id",
         (env["company_id"],),
     )
 
 
 class TestMaybeDispatch:
     @pytest.mark.asyncio
-    async def test_creates_round1_for_active_non_contributor_reviewer(
-        self, db: Any, review_env: dict[str, str]
-    ) -> None:
+    async def test_creates_round1_for_active_non_contributor_reviewer(self, db: Any, review_env: dict[str, str]) -> None:
         env = review_env
         artifact_id = _id()
         await db.execute(
@@ -237,9 +230,7 @@ class TestMaybeDispatch:
         # alice is a contributor so she is skipped even though listed.
         assert [c["reviewer_employee_id"] for c in created] == [env["bob_id"]]
         assigns = await _assignments(db, env)
-        assert [(a["reviewer_employee_id"], a["review_round"], a["status"]) for a in assigns] == [
-            (env["bob_id"], 1, "assigned")
-        ]
+        assert [(a["reviewer_employee_id"], a["review_round"], a["status"]) for a in assigns] == [(env["bob_id"], 1, "assigned")]
         # review.assigned is projection-only: outbox row present, no outbound topic mapping.
         outbox = await _rows(db, "SELECT topic FROM outbox_events")
         assert {o["topic"] for o in outbox} == {"review.assigned"}
@@ -348,9 +339,7 @@ class TestArtifactCreateWiring:
         )
         assert result["artifact_id"]
         assigns = await _assignments(db, env)
-        assert [(a["reviewer_employee_id"], a["review_round"]) for a in assigns] == [
-            (env["bob_id"], 1)
-        ]
+        assert [(a["reviewer_employee_id"], a["review_round"]) for a in assigns] == [(env["bob_id"], 1)]
 
     @pytest.mark.asyncio
     async def test_deduplicated_publish_is_noop(self, db: Any, review_env: dict[str, str]) -> None:

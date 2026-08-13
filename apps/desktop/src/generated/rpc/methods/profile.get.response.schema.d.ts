@@ -12,4 +12,13 @@ export interface ProfileGetResponse {
   version: number;
   created_at: string;
   updated_at: string;
+  profile_type: "agent_cli" | "api_model";
+  current_version_id: string | null;
+  routing_policy_json: string;
+  versions: {
+    id: string;
+    status: "draft" | "published" | "retired";
+    profile_type: "agent_cli" | "api_model";
+    routing_policy_json: string;
+  }[];
 }

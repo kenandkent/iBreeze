@@ -20,6 +20,7 @@ import pytest_asyncio
 
 from ibreeze.application import public_rpc as rpc
 from ibreeze.application.context import CommandContext
+from ibreeze.routing.rpc import validate_policy
 from ibreeze.rpc.dispatcher import Dispatcher
 
 
@@ -152,6 +153,19 @@ class TestFirstPublishedProfile:
         with pytest.raises(ValueError, match="PROFILE_VERSION_INVALID"):
             await rpc._company_create(db, {"name": "NoProfile"})
 
+    @pytest.mark.asyncio
+    async def test_routing_policy_profile_version_is_company_scoped(self, db, published_profile) -> None:
+        with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
+            await validate_policy(
+                db,
+                {
+                    "company_id": str(uuid4()),
+                    "profile_type": "agent_cli",
+                    "profile_version_id": published_profile,
+                    "policy": {},
+                },
+            )
+
 
 class TestCompanyHandlers:
     @pytest.mark.asyncio
@@ -185,7 +199,13 @@ class TestDepartmentHandlers:
     @pytest.mark.asyncio
     async def test_create_get_list(self, env) -> None:
         created = await rpc._department_create(
-            env.db, {"company_id": env.company_id, "name": "Eng", "function_description": "Engineering", "base_profile_version_id": env.profile_version_id}
+            env.db,
+            {
+                "company_id": env.company_id,
+                "name": "Eng",
+                "function_description": "Engineering",
+                "base_profile_version_id": env.profile_version_id,
+            },
         )
         assert created["department_id"]
         got = await rpc._department_get(env.db, {"company_id": env.company_id, "department_id": created["department_id"]})
@@ -197,12 +217,18 @@ class TestDepartmentHandlers:
     async def test_update_and_set_leader(self, env) -> None:
         dept_id = (
             await rpc._department_create(
-                env.db, {"company_id": env.company_id, "name": "Prod", "function_description": "Ops", "base_profile_version_id": env.profile_version_id}
+                env.db,
+                {
+                    "company_id": env.company_id,
+                    "name": "Prod",
+                    "function_description": "Ops",
+                    "base_profile_version_id": env.profile_version_id,
+                },
             )
         )["department_id"]
-        member_id = (
-            await rpc._employee_create(env.db, {"company_id": env.company_id, "department_id": dept_id, "display_name": "Lead"})
-        )["employee_id"]
+        member_id = (await rpc._employee_create(env.db, {"company_id": env.company_id, "department_id": dept_id, "display_name": "Lead"}))[
+            "employee_id"
+        ]
         await rpc._department_update(
             env.db, {"company_id": env.company_id, "department_id": dept_id, "name": "Renamed", "expected_version": 1}
         )
@@ -217,7 +243,9 @@ class TestDepartmentHandlers:
             env.db, {"company_id": env.company_id, "department_id": env.dept_id, "responsibility_key": "dev"}
         )
         assert created["version"] == 1
-        await rpc._responsibility_update(env.db, {"company_id": env.company_id, "department_id": env.dept_id, "name": "X", "expected_version": 1})
+        await rpc._responsibility_update(
+            env.db, {"company_id": env.company_id, "department_id": env.dept_id, "name": "X", "expected_version": 1}
+        )
         deleted = await rpc._responsibility_delete(env.db, {"company_id": env.company_id, "department_id": env.dept_id})
         assert deleted["status"] == "deleted"
 
@@ -225,9 +253,7 @@ class TestDepartmentHandlers:
 class TestEmployeeHandlers:
     @pytest.mark.asyncio
     async def test_create_get_list(self, env) -> None:
-        created = await rpc._employee_create(
-            env.db, {"company_id": env.company_id, "department_id": env.dept_id, "display_name": "Bob"}
-        )
+        created = await rpc._employee_create(env.db, {"company_id": env.company_id, "department_id": env.dept_id, "display_name": "Bob"})
         got = await rpc._employee_get(env.db, {"company_id": env.company_id, "employee_id": created["employee_id"]})
         assert got["employee_id"] == created["employee_id"]
         listed = await rpc._employee_list(env.db, {"company_id": env.company_id})
@@ -271,9 +297,7 @@ class TestConversationHandlers:
         created = await rpc._conversation_create(env.db, {"company_id": env.company_id, "title": "C"})
         listed = await rpc._conversation_list(env.db, {"company_id": env.company_id})
         assert any(item["id"] == created["conversation_id"] for item in listed["items"])
-        messages = await rpc._conversation_messages(
-            env.db, {"company_id": env.company_id, "conversation_id": created["conversation_id"]}
-        )
+        messages = await rpc._conversation_messages(env.db, {"company_id": env.company_id, "conversation_id": created["conversation_id"]})
         assert messages["items"] == []
 
     @pytest.mark.asyncio
@@ -340,7 +364,8 @@ class TestArtifactAndKnowledge:
     async def test_knowledge_import(self, env) -> None:
         event_id = await _insert_domain_event(env.db, env.company_id)
         result = await rpc._knowledge_import(
-            env.db, {"company_id": env.company_id, "title": "K", "content": "data", "visibility": "company", "source_message_event_id": event_id}
+            env.db,
+            {"company_id": env.company_id, "title": "K", "content": "data", "visibility": "company", "source_message_event_id": event_id},
         )
         assert result["status"] == "imported"
 
@@ -374,11 +399,41 @@ _MANIFEST = {
     "signing_key_id": "key-1",
     "resources": [
         {"type": "agent", "id": "agent-1", "key": "a1", "display_name": "Agent One", "version": "1.0.0"},
-        {"type": "provider", "id": "prov-1", "key": "openai", "protocol": "chat",
-         "model_bindings": [{"binding_id": "b1", "provider_model_name": "gpt-4o", "model_id": "model-1"}]},
-        {"type": "model", "id": "model-1", "key": "openai/gpt-4o", "display_name": "GPT-4o", "version": "1"},
-        {"type": "skill", "id": "skill-1", "skill_version_id": "sv-1", "display_name": "Skill One",
-         "version": "1.0.0", "description": "d", "content_sha256": "abc" + "0" * 61},
+        {
+            "type": "provider",
+            "id": "prov-1",
+            "key": "openai",
+            "protocol": "chat",
+            "model_bindings": [{"binding_id": "b1", "provider_model_name": "gpt-4o", "model_id": "model-1"}],
+        },
+        {
+            "type": "model",
+            "id": "model-1",
+            "key": "openai/gpt-4o",
+            "display_name": "GPT-4o",
+            "version": "1",
+            "routing_tier": 1,
+            "quality_prior": 0.5,
+            "tool_reliability_prior": 0.5,
+            "latency_prior_ms": 3000,
+            "model_family": "gpt",
+            "model_vendor": "openai",
+            "architecture_class": "dense",
+            "supports_reasoning": False,
+            "reasoning_levels": [],
+            "input_price_microusd_per_million": 0,
+            "output_price_microusd_per_million": 0,
+            "routing_enabled": False,
+        },
+        {
+            "type": "skill",
+            "id": "skill-1",
+            "skill_version_id": "sv-1",
+            "display_name": "Skill One",
+            "version": "1.0.0",
+            "description": "d",
+            "content_sha256": "abc" + "0" * 61,
+        },
     ],
 }
 
@@ -415,6 +470,17 @@ class TestCatalog:
         assert models["models"][0]["provider"] == "openai"
         skills = await rpc._catalog_list_resources(lc, "skill")
         assert skills["skills"][0]["skill_id"] == "skill-1"
+
+    @pytest.mark.asyncio
+    async def test_model_without_routing_metadata_is_rejected(self, tmp_path) -> None:
+        manifest = dict(_MANIFEST)
+        manifest["resources"] = [resource for resource in _MANIFEST["resources"] if resource.get("type") != "model"] + [
+            {"type": "model", "id": "model-1", "key": "openai/gpt-4o"}
+        ]
+        (tmp_path / "catalog-manifest.v1.json").write_text(json.dumps(manifest), encoding="utf-8")
+        lc = _FakeLifecycle(tmp_path / "p.db", None)
+        with pytest.raises(ValueError, match="CATALOG_ROUTING_METADATA_MISSING"):
+            await rpc._catalog_list_resources(lc, "model")
 
     @pytest.mark.asyncio
     async def test_list_catalogs_get_active(self, tmp_path) -> None:
@@ -511,13 +577,16 @@ class TestVerifyRegistry:
         dispatcher = env.lifecycle.dispatcher
         for method in ("review.listIssues", "review.rerun", "review.resolveIssue", "review.submit"):
             dispatcher.register(method, _dummy)
-        assert rpc.verify_sidecar_registry(dispatcher) == 112
+        registry_path = rpc.Path(__file__).resolve().parents[2] / "packages/rpc-schema/registry.v1.json"
+        expected = sum(1 for method in __import__("json").loads(registry_path.read_text())["methods"] if method["owner"] == "sidecar")
+        assert rpc.verify_sidecar_registry(dispatcher) == expected
 
 
 class TestRegisterAndDispatch:
     def test_registers_all_public_sidecar_methods(self, env) -> None:
-        # 112 sidecar methods total; the four review.* live in the lifecycle.
-        assert env.registered == 108
+        registry_path = rpc.Path(__file__).resolve().parents[2] / "packages/rpc-schema/registry.v1.json"
+        expected = sum(1 for method in __import__("json").loads(registry_path.read_text())["methods"] if method["owner"] == "sidecar") - 4
+        assert env.registered == expected
 
     @pytest.mark.asyncio
     async def test_dispatch_company_get(self, env) -> None:
@@ -552,7 +621,7 @@ class TestRegisterAndDispatch:
         profile = await env.lifecycle.dispatcher.dispatch(
             "profile.get", {"company_id": env.company_id, "profile_id": env.profile_id}, _ctx()
         )
-        assert profile["id"] == env.profile_id
+        assert profile["profile_id"] == env.profile_id
 
     @pytest.mark.asyncio
     async def test_dispatch_task_read_missing_returns_none(self, env) -> None:
@@ -582,8 +651,6 @@ class TestRegisterAndDispatch:
         from unittest.mock import AsyncMock, patch
 
         with patch.object(rpc.runtime_service, "get_runtime_status", new=AsyncMock(return_value={"status": "ready"})) as m:
-            result = await env.lifecycle.dispatcher.dispatch(
-                "runtime.getStatus", {"company_id": env.company_id}, _ctx()
-            )
+            result = await env.lifecycle.dispatcher.dispatch("runtime.getStatus", {"company_id": env.company_id}, _ctx())
         assert result["status"] == "ready"
         m.assert_awaited_once()

@@ -73,9 +73,7 @@ async def test_import_is_atomic_and_event_payload_excludes_content(
         ),
     )
     assert (await get_knowledge(db, company.id, imported.id)).content_sha256
-    assert [item.id for item in await list_knowledge(db, company.id)] == [
-        imported.id
-    ]
+    assert [item.id for item in await list_knowledge(db, company.id)] == [imported.id]
     event = await (
         await db.execute(
             """SELECT payload_json FROM domain_events
@@ -236,9 +234,7 @@ async def test_import_to_archived_company(
     published_profile: str,
 ) -> None:
     company, _, source_event = await _scope(db, published_profile, "归档公司")
-    await db.execute(
-        "UPDATE companies SET status='archived' WHERE id=?", (company.id,)
-    )
+    await db.execute("UPDATE companies SET status='archived' WHERE id=?", (company.id,))
     await db.commit()
     with pytest.raises(ValueError, match="COMPANY_ARCHIVED"):
         await import_knowledge(
@@ -300,9 +296,7 @@ async def test_list_knowledge_with_pagination(
     first_page = await list_knowledge(db, company.id, limit=2)
     assert len(first_page) == 2
     last_item = first_page[-1]
-    second_page = await list_knowledge(
-        db, company.id, limit=2, after=(last_item.created_at.isoformat(), last_item.id)
-    )
+    second_page = await list_knowledge(db, company.id, limit=2, after=(last_item.created_at.isoformat(), last_item.id))
     assert len(second_page) == 1
     assert second_page[0].id == items[0].id
 

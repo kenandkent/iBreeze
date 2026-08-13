@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/candidate-bindings.v2",
+  "title": "CandidateBindingsV2",
+  "type": "array",
+  "minItems": 1,
+  "maxItems": 12,
+  "uniqueItems": true,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "candidate_id": {"type":"string","format":"uuid"},
+      "provider_release_id": {"type":"string","format":"uuid"},
+      "provider_key": {"type":"string","minLength":1},
+      "provider_protocol": {"enum":["openai_responses","anthropic_messages","openai_chat_completions"]},
+      "model_binding_id": {"type":"string","format":"uuid"},
+      "model_id": {"type":"string","format":"uuid"},
+      "provider_model_name": {"type":"string","minLength":1},
+      "credential_ref": {"type":"string","format":"uuid"},
+      "credential_secret_version": {"type":"integer","minimum":1},
+      "context_window": {"type":"integer","minimum":1},
+      "max_output_tokens": {"type":"integer","minimum":1},
+      "supports_tools":{"type":"boolean"},"supports_streaming":{"type":"boolean"},"supports_vision":{"type":"boolean"},
+      "routing_tier":{"type":"integer","minimum":0,"maximum":3},
+      "quality_prior":{"type":"string","pattern":"^(?:0|0\\.[0-9]{4}|1(?:\\.0{4})?)$"},
+      "tool_reliability_prior":{"type":"string","pattern":"^(?:0|0\\.[0-9]{4}|1(?:\\.0{4})?)$"},
+      "latency_prior_ms":{"type":"integer","minimum":1},"model_family":{"type":"string"},"model_vendor":{"type":"string"},"architecture_class":{"enum":["dense","moe","hybrid","unknown"]},"supports_reasoning":{"type":"boolean"},"reasoning_levels":{"type":"array","uniqueItems":true,"items":{"enum":["low","medium","high"]}},"input_price_microusd_per_million":{"type":"integer","minimum":0},"output_price_microusd_per_million":{"type":"integer","minimum":0},"routing_enabled":{"type":"boolean"},"eligible_roles":{"type":"array","uniqueItems":true,"items":{"enum":["single","proposer","aggregator","fallback"]}},"request_defaults_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}
+    },
+    "required":["candidate_id","provider_release_id","provider_key","provider_protocol","model_binding_id","model_id","provider_model_name","credential_ref","credential_secret_version","context_window","max_output_tokens","supports_tools","supports_streaming","supports_vision","routing_tier","quality_prior","tool_reliability_prior","latency_prior_ms","model_family","model_vendor","architecture_class","supports_reasoning","reasoning_levels","input_price_microusd_per_million","output_price_microusd_per_million","routing_enabled","eligible_roles","request_defaults_sha256"]
+  }
+}

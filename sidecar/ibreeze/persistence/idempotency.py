@@ -19,8 +19,7 @@ class IdempotencyStore:
         if idempotency_key is None:
             return None
         cursor = await session.connection.execute(
-            "SELECT status, response_json, error_code, request_sha256 "
-            "FROM idempotency WHERE idempotency_key=?",
+            "SELECT status, response_json, error_code, request_sha256 FROM idempotency WHERE idempotency_key=?",
             (idempotency_key,),
         )
         row = await cursor.fetchone()

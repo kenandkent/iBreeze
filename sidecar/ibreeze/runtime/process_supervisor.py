@@ -185,9 +185,7 @@ class ProcessSupervisor:
             "locale": locale,
             "workspace_policy_sha256": workspace_policy_sha256,
             "network_policy_sha256": network_policy_sha256,
-            "deadline_at": (
-                datetime.now(UTC) + timedelta(seconds=timeout)
-            ).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+            "deadline_at": (datetime.now(UTC) + timedelta(seconds=timeout)).isoformat(timespec="microseconds").replace("+00:00", "Z"),
         }
         # Keep UUID construction in this facade explicit: the Rust boundary
         # rejects malformed IDs before any process or lease is created.
@@ -319,9 +317,7 @@ class ProcessSupervisor:
         deadline = asyncio.get_running_loop().time() + timeout
         process_id = self._process_id(run_id)
         while True:
-            result = await self._rpc.call(
-                "runtime.process.status", {"process_id": process_id, "run_id": run_id}
-            )
+            result = await self._rpc.call("runtime.process.status", {"process_id": process_id, "run_id": run_id})
             if result.get("state") not in {"running"} and result.get("status") not in {
                 "running",
                 "cancellation_requested",
@@ -351,9 +347,7 @@ class ProcessSupervisor:
         }
 
     async def status(self, run_id: str) -> dict[str, Any]:
-        return await self._rpc.call(
-            "runtime.process.status", {"process_id": self._process_id(run_id), "run_id": run_id}
-        )
+        return await self._rpc.call("runtime.process.status", {"process_id": self._process_id(run_id), "run_id": run_id})
 
 
 _supervisor: ProcessSupervisor | None = None

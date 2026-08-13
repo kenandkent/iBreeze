@@ -67,9 +67,7 @@ class TestAnalysisWorkerWorkSuccess:
         wq.submit = AsyncMock(return_value=3)
         w = AnalysisWorker(write_queue=wq)
         await w.work()
-        mock_logger.info.assert_called_once_with(
-            "Cleaned up %d expired runtime leases", 3
-        )
+        mock_logger.info.assert_called_once_with("Cleaned up %d expired runtime leases", 3)
 
     @patch("ibreeze.workers.analysis.logger")
     async def test_does_not_log_when_cleanup_count_zero(self, mock_logger):
@@ -136,21 +134,13 @@ class TestAnalysisWorkerWorkSuccess:
         await w.work()
 
         # Should update runtime_queue for each expired lease
-        update_calls = [
-            c for c in conn.execute.await_args_list
-            if "UPDATE runtime_queue" in str(c.args)
-        ]
+        update_calls = [c for c in conn.execute.await_args_list if "UPDATE runtime_queue" in str(c.args)]
         assert len(update_calls) == 2
 
-        delete_calls = [
-            c for c in conn.execute.await_args_list
-            if "DELETE FROM runtime_leases" in str(c.args)
-        ]
+        delete_calls = [c for c in conn.execute.await_args_list if "DELETE FROM runtime_leases" in str(c.args)]
         assert len(delete_calls) == 2
 
-        mock_logger.info.assert_called_once_with(
-            "Cleaned up %d expired runtime leases", 2
-        )
+        mock_logger.info.assert_called_once_with("Cleaned up %d expired runtime leases", 2)
 
     @patch("ibreeze.workers.analysis.logger")
     async def test_inner_cleanup_with_run_id_updates_agent_runs(self, mock_logger):
@@ -178,10 +168,7 @@ class TestAnalysisWorkerWorkSuccess:
         w = AnalysisWorker(write_queue=wq)
         await w.work()
 
-        agent_run_calls = [
-            c for c in conn.execute.await_args_list
-            if "UPDATE agent_runs" in str(c.args)
-        ]
+        agent_run_calls = [c for c in conn.execute.await_args_list if "UPDATE agent_runs" in str(c.args)]
         assert len(agent_run_calls) == 1
         sql, params = agent_run_calls[0].args
         assert "status='lost'" in str(sql)
@@ -196,9 +183,7 @@ class TestAnalysisWorkerWorkException:
         wq.submit = AsyncMock(side_effect=RuntimeError("db down"))
         w = AnalysisWorker(write_queue=wq)
         await w.work()
-        mock_logger.exception.assert_called_once_with(
-            "AnalysisWorker cleanup failed"
-        )
+        mock_logger.exception.assert_called_once_with("AnalysisWorker cleanup failed")
 
     @patch("ibreeze.workers.analysis.logger")
     async def test_does_not_re_raise(self, mock_logger):

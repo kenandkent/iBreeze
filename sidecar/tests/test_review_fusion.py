@@ -28,9 +28,7 @@ class TestFuseVerdicts:
         assert verdict == FusedVerdict(verdict="needs_changes", confidence=1.0, hard_veto=True)
 
     def test_failed_among_passes_is_hard_veto(self) -> None:
-        verdict = fuse_verdicts(
-            [_score("pass", 0.5), _score("failed", 0.8)], open_blocker_high_issues=0
-        )
+        verdict = fuse_verdicts([_score("pass", 0.5), _score("failed", 0.8)], open_blocker_high_issues=0)
         assert verdict.hard_veto
         assert verdict.verdict == "needs_changes"
         assert verdict.confidence == 1.0
@@ -103,10 +101,7 @@ class TestRerunDecision:
         assert self._decide(FusedVerdict("pass", 0.9, False)) == "pass"
 
     def test_exhausted_rounds(self) -> None:
-        assert (
-            self._decide(FusedVerdict("pass", 0.5, False), current_round=2, review_rounds=2)
-            == "exhausted"
-        )
+        assert self._decide(FusedVerdict("pass", 0.5, False), current_round=2, review_rounds=2) == "exhausted"
 
     def test_low_confidence_reruns(self) -> None:
         assert self._decide(FusedVerdict("pass", 0.5, False)) == "rerun"

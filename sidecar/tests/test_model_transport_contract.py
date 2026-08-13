@@ -13,3 +13,8 @@ def test_responses_tool_schema_is_complete():
     tool = request["tools"][0]
     assert tool["parameters"]["properties"]["query"]["type"] == "string"
     assert tool["parameters"]["additionalProperties"] is False
+
+
+def test_proposer_tool_schema_is_explicitly_non_executable():
+    request = _build_provider_request("openai_chat_completions", (), ("read_file",), tools_are_suggestions=True)
+    assert "Non-executable" in request["tools"][0]["function"]["description"]

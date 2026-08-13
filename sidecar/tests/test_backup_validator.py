@@ -21,16 +21,27 @@ from ibreeze.backup.validator import (
     validate_backup_database,
 )
 
-REQUIRED_TABLE_NAMES = frozenset({
-    "companies", "departments", "employees", "conversations",
-    "agent_runs", "artifacts", "knowledge_items", "backup_records",
-    "domain_events", "schema_migrations", "embedding_generations",
-})
+REQUIRED_TABLE_NAMES = frozenset(
+    {
+        "companies",
+        "departments",
+        "employees",
+        "conversations",
+        "agent_runs",
+        "artifacts",
+        "knowledge_items",
+        "backup_records",
+        "domain_events",
+        "schema_migrations",
+        "embedding_generations",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _create_db(path: str, tables: dict[str, list[tuple]] | None = None):
     conn = sqlite3.connect(path)
@@ -41,17 +52,12 @@ def _create_db(path: str, tables: dict[str, list[tuple]] | None = None):
             cursor.execute(ddl)
             for row in rows:
                 placeholders = ",".join("?" for _ in row)
-                cursor.execute(
-                    f"INSERT INTO {ddl.split()[2]} VALUES ({placeholders})", row
-                )
+                cursor.execute(f"INSERT INTO {ddl.split()[2]} VALUES ({placeholders})", row)
     conn.commit()
     conn.close()
 
 
-MIGRATIONS_DDL = (
-    "CREATE TABLE schema_migrations "
-    "(version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT, checksum TEXT)"
-)
+MIGRATIONS_DDL = "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT, checksum TEXT)"
 
 
 def _create_minimal_valid_db(path: str):
@@ -87,10 +93,12 @@ def valid_db(tmp_path: Path) -> Path:
 def valid_archive(tmp_path: Path, valid_db: Path) -> Path:
     db_content = valid_db.read_bytes()
     manifest = json.dumps({"backup_id": "test"}).encode()
-    data = _make_tar_zst_bytes([
-        ("manifest.json", manifest),
-        ("data/profile.db", db_content),
-    ])
+    data = _make_tar_zst_bytes(
+        [
+            ("manifest.json", manifest),
+            ("data/profile.db", db_content),
+        ]
+    )
     archive = tmp_path / "backup.tar.zst"
     archive.write_bytes(data)
     return archive
@@ -100,8 +108,8 @@ def valid_archive(tmp_path: Path, valid_db: Path) -> Path:
 # validate_backup_database
 # ===================================================================
 
-class TestValidateBackupDatabase:
 
+class TestValidateBackupDatabase:
     async def test_valid_database(self, valid_db: Path):
         result = await validate_backup_database(str(valid_db))
         assert result["valid"] is True
@@ -128,10 +136,13 @@ class TestValidateBackupDatabase:
 
     async def test_missing_required_tables(self, tmp_path: Path):
         db = tmp_path / "partial.db"
-        _create_db(str(db), {
-            "CREATE TABLE companies (id TEXT PRIMARY KEY)": [],
-            "CREATE TABLE employees (id TEXT PRIMARY KEY)": [],
-        })
+        _create_db(
+            str(db),
+            {
+                "CREATE TABLE companies (id TEXT PRIMARY KEY)": [],
+                "CREATE TABLE employees (id TEXT PRIMARY KEY)": [],
+            },
+        )
         result = await validate_backup_database(str(db))
         assert result["valid"] is False
         missing_errors = [e for e in result["errors"] if "Missing required tables" in e]
@@ -181,9 +192,7 @@ class TestValidateBackupDatabase:
             ddl = MIGRATIONS_DDL if t == "schema_migrations" else f"CREATE TABLE {t} (id TEXT PRIMARY KEY)"
             conn.execute(ddl)
         conn.execute("INSERT INTO schema_migrations VALUES (1, 'init', '2024-01-01', 'abc')")
-        conn.execute(
-            "CREATE TABLE child (id INTEGER PRIMARY KEY, pid INTEGER REFERENCES parent(id))"
-        )
+        conn.execute("CREATE TABLE child (id INTEGER PRIMARY KEY, pid INTEGER REFERENCES parent(id))")
         conn.execute("INSERT INTO child VALUES (1, 999)")
         conn.execute("PRAGMA user_version = 1")
         conn.commit()
@@ -198,9 +207,7 @@ class TestValidateBackupDatabase:
         db = tmp_path / "orphans.db"
         conn = sqlite3.connect(str(db))
         conn.execute("CREATE TABLE artifacts (id TEXT PRIMARY KEY)")
-        conn.execute(
-            "CREATE TABLE knowledge_items (id TEXT PRIMARY KEY, source_artifact_id TEXT)"
-        )
+        conn.execute("CREATE TABLE knowledge_items (id TEXT PRIMARY KEY, source_artifact_id TEXT)")
         conn.execute("INSERT INTO knowledge_items VALUES ('k1', 'nonexistent-artifact')")
         conn.commit()
         conn.close()
@@ -210,10 +217,13 @@ class TestValidateBackupDatabase:
 
     async def test_ref_chain_skips_missing_tables(self, tmp_path: Path):
         db = tmp_path / "partial_ref.db"
-        _create_db(str(db), {
-            "CREATE TABLE companies (id TEXT PRIMARY KEY)": [],
-            "CREATE TABLE employees (id TEXT PRIMARY KEY, company_id TEXT)": [],
-        })
+        _create_db(
+            str(db),
+            {
+                "CREATE TABLE companies (id TEXT PRIMARY KEY)": [],
+                "CREATE TABLE employees (id TEXT PRIMARY KEY, company_id TEXT)": [],
+            },
+        )
         result = await validate_backup_database(str(db))
         assert result["valid"] is False
         assert result["ref_issues"] == []
@@ -302,8 +312,8 @@ class TestValidateBackupDatabase:
 # validate_backup_archive
 # ===================================================================
 
-class TestValidateBackupArchive:
 
+class TestValidateBackupArchive:
     async def test_archive_not_found(self):
         result = await validate_backup_archive("/nonexistent/archive.tar.zst")
         assert result["valid"] is False
@@ -336,11 +346,13 @@ class TestValidateBackupArchive:
     async def test_traversal_with_dotdot_prefix(self, tmp_path: Path):
         archive = tmp_path / "traversal1.tar.zst"
         manifest = json.dumps({"backup_id": "test"}).encode()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", manifest),
-            ("data/profile.db", b"fake db"),
-            ("../etc/passwd", b"evil"),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", manifest),
+                ("data/profile.db", b"fake db"),
+                ("../etc/passwd", b"evil"),
+            ]
+        )
         archive.write_bytes(data)
         result = await validate_backup_archive(str(archive))
         assert result["valid"] is True
@@ -350,11 +362,13 @@ class TestValidateBackupArchive:
     async def test_traversal_with_slash_dotdot(self, tmp_path: Path):
         archive = tmp_path / "traversal2.tar.zst"
         manifest = json.dumps({"backup_id": "test"}).encode()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", manifest),
-            ("data/profile.db", b"fake db"),
-            ("sub/../escape", b"evil"),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", manifest),
+                ("data/profile.db", b"fake db"),
+                ("sub/../escape", b"evil"),
+            ]
+        )
         archive.write_bytes(data)
         result = await validate_backup_archive(str(archive))
         assert result["valid"] is True
@@ -364,12 +378,14 @@ class TestValidateBackupArchive:
     async def test_multiple_traversal_entries(self, tmp_path: Path):
         archive = tmp_path / "traversal3.tar.zst"
         manifest = json.dumps({"backup_id": "test"}).encode()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", manifest),
-            ("data/profile.db", b"fake db"),
-            ("../etc/hosts", b"evil1"),
-            ("a/../../../etc/shadow", b"evil2"),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", manifest),
+                ("data/profile.db", b"fake db"),
+                ("../etc/hosts", b"evil1"),
+                ("a/../../../etc/shadow", b"evil2"),
+            ]
+        )
         archive.write_bytes(data)
         result = await validate_backup_archive(str(archive))
         assert result["valid"] is True
@@ -398,12 +414,14 @@ class TestValidateBackupArchive:
         archive = valid_archive.parent / "multi.tar.zst"
         manifest = json.dumps({"backup_id": "test"}).encode()
         db_content = valid_db.read_bytes()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", manifest),
-            ("data/profile.db", db_content),
-            ("data/extra.txt", b"extra content"),
-            ("data/extra2.txt", b"more content"),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", manifest),
+                ("data/profile.db", db_content),
+                ("data/extra.txt", b"extra content"),
+                ("data/extra2.txt", b"more content"),
+            ]
+        )
         archive.write_bytes(data)
         result = await validate_backup_archive(str(archive))
         assert result["valid"] is True
@@ -414,8 +432,8 @@ class TestValidateBackupArchive:
 # restore_from_backup
 # ===================================================================
 
-class TestRestoreFromBackup:
 
+class TestRestoreFromBackup:
     async def test_successful_restore(self, valid_archive: Path):
         target = valid_archive.parent / "restored.db"
         result = await restore_from_backup(str(target), str(valid_archive))
@@ -431,9 +449,7 @@ class TestRestoreFromBackup:
     async def test_restore_with_staging_dir(self, valid_archive: Path, tmp_path: Path):
         target = tmp_path / "restored.db"
         staging = tmp_path / "my_staging"
-        result = await restore_from_backup(
-            str(target), str(valid_archive), staging_dir=str(staging)
-        )
+        result = await restore_from_backup(str(target), str(valid_archive), staging_dir=str(staging))
         assert result["success"] is True
         assert os.path.exists(str(target))
 
@@ -461,7 +477,8 @@ class TestRestoreFromBackup:
         archive = tmp_path / "bad.tar.zst"
         archive.write_bytes(b"garbage")
         result = await restore_from_backup(
-            str(tmp_path / "target.db"), str(archive),
+            str(tmp_path / "target.db"),
+            str(archive),
         )
         assert result["success"] is False
         assert len(result["errors"]) == 1
@@ -472,14 +489,17 @@ class TestRestoreFromBackup:
         conn.execute("CREATE TABLE companies (id TEXT PRIMARY KEY)")
         conn.commit()
         conn.close()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
-            ("data/profile.db", db_with_issues.read_bytes()),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
+                ("data/profile.db", db_with_issues.read_bytes()),
+            ]
+        )
         archive = tmp_path / "bad_db_archive.tar.zst"
         archive.write_bytes(data)
         result = await restore_from_backup(
-            str(tmp_path / "target.db"), str(archive),
+            str(tmp_path / "target.db"),
+            str(archive),
         )
         assert result["success"] is False
         assert len(result["errors"]) > 0
@@ -493,14 +513,17 @@ class TestRestoreFromBackup:
         conn.execute("PRAGMA user_version = 1")
         conn.commit()
         conn.close()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
-            ("data/profile.db", db_no_mig.read_bytes()),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
+                ("data/profile.db", db_no_mig.read_bytes()),
+            ]
+        )
         archive = tmp_path / "no_mig_archive.tar.zst"
         archive.write_bytes(data)
         result = await restore_from_backup(
-            str(tmp_path / "target.db"), str(archive),
+            str(tmp_path / "target.db"),
+            str(archive),
         )
         assert result["success"] is False
         assert "Schema has no migrations applied" in result["errors"][0]
@@ -509,20 +532,20 @@ class TestRestoreFromBackup:
         db_incomplete = tmp_path / "incomplete_profile.db"
         _create_minimal_valid_db(str(db_incomplete))
         conn = sqlite3.connect(str(db_incomplete))
-        conn.execute(
-            "INSERT OR IGNORE INTO schema_migrations "
-            "VALUES (3, 'v3', '2024-01-03', 'def')"
-        )
+        conn.execute("INSERT OR IGNORE INTO schema_migrations VALUES (3, 'v3', '2024-01-03', 'def')")
         conn.commit()
         conn.close()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
-            ("data/profile.db", db_incomplete.read_bytes()),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
+                ("data/profile.db", db_incomplete.read_bytes()),
+            ]
+        )
         archive = tmp_path / "incomplete_archive.tar.zst"
         archive.write_bytes(data)
         result = await restore_from_backup(
-            str(tmp_path / "target.db"), str(archive),
+            str(tmp_path / "target.db"),
+            str(archive),
         )
         assert result["success"] is False
         assert "Migration chain incomplete" in result["errors"][0]
@@ -531,17 +554,21 @@ class TestRestoreFromBackup:
         db = tmp_path / "profile.db"
         _create_minimal_valid_db(str(db))
         original = db.read_bytes()
-        db_content = original[:len(original)//2]
-        data = _make_tar_zst_bytes([
-            ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
-            ("data/profile.db", db_content),
-        ])
+        db_content = original[: len(original) // 2]
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
+                ("data/profile.db", db_content),
+            ]
+        )
         archive = tmp_path / "truncated.tar.zst"
         archive.write_bytes(data)
         target = tmp_path / "target.db"
         staging = tmp_path / "my_staging"
         result = await restore_from_backup(
-            str(target), str(archive), staging_dir=str(staging),
+            str(target),
+            str(archive),
+            staging_dir=str(staging),
         )
         assert result["success"] is False
         assert len(result["errors"]) > 0
@@ -552,7 +579,9 @@ class TestRestoreFromBackup:
         target = tmp_path / "target.db"
         staging = tmp_path / "my_staging"
         result = await restore_from_backup(
-            str(target), str(archive), staging_dir=str(staging),
+            str(target),
+            str(archive),
+            staging_dir=str(staging),
         )
         assert result["success"] is False
         staging_path = os.path.join(str(staging), "restore_staging")
@@ -562,7 +591,9 @@ class TestRestoreFromBackup:
         target = valid_archive.parent / "clean_target.db"
         staging = valid_archive.parent.parent / "restore_staging_custom"
         result = await restore_from_backup(
-            str(target), str(valid_archive), staging_dir=str(staging),
+            str(target),
+            str(valid_archive),
+            staging_dir=str(staging),
         )
         assert result["success"] is True
         staging_path = os.path.join(str(staging), "restore_staging")
@@ -570,10 +601,12 @@ class TestRestoreFromBackup:
 
     async def test_restore_exception_during_rename(self, tmp_path: Path, valid_db: Path):
         db_content = valid_db.read_bytes()
-        data = _make_tar_zst_bytes([
-            ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
-            ("data/profile.db", db_content),
-        ])
+        data = _make_tar_zst_bytes(
+            [
+                ("manifest.json", json.dumps({"backup_id": "test"}).encode()),
+                ("data/profile.db", db_content),
+            ]
+        )
         archive = tmp_path / "rename_fail.tar.zst"
         archive.write_bytes(data)
         parent_file = tmp_path / "not_a_dir"
@@ -581,7 +614,9 @@ class TestRestoreFromBackup:
         target = parent_file / "target.db"
         staging = tmp_path / "my_staging"
         result = await restore_from_backup(
-            str(target), str(archive), staging_dir=str(staging),
+            str(target),
+            str(archive),
+            staging_dir=str(staging),
         )
         assert result["success"] is False
         assert len(result["errors"]) == 1
@@ -602,7 +637,8 @@ class TestRestoreFromBackup:
         archive = tmp_path / "symlink_db.tar.zst"
         archive.write_bytes(compressed)
         result = await restore_from_backup(
-            str(tmp_path / "target.db"), str(archive),
+            str(tmp_path / "target.db"),
+            str(archive),
             staging_dir=str(tmp_path / "staging"),
         )
         assert result["success"] is False

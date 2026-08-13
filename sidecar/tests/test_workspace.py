@@ -17,14 +17,20 @@ def test_workspace_allows_relative_read_and_write(tmp_path: Path) -> None:
     file = source / "main.py"
     file.write_text("print('ok')", encoding="utf-8")
     boundary = WorkspaceBoundary(workspace)
-    assert boundary.resolve_workspace_path(
-        "src/main.py",
-        for_write=False,
-    ) == file
-    assert boundary.resolve_workspace_path(
-        "src/new.py",
-        for_write=True,
-    ) == source / "new.py"
+    assert (
+        boundary.resolve_workspace_path(
+            "src/main.py",
+            for_write=False,
+        )
+        == file
+    )
+    assert (
+        boundary.resolve_workspace_path(
+            "src/new.py",
+            for_write=True,
+        )
+        == source / "new.py"
+    )
 
 
 @pytest.mark.parametrize(

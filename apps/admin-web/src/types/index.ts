@@ -61,6 +61,18 @@ export interface ModelCatalogItem {
   supports_tools: boolean;
   supports_streaming: boolean;
   supports_vision: boolean;
+  routing_tier: number;
+  quality_prior: number;
+  tool_reliability_prior: number;
+  latency_prior_ms: number;
+  model_family: string;
+  model_vendor: string;
+  architecture_class: 'dense' | 'moe' | 'hybrid' | 'unknown';
+  supports_reasoning: boolean;
+  reasoning_levels: Array<'low' | 'medium' | 'high'>;
+  input_price_microusd_per_million: number;
+  output_price_microusd_per_million: number;
+  routing_enabled: boolean;
   status: 'draft' | 'validated' | 'published';
   created_at: string;
   updated_at: string;

@@ -21,9 +21,13 @@
     }
   },
   "sidecar_to_rust": [
+    "routing.snapshot.register",
+    "routing.decision.register",
+    "routing.snapshot.revoke",
     "credential.http.start",
     "credential.http.cancel",
     "credential.probe",
+    "credential.describe",
     "host.externalWrite.execute",
     "runtime.process.start",
     "runtime.process.cancel",

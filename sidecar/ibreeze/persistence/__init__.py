@@ -80,9 +80,7 @@ async def claim_idempotency(
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    expires = (
-        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
+    expires = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
     from sqlite3 import IntegrityError
 
     try:

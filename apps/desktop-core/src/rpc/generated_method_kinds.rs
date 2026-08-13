@@ -1,8 +1,8 @@
 // DO NOT EDIT MANUALLY
 // Generated from packages/rpc-schema/registry.v1.json
 //
-// 120 total methods (50 read, 70 write)
-// 49 sidecar reads, 63 sidecar writes
+// 132 total methods (56 read, 76 write)
+// 54 sidecar reads, 65 sidecar writes
 
 /// Returns `true` when the method is a read (idempotent, safe to retry without idempotency key).
 /// Returns `None` when the method is not in the registry.
@@ -72,6 +72,7 @@ const READ_METHODS: &[&str] = &[
     "conversation.getDepartment",
     "conversation.list",
     "conversation.listMessages",
+    "credential.list",
     "department.get",
     "department.list",
     "departmentTask.get",
@@ -89,6 +90,11 @@ const READ_METHODS: &[&str] = &[
     "review.get",
     "review.list",
     "review.listIssues",
+    "routing.getDecision",
+    "routing.getRunSummary",
+    "routing.listDecisions",
+    "routing.listDeploymentHealth",
+    "routing.validatePolicy",
     "run.get",
     "run.list",
     "run.listEvents",
@@ -127,6 +133,10 @@ const WRITE_METHODS: &[&str] = &[
     "conversation.archive",
     "conversation.create",
     "conversation.submitUserMessage",
+    "credential.create",
+    "credential.delete",
+    "credential.probe",
+    "credential.updateSecret",
     "department.archive",
     "department.create",
     "department.responsibility.create",
@@ -161,6 +171,8 @@ const WRITE_METHODS: &[&str] = &[
     "review.rerun",
     "review.resolveIssue",
     "review.submit",
+    "routing.clearExpiredHealth",
+    "routing.setRunOverride",
     "run.cancel",
     "run.resume",
     "runtime.run",
@@ -214,6 +226,11 @@ const SIDECAR_READ_METHODS: &[&str] = &[
     "review.get",
     "review.list",
     "review.listIssues",
+    "routing.getDecision",
+    "routing.getRunSummary",
+    "routing.listDecisions",
+    "routing.listDeploymentHealth",
+    "routing.validatePolicy",
     "run.get",
     "run.list",
     "run.listEvents",
@@ -279,6 +296,8 @@ const SIDECAR_WRITE_METHODS: &[&str] = &[
     "review.rerun",
     "review.resolveIssue",
     "review.submit",
+    "routing.clearExpiredHealth",
+    "routing.setRunOverride",
     "run.cancel",
     "run.resume",
     "runtime.run",
@@ -296,7 +315,7 @@ const SIDECAR_WRITE_METHODS: &[&str] = &[
     "workspace.cleanupTask",
 ];
 
-const RUST_CORE_READ_METHODS: &[&str] = &["auth.listOfflineProfiles"];
+const RUST_CORE_READ_METHODS: &[&str] = &["auth.listOfflineProfiles", "credential.list"];
 
 const RUST_CORE_WRITE_METHODS: &[&str] = &[
     "auth.changePassword",
@@ -306,6 +325,10 @@ const RUST_CORE_WRITE_METHODS: &[&str] = &[
     "auth.openProfile",
     "auth.register",
     "backend.validateOrigin",
+    "credential.create",
+    "credential.delete",
+    "credential.probe",
+    "credential.updateSecret",
 ];
 
 fn method_matches(method: &str, table: &[&str]) -> bool {

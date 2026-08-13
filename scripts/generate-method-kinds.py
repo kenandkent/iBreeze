@@ -172,8 +172,9 @@ def generate_rust(methods: list[dict]) -> str:
         "];",
         "",
     ])
-    if len(rust_core_read) == 1:
-        lines.append(f'const RUST_CORE_READ_METHODS: &[&str] = &["{rust_core_read[0]}"];')
+    if len(rust_core_read) <= 2:
+        values = ", ".join(f'"{method}"' for method in rust_core_read)
+        lines.append(f"const RUST_CORE_READ_METHODS: &[&str] = &[{values}];")
     else:
         lines.append("const RUST_CORE_READ_METHODS: &[&str] = &[")
         lines.extend(f'    "{m}",' for m in rust_core_read)

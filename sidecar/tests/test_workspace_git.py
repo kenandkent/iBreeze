@@ -55,9 +55,7 @@ class TestGitBaselineCreation:
     async def test_create_bundle(self, tmp_path):
         await _init_git_repo(tmp_path)
         bundle_path = tmp_path / "backup.bundle"
-        result = await create_bundle(
-            str(tmp_path), str(bundle_path), "main"
-        )
+        result = await create_bundle(str(tmp_path), str(bundle_path), "main")
         assert result["success"] is True
         assert bundle_path.exists()
 
@@ -68,9 +66,7 @@ class TestConcurrentBranchIsolation:
 
     async def test_create_worktree(self, tmp_path):
         await _init_git_repo(tmp_path)
-        result = await create_worktree(
-            str(tmp_path), "employee-a", "feat-a", base_branch="main"
-        )
+        result = await create_worktree(str(tmp_path), "employee-a", "feat-a", base_branch="main")
         assert result["success"] is True
         assert Path(result["path"]).exists()
         assert result["branch"] == "feat-a"
@@ -78,12 +74,8 @@ class TestConcurrentBranchIsolation:
     async def test_multiple_worktrees_coexist(self, tmp_path):
         """WORK-005: Multiple employee worktrees are isolated."""
         await _init_git_repo(tmp_path)
-        wt_a = await create_worktree(
-            str(tmp_path), "emp-a", "feat-a", base_branch="main"
-        )
-        wt_b = await create_worktree(
-            str(tmp_path), "emp-b", "feat-b", base_branch="main"
-        )
+        wt_a = await create_worktree(str(tmp_path), "emp-a", "feat-a", base_branch="main")
+        wt_b = await create_worktree(str(tmp_path), "emp-b", "feat-b", base_branch="main")
         assert wt_a["success"] is True
         assert wt_b["success"] is True
         assert wt_a["path"] != wt_b["path"]
@@ -92,9 +84,7 @@ class TestConcurrentBranchIsolation:
 
     async def test_remove_worktree(self, tmp_path):
         await _init_git_repo(tmp_path)
-        await create_worktree(
-            str(tmp_path), "emp-c", "feat-c", base_branch="main"
-        )
+        await create_worktree(str(tmp_path), "emp-c", "feat-c", base_branch="main")
         result = await remove_worktree(str(tmp_path), "emp-c")
         assert result["success"] is True
 
@@ -118,19 +108,13 @@ class TestUserBranchDriftDetection:
     async def test_drift_via_commit_difference(self, tmp_path):
         """WORK-006: Branch drift detected by comparing commit SHAs."""
         await _init_git_repo(tmp_path)
-        baseline = await git_command(
-            "rev-parse", "HEAD", cwd=str(tmp_path)
-        )
+        baseline = await git_command("rev-parse", "HEAD", cwd=str(tmp_path))
         assert baseline["success"] is True
         baseline_sha = baseline["stdout"].strip()
         (tmp_path / "drift.md").write_text("drift", encoding="utf-8")
         await git_command("add", ".", cwd=str(tmp_path))
-        await git_command(
-            "commit", "-m", "drift commit", cwd=str(tmp_path)
-        )
-        current = await git_command(
-            "rev-parse", "HEAD", cwd=str(tmp_path)
-        )
+        await git_command("commit", "-m", "drift commit", cwd=str(tmp_path))
+        current = await git_command("rev-parse", "HEAD", cwd=str(tmp_path))
         current_sha = current["stdout"].strip()
         assert baseline_sha != current_sha
 

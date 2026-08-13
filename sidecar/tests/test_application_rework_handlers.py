@@ -51,7 +51,8 @@ class TestRequestReworkHandler:
     async def test_creates_rework_attempt_and_links_issues(self, mock_hash, uow, company_id, company_task_id):
         handler = RequestReworkHandler(uow)
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
+            company_id=company_id,
+            company_task_id=company_task_id,
             source_review_issue_ids=[uuid.uuid4(), uuid.uuid4()],
             expected_version=1,
         )
@@ -83,8 +84,10 @@ class TestRequestReworkHandler:
     async def test_raises_when_no_issues(self, mock_hash, uow, company_id, company_task_id):
         handler = RequestReworkHandler(uow)
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
-            source_review_issue_ids=[], expected_version=1,
+            company_id=company_id,
+            company_task_id=company_task_id,
+            source_review_issue_ids=[],
+            expected_version=1,
         )
 
         async def fake_execute(context, sha, command):
@@ -101,8 +104,10 @@ class TestRequestReworkHandler:
         handler = RequestReworkHandler(uow)
         issue_id = uuid.uuid4()
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
-            source_review_issue_ids=[issue_id], expected_version=1,
+            company_id=company_id,
+            company_task_id=company_task_id,
+            source_review_issue_ids=[issue_id],
+            expected_version=1,
         )
 
         async def exec_side_effect(sql, params=None):
@@ -121,8 +126,10 @@ class TestRequestReworkHandler:
     async def test_raises_optimistic_lock_conflict(self, mock_hash, uow, company_id, company_task_id):
         handler = RequestReworkHandler(uow)
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
-            source_review_issue_ids=[uuid.uuid4()], expected_version=1,
+            company_id=company_id,
+            company_task_id=company_task_id,
+            source_review_issue_ids=[uuid.uuid4()],
+            expected_version=1,
         )
 
         call_count = 0
@@ -151,8 +158,10 @@ class TestRequestReworkHandler:
     async def test_increments_attempt_no(self, mock_hash, uow, company_id, company_task_id):
         handler = RequestReworkHandler(uow)
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
-            source_review_issue_ids=[uuid.uuid4()], expected_version=1,
+            company_id=company_id,
+            company_task_id=company_task_id,
+            source_review_issue_ids=[uuid.uuid4()],
+            expected_version=1,
         )
 
         call_count = 0
@@ -178,8 +187,10 @@ class TestRequestReworkHandler:
     @patch("ibreeze.application.rework_handlers._hash", return_value="fakehash")
     async def test_department_task_path(self, mock_hash, uow, company_id, company_task_id):
         request = Mock(
-            company_id=company_id, company_task_id=company_task_id,
-            source_review_issue_ids=[uuid.uuid4()], expected_version=1,
+            company_id=company_id,
+            company_task_id=company_task_id,
+            source_review_issue_ids=[uuid.uuid4()],
+            expected_version=1,
             department_task_id=uuid.uuid4(),
         )
         handler = RequestReworkHandler(uow)
@@ -202,6 +213,7 @@ class TestRequestReworkHandler:
 
     async def test_no_for_update_in_production_code(self):
         import inspect
+
         source = inspect.getsource(RequestReworkHandler.handle)
         assert "FOR UPDATE" not in source.upper()
 
@@ -213,11 +225,18 @@ class TestAdvanceReworkAttemptHandler:
         attempt_id = uuid.uuid4()
 
         async def fake_execute(context, sha, command):
-            session = _make_session(lambda sql, p=None: _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "planned", "version": 1,
-            }))
+            session = _make_session(
+                lambda sql, p=None: _fetchone_cursor(
+                    {
+                        "id": str(attempt_id),
+                        "company_task_id": str(uuid.uuid4()),
+                        "department_task_id": None,
+                        "attempt_no": 1,
+                        "status": "planned",
+                        "version": 1,
+                    }
+                )
+            )
             result = await command(session)
             return result.response
 
@@ -232,11 +251,18 @@ class TestAdvanceReworkAttemptHandler:
         attempt_id = uuid.uuid4()
 
         async def fake_execute(context, sha, command):
-            session = _make_session(lambda sql, p=None: _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "running", "version": 1,
-            }))
+            session = _make_session(
+                lambda sql, p=None: _fetchone_cursor(
+                    {
+                        "id": str(attempt_id),
+                        "company_task_id": str(uuid.uuid4()),
+                        "department_task_id": None,
+                        "attempt_no": 1,
+                        "status": "running",
+                        "version": 1,
+                    }
+                )
+            )
             result = await command(session)
             return result.response
 
@@ -251,11 +277,18 @@ class TestAdvanceReworkAttemptHandler:
         attempt_id = uuid.uuid4()
 
         async def fake_execute(context, sha, command):
-            session = _make_session(lambda sql, p=None: _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "running", "version": 1,
-            }))
+            session = _make_session(
+                lambda sql, p=None: _fetchone_cursor(
+                    {
+                        "id": str(attempt_id),
+                        "company_task_id": str(uuid.uuid4()),
+                        "department_task_id": None,
+                        "attempt_no": 1,
+                        "status": "running",
+                        "version": 1,
+                    }
+                )
+            )
             result = await command(session)
             return result.response
 
@@ -270,11 +303,18 @@ class TestAdvanceReworkAttemptHandler:
         attempt_id = uuid.uuid4()
 
         async def fake_execute(context, sha, command):
-            session = _make_session(lambda sql, p=None: _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "planned", "version": 1,
-            }))
+            session = _make_session(
+                lambda sql, p=None: _fetchone_cursor(
+                    {
+                        "id": str(attempt_id),
+                        "company_task_id": str(uuid.uuid4()),
+                        "department_task_id": None,
+                        "attempt_no": 1,
+                        "status": "planned",
+                        "version": 1,
+                    }
+                )
+            )
             result = await command(session)
             return result.response
 
@@ -291,11 +331,16 @@ class TestAdvanceReworkAttemptHandler:
 
         async def record_exec(sql, params=None):
             executed_sqls.append(sql)
-            return _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "planned", "version": 1,
-            })
+            return _fetchone_cursor(
+                {
+                    "id": str(attempt_id),
+                    "company_task_id": str(uuid.uuid4()),
+                    "department_task_id": None,
+                    "attempt_no": 1,
+                    "status": "planned",
+                    "version": 1,
+                }
+            )
 
         async def fake_execute(context, sha, command):
             session = _make_session(record_exec)
@@ -329,11 +374,18 @@ class TestAdvanceReworkAttemptHandler:
         attempt_id = uuid.uuid4()
 
         async def fake_execute(context, sha, command):
-            session = _make_session(lambda sql, p=None: _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "completed", "version": 1,
-            }))
+            session = _make_session(
+                lambda sql, p=None: _fetchone_cursor(
+                    {
+                        "id": str(attempt_id),
+                        "company_task_id": str(uuid.uuid4()),
+                        "department_task_id": None,
+                        "attempt_no": 1,
+                        "status": "completed",
+                        "version": 1,
+                    }
+                )
+            )
             return await command(session)
 
         uow.execute = AsyncMock(side_effect=fake_execute)
@@ -351,11 +403,16 @@ class TestAdvanceReworkAttemptHandler:
 
         async def record_exec(sql, params=None):
             executed_sqls.append(sql)
-            return _fetchone_cursor({
-                "id": str(attempt_id), "company_task_id": str(uuid.uuid4()),
-                "department_task_id": None, "attempt_no": 1,
-                "status": "running", "version": 1,
-            })
+            return _fetchone_cursor(
+                {
+                    "id": str(attempt_id),
+                    "company_task_id": str(uuid.uuid4()),
+                    "department_task_id": None,
+                    "attempt_no": 1,
+                    "status": "running",
+                    "version": 1,
+                }
+            )
 
         async def fake_execute(context, sha, command):
             session = _make_session(record_exec)
@@ -371,5 +428,6 @@ class TestAdvanceReworkAttemptHandler:
 
     async def test_no_for_update_in_production_code(self):
         import inspect
+
         source = inspect.getsource(AdvanceReworkAttemptHandler.handle)
         assert "FOR UPDATE" not in source.upper()

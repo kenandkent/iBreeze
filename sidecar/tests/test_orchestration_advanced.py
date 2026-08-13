@@ -165,9 +165,7 @@ class TestTransferEmployeeBlocksActiveTask:
                 workflow_role=WorkflowRole.MEMBER,
             ),
         )
-        dept = await set_department_leader(
-            db, company.id, department.id, new_leader.id, expected_version=1
-        )
+        dept = await set_department_leader(db, company.id, department.id, new_leader.id, expected_version=1)
         assert dept.leader_employee_id == new_leader.id
 
     async def test_state_transition_blocks_transfer(self):
@@ -274,9 +272,7 @@ class TestDepartmentHeadSwitch:
             ),
         )
         with pytest.raises(ValueError, match="LEADER_PROFILE_UNAVAILABLE"):
-            await set_department_leader(
-                db, company.id, dept_a.id, employee_b.id, expected_version=1
-            )
+            await set_department_leader(db, company.id, dept_a.id, employee_b.id, expected_version=1)
 
 
 @pytest.mark.asyncio
@@ -300,9 +296,7 @@ class TestSevenProbesBeforeExecution:
         )
 
         with pytest.raises((AttributeError, TypeError)):
-            await check_concurrency_slot(
-                db=None, company_id="test", max_concurrent=5
-            )
+            await check_concurrency_slot(db=None, company_id="test", max_concurrent=5)
 
     async def test_plan_validation_cycle_detected(self):
         """ORCH-003: Plan validation detects dependency cycles."""

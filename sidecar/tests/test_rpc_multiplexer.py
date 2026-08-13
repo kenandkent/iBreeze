@@ -66,6 +66,7 @@ class TestPendingRequests:
 
     async def test_backpressure_error(self, mux: Multiplexer):
         from ibreeze.rpc.multiplexer import MAX_PENDING_PER_DIRECTION
+
         for i in range(MAX_PENDING_PER_DIRECTION):
             mux.register_pending(f"rpc:{i}", deadline=100.0)
         with pytest.raises(IpcBackpressureError, match="too many pending requests"):
@@ -92,6 +93,7 @@ class TestStreams:
 
     async def test_push_stream_frame_buffer_full(self, mux: Multiplexer):
         from ibreeze.rpc.multiplexer import MAX_STREAM_BUFFER_FRAMES
+
         req_id = uuid.uuid4()
         queue = mux.register_stream(req_id)
         for i in range(MAX_STREAM_BUFFER_FRAMES):
@@ -119,6 +121,7 @@ class TestStreams:
 
     async def test_stream_backpressure(self, mux: Multiplexer):
         from ibreeze.rpc.multiplexer import MAX_PENDING_PER_DIRECTION
+
         for i in range(MAX_PENDING_PER_DIRECTION):
             mux.register_stream(uuid.uuid4())
         with pytest.raises(IpcBackpressureError, match="too many streams"):

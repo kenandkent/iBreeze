@@ -39,10 +39,7 @@ async def db_with_data(tmp_dir):
         "aggregate_type TEXT, aggregate_id TEXT, aggregate_version INTEGER, "
         "event_type TEXT, payload_json TEXT, trace_id TEXT, occurred_at TEXT)"
     )
-    conn.execute(
-        "INSERT INTO domain_events VALUES ('evt1', 'c1', 'test', 'a1', 1, "
-        "'test.event', '{}', 'trace1', '2024-01-01T00:00:00Z')"
-    )
+    conn.execute("INSERT INTO domain_events VALUES ('evt1', 'c1', 'test', 'a1', 1, 'test.event', '{}', 'trace1', '2024-01-01T00:00:00Z')")
     conn.commit()
     conn.close()
     return db

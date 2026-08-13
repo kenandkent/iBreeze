@@ -41,6 +41,7 @@ def test_safe_arcname_detects_traversal(tmp_path):
 
 def test_tar_filter_keeps_regular_file():
     import tarfile
+
     info = tarfile.TarInfo(name="test.txt")
     info.type = tarfile.REGTYPE
     assert _tar_filter(info) is info
@@ -48,6 +49,7 @@ def test_tar_filter_keeps_regular_file():
 
 def test_tar_filter_keeps_directory():
     import tarfile
+
     info = tarfile.TarInfo(name="dir/")
     info.type = tarfile.DIRTYPE
     assert _tar_filter(info) is info
@@ -55,6 +57,7 @@ def test_tar_filter_keeps_directory():
 
 def test_tar_filter_rejects_symlink():
     import tarfile
+
     info = tarfile.TarInfo(name="link")
     info.type = tarfile.SYMTYPE
     assert _tar_filter(info) is None
@@ -71,9 +74,7 @@ class TestCreateBackupPackage:
         output_dir = tmp_path / "backups"
         output_dir.mkdir()
 
-        result = create_backup_package(
-            str(db_file), str(cas_dir), str(output_dir), backup_type="manual"
-        )
+        result = create_backup_package(str(db_file), str(cas_dir), str(output_dir), backup_type="manual")
         assert os.path.exists(result["archive_path"])
         assert result["archive_sha256"]
         assert result["archive_size"] > 0
@@ -85,13 +86,12 @@ class TestCreateBackupPackage:
         output_dir = tmp_path / "backups"
         output_dir.mkdir()
 
-        result = create_backup_package(
-            str(db_file), str(tmp_path / "empty_cas"), str(output_dir)
-        )
+        result = create_backup_package(str(db_file), str(tmp_path / "empty_cas"), str(output_dir))
 
         import tarfile
 
         import zstandard as zstd
+
         with open(result["archive_path"], "rb") as f:
             dctx = zstd.ZstdDecompressor()
             with dctx.stream_reader(f) as reader:

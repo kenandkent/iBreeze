@@ -47,9 +47,7 @@ class TestRetentionPolicy:
     async def test_retention_no_old_backups(self, db_path, tmp_dir):
         backup_dir = tmp_dir / "backups"
         await create_backup(db_path, backup_dir, backup_id="backup-new")
-        result = await apply_retention_policy(
-            backup_dir, daily_retention=7, weekly_retention=4
-        )
+        result = await apply_retention_policy(backup_dir, daily_retention=7, weekly_retention=4)
         assert result["deleted"] == 0
         assert result["daily_count"] == 1
 
@@ -58,9 +56,7 @@ class TestRetentionPolicy:
         backup_dir = tmp_dir / "backups"
         await create_backup(db_path, backup_dir, backup_id="backup-1")
         await create_backup(db_path, backup_dir, backup_id="backup-2")
-        result = await apply_retention_policy(
-            backup_dir, daily_retention=7, weekly_retention=4
-        )
+        result = await apply_retention_policy(backup_dir, daily_retention=7, weekly_retention=4)
         assert result["deleted"] == 0
 
     async def test_retention_empty_dir(self, tmp_dir):
@@ -95,25 +91,19 @@ class TestRestoreValidation:
         backup_dir = tmp_dir / "backups"
         result = await create_backup(db_path, backup_dir, backup_id="valid")
         target = tmp_dir / "restored.db"
-        restore_result = await restore_backup(
-            backup_dir, result["backup_id"], target, validate_manifest=True
-        )
+        restore_result = await restore_backup(backup_dir, result["backup_id"], target, validate_manifest=True)
         assert restore_result["restored"] is True
 
     async def test_restore_not_found(self, tmp_dir):
         with pytest.raises(ValueError, match="BACKUP_NOT_FOUND"):
-            await restore_backup(
-                tmp_dir / "backups", "nonexistent", tmp_dir / "target.db"
-            )
+            await restore_backup(tmp_dir / "backups", "nonexistent", tmp_dir / "target.db")
 
     async def test_restore_archive_not_found(self, tmp_dir):
         backup_dir = tmp_dir / "backups"
         backup_dir.mkdir()
         (backup_dir / "no-archive").mkdir()
         with pytest.raises(ValueError, match="ARCHIVE_NOT_FOUND"):
-            await restore_backup(
-                backup_dir, "no-archive", tmp_dir / "target.db"
-            )
+            await restore_backup(backup_dir, "no-archive", tmp_dir / "target.db")
 
     async def test_restore_hash_mismatch(self, db_path, tmp_dir):
         """BACK-003: Restore rejects tampered backup."""
@@ -138,9 +128,7 @@ class TestRestoreValidation:
         backup_dir = tmp_dir / "backups"
         result = await create_backup(db_path, backup_dir, backup_id="skip")
         target = tmp_dir / "restored.db"
-        restore_result = await restore_backup(
-            backup_dir, result["backup_id"], target, validate_manifest=False
-        )
+        restore_result = await restore_backup(backup_dir, result["backup_id"], target, validate_manifest=False)
         assert restore_result["restored"] is True
 
 
@@ -154,9 +142,7 @@ class TestAtomicRestoreSwitch:
         result = await create_backup(db_path, backup_dir, backup_id="atomic")
         target = tmp_dir / "target.db"
         target.touch()
-        restore_result = await restore_backup(
-            backup_dir, result["backup_id"], target
-        )
+        restore_result = await restore_backup(backup_dir, result["backup_id"], target)
         assert restore_result["restored"] is True
         restored_path = Path(restore_result["target"])
         assert restored_path.exists()
@@ -207,9 +193,7 @@ class TestRestorePostConstraints:
         target = tmp_dir / "restored.db"
         restore_result = await restore_backup(backup_dir, result["backup_id"], target)
         conn = sqlite3.connect(restore_result["target"])
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = {row[0] for row in cursor.fetchall()}
         conn.close()
         assert "companies" in tables

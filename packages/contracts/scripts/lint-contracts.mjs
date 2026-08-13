@@ -16,6 +16,7 @@ const SCHEMA_DIRS = [
   "approvals",
   "skill",
   "../rpc-schema",
+  "routing",
 ];
 
 const SKIP_FILES = new Set([

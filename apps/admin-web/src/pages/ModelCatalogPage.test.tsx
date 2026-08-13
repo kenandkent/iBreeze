@@ -18,7 +18,7 @@ function renderPage() {
   return render(<TestProviders qc={qc}><ModelCatalogPage /></TestProviders>);
 }
 
-const draftModel = { id: '1', provider_key: 'openai', model_key: 'gpt-4', display_name: 'GPT-4', context_window: 8192, supports_tools: true, supports_streaming: true, supports_vision: false, status: 'draft', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' };
+const draftModel = { id: '1', provider_key: 'openai', model_key: 'gpt-4', display_name: 'GPT-4', context_window: 8192, supports_tools: true, supports_streaming: true, supports_vision: false, routing_tier: 1, quality_prior: 0.5, tool_reliability_prior: 0.5, latency_prior_ms: 3000, model_family: 'gpt', model_vendor: 'openai', architecture_class: 'dense', supports_reasoning: false, reasoning_levels: [], input_price_microusd_per_million: 0, output_price_microusd_per_million: 0, routing_enabled: false, status: 'draft', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' };
 
 describe('ModelCatalogPage interactions', () => {
   beforeEach(() => { vi.clearAllMocks(); mockApiGet.mockResolvedValue({ items: [] }); });
@@ -30,6 +30,8 @@ describe('ModelCatalogPage interactions', () => {
     fireEvent.change(screen.getByLabelText('提供商 Key'), { target: { value: 'openai' } });
     fireEvent.change(screen.getByLabelText('模型 Key'), { target: { value: 'gpt-4' } });
     fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: 'GPT-4' } });
+    fireEvent.change(screen.getByLabelText('模型家族'), { target: { value: 'gpt' } });
+    fireEvent.change(screen.getByLabelText('模型厂商'), { target: { value: 'openai' } });
     fireEvent.click(screen.getByText('确 定'));
     await waitFor(() => { expect(mockApiPost).toHaveBeenCalled(); });
   });
@@ -41,6 +43,8 @@ describe('ModelCatalogPage interactions', () => {
     fireEvent.change(screen.getByLabelText('提供商 Key'), { target: { value: 'openai' } });
     fireEvent.change(screen.getByLabelText('模型 Key'), { target: { value: 'gpt-4' } });
     fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: 'GPT-4' } });
+    fireEvent.change(screen.getByLabelText('模型家族'), { target: { value: 'gpt' } });
+    fireEvent.change(screen.getByLabelText('模型厂商'), { target: { value: 'openai' } });
     fireEvent.click(screen.getByText('确 定'));
     await waitFor(() => { expect(mockApiPost).toHaveBeenCalled(); });
   });

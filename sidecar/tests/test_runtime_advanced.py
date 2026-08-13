@@ -105,10 +105,18 @@ class TestFairScheduling:
         company_a = await _company(db, published_profile, "调度公平A")
         company_b = await _company(db, published_profile, "调度公平B")
         await _enqueue_with_run(
-            db, company_a.id, "run-a", work_item_id="task-a", job_id="job-a",
+            db,
+            company_a.id,
+            "run-a",
+            work_item_id="task-a",
+            job_id="job-a",
         )
         await _enqueue_with_run(
-            db, company_b.id, "run-b", work_item_id="task-b", job_id="job-b",
+            db,
+            company_b.id,
+            "run-b",
+            work_item_id="task-b",
+            job_id="job-b",
         )
         item = await dequeue_next(db)
         assert item["company_id"] == company_a.id
@@ -120,12 +128,20 @@ class TestFairScheduling:
         """RUN-001: Higher priority (lower number) dequeued first."""
         company = await _company(db, published_profile, "优先级排序")
         await _enqueue_with_run(
-            db, company.id, "run-low",
-            work_item_id="task-low", job_id="job-low", priority=20,
+            db,
+            company.id,
+            "run-low",
+            work_item_id="task-low",
+            job_id="job-low",
+            priority=20,
         )
         await _enqueue_with_run(
-            db, company.id, "run-high",
-            work_item_id="task-high", job_id="job-high", priority=0,
+            db,
+            company.id,
+            "run-high",
+            work_item_id="task-high",
+            job_id="job-high",
+            priority=0,
         )
         item = await dequeue_next(db)
         assert item["work_item_id"] == "task-high"
@@ -142,8 +158,11 @@ class TestSlotLimitEnforcement:
     async def test_lease_acquisition(self, db, published_profile):
         company = await _company(db, published_profile, "租约获取")
         queue_id = await _enqueue_with_run(
-            db, company.id, "run-c",
-            work_item_id="task-c", job_id="job-c",
+            db,
+            company.id,
+            "run-c",
+            work_item_id="task-c",
+            job_id="job-c",
         )
         lease_id = await acquire_lease(
             db,
@@ -155,19 +174,18 @@ class TestSlotLimitEnforcement:
             conversation_id=company.company_conversation_id,
         )
         assert lease_id is not None
-        item = await (
-            await db.execute(
-                "SELECT status FROM runtime_queue WHERE id=?", (queue_id,)
-            )
-        ).fetchone()
+        item = await (await db.execute("SELECT status FROM runtime_queue WHERE id=?", (queue_id,))).fetchone()
         assert item["status"] == "leased"
 
     async def test_concurrent_lease_conflict(self, db, published_profile):
         """RUN-002: Second lease on same queue fails."""
         company = await _company(db, published_profile, "租约冲突")
         queue_id = await _enqueue_with_run(
-            db, company.id, "run-d",
-            work_item_id="task-d", job_id="job-d",
+            db,
+            company.id,
+            "run-d",
+            work_item_id="task-d",
+            job_id="job-d",
         )
         lease1 = await acquire_lease(
             db,
@@ -193,8 +211,11 @@ class TestSlotLimitEnforcement:
     async def test_release_lease_marks_completed(self, db, published_profile):
         company = await _company(db, published_profile, "释放租约")
         queue_id = await _enqueue_with_run(
-            db, company.id, "run-e",
-            work_item_id="task-e", job_id="job-e",
+            db,
+            company.id,
+            "run-e",
+            work_item_id="task-e",
+            job_id="job-e",
         )
         lease_id = await acquire_lease(
             db,
@@ -206,17 +227,9 @@ class TestSlotLimitEnforcement:
             conversation_id=company.company_conversation_id,
         )
         await release_lease(db, lease_id)
-        item = await (
-            await db.execute(
-                "SELECT status FROM runtime_queue WHERE id=?", (queue_id,)
-            )
-        ).fetchone()
+        item = await (await db.execute("SELECT status FROM runtime_queue WHERE id=?", (queue_id,))).fetchone()
         assert item["status"] == "completed"
-        lease = await (
-            await db.execute(
-                "SELECT COUNT(*) as cnt FROM runtime_leases WHERE id=?", (lease_id,)
-            )
-        ).fetchone()
+        lease = await (await db.execute("SELECT COUNT(*) as cnt FROM runtime_leases WHERE id=?", (lease_id,))).fetchone()
         assert lease["cnt"] == 0
 
 
@@ -227,8 +240,11 @@ class TestLeaseReclaimOnTimeout:
     async def test_heartbeat_extends_lease(self, db, published_profile):
         company = await _company(db, published_profile, "心跳续期")
         queue_id = await _enqueue_with_run(
-            db, company.id, "run-f",
-            work_item_id="task-f", job_id="job-f",
+            db,
+            company.id,
+            "run-f",
+            work_item_id="task-f",
+            job_id="job-f",
         )
         lease_id = await acquire_lease(
             db,
@@ -241,11 +257,7 @@ class TestLeaseReclaimOnTimeout:
             ttl_seconds=3600,
         )
         assert lease_id is not None
-        lease = await (
-            await db.execute(
-                "SELECT expires_at FROM runtime_leases WHERE id=?", (lease_id,)
-            )
-        ).fetchone()
+        lease = await (await db.execute("SELECT expires_at FROM runtime_leases WHERE id=?", (lease_id,))).fetchone()
         assert lease is not None
         result = await heartbeat_lease(db, lease_id)
         assert isinstance(result, bool)
@@ -258,8 +270,11 @@ class TestLeaseReclaimOnTimeout:
     async def test_release_removes_lease(self, db, published_profile):
         company = await _company(db, published_profile, "释放移除租约")
         queue_id = await _enqueue_with_run(
-            db, company.id, "run-g",
-            work_item_id="task-g", job_id="job-g",
+            db,
+            company.id,
+            "run-g",
+            work_item_id="task-g",
+            job_id="job-g",
         )
         lease_id = await acquire_lease(
             db,
@@ -271,11 +286,7 @@ class TestLeaseReclaimOnTimeout:
             conversation_id=company.company_conversation_id,
         )
         await release_lease(db, lease_id)
-        lease_count = await (
-            await db.execute(
-                "SELECT COUNT(*) as cnt FROM runtime_leases WHERE id=?", (lease_id,)
-            )
-        ).fetchone()
+        lease_count = await (await db.execute("SELECT COUNT(*) as cnt FROM runtime_leases WHERE id=?", (lease_id,))).fetchone()
         assert lease_count["cnt"] == 0
 
 

@@ -142,7 +142,6 @@ async def _run_command(uow: Mock, context: object, sha: str, command) -> object:
 
 
 class TestSubmitReviewGuards:
-
     @pytest.fixture
     def guards_repo(self):
         return Mock(spec=ReviewRepository)
@@ -214,9 +213,14 @@ class TestSubmitReviewGuards:
     @staticmethod
     def _issue(assignment: ReviewAssignment, *, severity: str = "high", category: str = "functional"):
         return ReviewIssueInput(
-            client_issue_id=uuid.uuid4(), severity=severity, category=category,
-            description="test", expected="ok", actual="bad",
-            evidence_refs=(assignment.artifact_id,), suggested_fix="fix",
+            client_issue_id=uuid.uuid4(),
+            severity=severity,
+            category=category,
+            description="test",
+            expected="ok",
+            actual="bad",
+            evidence_refs=(assignment.artifact_id,),
+            suggested_fix="fix",
             assignee_employee_id=None,
         )
 
@@ -224,14 +228,20 @@ class TestSubmitReviewGuards:
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
         request = self._request(assignment, "pass", (), company_id)
         await self._assert_guards_ok(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
         )
 
     async def test_valid_needs_changes_verdict(self, guards_repo, company_id):
         assignment = _make_assignment(company_id=company_id, state="in_review", version=1)
         request = self._request(assignment, "needs_changes", (self._issue(assignment),), company_id)
         await self._assert_guards_ok(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
         )
 
     async def test_valid_failed_verdict(self, guards_repo, company_id):
@@ -239,7 +249,10 @@ class TestSubmitReviewGuards:
         issue = self._issue(assignment, severity="blocker", category="review_execution")
         request = self._request(assignment, "failed", (issue,), company_id)
         await self._assert_guards_ok(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
         )
 
     async def test_state_not_assigned_nor_in_review(self, guards_repo, company_id):
@@ -250,10 +263,15 @@ class TestSubmitReviewGuards:
     async def test_version_mismatch(self, guards_repo, company_id):
         assignment = _make_assignment(company_id=company_id, state="assigned", version=2)
         request = SubmitReview(
-            company_id=company_id, assignment_id=assignment.id,
-            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=assignment.artifact_id,
-            reviewed_sha256=assignment.artifact_sha256, report_artifact_id=uuid.uuid4(),
-            verdict="pass", issues=(), expected_assignment_version=1,
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=assignment.artifact_id,
+            reviewed_sha256=assignment.artifact_sha256,
+            report_artifact_id=uuid.uuid4(),
+            verdict="pass",
+            issues=(),
+            expected_assignment_version=1,
         )
         await self._assert_guards_raises(guards_repo, AsyncMock(), assignment, request, "OPTIMISTIC_LOCK_CONFLICT")
 
@@ -272,7 +290,10 @@ class TestSubmitReviewGuards:
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
         request = self._request(assignment, "pass", (self._issue(assignment),), company_id)
         await self._assert_guards_raises(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
             "VERDICT_PASS_WITH_ISSUES",
         )
 
@@ -280,7 +301,10 @@ class TestSubmitReviewGuards:
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
         request = self._request(assignment, "needs_changes", (), company_id)
         await self._assert_guards_raises(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
             "VERDICT_NEEDS_CHANGES_WITHOUT_ISSUES",
         )
 
@@ -288,7 +312,10 @@ class TestSubmitReviewGuards:
         assignment = _make_assignment(company_id=company_id, state="assigned", version=1)
         request = self._request(assignment, "failed", (self._issue(assignment),), company_id)
         await self._assert_guards_raises(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
             "VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION",
         )
 
@@ -297,7 +324,10 @@ class TestSubmitReviewGuards:
         issue = self._issue(assignment, severity="blocker", category="security")
         request = self._request(assignment, "failed", (issue,), company_id)
         await self._assert_guards_raises(
-            guards_repo, self._session(request, assignment.reviewer_employee_id), assignment, request,
+            guards_repo,
+            self._session(request, assignment.reviewer_employee_id),
+            assignment,
+            request,
             "VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION",
         )
 
@@ -306,7 +336,6 @@ class TestSubmitReviewGuards:
 
 
 class TestStartReviewHandler:
-
     async def _run(self, uow, repo, request):
         """Run the handler's inner command via uow.execute mock."""
         handler = StartReviewHandler(repo, uow)
@@ -325,11 +354,13 @@ class TestStartReviewHandler:
     async def test_starts_review(self, mock_hash, repo, uow):
         assignment = _make_assignment(state="assigned", version=1)
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=assignment.company_id,
+            id=assignment.id,
+            company_id=assignment.company_id,
             artifact_id=assignment.artifact_id,
             artifact_sha256=assignment.artifact_sha256,
             reviewer_employee_id=assignment.reviewer_employee_id,
-            state="in_review", version=2,
+            state="in_review",
+            version=2,
         )
         repo.lock_assignment.return_value = assignment
         repo.transition.return_value = result_assignment
@@ -370,11 +401,13 @@ class TestStartReviewHandler:
     async def test_start_review_has_no_additional_events(self, mock_hash, repo, uow):
         assignment = _make_assignment(state="assigned", version=1)
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=assignment.company_id,
+            id=assignment.id,
+            company_id=assignment.company_id,
             artifact_id=assignment.artifact_id,
             artifact_sha256=assignment.artifact_sha256,
             reviewer_employee_id=assignment.reviewer_employee_id,
-            state="in_review", version=2,
+            state="in_review",
+            version=2,
         )
         repo.lock_assignment.return_value = assignment
         repo.transition.return_value = result_assignment
@@ -398,11 +431,11 @@ class TestStartReviewHandler:
         # review only changes the aggregate state inside this command.
         assert events_captured == []
 
+
 # ─── SubmitReviewHandler ──────────────────────────────────────────────────────
 
 
 class TestSubmitReviewHandler:
-
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
     async def test_submits_review_with_issues(self, mock_hash, repo, uow, company_id):
         assignment = _make_assignment(state="in_review", version=1)
@@ -419,11 +452,13 @@ class TestSubmitReviewHandler:
         repo.create_issues.return_value = (issue1, issue2)
 
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=assignment.company_id,
+            id=assignment.id,
+            company_id=assignment.company_id,
             artifact_id=assignment.artifact_id,
             artifact_sha256=assignment.artifact_sha256,
             reviewer_employee_id=assignment.reviewer_employee_id,
-            state="submitted", version=2,
+            state="submitted",
+            version=2,
         )
         repo.transition.return_value = result_assignment
 
@@ -431,16 +466,26 @@ class TestSubmitReviewHandler:
         issue_inputs = (
             Mock(
                 spec=ReviewIssueInput,
-                client_issue_id=uuid.uuid4(), severity="high", category="functional",
-                description="desc", expected="exp", actual="act",
-                evidence_refs=(uuid.uuid4(),), suggested_fix="fix",
+                client_issue_id=uuid.uuid4(),
+                severity="high",
+                category="functional",
+                description="desc",
+                expected="exp",
+                actual="act",
+                evidence_refs=(uuid.uuid4(),),
+                suggested_fix="fix",
                 assignee_employee_id=uuid.uuid4(),
             ),
             Mock(
                 spec=ReviewIssueInput,
-                client_issue_id=uuid.uuid4(), severity="low", category="style",
-                description="desc2", expected="exp2", actual="act2",
-                evidence_refs=(), suggested_fix="fix2",
+                client_issue_id=uuid.uuid4(),
+                severity="low",
+                category="style",
+                description="desc2",
+                expected="exp2",
+                actual="act2",
+                evidence_refs=(),
+                suggested_fix="fix2",
                 assignee_employee_id=None,
             ),
         )
@@ -486,19 +531,25 @@ class TestSubmitReviewHandler:
         repo.create_issues.return_value = ()
 
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=assignment.company_id,
+            id=assignment.id,
+            company_id=assignment.company_id,
             artifact_id=assignment.artifact_id,
-            state="submitted", version=2,
+            state="submitted",
+            version=2,
         )
         repo.transition.return_value = result_assignment
 
         handler = SubmitReviewHandler(repo, guards, uow)
         request = Mock(
             spec=SubmitReview,
-            company_id=company_id, assignment_id=assignment.id,
-            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
-            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
-            verdict="pass", issues=(),
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64,
+            report_artifact_id=uuid.uuid4(),
+            verdict="pass",
+            issues=(),
             expected_assignment_version=1,
         )
 
@@ -541,8 +592,11 @@ class TestSubmitReviewHandler:
         guards.validate = AsyncMock(side_effect=ValueError("REVIEW_SELF_ASSIGNMENT"))
         request = Mock(
             spec=SubmitReview,
-            company_id=company_id, assignment_id=assignment.id,
-            expected_assignment_version=1, verdict="pass", issues=(),
+            company_id=company_id,
+            assignment_id=assignment.id,
+            expected_assignment_version=1,
+            verdict="pass",
+            issues=(),
         )
         with pytest.raises(ValueError, match="REVIEW_SELF_ASSIGNMENT"):
             await self._run(uow, repo, guards, request)
@@ -559,18 +613,24 @@ class TestSubmitReviewHandler:
         repo.create_report.return_value = report
         repo.create_issues.return_value = ()
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=company_id,
-            state="submitted", version=2,
+            id=assignment.id,
+            company_id=company_id,
+            state="submitted",
+            version=2,
         )
         repo.transition.return_value = result_assignment
 
         handler = SubmitReviewHandler(repo, guards, uow)
         request = Mock(
             spec=SubmitReview,
-            company_id=company_id, assignment_id=assignment.id,
-            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
-            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
-            verdict="pass", issues=(),
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64,
+            report_artifact_id=uuid.uuid4(),
+            verdict="pass",
+            issues=(),
             expected_assignment_version=1,
         )
 
@@ -617,16 +677,22 @@ class TestSubmitReviewHandler:
         repo.create_report.return_value = report
         repo.create_issues.return_value = ()
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=company_id,
-            state="submitted", version=2,
+            id=assignment.id,
+            company_id=company_id,
+            state="submitted",
+            version=2,
         )
         repo.transition.return_value = result_assignment
 
         rerun_event = DomainEventRecord(
-            event_id=uuid.uuid4(), event_type="review.assigned",
-            aggregate_type="review_assignment", aggregate_id=uuid.uuid4(),
-            aggregate_version=1, company_id=company_id,
-            payload_json='{"assignment_id":"rr"}', trace_id=str(uuid.uuid4()),
+            event_id=uuid.uuid4(),
+            event_type="review.assigned",
+            aggregate_type="review_assignment",
+            aggregate_id=uuid.uuid4(),
+            aggregate_version=1,
+            company_id=company_id,
+            payload_json='{"assignment_id":"rr"}',
+            trace_id=str(uuid.uuid4()),
         )
         rerun_outbox = OutboxRecord(
             topic="review.assigned",
@@ -635,16 +701,22 @@ class TestSubmitReviewHandler:
         )
         aggregation = AsyncMock()
         aggregation.on_report_submitted.return_value = AggregationOutcome(
-            fused=Mock(), rerun_event=rerun_event, rerun_outbox=rerun_outbox,
+            fused=Mock(),
+            rerun_event=rerun_event,
+            rerun_outbox=rerun_outbox,
         )
 
         handler = SubmitReviewHandler(repo, guards, uow, aggregation=aggregation)
         request = Mock(
             spec=SubmitReview,
-            company_id=company_id, assignment_id=assignment.id,
-            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
-            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
-            verdict="pass", issues=(),
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64,
+            report_artifact_id=uuid.uuid4(),
+            verdict="pass",
+            issues=(),
             expected_assignment_version=1,
         )
 
@@ -681,18 +753,24 @@ class TestSubmitReviewHandler:
         repo.create_report.return_value = report
         repo.create_issues.return_value = ()
         result_assignment = _make_assignment(
-            id=assignment.id, company_id=company_id,
-            state="submitted", version=2,
+            id=assignment.id,
+            company_id=company_id,
+            state="submitted",
+            version=2,
         )
         repo.transition.return_value = result_assignment
 
         handler = SubmitReviewHandler(repo, guards, uow)
         request = Mock(
             spec=SubmitReview,
-            company_id=company_id, assignment_id=assignment.id,
-            reviewer_run_id=uuid.uuid4(), reviewed_artifact_id=uuid.uuid4(),
-            reviewed_sha256="a" * 64, report_artifact_id=uuid.uuid4(),
-            verdict="pass", issues=(),
+            company_id=company_id,
+            assignment_id=assignment.id,
+            reviewer_run_id=uuid.uuid4(),
+            reviewed_artifact_id=uuid.uuid4(),
+            reviewed_sha256="a" * 64,
+            report_artifact_id=uuid.uuid4(),
+            verdict="pass",
+            issues=(),
             expected_assignment_version=1,
         )
 
@@ -717,7 +795,6 @@ class TestSubmitReviewHandler:
 
 
 class TestStartIssueFixHandler:
-
     async def _run(self, uow, repo, request):
         handler = StartIssueFixHandler(repo, uow)
 
@@ -736,9 +813,12 @@ class TestStartIssueFixHandler:
         issue = _make_issue(state="open", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, category=issue.category,
-            state="fixing", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            category=issue.category,
+            state="fixing",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -776,8 +856,10 @@ class TestStartIssueFixHandler:
         issue = _make_issue(state="open", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, severity=issue.severity,
-            state="fixing", version=2,
+            id=issue.id,
+            severity=issue.severity,
+            state="fixing",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -811,7 +893,6 @@ class TestStartIssueFixHandler:
 
 
 class TestResolveIssueHandler:
-
     async def _run(self, uow, repo, request):
         handler = ResolveIssueHandler(repo, uow)
 
@@ -830,8 +911,10 @@ class TestResolveIssueHandler:
         issue = _make_issue(state="fixing", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, severity=issue.severity,
-            state="resolved", version=2,
+            id=issue.id,
+            severity=issue.severity,
+            state="resolved",
+            version=2,
         )
         repo.resolve_issue_with_evidence.return_value = result_issue
 
@@ -899,7 +982,6 @@ class TestResolveIssueHandler:
 
 
 class TestVerifyIssueHandler:
-
     async def _run(self, uow, repo, request):
         handler = VerifyIssueHandler(repo, uow)
 
@@ -918,9 +1000,12 @@ class TestVerifyIssueHandler:
         issue = _make_issue(state="resolved", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, category=issue.category,
-            state="verified", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            category=issue.category,
+            state="verified",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -930,7 +1015,10 @@ class TestVerifyIssueHandler:
         assert result == {"id": str(issue.id), "state": "verified"}
         repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
         repo.transition_issue.assert_awaited_once_with(
-            ANY, issue, "verified", verifier_employee_id=request.verifier_employee_id,
+            ANY,
+            issue,
+            "verified",
+            verifier_employee_id=request.verifier_employee_id,
         )
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")
@@ -959,8 +1047,11 @@ class TestVerifyIssueHandler:
         issue = _make_issue(state="resolved", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, state="verified", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            state="verified",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -995,7 +1086,6 @@ class TestVerifyIssueHandler:
 
 
 class TestCloseIssueHandler:
-
     async def _run(self, uow, repo, request):
         handler = CloseIssueHandler(repo, uow)
 
@@ -1014,9 +1104,12 @@ class TestCloseIssueHandler:
         issue = _make_issue(state="verified", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, category=issue.category,
-            state="closed", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            category=issue.category,
+            state="closed",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -1053,8 +1146,11 @@ class TestCloseIssueHandler:
         issue = _make_issue(state="verified", company_id=uuid.uuid4(), version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, state="closed", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            state="closed",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -1093,7 +1189,6 @@ class TestCloseIssueHandler:
 
 
 class TestRejectIssueHandler:
-
     async def _run(self, uow, repo, request):
         handler = RejectIssueHandler(repo, uow)
 
@@ -1112,9 +1207,12 @@ class TestRejectIssueHandler:
         issue = _make_issue(state="open", version=1)
         repo.lock_issue.return_value = issue
         result_issue = _make_issue(
-            id=issue.id, company_id=issue.company_id,
-            severity=issue.severity, category=issue.category,
-            state="rejected", version=2,
+            id=issue.id,
+            company_id=issue.company_id,
+            severity=issue.severity,
+            category=issue.category,
+            state="rejected",
+            version=2,
         )
         repo.transition_issue.return_value = result_issue
 
@@ -1124,7 +1222,10 @@ class TestRejectIssueHandler:
         assert result == {"id": str(issue.id), "state": "rejected"}
         repo.lock_issue.assert_awaited_once_with(ANY, request.issue_id, request.company_id)
         repo.transition_issue.assert_awaited_once_with(
-            ANY, issue, "rejected", rejection_reason=request.rejection_reason,
+            ANY,
+            issue,
+            "rejected",
+            rejection_reason=request.rejection_reason,
         )
 
     @patch("ibreeze.application.review_handlers.canonical_hash", return_value="fakehash")

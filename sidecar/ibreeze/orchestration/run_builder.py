@@ -45,6 +45,13 @@ class RunSpec:
     priority: int = 0
     checks: list[dict[str, str]] = field(default_factory=list)
     now: str | None = None
+    routing_policy_json: str = "{}"
+    routing_policy_sha256: str | None = None
+    routing_classifier_version: str | None = None
+    candidate_bindings_json: str | None = None
+    candidate_bindings_sha256: str | None = None
+    profile_type: str = "agent_cli"
+    required_capability_tags: tuple[str, ...] = ()
 
 
 def _now_iso() -> str:
@@ -87,11 +94,33 @@ async def build_run(
         "provider_protocol": binding.get("provider_protocol", ""),
         "run_purpose": spec.run_purpose,
         "adapter_type": spec.adapter_type,
+        "required_capability_tags": list(spec.required_capability_tags),
     }
     if spec.adapter_type == "api_model":
         # API-model runs carry the resolved model id; CLI adapters select their
         # own default model when the key is absent (see runtime/adapters/*.py).
         run_spec["model"] = spec.model_id
+    candidate_json: str | None
+    candidate_hash: str | None
+    if spec.profile_type == "api_model" and spec.candidate_bindings_json is None:
+        from ibreeze.routing.candidates import resolve_candidate_bindings
+
+        (
+            candidate_json,
+            candidate_hash,
+            _routing_mode,
+        ) = await resolve_candidate_bindings(
+            db,
+            company_id=spec.company_id,
+            employee_id=spec.employee_id,
+            catalog_release_id=spec.catalog_release_id,
+            profile_type=spec.profile_type,
+            runtime_binding=binding,
+            routing_policy_json=spec.routing_policy_json,
+        )
+    else:
+        candidate_json = spec.candidate_bindings_json
+        candidate_hash = spec.candidate_bindings_sha256
     spec_json = json.dumps(run_spec, sort_keys=True, separators=(",", ":"))
     spec_sha = hashlib.sha256(spec_json.encode()).hexdigest()
 
@@ -133,8 +162,9 @@ async def build_run(
         " catalog_release_id, runtime_binding_json,"
         " skill_lock_json, tool_policy_json,"
         " workspace_policy_json, verification_commands_json,"
-        " content_sha256, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " content_sha256, routing_policy_json, routing_policy_sha256, routing_classifier_version,"
+        " candidate_bindings_json, candidate_bindings_sha256, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             exec_snap_id,
             spec.company_id,
@@ -156,6 +186,11 @@ async def build_run(
             "{}",
             "[]",
             spec_sha,
+            spec.routing_policy_json,
+            spec.routing_policy_sha256,
+            spec.routing_classifier_version or ("rules-v1" if spec.profile_type == "api_model" else None),
+            candidate_json,
+            candidate_hash,
             now,
         ),
     )

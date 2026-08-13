@@ -173,9 +173,7 @@ class ReviewRepository:
             version=row["version"],
             assignee_employee_id=(UUID(row["assignee_employee_id"]) if row["assignee_employee_id"] else None),
             evidence_refs=evidence_refs,
-            verifier_employee_id=(
-                UUID(row["verifier_employee_id"]) if row["verifier_employee_id"] else None
-            ),
+            verifier_employee_id=(UUID(row["verifier_employee_id"]) if row["verifier_employee_id"] else None),
             rejection_reason=row["rejection_reason"],
         )
 
@@ -274,14 +272,8 @@ class ReviewRepository:
             version=issue.version + 1,
             assignee_employee_id=issue.assignee_employee_id,
             evidence_refs=issue.evidence_refs,
-            verifier_employee_id=(
-                verifier_employee_id if target_state == "verified" else issue.verifier_employee_id
-            ),
-            rejection_reason=(
-                (rejection_reason or "").strip()
-                if target_state == "rejected"
-                else issue.rejection_reason
-            ),
+            verifier_employee_id=(verifier_employee_id if target_state == "verified" else issue.verifier_employee_id),
+            rejection_reason=((rejection_reason or "").strip() if target_state == "rejected" else issue.rejection_reason),
         )
 
     async def resolve_issue_with_evidence(
@@ -300,9 +292,7 @@ class ReviewRepository:
             raise ValueError("STATE_TRANSITION_INVALID")
         if issue.version != expected_version:
             raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-        if len(resolution_artifact_sha256) != 64 or any(
-            character not in "0123456789abcdef" for character in resolution_artifact_sha256
-        ):
+        if len(resolution_artifact_sha256) != 64 or any(character not in "0123456789abcdef" for character in resolution_artifact_sha256):
             raise ValueError("RESOLUTION_ARTIFACT_HASH_INVALID")
         if not 1 <= len(resolution_summary) <= 20_000:
             raise ValueError("RESOLUTION_SUMMARY_INVALID")
@@ -460,11 +450,7 @@ class ReviewRepository:
                     category=iss["category"],
                     state="open",
                     version=1,
-                    assignee_employee_id=(
-                        UUID(str(iss["assignee_employee_id"]))
-                        if iss.get("assignee_employee_id")
-                        else None
-                    ),
+                    assignee_employee_id=(UUID(str(iss["assignee_employee_id"])) if iss.get("assignee_employee_id") else None),
                     evidence_refs=tuple(str(ref) for ref in iss.get("evidence_refs", [])),
                 )
             )

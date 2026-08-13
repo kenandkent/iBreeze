@@ -63,9 +63,7 @@ async def _get_migration_version_async(writer: aiosqlite.Connection | None) -> i
     if writer is None:
         return 0
     try:
-        cursor = await writer.execute(
-            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE status='completed'"
-        )
+        cursor = await writer.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE status='completed'")
         row = await cursor.fetchone()
         return int(row[0]) if row else 0
     except Exception:

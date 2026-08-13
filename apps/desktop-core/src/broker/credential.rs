@@ -3,6 +3,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use keyring::Entry;
+use rand::RngCore;
 
 use crate::error::AppError;
 
@@ -47,7 +48,21 @@ impl CredentialStore {
         profile_directory_id: &str,
         credential_ref: Uuid,
     ) -> Result<KeychainCredential, AppError> {
-        let account = format!("{profile_directory_id}/provider/{credential_ref}");
+        self.load_keychain_credential_version(profile_directory_id, credential_ref, 1)
+    }
+
+    pub fn load_keychain_credential_version(
+        &self,
+        profile_directory_id: &str,
+        credential_ref: Uuid,
+        secret_version: u64,
+    ) -> Result<KeychainCredential, AppError> {
+        if secret_version == 0 {
+            return Err(AppError::Validation(
+                "CREDENTIAL_SECRET_VERSION_INVALID".to_owned(),
+            ));
+        }
+        let account = format!("{profile_directory_id}/provider/{credential_ref}/v{secret_version}");
         let entry = Entry::new(KEYCHAIN_SERVICE, &account)
             .map_err(|e| AppError::Storage(format!("Keychain entry failed: {e}")))?;
         let serialized = entry.get_password().map_err(|e| match e {
@@ -74,7 +89,22 @@ impl CredentialStore {
         credential_ref: Uuid,
         credential: &KeychainCredential,
     ) -> Result<(), AppError> {
-        let account = format!("{profile_directory_id}/provider/{credential_ref}");
+        self.store_credential_version(profile_directory_id, credential_ref, 1, credential)
+    }
+
+    pub fn store_credential_version(
+        &self,
+        profile_directory_id: &str,
+        credential_ref: Uuid,
+        secret_version: u64,
+        credential: &KeychainCredential,
+    ) -> Result<(), AppError> {
+        if secret_version == 0 {
+            return Err(AppError::Validation(
+                "CREDENTIAL_SECRET_VERSION_INVALID".to_owned(),
+            ));
+        }
+        let account = format!("{profile_directory_id}/provider/{credential_ref}/v{secret_version}");
         let entry = Entry::new(KEYCHAIN_SERVICE, &account)
             .map_err(|e| AppError::Storage(format!("Keychain entry failed: {e}")))?;
         let serialized =
@@ -90,13 +120,57 @@ impl CredentialStore {
         profile_directory_id: &str,
         credential_ref: Uuid,
     ) -> Result<bool, AppError> {
-        let account = format!("{profile_directory_id}/provider/{credential_ref}");
+        self.delete_credential_version(profile_directory_id, credential_ref, 1)
+    }
+
+    pub fn delete_credential_version(
+        &self,
+        profile_directory_id: &str,
+        credential_ref: Uuid,
+        secret_version: u64,
+    ) -> Result<bool, AppError> {
+        let account = format!("{profile_directory_id}/provider/{credential_ref}/v{secret_version}");
         let entry = Entry::new(KEYCHAIN_SERVICE, &account)
             .map_err(|e| AppError::Storage(format!("Keychain entry failed: {e}")))?;
         match entry.delete_credential() {
             Ok(()) => Ok(true),
             Err(keyring::Error::NoEntry) => Ok(false),
             Err(e) => Err(AppError::Storage(format!("Keychain delete failed: {e}"))),
+        }
+    }
+
+    /// Return the profile-scoped HMAC key used by credential idempotency.
+    /// It is created once in the OS Keychain and is never copied to the
+    /// profile directory or backup archive.
+    pub fn load_or_create_profile_idempotency_key(
+        &self,
+        profile_directory_id: &str,
+    ) -> Result<[u8; 32], AppError> {
+        let account = format!("{profile_directory_id}/credential-idempotency-key");
+        let entry = Entry::new(KEYCHAIN_SERVICE, &account)
+            .map_err(|e| AppError::Storage(format!("Keychain entry failed: {e}")))?;
+        match entry.get_password() {
+            Ok(encoded) => {
+                let bytes =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
+                        .map_err(|_| {
+                            AppError::Security("CREDENTIAL_IDEMPOTENCY_KEY_CORRUPT".to_owned())
+                        })?;
+                bytes.try_into().map_err(|_| {
+                    AppError::Security("CREDENTIAL_IDEMPOTENCY_KEY_CORRUPT".to_owned())
+                })
+            }
+            Err(keyring::Error::NoEntry) => {
+                let mut bytes = [0_u8; 32];
+                rand::rngs::OsRng.fill_bytes(&mut bytes);
+                let encoded =
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
+                entry
+                    .set_password(&encoded)
+                    .map_err(|e| AppError::Storage(format!("Keychain write failed: {e}")))?;
+                Ok(bytes)
+            }
+            Err(error) => Err(AppError::Storage(format!("Keychain read failed: {error}"))),
         }
     }
 }

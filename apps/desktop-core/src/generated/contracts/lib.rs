@@ -24,6 +24,7 @@ pub struct BackupManifest {
     pub sqlite_sha256: String,
     pub total_size: i64,
 }
+pub type CandidateBindings = Vec<ItemStruct>;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CatalogManifest {
@@ -50,6 +51,13 @@ pub struct CompanyPlan {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RoutingGoldenTask {
+    pub manifest_id: String,
+    pub schema_version: serde_json::Value,
+    pub tasks: Vec<ItemStruct>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExecutionReport {
     pub artifacts: Vec<ItemStruct>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,6 +68,13 @@ pub struct ExecutionReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
     pub status: StatusEnum,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderCredentialsIndex {
+    pub credentials: Vec<ItemStruct>,
+    pub revision: i64,
+    pub schema_version: serde_json::Value,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -74,6 +89,16 @@ pub struct ReviewReport {
     pub reviewer_employee_id: String,
     pub run_id: String,
     pub submitted_at: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoutingPolicy {
+    pub anchor_candidate_id: String,
+    pub candidates: Vec<ItemStruct>,
+    pub ensemble: EnsembleStruct,
+    pub fallback_order: Vec<String>,
+    pub mode: ModeEnum,
+    pub schema_version: serde_json::Value,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

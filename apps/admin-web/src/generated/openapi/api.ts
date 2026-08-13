@@ -1446,16 +1446,41 @@ export interface components {
         };
         /** ModelCreate */
         ModelCreate: {
+            /**
+             * Architecture Class
+             * @enum {string}
+             */
+            architecture_class: "dense" | "moe" | "hybrid" | "unknown";
             /** Context Window */
             context_window: number;
             /** Display Name */
             display_name: string;
+            /** Input Price Microusd Per Million */
+            input_price_microusd_per_million: number;
+            /** Latency Prior Ms */
+            latency_prior_ms: number;
             /** Max Output Tokens */
             max_output_tokens: number;
+            /** Model Family */
+            model_family: string;
             /** Model Key */
             model_key: string;
+            /** Model Vendor */
+            model_vendor: string;
+            /** Output Price Microusd Per Million */
+            output_price_microusd_per_million: number;
             /** Provider Key */
             provider_key: string;
+            /** Quality Prior */
+            quality_prior: number | string;
+            /** Reasoning Levels */
+            reasoning_levels: ("low" | "medium" | "high")[];
+            /** Routing Enabled */
+            routing_enabled: boolean;
+            /** Routing Tier */
+            routing_tier: number;
+            /** Supports Reasoning */
+            supports_reasoning: boolean;
             /** Supports Streaming */
             supports_streaming: boolean;
             /** Supports Tools */
@@ -1464,9 +1489,16 @@ export interface components {
             supports_vision: boolean;
             /** Tokenizer Key */
             tokenizer_key: string;
+            /** Tool Reliability Prior */
+            tool_reliability_prior: number | string;
         };
         /** ModelResponse */
         ModelResponse: {
+            /**
+             * Architecture Class
+             * @enum {string}
+             */
+            architecture_class: "dense" | "moe" | "hybrid" | "unknown";
             /** Catalog Revision */
             catalog_revision: number;
             /** Context Window */
@@ -1483,17 +1515,37 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Input Price Microusd Per Million */
+            input_price_microusd_per_million: number;
+            /** Latency Prior Ms */
+            latency_prior_ms: number;
             /** Max Output Tokens */
             max_output_tokens: number;
+            /** Model Family */
+            model_family: string;
             /** Model Key */
             model_key: string;
+            /** Model Vendor */
+            model_vendor: string;
+            /** Output Price Microusd Per Million */
+            output_price_microusd_per_million: number;
             /** Provider Key */
             provider_key: string;
+            /** Quality Prior */
+            quality_prior: string;
+            /** Reasoning Levels */
+            reasoning_levels: ("low" | "medium" | "high")[];
+            /** Routing Enabled */
+            routing_enabled: boolean;
+            /** Routing Tier */
+            routing_tier: number;
             /**
              * Status
              * @enum {string}
              */
             status: "draft" | "validated" | "published";
+            /** Supports Reasoning */
+            supports_reasoning: boolean;
             /** Supports Streaming */
             supports_streaming: boolean;
             /** Supports Tools */
@@ -1502,6 +1554,8 @@ export interface components {
             supports_vision: boolean;
             /** Tokenizer Key */
             tokenizer_key: string;
+            /** Tool Reliability Prior */
+            tool_reliability_prior: string;
             /**
              * Updated At
              * Format: date-time
@@ -1512,12 +1566,34 @@ export interface components {
         };
         /** ModelUpdate */
         ModelUpdate: {
+            /** Architecture Class */
+            architecture_class?: ("dense" | "moe" | "hybrid" | "unknown") | null;
             /** Context Window */
             context_window?: number | null;
             /** Display Name */
             display_name?: string | null;
+            /** Input Price Microusd Per Million */
+            input_price_microusd_per_million?: number | null;
+            /** Latency Prior Ms */
+            latency_prior_ms?: number | null;
             /** Max Output Tokens */
             max_output_tokens?: number | null;
+            /** Model Family */
+            model_family?: string | null;
+            /** Model Vendor */
+            model_vendor?: string | null;
+            /** Output Price Microusd Per Million */
+            output_price_microusd_per_million?: number | null;
+            /** Quality Prior */
+            quality_prior?: number | string | null;
+            /** Reasoning Levels */
+            reasoning_levels?: ("low" | "medium" | "high")[] | null;
+            /** Routing Enabled */
+            routing_enabled?: boolean | null;
+            /** Routing Tier */
+            routing_tier?: number | null;
+            /** Supports Reasoning */
+            supports_reasoning?: boolean | null;
             /** Supports Streaming */
             supports_streaming?: boolean | null;
             /** Supports Tools */
@@ -1526,6 +1602,8 @@ export interface components {
             supports_vision?: boolean | null;
             /** Tokenizer Key */
             tokenizer_key?: string | null;
+            /** Tool Reliability Prior */
+            tool_reliability_prior?: number | string | null;
         };
         /** ProviderCreate */
         ProviderCreate: {

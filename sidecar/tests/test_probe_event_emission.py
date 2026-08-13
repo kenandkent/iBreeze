@@ -84,8 +84,7 @@ async def env(db):
         " department_task_id, artifact_type, review_strategy, contributor_employee_ids_json,"
         " reviewer_employee_ids_json, review_rounds, confidence_threshold, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,3,0.7,?)",
-        (_id(), company_id, task_id, dept_task_id, "document", "independent_drafts",
-         json.dumps([alice_id]), json.dumps([bob_id]), now),
+        (_id(), company_id, task_id, dept_task_id, "document", "independent_drafts", json.dumps([alice_id]), json.dumps([bob_id]), now),
     )
 
     sha = _sha256("v1")
@@ -94,8 +93,7 @@ async def env(db):
         "INSERT INTO artifacts (id, company_id, company_task_id, department_task_id,"
         " artifact_type, logical_name, object_sha256, object_size, media_type, metadata_json,"
         " is_current, created_by_type, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)",
-        (artifact_id, company_id, task_id, dept_task_id, "document", "x.py", sha, 10,
-         "text/x-python", "{}", "user", now),
+        (artifact_id, company_id, task_id, dept_task_id, "document", "x.py", sha, 10, "text/x-python", "{}", "user", now),
     )
     await db.execute(
         "INSERT INTO artifact_contributors (artifact_id, company_id, employee_id) VALUES (?,?,?)",
@@ -131,8 +129,13 @@ async def _round1_submitted(db, env):
         (_id(), env["company_id"], a1_id, _id(), env["artifact_id"], env["sha"], "pass", env["artifact_id"], env["now"]),
     )
     return ReviewAssignment(
-        id=UUID(a1_id), company_id=UUID(env["company_id"]), artifact_id=UUID(env["artifact_id"]),
-        artifact_sha256=env["sha"], reviewer_employee_id=UUID(env["bob_id"]), state="submitted", version=1,
+        id=UUID(a1_id),
+        company_id=UUID(env["company_id"]),
+        artifact_id=UUID(env["artifact_id"]),
+        artifact_sha256=env["sha"],
+        reviewer_employee_id=UUID(env["bob_id"]),
+        state="submitted",
+        version=1,
     )
 
 
@@ -151,10 +154,12 @@ async def test_auto_rerun_emits_review_assigned_event_and_gate_blocks(db, env):
     assert outcome.rerun_event is not None
     assert outcome.rerun_outbox is not None
     assert outcome.rerun_outbox.topic == "review.assigned"
-    r2 = await (await db.execute(
-        "SELECT id FROM review_assignments WHERE artifact_id=? AND review_round=2",
-        (env["artifact_id"],),
-    )).fetchone()
+    r2 = await (
+        await db.execute(
+            "SELECT id FROM review_assignments WHERE artifact_id=? AND review_round=2",
+            (env["artifact_id"],),
+        )
+    ).fetchone()
     assert r2 is not None
     assert json.loads(outcome.rerun_event.payload_json)["assignment_id"] == r2["id"]
 
@@ -171,8 +176,10 @@ async def test_auto_rerun_emits_review_assigned_event_and_gate_blocks(db, env):
     assert len(blockers) > 0
 
     # review runs only come from gateway.start (external): no agent_runs row yet.
-    runs = await (await db.execute(
-        "SELECT run_purpose, work_item_id, status FROM agent_runs WHERE company_id=?",
-        (env["company_id"],),
-    )).fetchall()
+    runs = await (
+        await db.execute(
+            "SELECT run_purpose, work_item_id, status FROM agent_runs WHERE company_id=?",
+            (env["company_id"],),
+        )
+    ).fetchall()
     assert len(runs) == 0

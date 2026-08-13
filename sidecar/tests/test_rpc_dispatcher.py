@@ -117,7 +117,9 @@ class TestHandleFrame:
         assert result["error"]["code"] == -32000
         assert "METHOD_NOT_ALLOWED" in result["error"]["message"]
 
-    async def test_notification_returns_none_on_success(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
+    async def test_notification_returns_none_on_success(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock
+    ):
         frame = {"jsonrpc": "2.0", "method": "sys.health", "params": {}}
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result is None
@@ -137,12 +139,16 @@ class TestHandleFrame:
         with pytest.raises(MethodNotAllowed, match="method field required"):
             await handle_frame(frame, dispatcher, reverse_table, session)
 
-    async def test_params_defaults_to_empty_dict(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock, handler: AsyncMock):
+    async def test_params_defaults_to_empty_dict(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock, handler: AsyncMock
+    ):
         frame = {"jsonrpc": "2.0", "id": "core:1", "method": "sys.health"}
         await handle_frame(frame, dispatcher, reverse_table, session)
         handler.assert_awaited_once_with({}, session)
 
-    async def test_non_dict_params_normalized_to_empty(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock, handler: AsyncMock):
+    async def test_non_dict_params_normalized_to_empty(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock, handler: AsyncMock
+    ):
         frame = {"jsonrpc": "2.0", "id": "core:1", "method": "sys.health", "params": "string"}
         await handle_frame(frame, dispatcher, reverse_table, session)
         handler.assert_awaited_once_with({}, session)
@@ -153,18 +159,25 @@ class TestHandleFrame:
         assert result["result"] == {"ok": True}
         handler.assert_awaited_once_with({"msg": "hi"}, None)
 
-    async def test_self_connection_guard_reverse_routing(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
+    async def test_self_connection_guard_reverse_routing(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock
+    ):
         handler2 = AsyncMock(return_value={"echoed": True})
         reverse_table.register("sys.echo", handler2)
         frame = {"jsonrpc": "2.0", "id": "sidecar:self-test", "method": "sys.echo", "params": {"x": 1}}
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"]["echoed"] is True
 
-    async def test_deadline_not_exceeded_passes(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock):
+    async def test_deadline_not_exceeded_passes(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock
+    ):
         future = datetime.now(UTC) + timedelta(seconds=30)
         frame = {
-            "jsonrpc": "2.0", "id": "core:1", "method": "sys.health",
-            "params": {}, "meta": {"deadline_at": future.isoformat()},
+            "jsonrpc": "2.0",
+            "id": "core:1",
+            "method": "sys.health",
+            "params": {},
+            "meta": {"deadline_at": future.isoformat()},
         }
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"] == {"ok": True}
@@ -172,50 +185,73 @@ class TestHandleFrame:
     async def test_deadline_exceeded_raises(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
         past = datetime.now(UTC) - timedelta(seconds=10)
         frame = {
-            "jsonrpc": "2.0", "id": "core:1", "method": "sys.health",
-            "params": {}, "meta": {"deadline_at": past.isoformat()},
+            "jsonrpc": "2.0",
+            "id": "core:1",
+            "method": "sys.health",
+            "params": {},
+            "meta": {"deadline_at": past.isoformat()},
         }
         with pytest.raises(IpcDeadlineExceeded, match="IPC_DEADLINE_EXCEEDED: sys.health"):
             await handle_frame(frame, dispatcher, reverse_table, session)
 
-    async def test_deadline_exceeded_notification_returns_none(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
+    async def test_deadline_exceeded_notification_returns_none(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock
+    ):
         past = datetime.now(UTC) - timedelta(seconds=10)
         frame = {
-            "jsonrpc": "2.0", "method": "sys.health",
-            "params": {}, "meta": {"deadline_at": past.isoformat()},
+            "jsonrpc": "2.0",
+            "method": "sys.health",
+            "params": {},
+            "meta": {"deadline_at": past.isoformat()},
         }
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result is None
 
-    async def test_deadline_with_timezone_offset(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock):
+    async def test_deadline_with_timezone_offset(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock
+    ):
         future = datetime.now(UTC) + timedelta(hours=1)
         future_with_offset = future.replace(tzinfo=UTC).astimezone()
         frame = {
-            "jsonrpc": "2.0", "id": "core:1", "method": "sys.health",
-            "params": {}, "meta": {"deadline_at": future_with_offset.isoformat()},
+            "jsonrpc": "2.0",
+            "id": "core:1",
+            "method": "sys.health",
+            "params": {},
+            "meta": {"deadline_at": future_with_offset.isoformat()},
         }
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"] == {"ok": True}
 
-    async def test_invalid_deadline_ignored(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock):
+    async def test_invalid_deadline_ignored(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock
+    ):
         frame = {
-            "jsonrpc": "2.0", "id": "core:1", "method": "sys.health",
-            "params": {}, "meta": {"deadline_at": "not-a-date"},
+            "jsonrpc": "2.0",
+            "id": "core:1",
+            "method": "sys.health",
+            "params": {},
+            "meta": {"deadline_at": "not-a-date"},
         }
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"] == {"ok": True}
 
-    async def test_missing_meta_does_not_crash(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock):
+    async def test_missing_meta_does_not_crash(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock
+    ):
         frame = {"jsonrpc": "2.0", "id": "core:1", "method": "sys.health", "params": {}}
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"] == {"ok": True}
 
-    async def test_non_dict_meta_ignored(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock):
+    async def test_non_dict_meta_ignored(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, handler: AsyncMock, session: MagicMock
+    ):
         frame = {"jsonrpc": "2.0", "id": "core:1", "method": "sys.health", "params": {}, "meta": "bad"}
         result = await handle_frame(frame, dispatcher, reverse_table, session)
         assert result["result"] == {"ok": True}
 
-    async def test_exception_from_handler_returns_error(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
+    async def test_exception_from_handler_returns_error(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock
+    ):
         failing_handler = AsyncMock(side_effect=ValueError("internal error"))
         dispatcher.register("sys.broken", failing_handler)
         frame = {"jsonrpc": "2.0", "id": "core:1", "method": "sys.broken", "params": {}}
@@ -224,7 +260,9 @@ class TestHandleFrame:
         assert result["error"]["code"] == -32000
         assert "internal error" in result["error"]["message"]
 
-    async def test_exception_from_notification_returns_none(self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock):
+    async def test_exception_from_notification_returns_none(
+        self, dispatcher: Dispatcher, reverse_table: ReverseMethodTable, session: MagicMock
+    ):
         failing_handler = AsyncMock(side_effect=ValueError("oops"))
         dispatcher.register("sys.broken", failing_handler)
         frame = {"jsonrpc": "2.0", "method": "sys.broken", "params": {}}

@@ -27,6 +27,7 @@ def _make_mock_db():
     def configure_fetchone(table_data, default=None):
         async def fetchone():
             return table_data.get("row") if isinstance(table_data, dict) else table_data
+
         return fetchone
 
     return db
@@ -56,10 +57,15 @@ def mock_db():
             cursor.fetchone.return_value = {"cnt": 5}
         elif "embedding_generations" in sql:
             cursor.fetchall.return_value = [
-                {"id": "gen-1", "model_key": "text-embedding-ada-002",
-                 "vector_dimension": 384, "source_event_sequence": 42,
-                 "status": "active", "created_at": "2024-01-01T00:00:00Z",
-                 "activated_at": "2024-01-01T01:00:00Z"}
+                {
+                    "id": "gen-1",
+                    "model_key": "text-embedding-ada-002",
+                    "vector_dimension": 384,
+                    "source_event_sequence": 42,
+                    "status": "active",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "activated_at": "2024-01-01T01:00:00Z",
+                }
             ]
         else:
             cursor.fetchone.return_value = None

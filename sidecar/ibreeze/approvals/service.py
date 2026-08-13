@@ -18,9 +18,7 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-_EXTERNAL_WRITE_OPERATIONS = frozenset(
-    {"create_file", "replace_file", "delete_file", "create_directory"}
-)
+_EXTERNAL_WRITE_OPERATIONS = frozenset({"create_file", "replace_file", "delete_file", "create_directory"})
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -82,9 +80,7 @@ async def request_external_write_approval(
         raise ValueError("SOURCE_SHA256_INVALID")
     approval_id = _id()
     now = _now()
-    expires_at = (
-        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
+    expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     target_json = json.dumps(
         {
@@ -148,9 +144,7 @@ async def request_uncertain_recovery_approval(
     _validate_timestamp(prior_started_at, "prior_started_at")
     approval_id = _id()
     now = _now()
-    expires_at = (
-        (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
+    expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     target = {
         "run_id": run_id,
@@ -255,10 +249,7 @@ async def list_pending_approvals(
             LIMIT ?""",
         tuple(params),
     )
-    return [
-        {**dict(row), "execution_pending": row["status"] == "allowed"}
-        for row in await cursor.fetchall()
-    ]
+    return [{**dict(row), "execution_pending": row["status"] == "allowed"} for row in await cursor.fetchall()]
 
 
 async def expire_stale_approvals(

@@ -34,12 +34,17 @@ from ibreeze.orchestration.role_behavior import (
 
 def _sha256(data: str) -> str:
     import hashlib
+
     return hashlib.sha256(data.encode()).hexdigest()
 
 
 async def _setup_orch_env(
-    db: aiosqlite.Connection, company_id: str, version_id: str,
-    profile_id: str, employee_id: str, dept_id: str,
+    db: aiosqlite.Connection,
+    company_id: str,
+    version_id: str,
+    profile_id: str,
+    employee_id: str,
+    dept_id: str,
 ):
     now = "2026-01-01T00:00:00Z"
     await db.execute("PRAGMA foreign_keys = OFF")
@@ -118,7 +123,10 @@ async def _setup_orch_env(
 
 
 async def _create_task_with_plan(
-    db: aiosqlite.Connection, company_id: str, task_id: str, plan_status: str = "draft",
+    db: aiosqlite.Connection,
+    company_id: str,
+    task_id: str,
+    plan_status: str = "draft",
 ) -> str:
     now = "2026-01-01T00:00:00Z"
     conv_id = str(uuid.uuid4())
@@ -181,7 +189,8 @@ async def orch_env(db: aiosqlite.Connection):
 class TestReportGenerator:
     async def test_generate_department_report(self, db, orch_env):
         report = await generate_department_report(
-            db, company_id=orch_env["company_id"],
+            db,
+            company_id=orch_env["company_id"],
             department_id=orch_env["dept_id"],
             task_id=str(uuid.uuid4()),
         )
@@ -192,7 +201,8 @@ class TestReportGenerator:
 
     async def test_generate_company_review(self, db, orch_env):
         review = await generate_company_review(
-            db, company_id=orch_env["company_id"],
+            db,
+            company_id=orch_env["company_id"],
             task_id=str(uuid.uuid4()),
         )
         assert review["review_type"] == "company"
@@ -200,7 +210,8 @@ class TestReportGenerator:
 
     async def test_generate_final_report(self, db, orch_env):
         final = await generate_final_report(
-            db, company_id=orch_env["company_id"],
+            db,
+            company_id=orch_env["company_id"],
             task_id=str(uuid.uuid4()),
         )
         assert final["report_type"] == "final"
@@ -235,8 +246,7 @@ class TestPlanGenerator:
                     status, attempt, created_at, updated_at, version)
                    VALUES (?, ?, ?, ?, ?, ?, 'avail', 'exec', 'company_plan', 'codex_cli', '{}', ?,
                            'queued', 1, ?, ?, 1)""",
-                (run_id, orch_env["company_id"], task_id, task_id,
-                 str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
+                (run_id, orch_env["company_id"], task_id, task_id, str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
             )
         finally:
             await db.execute("PRAGMA foreign_keys = ON")
@@ -289,8 +299,7 @@ class TestPlanGenerator:
                     status, attempt, created_at, updated_at, version)
                    VALUES (?, ?, ?, ?, ?, ?, 'avail', 'exec', 'company_plan', 'codex_cli', '{}', ?,
                            'queued', 1, ?, ?, 1)""",
-                (run_id, orch_env["company_id"], task_id, task_id,
-                 str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
+                (run_id, orch_env["company_id"], task_id, task_id, str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
             )
         finally:
             await db.execute("PRAGMA foreign_keys = ON")

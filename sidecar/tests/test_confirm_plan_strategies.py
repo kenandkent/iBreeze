@@ -98,7 +98,7 @@ async def strategy_env(db: Any) -> dict[str, str]:
         " tool_policy_json, timeout_seconds, max_retries, workspace_policy,"
         " catalog_release_id, content_sha256, status, created_at, published_at)"
         " VALUES (?,?,1,'Default v1','Default profile','agent_cli',?,"
-        " 'Act carefully.','[]','{}',300,2,'workspace_rw_external_ro',?,?,"
+        " 'Act carefully.','[\"code\",\"review\"]','{}',300,2,'workspace_rw_external_ro',?,?,"
         " 'published',?,?)",
         (version_id, profile_id, binding_json, release_id, _sha256("default"), now, now),
     )
@@ -110,9 +110,7 @@ async def strategy_env(db: Any) -> dict[str, str]:
         (dept_rev_id, dept_id, company_id, _sha256("eng"), now),
     )
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'department','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'department','active',?)",
         (dept_conv_id, company_id, now),
     )
     await db.execute(
@@ -127,9 +125,7 @@ async def strategy_env(db: Any) -> dict[str, str]:
     bob_id = await _insert_employee(db, company_id, dept_id, version_id, now, "Bob")
     carol_id = await _insert_employee(db, company_id, dept_id, version_id, now, "Carol")
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'company','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'company','active',?)",
         (conv_id, company_id, now),
     )
     await db.execute(
@@ -189,7 +185,13 @@ async def strategy_env(db: Any) -> dict[str, str]:
     }
 
 
-async def _register_plan(db: Any, env: dict[str, str], deliverables: list[dict[str, Any]]) -> str:
+async def _register_plan(
+    db: Any,
+    env: dict[str, str],
+    deliverables: list[dict[str, Any]],
+    *,
+    required_capability_tags: list[str] | None = None,
+) -> str:
     plan_body = json.dumps(
         {
             "company_id": env["company_id"],
@@ -204,6 +206,7 @@ async def _register_plan(db: Any, env: dict[str, str], deliverables: list[dict[s
                     "deliverables": deliverables,
                     "acceptance_criteria": ["Works"],
                     "dependency_refs": [],
+                    "required_capability_tags": required_capability_tags or [],
                 }
             ],
             "created_at": env["now"],
@@ -328,12 +331,39 @@ class TestPrimaryWithPeerReview:
         # Spec still freezes the full contributor set for reviewer checks.
         spec = await _rows(
             db,
-            "SELECT review_strategy, contributor_employee_ids_json FROM deliverable_review_specs"
-            " WHERE company_id=? AND company_task_id=?",
+            "SELECT review_strategy, contributor_employee_ids_json FROM deliverable_review_specs WHERE company_id=? AND company_task_id=?",
             (env["company_id"], env["task_id"]),
         )
         assert spec[0]["review_strategy"] == "primary_with_peer_review"
         assert json.loads(spec[0]["contributor_employee_ids_json"]) == [env["alice_id"], env["bob_id"]]
+
+
+class TestCapabilityPreflight:
+    @pytest.mark.asyncio
+    async def test_missing_profile_capability_keeps_plan_waiting(self, db: Any, strategy_env: dict[str, str]) -> None:
+        env = strategy_env
+        sha = await _register_plan(
+            db,
+            env,
+            [_deliverable("independent_drafts", [env["alice_id"]], [env["carol_id"]])],
+            required_capability_tags=["security"],
+        )
+        result = await _confirm(db, env, sha)
+        assert result["status"] == "waiting_resource"
+        assert await _rows(db, "SELECT 1 FROM employee_tasks WHERE company_id=?", (env["company_id"],)) == []
+
+    @pytest.mark.asyncio
+    async def test_unavailable_reviewer_keeps_plan_waiting(self, db: Any, strategy_env: dict[str, str]) -> None:
+        env = strategy_env
+        await db.execute("UPDATE employees SET status='inactive' WHERE id=?", (env["carol_id"],))
+        sha = await _register_plan(
+            db,
+            env,
+            [_deliverable("independent_drafts", [env["alice_id"]], [env["carol_id"]])],
+        )
+        result = await _confirm(db, env, sha)
+        assert result["status"] == "waiting_resource"
+        assert await _rows(db, "SELECT 1 FROM employee_tasks WHERE company_id=?", (env["company_id"],)) == []
 
 
 class TestSequentialRefinement:
@@ -344,6 +374,7 @@ class TestSequentialRefinement:
             db,
             env,
             [_deliverable("sequential_refinement", [env["alice_id"], env["bob_id"]], [env["carol_id"]])],
+            required_capability_tags=["code", "review"],
         )
         result = await _confirm(db, env, sha)
         assert result["status"] == "confirmed"
@@ -379,20 +410,26 @@ class TestSequentialRefinement:
         # The second segment froze a dispatch spec for lazy dispatch.
         specs = await _rows(
             db,
-            "SELECT employee_task_id, profile_version_id, model_id, workspace_grant_id, department_revision_id"
+            "SELECT employee_task_id, profile_version_id, model_id, workspace_grant_id, department_revision_id,"
+            " required_capability_tags_json"
             " FROM employee_task_dispatch_specs WHERE company_id=? AND company_task_id=?",
             (env["company_id"], env["task_id"]),
         )
         assert [row["employee_task_id"] for row in specs] == [second["id"]]
         assert specs[0]["profile_version_id"]
         assert specs[0]["workspace_grant_id"]
+        assert json.loads(specs[0]["required_capability_tags_json"]) == ["code", "review"]
+        run_spec = await _rows(
+            db,
+            "SELECT run_spec_json FROM agent_runs WHERE employee_task_id=?",
+            (first["id"],),
+        )
+        assert json.loads(run_spec[0]["run_spec_json"])["required_capability_tags"] == ["code", "review"]
 
 
 class TestDuplicateDeliverableRejection:
     @pytest.mark.asyncio
-    async def test_duplicate_artifact_type_rejected_at_confirm(
-        self, db: Any, strategy_env: dict[str, str]
-    ) -> None:
+    async def test_duplicate_artifact_type_rejected_at_confirm(self, db: Any, strategy_env: dict[str, str]) -> None:
         """S2-2: two deliverables sharing an artifact_type would collide on the
         deliverable_review_specs UNIQUE key and silently drop the second spec
         (no reviews, or the wrong ones).  Reject the plan loudly at confirm

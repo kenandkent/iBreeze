@@ -9,6 +9,23 @@ use heck::{ToPascalCase, ToSnakeCase};
 use quote::{format_ident, quote};
 use proc_macro2::TokenStream;
 
+fn rust_field_ident(name: &str) -> proc_macro2::Ident {
+    let snake = name.to_snake_case();
+    const KEYWORDS: &[&str] = &[
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else",
+        "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop",
+        "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
+        "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+        "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof",
+        "unsized", "virtual", "yield", "try",
+    ];
+    if KEYWORDS.contains(&snake.as_str()) {
+        format_ident!("r#{}", snake)
+    } else {
+        format_ident!("{}", snake)
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Generate Rust types from JSON Schema", long_about = None)]
 struct Args {
@@ -254,8 +271,10 @@ fn generate_struct(
                 }
                 
                 let field_type = schema_to_rust_type(prop_name, &prop_schema, all_schemas, processed)?;
-                let field_ident = format_ident!("{}", prop_name.to_snake_case());
-                let serde_name = if *prop_name != prop_name.to_snake_case() {
+                let field_ident = rust_field_ident(prop_name);
+                let serde_name = if *prop_name != prop_name.to_snake_case()
+                    || field_ident.to_string().starts_with("r#")
+                {
                     quote! { #[serde(rename = #prop_name)] }
                 } else {
                     quote! {}

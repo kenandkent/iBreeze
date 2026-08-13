@@ -60,11 +60,13 @@ class TestVerifySqliteCapabilities:
         return db
 
     async def test_ok(self):
-        db = await self._make_db({
-            "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
-            "json_valid": self._make_cursor(fetchone_return=(1,)),
-            "compile_options": self._make_cursor(aiter_items=[("ENABLE_FTS5",)]),
-        })
+        db = await self._make_db(
+            {
+                "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
+                "json_valid": self._make_cursor(fetchone_return=(1,)),
+                "compile_options": self._make_cursor(aiter_items=[("ENABLE_FTS5",)]),
+            }
+        )
         await verify_sqlite_capabilities(db)
 
     async def test_version_too_old(self):
@@ -75,27 +77,33 @@ class TestVerifySqliteCapabilities:
             await verify_sqlite_capabilities(db)
 
     async def test_exact_minimum_version(self):
-        db = await self._make_db({
-            "sqlite_version": self._make_cursor(fetchone_return=("3.45.0",)),
-            "json_valid": self._make_cursor(fetchone_return=(1,)),
-            "compile_options": self._make_cursor(aiter_items=[("ENABLE_FTS5",)]),
-        })
+        db = await self._make_db(
+            {
+                "sqlite_version": self._make_cursor(fetchone_return=("3.45.0",)),
+                "json_valid": self._make_cursor(fetchone_return=(1,)),
+                "compile_options": self._make_cursor(aiter_items=[("ENABLE_FTS5",)]),
+            }
+        )
         await verify_sqlite_capabilities(db)
 
     async def test_json_not_supported(self):
-        db = await self._make_db({
-            "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
-            "json_valid": self._make_cursor(fetchone_return=(0,)),
-        })
+        db = await self._make_db(
+            {
+                "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
+                "json_valid": self._make_cursor(fetchone_return=(0,)),
+            }
+        )
         with pytest.raises(AssertionError):
             await verify_sqlite_capabilities(db)
 
     async def test_fts5_not_available(self):
-        db = await self._make_db({
-            "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
-            "json_valid": self._make_cursor(fetchone_return=(1,)),
-            "compile_options": self._make_cursor(aiter_items=[("OMIT_FTS5", "ENABLE_FTS4")]),
-        })
+        db = await self._make_db(
+            {
+                "sqlite_version": self._make_cursor(fetchone_return=("3.46.0",)),
+                "json_valid": self._make_cursor(fetchone_return=(1,)),
+                "compile_options": self._make_cursor(aiter_items=[("OMIT_FTS5", "ENABLE_FTS4")]),
+            }
+        )
         with pytest.raises(RuntimeError, match="FTS5 not available"):
             await verify_sqlite_capabilities(db)
 
@@ -108,9 +116,7 @@ class TestMigrationRunnerEnsureLedger:
         try:
             runner = MigrationRunner(db)
             await runner._ensure_ledger()
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
             row = await cursor.fetchone()
             assert row is not None
             assert row[0] == "schema_migrations"
@@ -205,9 +211,7 @@ class TestMigrationRunnerApplyAll:
             assert "test_a" in tables
             assert "test_b" in tables
 
-            cursor = await db.execute(
-                "SELECT version, status FROM schema_migrations ORDER BY version"
-            )
+            cursor = await db.execute("SELECT version, status FROM schema_migrations ORDER BY version")
             rows = await cursor.fetchall()
             assert len(rows) == 2
             assert rows[0]["version"] == 1
@@ -244,9 +248,7 @@ class TestMigrationRunnerApplyAll:
             with patch("ibreeze.persistence.migrator.MIGRATIONS_DIR", mig_dir):
                 await runner.apply_all()
 
-            cursor = await db.execute(
-                "SELECT COUNT(*) AS cnt FROM schema_migrations WHERE status='completed'"
-            )
+            cursor = await db.execute("SELECT COUNT(*) AS cnt FROM schema_migrations WHERE status='completed'")
             row = await cursor.fetchone()
             assert row["cnt"] == 1
         finally:
@@ -265,9 +267,7 @@ class TestMigrationRunnerApplyAll:
                 with pytest.raises(Exception):
                     await runner.apply_all()
 
-            cursor = await db.execute(
-                "SELECT status, error_code FROM schema_migrations WHERE version=1"
-            )
+            cursor = await db.execute("SELECT status, error_code FROM schema_migrations WHERE version=1")
             row = await cursor.fetchone()
             assert row is not None
             assert row["status"] == "failed"
@@ -292,9 +292,7 @@ class TestMigrationRunnerApplyAll:
                 with pytest.raises(RuntimeError, match="foreign key violations"):
                     await runner.apply_all()
 
-            cursor = await db.execute(
-                "SELECT status, error_code FROM schema_migrations WHERE version=1"
-            )
+            cursor = await db.execute("SELECT status, error_code FROM schema_migrations WHERE version=1")
             row = await cursor.fetchone()
             assert row is not None
             assert row["status"] == "failed"
@@ -304,9 +302,7 @@ class TestMigrationRunnerApplyAll:
     async def test_raises_on_integrity_check_failure(self, tmp_path):
         mig_dir = tmp_path / "migrations"
         mig_dir.mkdir()
-        (mig_dir / "001_corrupt.sql").write_text(
-            "CREATE TABLE test_x (id INTEGER PRIMARY KEY);"
-        )
+        (mig_dir / "001_corrupt.sql").write_text("CREATE TABLE test_x (id INTEGER PRIMARY KEY);")
 
         db = await aiosqlite.connect(":memory:")
         db.row_factory = aiosqlite.Row
@@ -336,9 +332,7 @@ class TestMigrationRunnerApplyAll:
                 with pytest.raises(RuntimeError, match="integrity check failed"):
                     await runner.apply_all()
 
-            cursor = await db.execute(
-                "SELECT status, error_code FROM schema_migrations WHERE version=1"
-            )
+            cursor = await db.execute("SELECT status, error_code FROM schema_migrations WHERE version=1")
             row = await cursor.fetchone()
             assert row is not None
             assert row["status"] == "failed"

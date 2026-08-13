@@ -14,5 +14,17 @@ export interface CatalogListmodelsResponse {
     model_binding_id?: string;
     provider_protocol?: "openai_responses" | "anthropic_messages" | "openai_chat_completions";
     capabilities?: string[];
+    routing_tier?: number;
+    quality_prior?: number;
+    tool_reliability_prior?: number;
+    latency_prior_ms?: number;
+    model_family?: string;
+    model_vendor?: string;
+    architecture_class?: "dense" | "moe" | "hybrid" | "unknown";
+    supports_reasoning?: boolean;
+    reasoning_levels?: ("low" | "medium" | "high")[];
+    input_price_microusd_per_million?: number;
+    output_price_microusd_per_million?: number;
+    routing_enabled?: boolean;
   }[];
 }

@@ -66,20 +66,12 @@ class ReviewAggregationService:
         """Record, fuse and persist the post-submit aggregation state."""
         await self._record_score(session, company_id=company_id, assignment=assignment)
 
-        scores = await self._load_scores(
-            session, company_id=company_id, artifact_id=assignment.artifact_id
-        )
-        open_blockers = await self._open_blocker_high_count(
-            session, company_id=company_id, artifact_id=assignment.artifact_id
-        )
+        scores = await self._load_scores(session, company_id=company_id, artifact_id=assignment.artifact_id)
+        open_blockers = await self._open_blocker_high_count(session, company_id=company_id, artifact_id=assignment.artifact_id)
         fused = fuse_verdicts(scores, open_blocker_high_issues=open_blockers)
 
-        rounds, threshold = await self._spec(
-            session, company_id=company_id, artifact_id=assignment.artifact_id
-        )
-        current_round, pending = await self._round_state(
-            session, company_id=company_id, artifact_id=assignment.artifact_id
-        )
+        rounds, threshold = await self._spec(session, company_id=company_id, artifact_id=assignment.artifact_id)
+        current_round, pending = await self._round_state(session, company_id=company_id, artifact_id=assignment.artifact_id)
         decision = rerun_decision(
             fused,
             current_round=current_round,
@@ -99,15 +91,11 @@ class ReviewAggregationService:
         )
 
         if decision in ("pass", "exhausted"):
-            await self._finalize_scores(
-                session, company_id=company_id, artifact_id=assignment.artifact_id, fused=fused
-            )
+            await self._finalize_scores(session, company_id=company_id, artifact_id=assignment.artifact_id, fused=fused)
         rerun_event: DomainEventRecord | None = None
         rerun_outbox: OutboxRecord | None = None
         if decision == "rerun":
-            rerun_event, rerun_outbox = await self._create_auto_rerun(
-                session, company_id=company_id, artifact_id=assignment.artifact_id
-            )
+            rerun_event, rerun_outbox = await self._create_auto_rerun(session, company_id=company_id, artifact_id=assignment.artifact_id)
         return AggregationOutcome(
             fused=fused,
             rerun_event=rerun_event,
@@ -130,9 +118,7 @@ class ReviewAggregationService:
         if row is None:
             return
         report_id = str(row["id"])
-        exists = await (
-            await session.execute("SELECT 1 FROM review_report_scores WHERE report_id=?", (report_id,))
-        ).fetchone()
+        exists = await (await session.execute("SELECT 1 FROM review_report_scores WHERE report_id=?", (report_id,))).fetchone()
         if exists is not None:
             return
         issue_cursor = await session.execute(
@@ -171,8 +157,7 @@ class ReviewAggregationService:
     async def _reviewer_stats(self, session: Any, company_id: Any, reviewer_id: Any) -> dict[str, object] | None:
         row = await (
             await session.execute(
-                "SELECT accuracy, sample_count FROM reviewer_stats"
-                " WHERE company_id=? AND reviewer_employee_id=?",
+                "SELECT accuracy, sample_count FROM reviewer_stats WHERE company_id=? AND reviewer_employee_id=?",
                 (str(company_id), str(reviewer_id)),
             )
         ).fetchone()
@@ -263,11 +248,7 @@ class ReviewAggregationService:
         if not rows:
             return 1, 0
         current_round = max(int(row["review_round"]) for row in rows)
-        pending = sum(
-            1
-            for row in rows
-            if int(row["review_round"]) == current_round and row["status"] in ("assigned", "in_review")
-        )
+        pending = sum(1 for row in rows if int(row["review_round"]) == current_round and row["status"] in ("assigned", "in_review"))
         return current_round, pending
 
     # -- persistence ----------------------------------------------------------

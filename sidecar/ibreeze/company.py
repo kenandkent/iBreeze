@@ -228,9 +228,7 @@ async def create_company(
         )
 
         # ── 7. 插入办公室 DepartmentRevision ────────────────────────────
-        office_description = (
-            "接收用户任务，依据公司介绍完成需求梳理、计划编排、部门分派、跨部门 Review、问题处理和最终汇报"
-        )
+        office_description = "接收用户任务，依据公司介绍完成需求梳理、计划编排、部门分派、跨部门 Review、问题处理和最终汇报"
         office_rev_content = json.dumps(
             {
                 "name": "总经理办公室",

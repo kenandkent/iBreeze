@@ -10,11 +10,13 @@ class TestReadPool:
     async def test_start_creates_pool(self, tmp_path: Path):
         db_path = str(tmp_path / "test.db")
         import aiosqlite
+
         conn = await aiosqlite.connect(db_path)
         await conn.execute("CREATE TABLE test (id INT)")
         await conn.close()
 
         from ibreeze.persistence.read_pool import ReadPool
+
         pool = ReadPool(size=2, db_path=db_path)
         await pool.start(db_path)
         try:
@@ -26,11 +28,13 @@ class TestReadPool:
     async def test_acquire_returns_connection(self, tmp_path: Path):
         db_path = str(tmp_path / "test.db")
         import aiosqlite
+
         conn = await aiosqlite.connect(db_path)
         await conn.execute("CREATE TABLE test (id INT)")
         await conn.close()
 
         from ibreeze.persistence.read_pool import ReadPool
+
         pool = ReadPool(size=1, db_path=db_path)
         await pool.start(db_path)
         try:
@@ -43,11 +47,13 @@ class TestReadPool:
     async def test_stop_closes_connections(self, tmp_path: Path):
         db_path = str(tmp_path / "test.db")
         import aiosqlite
+
         conn = await aiosqlite.connect(db_path)
         await conn.execute("CREATE TABLE test (id INT)")
         await conn.close()
 
         from ibreeze.persistence.read_pool import ReadPool
+
         pool = ReadPool(size=1, db_path=db_path)
         await pool.start(db_path)
         await pool.stop()
@@ -56,11 +62,13 @@ class TestReadPool:
     async def test_start_with_pragma(self, tmp_path: Path):
         db_path = str(tmp_path / "test.db")
         import aiosqlite
+
         conn = await aiosqlite.connect(db_path)
         await conn.execute("CREATE TABLE test (id INT)")
         await conn.close()
 
         from ibreeze.persistence.read_pool import ReadPool
+
         pool = ReadPool(size=1)
         await pool.start(db_path)
         try:

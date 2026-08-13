@@ -177,9 +177,7 @@ class ModelRuntime:
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": result
-                        if isinstance(result, str)
-                        else json.dumps(result, ensure_ascii=False, sort_keys=True),
+                        "content": result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, sort_keys=True),
                     }
                 )
 

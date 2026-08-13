@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.clearExpiredHealth.request.v1","title":"RoutingClearExpiredHealthRequest","type":"object","additionalProperties":false,
+  "properties":{"company_id":{"type":"string","format":"uuid"}},"required":["company_id"]
+}

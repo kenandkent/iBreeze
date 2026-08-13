@@ -52,12 +52,21 @@ async def _insert_workspace(db, **overrides):
         "created_at, updated_at, version"
     )
     values = (
-        data["id"], data["company_id"], data["company_task_id"],
-        data["workspace_grant_id"], data["repository_root"],
-        data["baseline_commit_sha"], data["user_branch_name"],
-        data["integration_branch_name"], data["integration_worktree_path"],
-        data["status"], data["applied_commit_sha"], data["cleaned_at"],
-        data["created_at"], data["updated_at"], data["version"],
+        data["id"],
+        data["company_id"],
+        data["company_task_id"],
+        data["workspace_grant_id"],
+        data["repository_root"],
+        data["baseline_commit_sha"],
+        data["user_branch_name"],
+        data["integration_branch_name"],
+        data["integration_worktree_path"],
+        data["status"],
+        data["applied_commit_sha"],
+        data["cleaned_at"],
+        data["created_at"],
+        data["updated_at"],
+        data["version"],
     )
     await db.execute(f"INSERT INTO task_workspaces ({cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
     await db.commit()
@@ -80,11 +89,18 @@ class TestDatetime:
 class TestResponse:
     def test_creates_model_from_dict(self):
         row = {
-            "id": "ws-1", "company_id": "co-1", "company_task_id": "ct-1",
-            "workspace_grant_id": "wg-1", "repository_root": "/repo",
-            "baseline_commit_sha": "a" * 40, "user_branch_name": "feature/x",
-            "integration_branch_name": "main", "integration_worktree_path": "/wt",
-            "status": "active", "applied_commit_sha": None, "cleaned_at": None,
+            "id": "ws-1",
+            "company_id": "co-1",
+            "company_task_id": "ct-1",
+            "workspace_grant_id": "wg-1",
+            "repository_root": "/repo",
+            "baseline_commit_sha": "a" * 40,
+            "user_branch_name": "feature/x",
+            "integration_branch_name": "main",
+            "integration_worktree_path": "/wt",
+            "status": "active",
+            "applied_commit_sha": None,
+            "cleaned_at": None,
             "created_at": "2026-01-15T10:30:00.000000Z",
             "updated_at": "2026-01-15T10:30:00.000000Z",
             "version": 1,
@@ -98,11 +114,17 @@ class TestResponse:
 
     def test_populates_all_fields(self):
         row = {
-            "id": "ws-2", "company_id": "co-2", "company_task_id": "ct-2",
-            "workspace_grant_id": "wg-2", "repository_root": "/r2",
-            "baseline_commit_sha": "b" * 40, "user_branch_name": "feat/y",
-            "integration_branch_name": "dev", "integration_worktree_path": "/wt2",
-            "status": "applied", "applied_commit_sha": "c" * 40,
+            "id": "ws-2",
+            "company_id": "co-2",
+            "company_task_id": "ct-2",
+            "workspace_grant_id": "wg-2",
+            "repository_root": "/r2",
+            "baseline_commit_sha": "b" * 40,
+            "user_branch_name": "feat/y",
+            "integration_branch_name": "dev",
+            "integration_worktree_path": "/wt2",
+            "status": "applied",
+            "applied_commit_sha": "c" * 40,
             "cleaned_at": "2026-01-16T00:00:00.000000Z",
             "created_at": "2026-01-15T10:30:00.000000Z",
             "updated_at": "2026-01-16T00:00:00.000000Z",
@@ -260,13 +282,25 @@ class TestAbandonWorkspace:
                 status, attempt, resume_state, created_at, updated_at, version)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
             (
-                run_id, "co-1", inserted["company_task_id"],
-                str(uuid.uuid4()), employee_id,
-                employee_id, employee_id,
-                str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()),
-                "task_execution", "codex_cli", "{}",
+                run_id,
+                "co-1",
+                inserted["company_task_id"],
+                str(uuid.uuid4()),
+                employee_id,
+                employee_id,
+                employee_id,
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                "task_execution",
+                "codex_cli",
+                "{}",
                 "0" * 64,
-                "running", 1, None, NOW, NOW,
+                "running",
+                1,
+                None,
+                NOW,
+                NOW,
             ),
         )
         await db.commit()
@@ -323,13 +357,13 @@ class TestApplyWorkspace:
 
         mock_git = AsyncMock()
         mock_git.side_effect = [
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # integration status
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # integration status
             {"success": True, "stdout": "main\n", "stderr": "", "exit_code": 0},  # integration branch
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # user status
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # user status
             {"success": True, "stdout": "feature/test\n", "stderr": "", "exit_code": 0},  # user branch
             {"success": True, "stdout": "a" * 40 + "\n", "stderr": "", "exit_code": 0},  # user baseline
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # merge --no-ff --no-commit
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # commit
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # merge --no-ff --no-commit
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # commit
             {"success": True, "stdout": "abc123\n", "stderr": "", "exit_code": 0},  # rev-parse HEAD
         ]
 
@@ -346,13 +380,13 @@ class TestApplyWorkspace:
 
         mock_git = AsyncMock()
         mock_git.side_effect = [
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # integration status
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # integration status
             {"success": True, "stdout": "main\n", "stderr": "", "exit_code": 0},  # integration branch
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # user status
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # user status
             {"success": True, "stdout": "feature/test\n", "stderr": "", "exit_code": 0},  # user branch
             {"success": True, "stdout": "a" * 40 + "\n", "stderr": "", "exit_code": 0},  # user baseline
             {"success": False, "stdout": "", "stderr": "conflict", "exit_code": 1},  # merge fails
-            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},      # merge --abort
+            {"success": True, "stdout": "", "stderr": "", "exit_code": 0},  # merge --abort
         ]
 
         with (

@@ -701,6 +701,19 @@ Employee(api_model)
 
 API Model 是职员模型底座；Built-in Agent Runtime 是其任务执行引擎。两者不得混称为同一 Adapter。
 
+### 14.4 API Model 智能聚合路由
+
+API Model 的 turn 级智能聚合路由由《iBreeze智能聚合路由设计方案.md》完整规范。本总方案只固定边界，不复制第二套字段或规则：
+
+- `agent_cli` 继续使用 Codex CLI、Claude Code、OpenCode 的任务级多职员编排；只有 `api_model` Profile 才允许 `fixed`、`smart_single`、`selective_ensemble` 三种 turn 级模式。
+- Profile Version 固化 `routing_policy_json`；Confirm Plan 生成 Execution Snapshot v2，固化候选 Deployment、Credential Secret Version 和两个 canonical hash。Run 执行期间不得读取当前 Catalog/Profile 替换候选。
+- Python Sidecar 负责 RoutingContext、`rules-v1` 分类、能力门控、Decimal 评分、重试/回退、Ensemble、Health 和 Outcome；Plan/Department Task 的 `required_capability_tags` 在部门/职员能力匹配与确认计划资源预检阶段校验，并冻结到 Run spec 后只用于 Context 指纹和审计，不作为 API Model Candidate 的模型标签；Rust Credential/HTTP/Egress Broker 对每个物理 Attempt 重新校验 Snapshot Lease、Candidate、Role、Credential Version、Provider Binding 和 deadline。
+- `sequential_refinement` 的延迟 EmployeeTask 只能使用确认时冻结的 dispatch spec；依赖满足后的派发前必须严格解析冻结的能力标签数组，再复核冻结的员工部门、Profile Version、Catalog Release、能力标签和 Workspace Grant，任一引用失效或 spec 结构损坏则失败且不得创建 Run 或改用当前目录资源。
+- 路由 Decision、Attempt、Deployment Health、Outcome 写入 Profile 本地 SQLite；公共 RPC 只提供 company-scoped 的验证、Run 摘要、Decision 详情、Health 和后续 Turn Override，不返回 Prompt、候选正文、Credential Ref 原文或 Secret。
+- 灰度阶段只由 Sidecar 启动时读取 `IBREEZE_ROUTING_STAGE`；公共请求固定 `input_origin=production`，`observe`/`shadow` 不增加生产 Provider 调用。CLI 不携带 Routing Policy，也不得伪造 turn 级路由。
+
+字段、错误码、DDL、状态转换、测试矩阵和验收阈值以专项设计为准；若专项设计与本文件出现差异，必须先修订两个文档和生成契约，再实现代码。
+
 Runtime Gateway 的 `runtime.run` 不是任务编排入口，而是快照执行入口。请求必须携带
 `company_id`、`agent_id`、`company_task_id`、`conversation_id`、
 `availability_snapshot_id`、`execution_snapshot_id`、`model_id`、`run_purpose` 和
@@ -1295,6 +1308,12 @@ HTTP 接口必须按下表映射；本地专用错误没有 HTTP 状态。未列
 23. 部门报告和最终报告能追溯到产物、测试、Review、修复和复测证据。
 24. CLI Agent 不能绕过按 Run 生成的 Egress Broker 直接访问公网，未声明域名连接必须失败。
 25. Refresh Token 与 OfflineSessionTicket 以单个 Keychain session bundle 原子轮换，数据库、日志和 WebView 均不能读取其明文。
+26. API Model Profile Version 固化合法 Routing Policy；CLI Profile 不携带 Routing Policy。
+27. Execution Snapshot v2 固化候选 Deployment、Credential Secret Version 和 hash，Run 中途不读取新的 Catalog/Profile。
+28. `fixed`、`smart_single`、`selective_ensemble` 均经过 Sidecar `rules-v1`、能力门控、重试/回退和 Rust Snapshot Lease 授权；proposer 不执行工具，aggregator 只产生一个可执行结果。
+29. Route Decision、Attempt、Deployment Health、Outcome、usage 和 latency 可从 Run 查询；公共 RPC 按公司隔离且不返回 Prompt、候选正文、Credential Ref 原文或 Secret。
+30. 429/5xx/timeout 等 12 类 Provider 错误具有确定的 retry/fallback/bench 行为；取消、崩溃恢复和 IPC 重连不重复 Provider 请求或工具副作用。
+31. 智能路由设置、Run 观测、健康记录和后续 Turn Override 页面使用统一北京时间和数值格式；`IBREEZE_ROUTING_STAGE` 只在 Sidecar 启动时读取。
 
 ## 附录 A：固定工程结构
 
@@ -1831,7 +1850,7 @@ JSON-RPC 请求必须包含：
 
 读方法的 `idempotency_key` 为 null；写方法必须是 UUID。`deadline_at` 必须晚于接收时间且最多为接收时间后 10 分钟；长任务 RPC 只负责受理，不能用扩大 deadline 等待 Agent 完成。Rust本地认证与Profile生命周期写方法只用该key合并当前进程内尚未完成的同请求，请求完成立即删除，不持久化密码、Token或响应；用户显式重试必须生成新key。Sidecar业务写方法按J.14期限持久化幂等结果。`ipc_session_id` 仅允许在 Rust 本地方法和首次 `system.handshake` 时为 null；Sidecar业务方法、握手后的Supervisor方法及反向调用必须携带当前session id。Rust收到WebView提供的非当前session id时拒绝请求，且不会把调用方值替换为有效值后继续执行。
 
-RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`；Rust 只允许发送无 id 的 `credential.http.event`、`runtime.process.registered`、`runtime.process.output`、`runtime.process.exited` 通知。允许集合固定在 `packages/rpc-schema/reverse-methods.v1.json`，任一端收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。Rust 启动进程前必须用当前 ipc session、已验签 Catalog、ExecutionSnapshot、Workspace/Network policy hash 重新验证 Invocation；Sidecar 不持有或启动 CLI 进程。
+RPC 是双向的：Rust 发起的 id 使用 `core:{uuid}`，Sidecar 发起的 id 使用 `sidecar:{uuid}`。Sidecar 只允许反向调用 `credential.http.start`、`credential.http.cancel`、`credential.probe`、`credential.describe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`、`routing.snapshot.register`、`routing.decision.register`、`routing.snapshot.revoke`；Rust 只允许发送无 id 的 `credential.http.event`、`runtime.process.registered`、`runtime.process.output`、`runtime.process.exited` 通知。允许集合固定在 `packages/rpc-schema/reverse-methods.v1.json`，任一端收到其他反向方法立即返回 `METHOD_NOT_ALLOWED` 并写安全审计。Rust 启动进程前必须用当前 ipc session、已验签 Catalog、ExecutionSnapshot、Workspace/Network policy hash 重新验证 Invocation；Sidecar 不持有或启动 CLI 进程。
 
 `host.externalWrite.execute` 仅可由当前 Sidecar session 发起，params 固定为 `{approval_id,workspace_grant_id,run_id,operation,target_realpath,expected_old_sha256,source_relative_path,source_sha256,source_size,expires_at}`，其中 `workspace_grant_id` 是 Rust 当前 Profile 中已解析且未过期的 Workspace Grant，不能用人工审批 ID 替代；`operation` 只允许 `create_file/replace_file/delete_file/create_directory`。人工审批的 `target_json` 固定为 `{target_realpath,operation,expected_old_sha256,source_sha256,workspace_grant_id}` 并保存该 canonical JSON 的 SHA-256；create/replace 必须提供位于 `${profile_root}/external-write-staging/{approval_id}/` 下的无 symlink source 及 hash/size，delete/create_directory 的 source 三字段必须为 null。Rust 重新规范化目标、校验 Workspace Grant、过期时间、旧目标状态 hash 和 source，使用只允许该单一目标的临时 Seatbelt Profile 执行，销毁 staging 与临时权限后返回 `{approval_id,run_id,operation,target_realpath,result_state_sha256,completed_at,receipt_sha256}`；`result_state_sha256` 是目标存在性、类型、大小和内容 hash 的 RFC 8785 状态对象 SHA-256，`receipt_sha256` 是上述 response 字段 canonical JSON 的 SHA-256。相同 approval 重试时，若目标仍是 expected old state 且尚未过期则最多执行一次；若已经等于已记录的 result state，则即使刚过期也只读重建等价 receipt；其他状态返回 `APPROVAL_TARGET_CHANGED`，从而覆盖“动作完成但响应丢失”且绝不在过期后产生新副作用。Rust 不读取或修改业务 SQLite；Sidecar 必须逐字段校验 approval target、receipt 绑定字段和哈希后，才按 H.11 消费审批。
 
@@ -4410,10 +4429,10 @@ credential.http.cancel
 credential.probe
 ```
 
-请求包含 `credential_ref`、Provider Catalog id/version、method、relative path、非认证 headers 和 body。Rust：
+请求包含 `run_id`、完整的 Snapshot/Decision/Attempt/Candidate/Role 路由授权字段、`credential_ref`、固定 `credential_secret_version`、`provider_release_id`、`model_binding_id`、`operation`、由 Built-in Agent Runtime 生成的非认证请求体和 `deadline_at`。五个路由授权字段必须全部提供或全部省略；只有无路由字段的旧 fixed 兼容调用允许省略。请求禁止携带 URL、协议、relative path、model、stream 或认证字段；Rust：
 
 1. 校验调用来自已认证 Sidecar ipc session。
-2. 校验 Provider base URL 与已验签目录一致。
+2. 按 Execution Snapshot 校验 Candidate、Provider/Model Binding、Credential Version 和 Run/Attempt Lease，并从已验签 Catalog 解析协议、base URL、固定 relative path、model name 与 request defaults。
 3. 从 Keychain 加载 Key。
 4. 按 Provider auth scheme 注入 Authorization 或 x-api-key。
 5. 用 reqwest 发起 HTTPS 请求。

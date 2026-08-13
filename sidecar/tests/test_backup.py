@@ -25,6 +25,7 @@ class TestBackupService:
     @pytest.fixture
     def db_path(self, tmp_dir):
         import sqlite3
+
         db = tmp_dir / "test.db"
         conn = sqlite3.connect(str(db))
         conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY)")

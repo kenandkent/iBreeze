@@ -17,7 +17,8 @@ class TestWriteEnvelope:
     @pytest.mark.asyncio
     async def test_is_expired_true(self) -> None:
         envelope = WriteEnvelope(
-            "test", UUID(int=0),
+            "test",
+            UUID(int=0),
             datetime.now(UTC) - timedelta(hours=1),
             lambda c: "ok",
         )
@@ -26,7 +27,8 @@ class TestWriteEnvelope:
     @pytest.mark.asyncio
     async def test_is_expired_false(self) -> None:
         envelope = WriteEnvelope(
-            "test", UUID(int=0),
+            "test",
+            UUID(int=0),
             datetime.now(UTC).replace(year=9999),
             lambda c: "ok",
         )
@@ -35,7 +37,8 @@ class TestWriteEnvelope:
     @pytest.mark.asyncio
     async def test_result_property(self) -> None:
         envelope = WriteEnvelope(
-            "test", UUID(int=0),
+            "test",
+            UUID(int=0),
             datetime.now(UTC).replace(year=9999),
             lambda c: "ok",
         )
@@ -124,7 +127,10 @@ class TestWriteQueue:
 
         with pytest.raises(RuntimeError, match="IPC_DEADLINE_EXCEEDED"):
             await queue.submit(
-                "expired", UUID(int=0), datetime.now(UTC) - timedelta(hours=1), fake_execute,
+                "expired",
+                UUID(int=0),
+                datetime.now(UTC) - timedelta(hours=1),
+                fake_execute,
             )
         await queue.stop()
 

@@ -320,8 +320,14 @@ async def resume_run(
     if queue_type == "task_execution":
         queue_type = "employee_task"
     if queue_type not in {
-        "interactive_turn", "company_plan", "employee_task", "review",
-        "verification", "repair", "merge", "summary",
+        "interactive_turn",
+        "company_plan",
+        "employee_task",
+        "review",
+        "verification",
+        "repair",
+        "merge",
+        "summary",
     }:
         queue_type = "employee_task"
     await db.execute(

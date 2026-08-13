@@ -70,10 +70,12 @@ class TestVerifyAndFix:
             assert len(result["results"]) == 3
 
     async def test_verification_fails_all_attempts(self, mock_db, mock_supervisor):
-        mock_supervisor.wait = AsyncMock(return_value={
-            "exit_code": 1,
-            "stdout_preview": "failure",
-        })
+        mock_supervisor.wait = AsyncMock(
+            return_value={
+                "exit_code": 1,
+                "stdout_preview": "failure",
+            }
+        )
 
         with patch("ibreeze.runtime.process_supervisor.get_supervisor", return_value=mock_supervisor):
             result = await verify_and_fix(
@@ -128,3 +130,22 @@ class TestVerifyAndFix:
 
             call_args = mock_supervisor.start.call_args
             assert call_args[0][1] == ["pytest", "-v", "--tb=short"]
+
+    async def test_verification_projects_outcome_when_routed(self, mock_db, mock_supervisor):
+        cursor = AsyncMock()
+        cursor.fetchone = AsyncMock(return_value={"id": "decision-1"})
+        mock_db.execute = AsyncMock(side_effect=[MagicMock(), cursor])
+        with (
+            patch("ibreeze.runtime.process_supervisor.get_supervisor", return_value=mock_supervisor),
+            patch("ibreeze.routing.outcomes.RouteOutcomeProjector.append", new_callable=AsyncMock) as append,
+        ):
+            await verify_and_fix(
+                mock_db,
+                run_id="run-routed",
+                company_id="company-routed",
+                artifact_id="artifact-routed",
+                verification_command="pytest",
+            )
+        append.assert_awaited_once()
+        assert append.call_args.kwargs["route_decision_id"] == "decision-1"
+        assert append.call_args.kwargs["outcome_type"] == "verification"

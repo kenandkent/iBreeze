@@ -174,8 +174,7 @@ async def _ensure_agent_run(db: aiosqlite.Connection, run_id: str, company_id: s
                 status, attempt, created_at, updated_at, version)
                VALUES (?, ?, ?, ?, ?, ?, 'avail', 'exec', 'review', 'codex_cli', '{}', ?,
                        'queued', 1, ?, ?, 1)""",
-            (run_id, company_id, company_task_id, company_task_id,
-             str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
+            (run_id, company_id, company_task_id, company_task_id, str(uuid.uuid4()), str(uuid.uuid4()), sha, now, now),
         )
     finally:
         await db.execute("PRAGMA foreign_keys = ON")
@@ -200,8 +199,11 @@ class TestCheckpoint:
         company_id = str(uuid.uuid4())
         await _ensure_agent_run(db, run_id, company_id)
         cp = await create_checkpoint(
-            db, run_id=run_id, boundary_type="tool",
-            state_snapshot={"k": "v"}, file_path="/tmp/test_cp.json",
+            db,
+            run_id=run_id,
+            boundary_type="tool",
+            state_snapshot={"k": "v"},
+            file_path="/tmp/test_cp.json",
         )
         assert cp["sequence"] == 1
 
@@ -249,8 +251,7 @@ async def _insert_run_events(db: aiosqlite.Connection, run_id: str, events: list
             """INSERT INTO agent_run_events
                (run_id, event_id, sequence, event_type, payload_json, trace_id, occurred_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (run_id, str(uuid.uuid4()), i, ev["type"], json.dumps(ev.get("data", {})),
-             str(uuid.uuid4()), "2026-01-01T00:00:00Z"),
+            (run_id, str(uuid.uuid4()), i, ev["type"], json.dumps(ev.get("data", {})), str(uuid.uuid4()), "2026-01-01T00:00:00Z"),
         )
     await db.commit()
 
@@ -335,8 +336,10 @@ class TestRecovery:
 
 # ── workspace_broker ─────────────────────────────────────────────────
 async def _create_workspace_prereqs(
-    db: aiosqlite.Connection, company_id: str,
-    company_task_id: str, workspace_grant_id: str,
+    db: aiosqlite.Connection,
+    company_id: str,
+    company_task_id: str,
+    workspace_grant_id: str,
 ):
     now = "2026-01-01T00:00:00Z"
     conv_id = str(uuid.uuid4())
@@ -382,6 +385,7 @@ class TestWorkspaceBroker:
         )
         assert result["status"] == "preparing"
         import os
+
         assert os.path.isdir(ws_path)
 
     async def test_activate_workspace(self, db, tmp_path):

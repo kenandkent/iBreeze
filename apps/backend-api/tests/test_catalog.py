@@ -50,6 +50,18 @@ def _model_body(model_key: str = "gpt-5") -> dict[str, object]:
         "supports_tools": True,
         "supports_streaming": True,
         "supports_vision": True,
+        "routing_tier": 1,
+        "quality_prior": 0.8,
+        "tool_reliability_prior": 0.9,
+        "latency_prior_ms": 1200,
+        "model_family": "gpt",
+        "model_vendor": "openai",
+        "architecture_class": "dense",
+        "supports_reasoning": True,
+        "reasoning_levels": ["low", "medium"],
+        "input_price_microusd_per_million": 1500,
+        "output_price_microusd_per_million": 6000,
+        "routing_enabled": True,
     }
 
 
@@ -216,6 +228,72 @@ async def test_model_constraints_and_provider_url_policy(
             headers=_headers(admin_tokens),
         )
         assert rejected.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_model_routing_metadata_is_returned_and_validated(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+) -> None:
+    created = await client.post(
+        "/admin/api/v1/models",
+        json=_model_body("routing-model"),
+        headers=_headers(admin_tokens),
+    )
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["routing_tier"] == 1
+    assert payload["model_family"] == "gpt"
+    assert payload["model_vendor"] == "openai"
+    assert payload["reasoning_levels"] == ["low", "medium"]
+    assert payload["routing_enabled"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("routing_tier", 4),
+        ("quality_prior", 1.0001),
+        ("tool_reliability_prior", -0.1),
+        ("latency_prior_ms", 0),
+        ("architecture_class", "transformer"),
+        ("reasoning_levels", ["medium", "medium"]),
+        ("reasoning_levels", ["high"]),
+    ],
+)
+async def test_model_routing_metadata_rejects_invalid_values(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+    field: str,
+    value: object,
+) -> None:
+    body = _model_body(f"invalid-{uuid.uuid4().hex[:8]}")
+    body[field] = value
+    if field == "reasoning_levels":
+        body["supports_reasoning"] = value != ["high"]
+    response = await client.post(
+        "/admin/api/v1/models",
+        json=body,
+        headers=_headers(admin_tokens),
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_model_routing_enabled_requires_real_family_and_vendor(
+    client: AsyncClient,
+    admin_tokens: dict[str, object],
+) -> None:
+    body = _model_body("missing-routing-identity")
+    body["model_family"] = "unknown"
+    body["model_vendor"] = "unknown"
+    response = await client.post(
+        "/admin/api/v1/models",
+        json=body,
+        headers=_headers(admin_tokens),
+    )
+    assert response.status_code == 422, response.text
 
 
 @pytest.mark.asyncio

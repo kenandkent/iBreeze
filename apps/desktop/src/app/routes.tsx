@@ -29,6 +29,8 @@ const TaskListPage = lazy(() => import('../pages/TaskListPage'));
 const TaskDetailPage = lazy(() => import('../pages/TaskDetailPage'));
 const SkillsPage = lazy(() => import('../pages/SkillsPage'));
 const RecoveryPage = lazy(() => import('../pages/RecoveryPage'));
+const ProfileRoutingPage = lazy(() => import('../pages/ProfileRoutingPage'));
+const RunRoutingPage = lazy(() => import('../pages/RunRoutingPage'));
 
 function Loading() {
   return (
@@ -128,6 +130,14 @@ export const routes: RouteObject[] = [
       {
         path: 'tasks/:taskId',
         element: <SuspenseWrapper><TaskDetailPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'profiles/:profileId/routing',
+        element: <SuspenseWrapper><ProfileRoutingPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'runs/:runId/routing',
+        element: <SuspenseWrapper><RunRoutingPage /></SuspenseWrapper>,
       },
       {
         path: 'conversations',

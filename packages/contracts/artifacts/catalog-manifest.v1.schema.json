@@ -57,6 +57,22 @@
           "supports_tools": { "type": "boolean" },
           "supports_streaming": { "type": "boolean" },
           "supports_vision": { "type": "boolean" },
+          "routing_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
+          "quality_prior": { "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.0001 },
+          "tool_reliability_prior": { "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.0001 },
+          "latency_prior_ms": { "type": "integer", "minimum": 1 },
+          "model_family": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "model_vendor": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "architecture_class": { "enum": ["dense", "moe", "hybrid", "unknown"] },
+          "supports_reasoning": { "type": "boolean" },
+          "reasoning_levels": {
+            "type": "array",
+            "items": { "enum": ["low", "medium", "high"] },
+            "uniqueItems": true
+          },
+          "input_price_microusd_per_million": { "type": "integer", "minimum": 0 },
+          "output_price_microusd_per_million": { "type": "integer", "minimum": 0 },
+          "routing_enabled": { "type": "boolean" },
           "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "skill_version_id": { "type": "string", "format": "uuid" },
           "skill_version": { "type": "integer", "minimum": 1 },
@@ -80,7 +96,22 @@
             }
           }
         },
-        "required": ["type", "id", "key", "catalog_revision", "version", "object_key", "object_sha256", "size"]
+        "required": ["type", "id", "key", "catalog_revision", "version", "object_key", "object_sha256", "size"],
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "model" } }, "required": ["type"] },
+            "then": {
+              "required": [
+                "provider_key", "model_key", "context_window", "max_output_tokens",
+                "supports_tools", "supports_streaming", "supports_vision", "routing_tier",
+                "quality_prior", "tool_reliability_prior", "latency_prior_ms", "model_family",
+                "model_vendor", "architecture_class", "supports_reasoning", "reasoning_levels",
+                "input_price_microusd_per_million", "output_price_microusd_per_million",
+                "routing_enabled"
+              ]
+            }
+          }
+        ]
       }
     },
     "signature": { "type": "string", "minLength": 1 }

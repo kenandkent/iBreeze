@@ -504,6 +504,77 @@ pub struct Conversation {
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub auth_type: AuthTypeEnum,
+    pub label: String,
+    pub provider_release_id: String,
+    pub secret: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub active_secret_version: i64,
+    pub auth_type: AuthTypeEnum,
+    pub credential_ref: String,
+    pub label: String,
+    pub metadata_version: i64,
+    pub provider_release_id: String,
+    pub state: StateEnum,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub credential_ref: String,
+    pub expected_metadata_version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub credential_ref: String,
+    pub deleted: bool,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_release_id: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub items: Vec<ItemStruct>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub credential_ref: String,
+    pub expected_metadata_version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub available: bool,
+    pub credential_ref: String,
+    pub metadata_version: i64,
+    pub state: StateEnum,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub credential_ref: String,
+    pub expected_metadata_version: i64,
+    pub secret: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Credential {
+    pub active_secret_version: i64,
+    pub credential_ref: String,
+    pub metadata_version: i64,
+    pub state: StateEnum,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Department {
     pub company_id: String,
     pub department_id: String,
@@ -979,6 +1050,8 @@ pub struct Profile {
     pub provider_protocol: Option<ProviderProtocolEnum>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing_policy: Option<RoutingPolicyStruct>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -996,11 +1069,15 @@ pub struct Profile {
 #[serde(deny_unknown_fields)]
 pub struct Profile {
     pub created_at: String,
+    pub current_version_id: String,
     pub display_name: String,
     pub profile_id: String,
+    pub profile_type: ProfileTypeEnum,
+    pub routing_policy_json: String,
     pub status: StatusEnum,
     pub updated_at: String,
     pub version: i64,
+    pub versions: Vec<ItemStruct>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1079,6 +1156,8 @@ pub struct Profile {
     pub provider_protocol: Option<ProviderProtocolEnum>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing_policy: Option<RoutingPolicyStruct>,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1222,6 +1301,134 @@ pub struct Review {
 #[serde(deny_unknown_fields)]
 pub struct Review {
     pub review_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoutingPolicyRpc {
+    pub anchor_candidate_id: String,
+    pub candidates: Vec<ItemStruct>,
+    pub ensemble: EnsembleStruct,
+    pub fallback_order: Vec<String>,
+    pub mode: ModeEnum,
+    pub schema_version: serde_json::Value,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub company_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub completed_at: String,
+    pub deleted_count: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub company_id: String,
+    pub decision_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub attempts: Vec<serde_json::Value>,
+    pub decision: DecisionStruct,
+    pub outcomes: Vec<serde_json::Value>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub company_id: String,
+    pub run_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub actual_models: Vec<serde_json::Value>,
+    pub control: ControlStruct,
+    pub decision_count: i64,
+    pub ensemble_count: i64,
+    pub fallback_hops: i64,
+    pub p50_latency_ms: f64,
+    pub p95_latency_ms: f64,
+    pub rollout_stage: String,
+    pub routing_mode: String,
+    pub run_id: String,
+    pub run_status: String,
+    pub single_count: i64,
+    pub total_completion_tokens: i64,
+    pub total_prompt_tokens: i64,
+    pub total_tokens: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub company_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    pub run_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub items: Vec<serde_json::Value>,
+    pub next_cursor: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_only: Option<bool>,
+    pub company_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub items: Vec<serde_json::Value>,
+    pub next_cursor: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub company_id: String,
+    pub expected_version: i64,
+    #[serde(rename = "override")]
+    pub r#override: OverrideEnum,
+    pub run_id: String,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub override_mode: String,
+    pub run_id: String,
+    pub updated_at: String,
+    pub version: i64,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_release_id: Option<String>,
+    pub company_id: String,
+    pub policy: PolicyStruct,
+    pub profile_type: ProfileTypeEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_version_id: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Routing {
+    pub canonical_json: String,
+    pub canonical_sha256: String,
+    pub issues: Vec<ItemStruct>,
+    pub valid: bool,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

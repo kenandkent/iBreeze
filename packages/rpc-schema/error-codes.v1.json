@@ -190,6 +190,186 @@
       "http_status": 500,
       "description": "Backup verification checksum mismatch",
       "retryable": true
+    },
+    {
+      "code": "ROUTING_POLICY_REQUIRED",
+      "http_status": 400,
+      "description": "API Model profile must provide a routing policy",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_POLICY_INVALID",
+      "http_status": 400,
+      "description": "Routing policy failed deterministic validation",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_ANCHOR_MISSING",
+      "http_status": 400,
+      "description": "Routing anchor is absent or unavailable",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_CANDIDATE_OUTSIDE_RELEASE",
+      "http_status": 400,
+      "description": "Candidate is not part of the pinned catalog release",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_CANDIDATE_DUPLICATE",
+      "http_status": 400,
+      "description": "Routing candidate identifiers must be unique",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_CANDIDATE_DISABLED",
+      "http_status": 400,
+      "description": "Routing candidate is disabled",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_POLICY_FORBIDDEN",
+      "http_status": 400,
+      "description": "CLI Agent profiles cannot contain an API Model routing policy",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_POLICY_NOT_APPLICABLE",
+      "http_status": 400,
+      "description": "Routing policy is not applicable to this profile type",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_CANDIDATE_COUNT_INVALID",
+      "http_status": 400,
+      "description": "Smart routing requires at least two candidates",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_ENSEMBLE_INVALID",
+      "http_status": 400,
+      "description": "Ensemble quorum and timeout configuration is invalid",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_ENSEMBLE_PROPOSER_COUNT_INVALID",
+      "http_status": 400,
+      "description": "Ensemble proposer count must be between two and four",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_ENSEMBLE_QUORUM_NOT_MET",
+      "http_status": 503,
+      "description": "The ensemble did not reach its configured proposer quorum",
+      "retryable": true
+    },
+    {
+      "code": "ROUTING_ENSEMBLE_AGGREGATOR_FAILED",
+      "http_status": 503,
+      "description": "The ensemble aggregator and fallback chain failed",
+      "retryable": true
+    },
+    {
+      "code": "ROUTING_NO_ELIGIBLE_CANDIDATE",
+      "http_status": 503,
+      "description": "No routing candidate passed the turn capability gate",
+      "retryable": true
+    },
+    {
+      "code": "ROUTING_ROLE_INSUFFICIENT",
+      "http_status": 400,
+      "description": "Candidate roles cannot satisfy the requested routing mode",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_FALLBACK_INVALID",
+      "http_status": 400,
+      "description": "Fallback order is invalid",
+      "retryable": false
+    },
+    {
+      "code": "ROUTER_NO_ELIGIBLE_CANDIDATE",
+      "http_status": 503,
+      "description": "No candidate passed the capability and health gates",
+      "retryable": true
+    },
+    {
+      "code": "MODEL_CAPABILITY_UNAVAILABLE",
+      "http_status": 503,
+      "description": "The pinned model pool cannot satisfy this turn",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_SNAPSHOT_HASH_MISMATCH",
+      "http_status": 409,
+      "description": "Execution snapshot routing content hash mismatch",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_SNAPSHOT_NOT_AUTHORIZED",
+      "http_status": 403,
+      "description": "Snapshot or candidate is not authorized for this run",
+      "retryable": false
+    },
+    {
+      "code": "ROUTE_DECISION_CONFLICT",
+      "http_status": 409,
+      "description": "Route decision replay has different immutable content",
+      "retryable": false
+    },
+    {
+      "code": "ROUTE_ATTEMPT_CONFLICT",
+      "http_status": 409,
+      "description": "Route attempt replay has different immutable identity",
+      "retryable": false
+    },
+    {
+      "code": "ROUTING_OVERRIDE_NOT_AVAILABLE",
+      "http_status": 409,
+      "description": "Run override is not available at the current stage or state",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_MISSING",
+      "http_status": 404,
+      "description": "Credential metadata or secret is missing",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_NOT_READY",
+      "http_status": 409,
+      "description": "Credential has not passed Probe",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_IN_USE",
+      "http_status": 409,
+      "description": "Credential cannot be changed while referenced by active work",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_VERSION_MISMATCH",
+      "http_status": 409,
+      "description": "Credential metadata version compare-and-swap failed",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_LABEL_DUPLICATE",
+      "http_status": 409,
+      "description": "Credential label is already used for this provider",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_PROVIDER_MISMATCH",
+      "http_status": 400,
+      "description": "Credential does not belong to the selected provider",
+      "retryable": false
+    },
+    {
+      "code": "CREDENTIAL_INDEX_CORRUPT",
+      "http_status": 500,
+      "description": "Credential metadata index failed integrity validation",
+      "retryable": false
     }
   ]
 }

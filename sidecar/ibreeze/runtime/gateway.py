@@ -111,10 +111,7 @@ async def start(
         availability["employee_id"] != employee_id
         or availability["company_task_id"] != company_task_id
         or availability["overall_status"] != "available"
-        or (
-            department_task_id is not None
-            and availability["department_task_id"] != department_task_id
-        )
+        or (department_task_id is not None and availability["department_task_id"] != department_task_id)
     ):
         raise RunValidationError("AVAILABILITY_SNAPSHOT_INVALID")
     try:
@@ -138,10 +135,7 @@ async def start(
     if execution is None or (
         execution["company_task_id"] != company_task_id
         or execution["employee_id"] != employee_id
-        or (
-            department_task_id is not None
-            and execution["department_task_id"] != department_task_id
-        )
+        or (department_task_id is not None and execution["department_task_id"] != department_task_id)
     ):
         raise RunValidationError("EXECUTION_SNAPSHOT_INVALID")
     effective_department_task_id = department_task_id or execution["department_task_id"]
@@ -151,13 +145,7 @@ async def start(
         raise RunValidationError("EXECUTION_SNAPSHOT_INVALID") from exc
     if not isinstance(binding, dict):
         raise RunValidationError("EXECUTION_SNAPSHOT_INVALID")
-    expected_model_id = str(
-        binding.get("api_model")
-        or binding.get("model")
-        or binding.get("agent_cli")
-        or binding.get("agent_key")
-        or ""
-    )
+    expected_model_id = str(binding.get("api_model") or binding.get("model") or binding.get("agent_cli") or binding.get("agent_key") or "")
     expected_adapter_type = str(binding.get("adapter_type") or "")
     if not expected_adapter_type:
         expected_adapter_type = (
@@ -318,8 +306,10 @@ async def start(
             effective_work_item,
             _id(),
             run_id,
-            0 if run_purpose in {"interactive_turn", "company_plan", "summary"}
-            else 10 if run_purpose in {"task_execution", "repair", "merge"}
+            0
+            if run_purpose in {"interactive_turn", "company_plan", "summary"}
+            else 10
+            if run_purpose in {"task_execution", "repair", "merge"}
             else 20,
             now,
         ),

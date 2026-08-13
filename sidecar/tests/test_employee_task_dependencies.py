@@ -110,9 +110,7 @@ async def chain_env(db: Any) -> dict[str, str]:
         (dept_rev_id, dept_id, company_id, _sha256("eng"), now),
     )
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'department','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'department','active',?)",
         (dept_conv_id, company_id, now),
     )
     await db.execute(
@@ -127,9 +125,7 @@ async def chain_env(db: Any) -> dict[str, str]:
     bob_id = await _insert_employee(db, company_id, dept_id, version_id, now, "Bob")
     carol_id = await _insert_employee(db, company_id, dept_id, version_id, now, "Carol")
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'company','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'company','active',?)",
         (conv_id, company_id, now),
     )
     await db.execute(
@@ -277,8 +273,7 @@ class TestSequentialChain:
 
         tasks = await _rows(
             db,
-            "SELECT id, employee_id, status, resume_state FROM employee_tasks"
-            " WHERE company_id=? ORDER BY created_at",
+            "SELECT id, employee_id, status, resume_state FROM employee_tasks WHERE company_id=? ORDER BY created_at",
             (env["company_id"],),
         )
         assert [t["employee_id"] for t in tasks] == [env["alice_id"], env["bob_id"], env["carol_id"]]
@@ -292,8 +287,7 @@ class TestSequentialChain:
         # Chain edges alice->bob, bob->carol.
         edges = await _rows(
             db,
-            "SELECT employee_task_id, depends_on_task_id FROM employee_task_dependencies"
-            " WHERE company_id=?",
+            "SELECT employee_task_id, depends_on_task_id FROM employee_task_dependencies WHERE company_id=?",
             (env["company_id"],),
         )
         assert {(e["employee_task_id"], e["depends_on_task_id"]) for e in edges} == {
@@ -336,14 +330,10 @@ class TestSequentialChain:
         assert result["status"] == "advanced"
         assert result["dispatched"] == [bob["id"]]
 
-        bob_row = await (await db.execute(
-            "SELECT status, resume_state FROM employee_tasks WHERE id=?", (bob["id"],)
-        )).fetchone()
+        bob_row = await (await db.execute("SELECT status, resume_state FROM employee_tasks WHERE id=?", (bob["id"],))).fetchone()
         assert bob_row["status"] == "assigned"
         assert bob_row["resume_state"] is None
-        carol_row = await (await db.execute(
-            "SELECT status FROM employee_tasks WHERE id=?", (carol["id"],)
-        )).fetchone()
+        carol_row = await (await db.execute("SELECT status FROM employee_tasks WHERE id=?", (carol["id"],))).fetchone()
         assert carol_row["status"] == "waiting_resource"
 
         runs = await _rows(db, "SELECT employee_task_id FROM agent_runs WHERE company_id=?", (env["company_id"],))
@@ -383,8 +373,7 @@ class TestSequentialChain:
         # Give carol a second upstream edge to alice: carol now depends on
         # both bob and alice, so alice's accept alone must not dispatch it.
         await db.execute(
-            "INSERT INTO employee_task_dependencies (employee_task_id, depends_on_task_id, company_id, created_at)"
-            " VALUES (?,?,?,?)",
+            "INSERT INTO employee_task_dependencies (employee_task_id, depends_on_task_id, company_id, created_at) VALUES (?,?,?,?)",
             (carol["id"], alice["id"], env["company_id"], env["now"]),
         )
 
@@ -396,15 +385,11 @@ class TestSequentialChain:
         )
         # Only bob has all upstreams satisfied.
         assert result["dispatched"] == [bob["id"]]
-        carol_row = await (await db.execute(
-            "SELECT status FROM employee_tasks WHERE id=?", (carol["id"],)
-        )).fetchone()
+        carol_row = await (await db.execute("SELECT status FROM employee_tasks WHERE id=?", (carol["id"],))).fetchone()
         assert carol_row["status"] == "waiting_resource"
 
     @pytest.mark.asyncio
-    async def test_lazy_dispatch_fails_when_binding_not_live(
-        self, db: Any, chain_env: dict[str, str]
-    ) -> None:
+    async def test_lazy_dispatch_fails_when_binding_not_live(self, db: Any, chain_env: dict[str, str]) -> None:
         """S2-1: a dependent whose frozen binding went stale is transitioned to
         'failed' instead of being left stuck in waiting_resource or silently
         skipped (which would strand the segment forever)."""
@@ -429,16 +414,146 @@ class TestSequentialChain:
         )
         assert result["dispatched"] == []
         assert result["failed"] == [bob["id"]]
-        bob_row = await (await db.execute(
-            "SELECT status, resume_state FROM employee_tasks WHERE id=?", (bob["id"],)
-        )).fetchone()
+        bob_row = await (await db.execute("SELECT status, resume_state FROM employee_tasks WHERE id=?", (bob["id"],))).fetchone()
         assert bob_row["status"] == "failed"
         assert bob_row["resume_state"] is None
         # No run was built for a failed segment.
         runs = await _rows(db, "SELECT employee_task_id FROM agent_runs WHERE company_id=?", (env["company_id"],))
         assert {r["employee_task_id"] for r in runs} == {alice["id"]}
         # Carol still waits on bob (never accepted).
-        carol_row = await (await db.execute(
-            "SELECT status FROM employee_tasks WHERE id=?", (carol["id"],)
-        )).fetchone()
+        carol_row = await (await db.execute("SELECT status FROM employee_tasks WHERE id=?", (carol["id"],))).fetchone()
         assert carol_row["status"] == "waiting_resource"
+
+    @pytest.mark.asyncio
+    async def test_lazy_dispatch_fails_when_frozen_capability_tags_are_not_an_array(
+        self, db: Any, chain_env: dict[str, str]
+    ) -> None:
+        """A syntactically valid but structurally corrupt spec must fail closed."""
+        env = chain_env
+        sha = await _register_plan(db, env, [env["alice_id"], env["bob_id"], env["carol_id"]])
+        assert (await _confirm(db, env, sha))["status"] == "confirmed"
+        tasks = await _rows(
+            db,
+            "SELECT id, employee_id FROM employee_tasks WHERE company_id=? ORDER BY created_at",
+            (env["company_id"],),
+        )
+        alice, bob, _carol = tasks
+        await db.execute(
+            "UPDATE employee_task_dispatch_specs SET required_capability_tags_json=? WHERE employee_task_id=?",
+            ("{}", bob["id"]),
+        )
+
+        await _accept(db, alice["id"], env["company_id"], _now())
+        result = await advance_employee_task_graph(
+            db,
+            company_id=env["company_id"],
+            accepted_task_id=alice["id"],
+        )
+
+        assert result["dispatched"] == []
+        assert result["failed"] == [bob["id"]]
+        bob_row = await (
+            await db.execute("SELECT status FROM employee_tasks WHERE id=?", (bob["id"],))
+        ).fetchone()
+        assert bob_row["status"] == "failed"
+        runs = await _rows(db, "SELECT employee_task_id FROM agent_runs WHERE company_id=?", (env["company_id"],))
+        assert {row["employee_task_id"] for row in runs} == {alice["id"]}
+
+    @pytest.mark.asyncio
+    async def test_lazy_dispatch_fails_when_workspace_grant_is_revoked(self, db: Any, chain_env: dict[str, str]) -> None:
+        """A frozen lazy segment must not run after its workspace is revoked."""
+        env = chain_env
+        sha = await _register_plan(db, env, [env["alice_id"], env["bob_id"], env["carol_id"]])
+        assert (await _confirm(db, env, sha))["status"] == "confirmed"
+        tasks = await _rows(
+            db,
+            "SELECT id, employee_id FROM employee_tasks WHERE company_id=? ORDER BY created_at",
+            (env["company_id"],),
+        )
+        alice, bob, _carol = tasks
+        grant = await (
+            await db.execute(
+                "SELECT workspace_grant_id FROM task_workspaces WHERE company_task_id=? AND company_id=?",
+                (env["task_id"], env["company_id"]),
+            )
+        ).fetchone()
+        await db.execute(
+            "UPDATE workspace_grants SET status='revoked' WHERE id=? AND company_id=?",
+            (grant["workspace_grant_id"], env["company_id"]),
+        )
+
+        await _accept(db, alice["id"], env["company_id"], _now())
+        result = await advance_employee_task_graph(
+            db,
+            company_id=env["company_id"],
+            accepted_task_id=alice["id"],
+        )
+
+        assert result["dispatched"] == []
+        assert result["failed"] == [bob["id"]]
+        bob_row = await (
+            await db.execute("SELECT status FROM employee_tasks WHERE id=?", (bob["id"],))
+        ).fetchone()
+        assert bob_row["status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_lazy_dispatch_fails_when_employee_changes_department(self, db: Any, chain_env: dict[str, str]) -> None:
+        """A deferred segment remains bound to its confirmed department."""
+        env = chain_env
+        sha = await _register_plan(db, env, [env["alice_id"], env["bob_id"], env["carol_id"]])
+        assert (await _confirm(db, env, sha))["status"] == "confirmed"
+        tasks = await _rows(
+            db,
+            "SELECT id, employee_id FROM employee_tasks WHERE company_id=? ORDER BY created_at",
+            (env["company_id"],),
+        )
+        alice, bob, _carol = tasks
+
+        new_department_id = _id()
+        new_revision_id = _id()
+        new_conversation_id = _id()
+        now = _now()
+        await db.execute(
+            "INSERT INTO department_revisions"
+            " (id, department_id, company_id, revision_number, name, function_description, content_sha256, created_at)"
+            " VALUES (?,?,?,1,'Other','Other department',?,?)",
+            (new_revision_id, new_department_id, env["company_id"], _sha256("other"), now),
+        )
+        await db.execute(
+            "INSERT INTO conversations (id, company_id, conversation_type, status, created_at)"
+            " VALUES (?,?,'department','active',?)",
+            (new_conversation_id, env["company_id"], now),
+        )
+        await db.execute(
+            "INSERT INTO departments"
+            " (id, company_id, department_type, normalized_name, current_revision_id, leader_employee_id,"
+            " department_conversation_id, status, created_at, updated_at, version)"
+            " VALUES (?,?, 'standard','other',?,?,?,'active',?,?,1)",
+            (
+                new_department_id,
+                env["company_id"],
+                new_revision_id,
+                env["bob_id"],
+                new_conversation_id,
+                now,
+                now,
+            ),
+        )
+        await db.execute(
+            "UPDATE employees SET department_id=? WHERE id=? AND company_id=?",
+            (new_department_id, env["bob_id"], env["company_id"]),
+        )
+
+        await _accept(db, alice["id"], env["company_id"], _now())
+        result = await advance_employee_task_graph(
+            db,
+            company_id=env["company_id"],
+            accepted_task_id=alice["id"],
+        )
+
+        assert result["dispatched"] == []
+        assert result["failed"] == [bob["id"]]
+        bob_row = await (
+            await db.execute("SELECT status FROM employee_tasks WHERE id=?", (bob["id"],))
+        ).fetchone()
+        assert bob_row["status"] == "failed"

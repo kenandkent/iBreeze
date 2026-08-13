@@ -82,6 +82,15 @@ impl CredentialLeaseManager {
         self.leases.read().await.len()
     }
 
+    pub async fn active_for_credential(&self, credential_ref: Uuid) -> usize {
+        self.leases
+            .read()
+            .await
+            .values()
+            .filter(|lease| lease.credential_ref == credential_ref)
+            .count()
+    }
+
     pub async fn cleanup_expired(&self) -> usize {
         let now = Instant::now();
         let mut leases = self.leases.write().await;

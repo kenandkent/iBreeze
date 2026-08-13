@@ -126,9 +126,7 @@ async def validate_backup_database(db_path: str) -> dict[str, Any]:
             errors.append(f"Orphaned reference chains: {ref_issues}")
 
         index_issues: list[str] = []
-        cursor.execute(
-            "SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
-        )
+        cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'")
         for idx_row in cursor.fetchall():
             idx_name = idx_row[0]
             try:

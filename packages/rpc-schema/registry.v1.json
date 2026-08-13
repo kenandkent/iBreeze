@@ -169,6 +169,138 @@
       "empty_request": false
     },
     {
+      "method": "credential.create",
+      "owner": "rust_core",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/credential.create.request.schema.json",
+      "response_schema": "methods/credential.create.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED", "CREDENTIAL_LABEL_DUPLICATE", "CREDENTIAL_PROVIDER_MISMATCH", "INTERNAL_ERROR"],
+      "empty_request": false
+    },
+    {
+      "method": "credential.delete",
+      "owner": "rust_core",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/credential.delete.request.schema.json",
+      "response_schema": "methods/credential.delete.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED", "CREDENTIAL_IN_USE", "CREDENTIAL_NOT_FOUND", "INTERNAL_ERROR"],
+      "empty_request": false
+    },
+    {
+      "method": "credential.list",
+      "owner": "rust_core",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/credential.list.request.schema.json",
+      "response_schema": "methods/credential.list.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED", "INTERNAL_ERROR"],
+      "empty_request": true
+    },
+    {
+      "method": "credential.probe",
+      "owner": "rust_core",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/credential.probe.request.schema.json",
+      "response_schema": "methods/credential.probe.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED", "CREDENTIAL_NOT_READY", "CREDENTIAL_PROVIDER_MISMATCH", "INTERNAL_ERROR"],
+      "empty_request": false
+    },
+    {
+      "method": "credential.updateSecret",
+      "owner": "rust_core",
+      "kind": "write",
+      "scope": "profile",
+      "request_schema": "methods/credential.updateSecret.request.schema.json",
+      "response_schema": "methods/credential.updateSecret.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED", "CREDENTIAL_IN_USE", "CREDENTIAL_VERSION_MISMATCH", "INTERNAL_ERROR"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.validatePolicy",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "profile",
+      "request_schema": "methods/routing.validatePolicy.request.schema.json",
+      "response_schema": "methods/routing.validatePolicy.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED", "ROUTING_POLICY_INVALID", "ROUTING_POLICY_REQUIRED", "RESOURCE_NOT_FOUND"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.getRunSummary",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/routing.getRunSummary.request.schema.json",
+      "response_schema": "methods/routing.getRunSummary.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED", "RESOURCE_NOT_FOUND"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.listDecisions",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/routing.listDecisions.request.schema.json",
+      "response_schema": "methods/routing.listDecisions.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED", "RESOURCE_NOT_FOUND"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.getDecision",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/routing.getDecision.request.schema.json",
+      "response_schema": "methods/routing.getDecision.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED", "RESOURCE_NOT_FOUND"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.listDeploymentHealth",
+      "owner": "sidecar",
+      "kind": "read",
+      "scope": "company",
+      "request_schema": "methods/routing.listDeploymentHealth.request.schema.json",
+      "response_schema": "methods/routing.listDeploymentHealth.response.schema.json",
+      "idempotency_ttl_seconds": 0,
+      "allowed_errors": ["VALIDATION_FAILED"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.setRunOverride",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "company",
+      "request_schema": "methods/routing.setRunOverride.request.schema.json",
+      "response_schema": "methods/routing.setRunOverride.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED", "ROUTING_OVERRIDE_NOT_AVAILABLE", "ROUTE_DECISION_CONFLICT", "RESOURCE_NOT_FOUND"],
+      "empty_request": false
+    },
+    {
+      "method": "routing.clearExpiredHealth",
+      "owner": "sidecar",
+      "kind": "write",
+      "scope": "company",
+      "request_schema": "methods/routing.clearExpiredHealth.request.schema.json",
+      "response_schema": "methods/routing.clearExpiredHealth.response.schema.json",
+      "idempotency_ttl_seconds": 86400,
+      "allowed_errors": ["VALIDATION_FAILED"],
+      "empty_request": false
+    },
+    {
       "method": "auth.changePassword",
       "owner": "rust_core",
       "kind": "write",

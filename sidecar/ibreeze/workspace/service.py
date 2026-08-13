@@ -244,18 +244,14 @@ async def apply_workspace(
         raise ValueError("WORKSPACE_NOT_FOUND")
     if status_result["stdout"].strip():
         raise ValueError("WORKSPACE_DIRTY")
-    integration_branch_result = await git_command(
-        "symbolic-ref", "--quiet", "--short", "HEAD", cwd=integration_path
-    )
+    integration_branch_result = await git_command("symbolic-ref", "--quiet", "--short", "HEAD", cwd=integration_path)
     if not integration_branch_result["success"] or integration_branch_result["stdout"].strip() != integration_branch:
         raise ValueError("WORKSPACE_ACCESS_DENIED")
 
     # J.3 applies only to the user's unchanged worktree.  Never merge into a
     # path or branch that drifted after plan confirmation.
     user_status_result = await git_command("status", "--porcelain", cwd=ws.repository_root)
-    user_branch_result = await git_command(
-        "symbolic-ref", "--quiet", "--short", "HEAD", cwd=ws.repository_root
-    )
+    user_branch_result = await git_command("symbolic-ref", "--quiet", "--short", "HEAD", cwd=ws.repository_root)
     user_head_result = await git_command("rev-parse", "HEAD", cwd=ws.repository_root)
     if (
         not user_status_result["success"]

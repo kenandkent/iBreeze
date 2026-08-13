@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/routing.validatePolicy.request.v1",
+  "title": "RoutingValidatePolicyRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "company_id": { "type": "string", "format": "uuid" },
+    "profile_type": { "enum": ["agent_cli", "api_model"] },
+    "profile_version_id": { "type": "string", "format": "uuid" },
+    "catalog_release_id": { "type": "string", "format": "uuid" },
+    "policy": { "$ref": "https://ibreeze.ai/schemas/routing-policy-rpc.v1" }
+  },
+  "required": ["company_id", "profile_type", "policy"],
+  "oneOf": [
+    { "required": ["profile_version_id"], "not": { "required": ["catalog_release_id"] } },
+    { "required": ["catalog_release_id"], "not": { "required": ["profile_version_id"] } }
+  ]
+}

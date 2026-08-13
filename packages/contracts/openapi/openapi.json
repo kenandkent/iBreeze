@@ -671,6 +671,16 @@
       "ModelCreate": {
         "additionalProperties": false,
         "properties": {
+          "architecture_class": {
+            "enum": [
+              "dense",
+              "moe",
+              "hybrid",
+              "unknown"
+            ],
+            "title": "Architecture Class",
+            "type": "string"
+          },
           "context_window": {
             "minimum": 8192.0,
             "title": "Context Window",
@@ -682,10 +692,26 @@
             "title": "Display Name",
             "type": "string"
           },
+          "input_price_microusd_per_million": {
+            "minimum": 0.0,
+            "title": "Input Price Microusd Per Million",
+            "type": "integer"
+          },
+          "latency_prior_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Prior Ms",
+            "type": "integer"
+          },
           "max_output_tokens": {
             "minimum": 1.0,
             "title": "Max Output Tokens",
             "type": "integer"
+          },
+          "model_family": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model Family",
+            "type": "string"
           },
           "model_key": {
             "maxLength": 200,
@@ -693,11 +719,62 @@
             "title": "Model Key",
             "type": "string"
           },
+          "model_vendor": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model Vendor",
+            "type": "string"
+          },
+          "output_price_microusd_per_million": {
+            "minimum": 0.0,
+            "title": "Output Price Microusd Per Million",
+            "type": "integer"
+          },
           "provider_key": {
             "maxLength": 64,
             "minLength": 1,
             "title": "Provider Key",
             "type": "string"
+          },
+          "quality_prior": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quality Prior"
+          },
+          "reasoning_levels": {
+            "items": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            "title": "Reasoning Levels",
+            "type": "array"
+          },
+          "routing_enabled": {
+            "title": "Routing Enabled",
+            "type": "boolean"
+          },
+          "routing_tier": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Routing Tier",
+            "type": "integer"
+          },
+          "supports_reasoning": {
+            "title": "Supports Reasoning",
+            "type": "boolean"
           },
           "supports_streaming": {
             "title": "Supports Streaming",
@@ -716,6 +793,20 @@
             "minLength": 1,
             "title": "Tokenizer Key",
             "type": "string"
+          },
+          "tool_reliability_prior": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Tool Reliability Prior"
           }
         },
         "required": [
@@ -727,7 +818,19 @@
           "tokenizer_key",
           "supports_tools",
           "supports_streaming",
-          "supports_vision"
+          "supports_vision",
+          "routing_tier",
+          "quality_prior",
+          "tool_reliability_prior",
+          "latency_prior_ms",
+          "model_family",
+          "model_vendor",
+          "architecture_class",
+          "supports_reasoning",
+          "reasoning_levels",
+          "input_price_microusd_per_million",
+          "output_price_microusd_per_million",
+          "routing_enabled"
         ],
         "title": "ModelCreate",
         "type": "object"
@@ -735,6 +838,16 @@
       "ModelResponse": {
         "additionalProperties": false,
         "properties": {
+          "architecture_class": {
+            "enum": [
+              "dense",
+              "moe",
+              "hybrid",
+              "unknown"
+            ],
+            "title": "Architecture Class",
+            "type": "string"
+          },
           "catalog_revision": {
             "title": "Catalog Revision",
             "type": "integer"
@@ -760,10 +873,26 @@
             "title": "Id",
             "type": "string"
           },
+          "input_price_microusd_per_million": {
+            "minimum": 0.0,
+            "title": "Input Price Microusd Per Million",
+            "type": "integer"
+          },
+          "latency_prior_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Latency Prior Ms",
+            "type": "integer"
+          },
           "max_output_tokens": {
             "minimum": 1.0,
             "title": "Max Output Tokens",
             "type": "integer"
+          },
+          "model_family": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model Family",
+            "type": "string"
           },
           "model_key": {
             "maxLength": 200,
@@ -771,11 +900,49 @@
             "title": "Model Key",
             "type": "string"
           },
+          "model_vendor": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model Vendor",
+            "type": "string"
+          },
+          "output_price_microusd_per_million": {
+            "minimum": 0.0,
+            "title": "Output Price Microusd Per Million",
+            "type": "integer"
+          },
           "provider_key": {
             "maxLength": 64,
             "minLength": 1,
             "title": "Provider Key",
             "type": "string"
+          },
+          "quality_prior": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+            "title": "Quality Prior",
+            "type": "string"
+          },
+          "reasoning_levels": {
+            "items": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            "title": "Reasoning Levels",
+            "type": "array"
+          },
+          "routing_enabled": {
+            "title": "Routing Enabled",
+            "type": "boolean"
+          },
+          "routing_tier": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Routing Tier",
+            "type": "integer"
           },
           "status": {
             "enum": [
@@ -785,6 +952,10 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "supports_reasoning": {
+            "title": "Supports Reasoning",
+            "type": "boolean"
           },
           "supports_streaming": {
             "title": "Supports Streaming",
@@ -802,6 +973,11 @@
             "maxLength": 100,
             "minLength": 1,
             "title": "Tokenizer Key",
+            "type": "string"
+          },
+          "tool_reliability_prior": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+            "title": "Tool Reliability Prior",
             "type": "string"
           },
           "updated_at": {
@@ -824,6 +1000,18 @@
           "supports_tools",
           "supports_streaming",
           "supports_vision",
+          "routing_tier",
+          "quality_prior",
+          "tool_reliability_prior",
+          "latency_prior_ms",
+          "model_family",
+          "model_vendor",
+          "architecture_class",
+          "supports_reasoning",
+          "reasoning_levels",
+          "input_price_microusd_per_million",
+          "output_price_microusd_per_million",
+          "routing_enabled",
           "id",
           "catalog_revision",
           "status",
@@ -837,6 +1025,23 @@
       "ModelUpdate": {
         "additionalProperties": false,
         "properties": {
+          "architecture_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dense",
+                  "moe",
+                  "hybrid",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Architecture Class"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -862,6 +1067,30 @@
             ],
             "title": "Display Name"
           },
+          "input_price_microusd_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Price Microusd Per Million"
+          },
+          "latency_prior_ms": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Prior Ms"
+          },
           "max_output_tokens": {
             "anyOf": [
               {
@@ -873,6 +1102,115 @@
               }
             ],
             "title": "Max Output Tokens"
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "model_vendor": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Vendor"
+          },
+          "output_price_microusd_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Price Microusd Per Million"
+          },
+          "quality_prior": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Prior"
+          },
+          "reasoning_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Levels"
+          },
+          "routing_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routing Enabled"
+          },
+          "routing_tier": {
+            "anyOf": [
+              {
+                "maximum": 3.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routing Tier"
+          },
+          "supports_reasoning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Reasoning"
           },
           "supports_streaming": {
             "anyOf": [
@@ -919,6 +1257,23 @@
               }
             ],
             "title": "Tokenizer Key"
+          },
+          "tool_reliability_prior": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,1}|(?=[\\d.]{1,6}0*$)\\d{0,1}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Reliability Prior"
           }
         },
         "title": "ModelUpdate",

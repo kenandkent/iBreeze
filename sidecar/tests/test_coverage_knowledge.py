@@ -57,6 +57,7 @@ class TestEmbeddingServiceExtended:
 
     def test_get_embedding_service_singleton(self):
         import ibreeze.knowledge.embeddings as mod
+
         mod._embedding_service = None
         svc1 = get_embedding_service()
         svc2 = get_embedding_service()
@@ -126,6 +127,7 @@ class TestVectorStoreExtended:
 
     def test_get_vector_store_singleton(self):
         import ibreeze.knowledge.vector_store as mod
+
         mod._vector_store = None
         vs1 = get_vector_store()
         vs2 = get_vector_store()
@@ -177,14 +179,19 @@ class TestReciprocalRankFusion:
 @pytest.mark.asyncio
 class TestHybridSearch:
     async def test_search_empty_results(self, db, published_profile):
-        with patch("ibreeze.knowledge.hybrid_search.search_fts", return_value=[]), \
-             patch("ibreeze.knowledge.hybrid_search.get_embedding_service") as mock_emb, \
-             patch("ibreeze.knowledge.hybrid_search.get_vector_store") as mock_vs:
+        with (
+            patch("ibreeze.knowledge.hybrid_search.search_fts", return_value=[]),
+            patch("ibreeze.knowledge.hybrid_search.get_embedding_service") as mock_emb,
+            patch("ibreeze.knowledge.hybrid_search.get_vector_store") as mock_vs,
+        ):
             mock_emb.return_value.embed_single.return_value = [0.1] * 384
             mock_vs.return_value.search.return_value = []
             result = await hybrid_search(
-                db, "comp1", "test query",
-                candidate_ids=None, generation_id=None,
+                db,
+                "comp1",
+                "test query",
+                candidate_ids=None,
+                generation_id=None,
             )
             assert result == []
 

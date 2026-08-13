@@ -1,11 +1,14 @@
 pub mod connect;
 pub mod credential;
+pub mod credential_idempotency;
+pub mod credential_index;
 pub mod dns_policy;
 pub mod domain_policy;
 pub mod egress;
 pub mod http;
 pub mod http_stream;
 pub mod lease;
+pub mod snapshot_authorization;
 
 pub use connect::{ConnectHandler, MAX_CONCURRENT_TUNNELS, MAX_TUNNEL_RATE_PER_MINUTE};
 pub use credential::CredentialStore;

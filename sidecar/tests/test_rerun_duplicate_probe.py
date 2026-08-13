@@ -105,7 +105,12 @@ async def _publish_artifact(db: Any, env: dict[str, str], sha: str) -> str:
 
 
 async def _assignment(
-    db: Any, env: dict[str, str], artifact_id: str, sha: str, reviewer_id: str, round_no: int,
+    db: Any,
+    env: dict[str, str],
+    artifact_id: str,
+    sha: str,
+    reviewer_id: str,
+    round_no: int,
     status: str = "assigned",
 ) -> ReviewAssignment:
     assignment_id = _id()
@@ -151,9 +156,7 @@ async def _report(db: Any, env: dict[str, str], assignment_id: str, artifact_id:
 
 class TestClaimedState:
     @pytest.mark.asyncio
-    async def test_normal_two_reviewer_round_progression_no_conflict(
-        self, db: Any
-    ) -> None:
+    async def test_normal_two_reviewer_round_progression_no_conflict(self, db: Any) -> None:
         """Drive the real decision loop through all rounds with a single reviewer;
         assert no IntegrityError escapes and no duplicate (artifact, reviewer, round)
         rows ever get created."""
@@ -173,8 +176,7 @@ class TestClaimedState:
         # Bob round-2 must be auto-created.
         assigns = await (
             await db.execute(
-                "SELECT reviewer_employee_id, review_round, status FROM review_assignments"
-                " WHERE artifact_id=? ORDER BY review_round",
+                "SELECT reviewer_employee_id, review_round, status FROM review_assignments WHERE artifact_id=? ORDER BY review_round",
                 (artifact_id,),
             )
         ).fetchall()
@@ -182,14 +184,12 @@ class TestClaimedState:
         assert (env["bob_id"], 2, "assigned") in rounds
 
         # Bob submits the AUTO-CREATED round 2 -> low confidence -> auto round 3.
-        r2 = (
-            await (
-                await db.execute(
-                    "SELECT id FROM review_assignments WHERE artifact_id=? AND review_round=2",
-                    (artifact_id,),
-                )
-            ).fetchone()
-        )
+        r2 = await (
+            await db.execute(
+                "SELECT id FROM review_assignments WHERE artifact_id=? AND review_round=2",
+                (artifact_id,),
+            )
+        ).fetchone()
         bob2 = ReviewAssignment(
             id=UUID(r2["id"]),
             company_id=UUID(env["company_id"]),
@@ -208,8 +208,7 @@ class TestClaimedState:
         # rerun again -> auto round 3.  No fake 0.75 pass, no IntegrityError.
         assigns = await (
             await db.execute(
-                "SELECT reviewer_employee_id, review_round, status FROM review_assignments"
-                " WHERE artifact_id=? ORDER BY review_round",
+                "SELECT reviewer_employee_id, review_round, status FROM review_assignments WHERE artifact_id=? ORDER BY review_round",
                 (artifact_id,),
             )
         ).fetchall()
@@ -240,8 +239,7 @@ class TestClaimedState:
 
         assigns = await (
             await db.execute(
-                "SELECT reviewer_employee_id, review_round FROM review_assignments"
-                " WHERE artifact_id=? ORDER BY review_round",
+                "SELECT reviewer_employee_id, review_round FROM review_assignments WHERE artifact_id=? ORDER BY review_round",
                 (artifact_id,),
             )
         ).fetchall()
@@ -268,16 +266,13 @@ class TestClaimedState:
 
         report = await (
             await db.execute(
-                "SELECT rr.id FROM review_reports rr"
-                " JOIN review_assignments ra ON ra.id=rr.assignment_id"
-                " WHERE ra.id=?", (str(bob_a.id),),
+                "SELECT rr.id FROM review_reports rr JOIN review_assignments ra ON ra.id=rr.assignment_id WHERE ra.id=?",
+                (str(bob_a.id),),
             )
         ).fetchone()
         assert report is not None
         try:
-            await ReviewRepository().create_rerun_assignment(
-                db, company_id=UUID(env["company_id"]), review_id=UUID(report["id"])
-            )
+            await ReviewRepository().create_rerun_assignment(db, company_id=UUID(env["company_id"]), review_id=UUID(report["id"]))
             raise AssertionError("expected IntegrityError for manual rerun on existing round+1")
         except sqlite3.IntegrityError:
             pass  # This is the reachable collision -- but it lives in RerunReview, not SubmitReview.

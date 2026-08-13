@@ -133,6 +133,20 @@ def _freeze_model(model: ModelCatalog, sequence: int) -> dict[str, Any]:
         "supports_tools": model.supports_tools,
         "supports_streaming": model.supports_streaming,
         "supports_vision": model.supports_vision,
+        "routing_tier": model.routing_tier or 1,
+        "quality_prior": float(model.quality_prior if model.quality_prior is not None else 0.5),
+        "tool_reliability_prior": float(
+            model.tool_reliability_prior if model.tool_reliability_prior is not None else 0.5
+        ),
+        "latency_prior_ms": model.latency_prior_ms or 3000,
+        "model_family": model.model_family or "unknown",
+        "model_vendor": model.model_vendor or "unknown",
+        "architecture_class": model.architecture_class or "unknown",
+        "supports_reasoning": bool(model.supports_reasoning),
+        "reasoning_levels": list(model.reasoning_levels or []),
+        "input_price_microusd_per_million": model.input_price_microusd_per_million or 0,
+        "output_price_microusd_per_million": model.output_price_microusd_per_million or 0,
+        "routing_enabled": bool(model.routing_enabled),
     }
     return _finalize_resource(entry)
 
@@ -209,6 +223,18 @@ async def freeze_resources(db: AsyncSession, release_id: uuid.UUID, sequence: in
                     "model_id": str(binding.model_id),
                     "provider_model_name": binding.provider_model_name,
                     "request_defaults": binding.request_defaults,
+                    "routing_tier": model_catalog.routing_tier or 1,
+                    "quality_prior": float(model_catalog.quality_prior or 0.5),
+                    "tool_reliability_prior": float(model_catalog.tool_reliability_prior or 0.5),
+                    "latency_prior_ms": model_catalog.latency_prior_ms or 3000,
+                    "model_family": model_catalog.model_family or "unknown",
+                    "model_vendor": model_catalog.model_vendor or "unknown",
+                    "architecture_class": model_catalog.architecture_class or "unknown",
+                    "supports_reasoning": bool(model_catalog.supports_reasoning),
+                    "reasoning_levels": list(model_catalog.reasoning_levels or []),
+                    "input_price_microusd_per_million": model_catalog.input_price_microusd_per_million or 0,
+                    "output_price_microusd_per_million": model_catalog.output_price_microusd_per_million or 0,
+                    "routing_enabled": bool(model_catalog.routing_enabled),
                 }
             )
         resources.append(_freeze_provider(provider, sequence, model_bindings))

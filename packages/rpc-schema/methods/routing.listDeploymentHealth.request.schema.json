@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.listDeploymentHealth.request.v1","title":"RoutingListDeploymentHealthRequest","type":"object","additionalProperties":false,
+  "properties":{"company_id":{"type":"string","format":"uuid"},"cursor":{"type":["string","null"]},"limit":{"type":"integer","minimum":1,"maximum":100},"active_only":{"type":"boolean"}},"required":["company_id"]
+}

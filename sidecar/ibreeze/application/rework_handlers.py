@@ -36,11 +36,7 @@ class RequestReworkHandler:
                 if await cursor.fetchone() is None:
                     raise ValueError(f"ISSUE_NOT_OPEN:{issue_id}")
 
-            dept_id = (
-                str(request.department_task_id)
-                if hasattr(request, "department_task_id") and request.department_task_id
-                else ""
-            )
+            dept_id = str(request.department_task_id) if hasattr(request, "department_task_id") and request.department_task_id else ""
             cursor = await session.execute(
                 """SELECT COALESCE(MAX(attempt_no), 0) + 1
                    FROM rework_attempts
@@ -51,15 +47,9 @@ class RequestReworkHandler:
             row = await cursor.fetchone()
             next_no = row[0] if row else 1
 
-            attempt_id = str(
-                hashlib.md5(f"{request.company_id}:{request.company_task_id}:{next_no}".encode()).hexdigest()[:32]
-            )
+            attempt_id = str(hashlib.md5(f"{request.company_id}:{request.company_task_id}:{next_no}".encode()).hexdigest()[:32])
 
-            dept_id_val = (
-                str(request.department_task_id)
-                if hasattr(request, "department_task_id") and request.department_task_id
-                else None
-            )
+            dept_id_val = str(request.department_task_id) if hasattr(request, "department_task_id") and request.department_task_id else None
             await session.execute(
                 """INSERT INTO rework_attempts
                    (id, company_id, company_task_id, department_task_id,

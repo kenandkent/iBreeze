@@ -20,6 +20,7 @@ the state they observe.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import uuid
@@ -37,6 +38,31 @@ def _id() -> str:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _parse_frozen_capability_tags(raw: object) -> tuple[str, ...] | None:
+    """Decode the immutable dispatch-spec tag array without fail-open coercion.
+
+    ``json_valid`` on the SQLite column intentionally only protects syntax for
+    existing databases.  Runtime dispatch must additionally require an array
+    of non-empty strings; accepting an object or scalar would iterate its keys
+    or characters and could incorrectly satisfy a capability preflight.
+    ``None`` means the frozen spec is corrupt and must not produce a Run.
+    """
+    if raw is None:
+        return ()
+    try:
+        value = json.loads(raw) if isinstance(raw, (str, bytes, bytearray)) else raw
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(value, list):
+        return None
+    tags: set[str] = set()
+    for item in value:
+        if not isinstance(item, str) or not item.strip() or item != item.strip():
+            return None
+        tags.add(item)
+    return tuple(sorted(tags))
 
 
 async def maybe_dispatch_deliverable_reviews(
@@ -170,7 +196,8 @@ async def advance_employee_task_graph(
     parse.  The optimistic ``WHERE status='waiting_resource'`` guard makes the
     dispatch exactly-once across replays.
 
-    A dependent whose frozen binding is no longer live is transitioned to
+    A dependent whose frozen employee, department, profile, catalog,
+    capability or workspace binding is no longer live is transitioned to
     ``failed`` (see :func:`_lazy_availability_checks`) rather than left stuck
     in ``waiting_resource``; those ids are returned under the ``failed`` key.
     """
@@ -205,18 +232,35 @@ async def advance_employee_task_graph(
         spec_row = await _dispatch_spec_for(db, company_id=company_id, employee_task_id=task_id)
         if spec_row is None:
             continue
-        checks, available = await _lazy_availability_checks(
-            db,
-            company_id=company_id,
-            employee_id=spec_row["employee_id"],
-            profile_version_id=spec_row["profile_version_id"],
-            catalog_release_id=spec_row["catalog_release_id"],
-            workspace_grant_id=spec_row["workspace_grant_id"],
+        required_capability_tags = _parse_frozen_capability_tags(
+            spec_row.get("required_capability_tags_json")
         )
+        if required_capability_tags is None:
+            required_capability_tags = ()
+            checks = [
+                {
+                    "check": "dispatch_spec",
+                    "status": "unavailable",
+                    "detail": "INVALID_CAPABILITY_TAGS",
+                }
+            ]
+            available = False
+        else:
+            checks, available = await _lazy_availability_checks(
+                db,
+                company_id=company_id,
+                employee_id=spec_row["employee_id"],
+                department_id=spec_row["department_id"],
+                profile_version_id=spec_row["profile_version_id"],
+                catalog_release_id=spec_row["catalog_release_id"],
+                required_capability_tags=required_capability_tags,
+                task_workspace_id=spec_row["task_workspace_id"],
+                workspace_grant_id=spec_row["workspace_grant_id"],
+            )
         if not available:
-            # The frozen binding is no longer live (employee deactivated,
-            # profile unpublished, catalog superseded or grant revoked).  Fail
-            # the segment instead of leaving it silently stuck in
+            # One of the frozen employee/department/profile/catalog/capability
+            # or workspace references is no longer live. Fail the segment
+            # instead of leaving it silently stuck in
             # ``waiting_resource``: the outbox event that triggered this
             # dispatch is delivered exactly once and nothing would re-dispatch
             # a waiting segment later.  A terminal, visible ``failed`` state
@@ -262,6 +306,9 @@ async def advance_employee_task_graph(
                 profile_version_id=spec_row["profile_version_id"],
                 catalog_release_id=spec_row["catalog_release_id"],
                 runtime_binding_json=spec_row["runtime_binding_json"],
+                routing_policy_json=spec_row["routing_policy_json"],
+                routing_policy_sha256=hashlib.sha256(str(spec_row["routing_policy_json"]).encode()).hexdigest(),
+                profile_type="api_model" if spec_row["adapter_type"] == "api_model" else "agent_cli",
                 adapter_type=spec_row["adapter_type"],
                 model_id=spec_row["model_id"],
                 objective=spec_row["objective"],
@@ -269,6 +316,7 @@ async def advance_employee_task_graph(
                 .isoformat(timespec="microseconds")
                 .replace("+00:00", "Z"),
                 run_purpose="task_execution",
+                required_capability_tags=required_capability_tags,
                 priority=0,
                 checks=checks,
                 now=now,
@@ -287,7 +335,8 @@ async def _dispatch_spec_for(
     cursor = await db.execute(
         """SELECT ds.company_task_id, ds.department_task_id, ds.employee_id,
                   ds.profile_version_id, ds.catalog_release_id,
-                  ds.runtime_binding_json, ds.adapter_type, ds.model_id,
+                  ds.runtime_binding_json, ds.routing_policy_json,
+                  ds.required_capability_tags_json, ds.adapter_type, ds.model_id,
                   ds.task_workspace_id, ds.company_revision_id,
                   ds.department_revision_id, ds.conversation_id,
                   ds.workspace_repository_root, ds.workspace_grant_id,
@@ -306,17 +355,21 @@ async def _lazy_availability_checks(
     *,
     company_id: str,
     employee_id: str,
+    department_id: str,
     profile_version_id: str,
     catalog_release_id: str,
+    required_capability_tags: tuple[str, ...] = (),
+    task_workspace_id: str,
     workspace_grant_id: str,
 ) -> tuple[list[dict[str, str]], bool]:
     """Compact still-valid probe for a deferred sequential segment.
 
     The confirm transaction already performed the authoritative preflight; the
-    frozen dispatch spec pins the profile, catalog release and workspace.  This
-    re-probe only re-checks that those pinned references are still live before
-    dispatching, so a segment is never scheduled against a retired profile or
-    a revoked workspace grant.
+    frozen dispatch spec pins the employee's department, profile version,
+    catalog release, capability requirements and workspace. This re-probe
+    checks those exact references again before dispatching, so a segment is
+    never scheduled after a transfer, profile retirement, catalog mismatch,
+    capability drift or workspace revocation.
     """
     checks: list[dict[str, str]] = []
     available = True
@@ -324,13 +377,17 @@ async def _lazy_availability_checks(
     row = await (
         await db.execute(
             """SELECT e.status AS employee_status,
+                      e.department_id,
+                      v.id AS profile_version_id,
                       v.status AS profile_version_status,
-                      v.catalog_release_id, p.status AS profile_status
+                      v.catalog_release_id,
+                      v.capability_tags_json,
+                      p.status AS profile_status
                FROM employees e
-               LEFT JOIN employee_base_profile_versions v ON v.id=e.base_profile_version_id
-               LEFT JOIN employee_base_profiles p ON p.id=v.profile_id
+               LEFT JOIN employee_base_profile_versions v ON v.id=?
+               LEFT JOIN employee_base_profiles p ON p.id=v.profile_id AND p.company_id=e.company_id
                WHERE e.id=? AND e.company_id=?""",
-            (employee_id, company_id),
+            (profile_version_id, employee_id, company_id),
         )
     ).fetchone()
     employee_ok = row is not None and row["employee_status"] == "active"
@@ -341,8 +398,23 @@ async def _lazy_availability_checks(
             "detail": str(row["employee_status"]) if row is not None else "missing",
         }
     )
+    if not employee_ok:
+        available = False
+
+    department_ok = row is not None and row["department_id"] == department_id
+    checks.append(
+        {
+            "check": "department_membership",
+            "status": "available" if department_ok else "unavailable",
+            "detail": str(row["department_id"]) if row is not None else "missing",
+        }
+    )
+    if not department_ok:
+        available = False
+
     profile_ok = (
         row is not None
+        and row["profile_version_id"] == profile_version_id
         and row["profile_version_status"] == "published"
         and row["profile_status"] == "active"
     )
@@ -353,6 +425,29 @@ async def _lazy_availability_checks(
             "detail": str(row["profile_version_status"] or "missing"),
         }
     )
+    if not profile_ok:
+        available = False
+
+    try:
+        profile_capability_tags = json.loads(row["capability_tags_json"] or "[]") if row is not None else []
+    except (TypeError, ValueError):
+        profile_capability_tags = []
+    if not isinstance(profile_capability_tags, list):
+        profile_capability_tags = []
+    required = {value for value in required_capability_tags if isinstance(value, str) and value.strip()}
+    profile_tags = {value for value in profile_capability_tags if isinstance(value, str)}
+    missing_capabilities = sorted(required - profile_tags)
+    capability_ok = not missing_capabilities
+    checks.append(
+        {
+            "check": "capability_tags",
+            "status": "available" if capability_ok else "unavailable",
+            "detail": "missing:" + ",".join(missing_capabilities) if missing_capabilities else ",".join(sorted(required)),
+        }
+    )
+    if not capability_ok:
+        available = False
+
     catalog_ok = row is not None and row["catalog_release_id"] == catalog_release_id
     checks.append(
         {
@@ -361,13 +456,38 @@ async def _lazy_availability_checks(
             "detail": str(row["catalog_release_id"] or "missing"),
         }
     )
-    workspace_ok = bool(workspace_grant_id)
+    if not catalog_ok:
+        available = False
+
+    workspace_row = await (
+        await db.execute(
+            """SELECT tw.status AS task_workspace_status,
+                      tw.workspace_grant_id,
+                      wg.status AS grant_status
+               FROM task_workspaces tw
+               LEFT JOIN workspace_grants wg
+                 ON wg.id=tw.workspace_grant_id AND wg.company_id=tw.company_id
+               WHERE tw.id=? AND tw.company_id=?""",
+            (task_workspace_id, company_id),
+        )
+    ).fetchone()
+    workspace_ok = (
+        workspace_row is not None
+        and workspace_row["task_workspace_status"] == "active"
+        and workspace_row["workspace_grant_id"] == workspace_grant_id
+        and workspace_row["grant_status"] == "active"
+    )
     checks.append(
         {
             "check": "workspace_grant",
             "status": "available" if workspace_ok else "unavailable",
-            "detail": workspace_grant_id or "missing",
+            "detail": (
+                f"{workspace_row['task_workspace_status']}:{workspace_row['grant_status']}"
+                if workspace_row is not None
+                else "missing"
+            ),
         }
     )
-    available = employee_ok and profile_ok and catalog_ok and workspace_ok
+    if not workspace_ok:
+        available = False
     return checks, available

@@ -7,6 +7,7 @@ import uuid
 import aiosqlite
 import pytest
 
+from ibreeze.runtime.run_executor import _resource_wait_failure_code
 from ibreeze.runtime.service import (
     cancel_run,
     get_agent_run,
@@ -22,12 +23,23 @@ from ibreeze.runtime.service import (
 
 def _sha256(data: str) -> str:
     import hashlib
+
     return hashlib.sha256(data.encode()).hexdigest()
 
 
+def test_resource_wait_failure_code_is_explicit_and_failures_are_not_retriable() -> None:
+    assert _resource_wait_failure_code(ValueError("MODEL_CAPABILITY_UNAVAILABLE")) == "MODEL_CAPABILITY_UNAVAILABLE"
+    assert _resource_wait_failure_code(RuntimeError("CREDENTIAL_NOT_READY")) == "CREDENTIAL_NOT_READY"
+    assert _resource_wait_failure_code(RuntimeError("EXECUTION_ERROR")) is None
+
+
 async def _setup_runtime_env(
-    db: aiosqlite.Connection, company_id: str, version_id: str,
-    profile_id: str, employee_id: str, dept_id: str,
+    db: aiosqlite.Connection,
+    company_id: str,
+    version_id: str,
+    profile_id: str,
+    employee_id: str,
+    dept_id: str,
 ):
     now = "2026-01-01T00:00:00Z"
     await db.execute("PRAGMA foreign_keys = OFF")
@@ -138,9 +150,20 @@ async def _create_agent_run(
                 status, resume_state, attempt, created_at, updated_at, version)
                VALUES (?, ?, ?, ?, ?, ?, 'avail', 'exec', 'review', ?, '{}', ?,
                        ?, ?, 1, ?, ?, 1)""",
-            (run_id, company_id, company_task_id, company_task_id,
-             str(uuid.uuid4()), str(uuid.uuid4()), adapter_type, sha,
-             status, resume_state, now, now),
+            (
+                run_id,
+                company_id,
+                company_task_id,
+                company_task_id,
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                adapter_type,
+                sha,
+                status,
+                resume_state,
+                now,
+                now,
+            ),
         )
     finally:
         await db.execute("PRAGMA foreign_keys = ON")

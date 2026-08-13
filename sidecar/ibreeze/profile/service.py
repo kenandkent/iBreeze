@@ -7,6 +7,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from ibreeze.routing.policy import validate_routing_policy
+
 
 def _id() -> str:
     return str(uuid.uuid4())
@@ -32,6 +34,7 @@ async def create_draft(
     provider_release_id: str = "",
     model_binding_id: str = "",
     provider_protocol: str = "",
+    routing_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Create a new profile draft version."""
     profile_id = _id()
@@ -67,6 +70,18 @@ async def create_draft(
         "model_binding_id": model_binding_id,
         "provider_protocol": provider_protocol,
     }
+    profile_type = "agent_cli" if agent_cli else "api_model"
+    if profile_type == "api_model":
+        raw_policy = routing_policy or base_profile.get("routing_policy")
+        validated = validate_routing_policy(
+            raw_policy if isinstance(raw_policy, dict) else None,
+            profile_type=profile_type,
+        )
+        policy_json = validated.canonical_json
+    elif routing_policy:
+        raise ValueError("ROUTING_POLICY_FORBIDDEN")
+    else:
+        policy_json = "{}"
     await db.execute(
         """INSERT INTO employee_base_profiles
            (id, company_id, name, normalized_name, description, status,
@@ -88,19 +103,20 @@ async def create_draft(
     await db.execute(
         """INSERT INTO employee_base_profile_versions
            (id, profile_id, version_number, name, description, profile_type,
-            runtime_binding_json, system_prompt, capability_tags_json,
+            runtime_binding_json, routing_policy_json, system_prompt, capability_tags_json,
             tool_policy_json, timeout_seconds, max_retries,
             workspace_policy, catalog_release_id, content_sha256,
             status, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             version_id,
             profile_id,
             1,
             base_profile.get("name", ""),
             base_profile.get("description", ""),
-            "agent_cli" if agent_cli else "api_model",
+            profile_type,
             json.dumps(runtime_binding, sort_keys=True),
+            policy_json,
             base_profile.get("system_prompt", ""),
             json.dumps(base_profile.get("capability_tags", [])),
             json.dumps(base_profile.get("tool_policy", {})),
@@ -139,6 +155,7 @@ async def update_draft(
     provider_release_id: str | None = None,
     model_binding_id: str | None = None,
     provider_protocol: str | None = None,
+    routing_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Update an existing draft."""
     now = _now()
@@ -153,6 +170,16 @@ async def update_draft(
     )
     if draft is None:
         raise ValueError("DRAFT_NOT_FOUND")
+
+    profile_type = str(draft["profile_type"])
+    policy_json: str | None = None
+    if routing_policy is not None:
+        if profile_type == "agent_cli":
+            raise ValueError("ROUTING_POLICY_FORBIDDEN")
+        policy_json = validate_routing_policy(
+            routing_policy,
+            profile_type=profile_type,
+        ).canonical_json
 
     try:
         runtime_binding = json.loads(draft["runtime_binding_json"] or "{}")
@@ -169,22 +196,20 @@ async def update_draft(
     for key, value in updates.items():
         if value is not None and value != "":
             runtime_binding[key] = value
-    runtime_binding = {
-        str(key): value for key, value in runtime_binding.items()
-    }
-    await db.execute(
-        """UPDATE employee_base_profile_versions
+    runtime_binding = {str(key): value for key, value in runtime_binding.items()}
+    if policy_json is None:
+        update_sql = """UPDATE employee_base_profile_versions
            SET runtime_binding_json=?
            WHERE id=? AND status='draft'
-             AND profile_id IN (
-                 SELECT id FROM employee_base_profiles WHERE company_id=?
-             )""",
-        (
-            json.dumps(runtime_binding, sort_keys=True),
-            draft_id,
-            company_id,
-        ),
-    )
+             AND profile_id IN (SELECT id FROM employee_base_profiles WHERE company_id=?)"""
+        update_args: tuple[Any, ...] = (json.dumps(runtime_binding, sort_keys=True), draft_id, company_id)
+    else:
+        update_sql = """UPDATE employee_base_profile_versions
+           SET runtime_binding_json=?, routing_policy_json=?
+           WHERE id=? AND status='draft'
+             AND profile_id IN (SELECT id FROM employee_base_profiles WHERE company_id=?)"""
+        update_args = (json.dumps(runtime_binding, sort_keys=True), policy_json, draft_id, company_id)
+    await db.execute(update_sql, update_args)
 
     return {
         "version_id": draft_id,
@@ -291,11 +316,7 @@ async def bind_skill(
     next_order = max_order_row["next_order"]
 
     binding_id = _id()
-    sha = (
-        package_sha256
-        if len(package_sha256) == 64
-        else _hashlib.sha256(f"{skill_id}:{skill_version}".encode()).hexdigest()
-    )
+    sha = package_sha256 if len(package_sha256) == 64 else _hashlib.sha256(f"{skill_id}:{skill_version}".encode()).hexdigest()
 
     await db.execute(
         """INSERT INTO profile_skill_bindings
@@ -392,6 +413,17 @@ async def validate_draft(
         for field in ("credential_ref", "provider_release_id", "model_binding_id", "provider_protocol"):
             if not isinstance(binding.get(field), str) or not binding[field].strip():
                 errors.append(f"missing_{field}")
+        try:
+            policy = json.loads(d.get("routing_policy_json") or "{}")
+        except (TypeError, ValueError):
+            policy = None
+        try:
+            validate_routing_policy(policy if isinstance(policy, dict) else None, profile_type="api_model")
+        except ValueError as exc:
+            errors.append(str(exc))
+        if isinstance(policy, dict) and d.get("catalog_release_id"):
+            catalog_errors = await _catalog_policy_errors(db, str(d["catalog_release_id"]), policy)
+            errors.extend(catalog_errors)
     elif d.get("profile_type") == "agent_cli" and not str(binding.get("agent_cli", "")).strip():
         errors.append("missing_agent_cli")
 
@@ -400,6 +432,41 @@ async def validate_draft(
         "valid": len(errors) == 0,
         "errors": errors,
     }
+
+
+async def _catalog_policy_errors(db: Any, release_id: str, policy: dict[str, object]) -> list[str]:
+    """Validate candidate provider/model bindings against the pinned release."""
+    provider_cursor = await db.execute(
+        "SELECT content_json FROM catalog_cache_resources WHERE release_id=? AND resource_type='provider'",
+        (release_id,),
+    )
+    providers: list[dict[str, Any]] = []
+    for row in await provider_cursor.fetchall():
+        try:
+            value = json.loads(row[0])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            providers.append(value)
+    bindings: dict[str, tuple[str, bool]] = {}
+    for provider in providers:
+        for binding in provider.get("model_bindings", []):
+            if isinstance(binding, dict) and binding.get("binding_id"):
+                bindings[str(binding["binding_id"])] = (str(provider.get("id", "")), bool(binding.get("routing_enabled", False)))
+    errors: list[str] = []
+    raw_candidates = policy.get("candidates", [])
+    if not isinstance(raw_candidates, list):
+        return errors
+    for index, candidate in enumerate(raw_candidates):
+        if not isinstance(candidate, dict):
+            continue
+        binding_id = str(candidate.get("model_binding_id", ""))
+        provider_id, enabled = bindings.get(binding_id, ("", False))
+        if not provider_id or provider_id != str(candidate.get("provider_release_id", "")):
+            errors.append(f"routing_candidate_outside_release:/candidates/{index}")
+        if not enabled or not bool(candidate.get("routing_enabled", False)):
+            errors.append(f"routing_candidate_disabled:/candidates/{index}")
+    return errors
 
 
 async def publish_draft(
@@ -420,6 +487,10 @@ async def publish_draft(
     )
     if draft is None:
         raise ValueError("DRAFT_NOT_FOUND")
+
+    validation = await validate_draft(db, company_id, draft_id)
+    if draft["profile_type"] == "api_model" and not validation["valid"]:
+        raise ValueError("PROFILE_NOT_VALID")
 
     await db.execute(
         """UPDATE employee_base_profile_versions

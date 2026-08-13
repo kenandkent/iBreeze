@@ -34,6 +34,41 @@ def _sha256(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
 
 
+def _apply_capability_preflight(resource: dict[str, Any], required_values: object) -> bool:
+    """Check task tags against the frozen employee profile capabilities.
+
+    Capability tags describe the employee/profile, not an API Model Candidate.
+    The profile is resolved once during confirmation; the result is retained in
+    the resource preflight and the task's exact tag list is later frozen into
+    the Run spec for routing-context audit.
+    """
+    required = tuple(
+        sorted(
+            {
+                str(value)
+                for value in (required_values if isinstance(required_values, list) else [])
+                if isinstance(value, str) and value.strip()
+            }
+        )
+    )
+    checked = resource.setdefault("_capability_checks", set())
+    if required in checked:
+        return bool(resource.get("available", False))
+    checked.add(required)
+    available = {str(value) for value in resource.get("capability_tags", ())}
+    missing = sorted(set(required) - available)
+    resource["checks"].append(
+        {
+            "check": "capability_tags",
+            "status": "available" if not missing else "unavailable",
+            "detail": ",".join(required) if not missing else "missing:" + ",".join(missing),
+        }
+    )
+    if missing:
+        resource["available"] = False
+    return bool(resource.get("available", False))
+
+
 @dataclass(frozen=True)
 class ConfirmPlanCommand:
     company_id: str
@@ -62,8 +97,7 @@ async def _run_availability_checks(db: Any, company_id: str) -> dict[str, Any]:
         }
     )
     cursor = await db.execute(
-        "SELECT release_id, downloaded_at FROM catalog_cache_releases"
-        " WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1",
+        "SELECT release_id, downloaded_at FROM catalog_cache_releases WHERE status='active' ORDER BY downloaded_at DESC LIMIT 1",
     )
     row = await cursor.fetchone()
     if row is None:
@@ -119,17 +153,13 @@ async def _prepare_employee_resources(
         if not isinstance(department_task, dict):
             return {}, False
         department_id = str(department_task.get("department_id", ""))
+        required_capability_tags = department_task.get("required_capability_tags", [])
         department_cursor = await db.execute(
-            "SELECT id, status, current_revision_id FROM departments"
-            " WHERE id=? AND company_id=?",
+            "SELECT id, status, current_revision_id FROM departments WHERE id=? AND company_id=?",
             (department_id, company_id),
         )
         department_row = await department_cursor.fetchone()
-        if (
-            department_row is None
-            or department_row["status"] != "active"
-            or not department_row["current_revision_id"]
-        ):
+        if department_row is None or department_row["status"] != "active" or not department_row["current_revision_id"]:
             all_available = False
 
         deliverables = department_task.get("deliverables", [])
@@ -138,21 +168,32 @@ async def _prepare_employee_resources(
         for deliverable in deliverables:
             if not isinstance(deliverable, dict):
                 return {}, False
-            employee_ids = deliverable.get("contributor_employee_ids", [])
-            if not isinstance(employee_ids, list) or not employee_ids:
+            contributor_ids = deliverable.get("contributor_employee_ids", [])
+            reviewer_ids = deliverable.get("reviewer_employee_ids", [])
+            if not isinstance(contributor_ids, list) or not contributor_ids:
                 return {}, False
+            # PlanValidator requires a non-empty reviewer list for new plans.
+            # Confirm remains backward-compatible with older direct/manual
+            # plan rows that predate review assignments; those rows simply
+            # have no reviewer participant to preflight.
+            if not isinstance(reviewer_ids, list):
+                reviewer_ids = []
+            employee_ids = list(dict.fromkeys([*contributor_ids, *reviewer_ids]))
             for employee_id_value in employee_ids:
                 employee_id = str(employee_id_value)
                 if employee_id in resources:
                     if resources[employee_id]["department_id"] != department_id:
                         all_available = False
+                    else:
+                        all_available = _apply_capability_preflight(resources[employee_id], required_capability_tags) and all_available
                     continue
 
                 cursor = await db.execute(
                     """SELECT e.id, e.department_id, e.status AS employee_status,
                               e.base_profile_version_id,
                               v.status AS profile_version_status,
-                              v.profile_type, v.runtime_binding_json,
+                              v.profile_type, v.runtime_binding_json, v.routing_policy_json,
+                              v.capability_tags_json,
                               v.catalog_release_id,
                               p.status AS profile_status
                        FROM employees e
@@ -209,10 +250,7 @@ async def _prepare_employee_resources(
                         }
                     )
 
-                profile_available = (
-                    row["profile_version_status"] == "published"
-                    and row["profile_status"] == "active"
-                )
+                profile_available = row["profile_version_status"] == "published" and row["profile_status"] == "active"
                 checks.append(
                     {
                         "check": "profile_version",
@@ -241,17 +279,19 @@ async def _prepare_employee_resources(
                 if not isinstance(binding, dict):
                     binding = {}
 
+                try:
+                    profile_capability_tags = json.loads(row["capability_tags_json"] or "[]")
+                except (TypeError, ValueError):
+                    profile_capability_tags = []
+                if not isinstance(profile_capability_tags, list):
+                    profile_capability_tags = []
+
                 profile_type = str(row["profile_type"] or "")
                 model_id = ""
                 adapter_type = ""
                 binding_available = True
                 if profile_type == "agent_cli":
-                    agent_value = str(
-                        binding.get("agent_cli")
-                        or binding.get("agent_key")
-                        or binding.get("adapter_type")
-                        or ""
-                    ).strip()
+                    agent_value = str(binding.get("agent_cli") or binding.get("agent_key") or binding.get("adapter_type") or "").strip()
                     if not agent_value:
                         binding_available = False
                     model_id = agent_value
@@ -299,12 +339,20 @@ async def _prepare_employee_resources(
                     "department_id": department_id,
                     "profile_version_id": row["base_profile_version_id"],
                     "binding": binding,
+                    "routing_policy_json": str(row["routing_policy_json"] or "{}"),
+                    "profile_type": profile_type,
+                    "capability_tags": tuple(
+                        str(value) for value in profile_capability_tags if isinstance(value, str)
+                    ),
+                    "_capability_checks": set(),
                     "adapter_type": adapter_type,
                     "model_id": model_id,
                     "available": employee_available,
                     "checks": checks,
                 }
+                _apply_capability_preflight(resources[employee_id], required_capability_tags)
                 all_available = all_available and employee_available
+                all_available = all_available and bool(resources[employee_id]["available"])
 
     return resources, all_available
 
@@ -478,9 +526,7 @@ async def confirm_and_dispatch(
     created_dept_tasks: list[str] = []
     created_emp_tasks: list[str] = []
     local_ref_to_dept_task: dict[str, str] = {}
-    availability_expires_at = (
-        datetime.now(UTC) + timedelta(minutes=5)
-    ).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    availability_expires_at = (datetime.now(UTC) + timedelta(minutes=5)).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     trace_id = _id()
 
@@ -637,12 +683,13 @@ async def confirm_and_dispatch(
                         "INSERT INTO employee_task_dispatch_specs"
                         " (employee_task_id, company_id, company_task_id,"
                         " department_task_id, employee_id, profile_version_id,"
-                        " catalog_release_id, runtime_binding_json,"
+                        " catalog_release_id, runtime_binding_json, routing_policy_json,"
+                        " required_capability_tags_json,"
                         " adapter_type, model_id, task_workspace_id,"
                         " company_revision_id, department_revision_id,"
                         " conversation_id, workspace_repository_root,"
                         " workspace_grant_id, created_at)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (
                             emp_task_id,
                             command.company_id,
@@ -652,6 +699,15 @@ async def confirm_and_dispatch(
                             profile_version_id,
                             catalog_release_id,
                             json.dumps(binding),
+                            resource["routing_policy_json"],
+                            json.dumps(
+                                [
+                                    str(value)
+                                    for value in dt_def.get("required_capability_tags", [])
+                                    if isinstance(value, str)
+                                ],
+                                separators=(",", ":"),
+                            ),
                             adapter_type,
                             model_id,
                             task_workspace_id,
@@ -682,11 +738,19 @@ async def confirm_and_dispatch(
                             profile_version_id=profile_version_id,
                             catalog_release_id=catalog_release_id,
                             runtime_binding_json=json.dumps(binding),
+                            routing_policy_json=resource["routing_policy_json"],
+                            routing_policy_sha256=_sha256(resource["routing_policy_json"]),
+                            profile_type=resource["profile_type"],
                             adapter_type=adapter_type,
                             model_id=model_id,
                             objective=objective,
                             availability_expires_at=availability_expires_at,
                             run_purpose="task_execution",
+                            required_capability_tags=tuple(
+                                str(value)
+                                for value in dt_def.get("required_capability_tags", [])
+                                if isinstance(value, str)
+                            ),
                             priority=0,
                             checks=resource["checks"],
                             now=now,
@@ -745,8 +809,7 @@ async def confirm_and_dispatch(
     for from_state, to_state in status_path:
         next_version = current_version + 1
         cursor = await db.execute(
-            "UPDATE company_tasks SET status=?, version=?, updated_at=?"
-            " WHERE id=? AND company_id=? AND status=? AND version=?",
+            "UPDATE company_tasks SET status=?, version=?, updated_at=? WHERE id=? AND company_id=? AND status=? AND version=?",
             (
                 to_state,
                 next_version,

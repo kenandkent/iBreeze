@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.clearExpiredHealth.response.v1","title":"RoutingClearExpiredHealthResponse","type":"object","additionalProperties":false,
+  "properties":{"deleted_count":{"type":"integer"},"completed_at":{"type":"string"}},"required":["deleted_count","completed_at"]
+}

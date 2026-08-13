@@ -192,8 +192,7 @@ async def _submit(
     """Simulate SubmitReviewHandler: create report + transition to submitted."""
     await _report(db, env, assignment, sha, verdict, issues)
     await db.execute(
-        "UPDATE review_assignments SET status='submitted', submitted_at=?"
-        " WHERE id=? AND status='assigned'",
+        "UPDATE review_assignments SET status='submitted', submitted_at=? WHERE id=? AND status='assigned'",
         (env["now"], str(assignment.id)),
     )
 
@@ -208,9 +207,7 @@ def _service() -> ReviewAggregationService:
 
 class TestVerdictUpsert:
     @pytest.mark.asyncio
-    async def test_two_submits_single_verdict_row_and_finalize(
-        self, db: Any, agg_env: dict[str, str]
-    ) -> None:
+    async def test_two_submits_single_verdict_row_and_finalize(self, db: Any, agg_env: dict[str, str]) -> None:
         env = agg_env
         sha = _sha256("v1")
         artifact_id = await _publish_artifact(db, env, sha)
@@ -223,8 +220,7 @@ class TestVerdictUpsert:
         await service.on_report_submitted(db, company_id=env["company_id"], assignment=bob)
         verdicts = await _rows(
             db,
-            "SELECT verdict, confidence, hard_veto_triggered, rerun_exhausted, score_json"
-            " FROM review_verdicts",
+            "SELECT verdict, confidence, hard_veto_triggered, rerun_exhausted, score_json FROM review_verdicts",
         )
         assert len(verdicts) == 1
         assert verdicts[0]["confidence"] == pytest.approx(0.5)
@@ -236,8 +232,7 @@ class TestVerdictUpsert:
         await service.on_report_submitted(db, company_id=env["company_id"], assignment=carol)
         verdicts = await _rows(
             db,
-            "SELECT verdict, confidence, hard_veto_triggered, rerun_exhausted, score_json"
-            " FROM review_verdicts",
+            "SELECT verdict, confidence, hard_veto_triggered, rerun_exhausted, score_json FROM review_verdicts",
         )
         assert len(verdicts) == 1  # upserted, not a second row
         assert verdicts[0]["verdict"] == "pass"
@@ -248,15 +243,12 @@ class TestVerdictUpsert:
         # Finalized: both reports credited, each reviewer got exactly one sample.
         scores = await _rows(
             db,
-            "SELECT report_id, credited, accuracy_contribution FROM review_report_scores"
-            " ORDER BY report_id",
+            "SELECT report_id, credited, accuracy_contribution FROM review_report_scores ORDER BY report_id",
         )
         assert len(scores) == 2
         assert all(row["credited"] == 1 for row in scores)
         assert all(row["accuracy_contribution"] == 1.0 for row in scores)
-        stats = await _rows(
-            db, "SELECT sample_count, accuracy FROM reviewer_stats ORDER BY reviewer_employee_id"
-        )
+        stats = await _rows(db, "SELECT sample_count, accuracy FROM reviewer_stats ORDER BY reviewer_employee_id")
         assert [(row["sample_count"], row["accuracy"]) for row in stats] == [(1, 0.3), (1, 0.3)]
 
     @pytest.mark.asyncio
@@ -297,18 +289,13 @@ class TestAutoRerun:
         bob = await _assignment(db, env, artifact_id, sha, env["bob_id"], 1)
         await _submit(db, env, bob, sha, "pass")
 
-        outcome = await _service().on_report_submitted(
-            db, company_id=env["company_id"], assignment=bob
-        )
+        outcome = await _service().on_report_submitted(db, company_id=env["company_id"], assignment=bob)
 
         assigns = await _rows(
             db,
-            "SELECT reviewer_employee_id, review_round, status FROM review_assignments"
-            " ORDER BY review_round",
+            "SELECT reviewer_employee_id, review_round, status FROM review_assignments ORDER BY review_round",
         )
-        assert [
-            (row["reviewer_employee_id"], row["review_round"], row["status"]) for row in assigns
-        ] == [
+        assert [(row["reviewer_employee_id"], row["review_round"], row["status"]) for row in assigns] == [
             (env["bob_id"], 1, "submitted"),
             (env["bob_id"], 2, "assigned"),
         ]
@@ -351,9 +338,7 @@ class TestAutoRerun:
         assert [(row["sample_count"], row["accuracy"]) for row in stats] == [(1, 0.3)]
 
     @pytest.mark.asyncio
-    async def test_same_reviewer_rerun_not_double_counted(
-        self, db: Any, agg_env: dict[str, str]
-    ) -> None:
+    async def test_same_reviewer_rerun_not_double_counted(self, db: Any, agg_env: dict[str, str]) -> None:
         """A lone reviewer re-reviewing must not fuse their own opinions twice.
 
         Without per-reviewer dedup, bob's round-1 + round-2 passes would fuse
@@ -401,18 +386,14 @@ class TestAutoRerun:
 
 class TestHardVeto:
     @pytest.mark.asyncio
-    async def test_needs_changes_blocks_and_skips_finalize(
-        self, db: Any, agg_env: dict[str, str]
-    ) -> None:
+    async def test_needs_changes_blocks_and_skips_finalize(self, db: Any, agg_env: dict[str, str]) -> None:
         env = agg_env
         sha = _sha256("v1")
         artifact_id = await _publish_artifact(db, env, sha)
         bob = await _assignment(db, env, artifact_id, sha, env["bob_id"], 1)
         await _submit(db, env, bob, sha, "needs_changes")
 
-        outcome = await _service().on_report_submitted(
-            db, company_id=env["company_id"], assignment=bob
-        )
+        outcome = await _service().on_report_submitted(db, company_id=env["company_id"], assignment=bob)
         assert outcome.fused.hard_veto
         assert outcome.fused.confidence == 1.0
         verdict = (await _rows(db, "SELECT verdict, hard_veto_triggered, score_json FROM review_verdicts"))[0]
@@ -423,9 +404,7 @@ class TestHardVeto:
         assert len(await _rows(db, "SELECT 1 FROM review_assignments")) == 1
 
     @pytest.mark.asyncio
-    async def test_open_blocker_issue_is_hard_veto_even_with_pass_verdict(
-        self, db: Any, agg_env: dict[str, str]
-    ) -> None:
+    async def test_open_blocker_issue_is_hard_veto_even_with_pass_verdict(self, db: Any, agg_env: dict[str, str]) -> None:
         env = agg_env
         sha = _sha256("v1")
         artifact_id = await _publish_artifact(db, env, sha)

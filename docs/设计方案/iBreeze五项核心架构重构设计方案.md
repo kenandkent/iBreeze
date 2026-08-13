@@ -517,9 +517,9 @@ SessionCancellationToken
 - heartbeat 每 5 秒一次，连续 3 次无响应判定断线。
 - 写帧使用单 writer task，禁止多个协程直接写 socket。
 
-### 6.5 反向 Runtime Process Control
+### 6.5 反向 Runtime Process Control 与 API Model Broker
 
-Sidecar 负责生成 Agent Adapter Invocation，Rust 负责验证并执行。Sidecar → Rust 固定允许：
+Sidecar 负责生成 Agent Adapter Invocation 和 API Model Provider 请求，Rust 负责验证并执行。反向方法集合以 `packages/rpc-schema/reverse-methods.v1.json` 为唯一事实来源；当前 Sidecar → Rust 固定允许：
 
 ```text
 runtime.process.start
@@ -528,7 +528,11 @@ runtime.process.status
 credential.http.start
 credential.http.cancel
 credential.probe
+credential.describe
 host.externalWrite.execute
+routing.snapshot.register
+routing.decision.register
+routing.snapshot.revoke
 ```
 
 Rust → Sidecar 固定允许：
@@ -677,18 +681,22 @@ ExecutionSnapshot 的不可变运行绑定一致，其他模块禁止直接插�
 ```json
 {
   "run_id": "uuid",
+  "execution_snapshot_id": "uuid",
+  "route_decision_id": "uuid",
+  "route_attempt_id": "uuid",
+  "candidate_id": "uuid",
+  "route_role": "single|proposer|aggregator|fallback",
   "credential_ref": "uuid",
+  "credential_secret_version": 1,
   "provider_release_id": "uuid",
   "model_binding_id": "uuid",
-  "protocol": "openai_responses|anthropic_messages|openai_chat_completions",
   "operation": "model_turn",
-  "relative_path": "/v1/responses",
   "request": {},
   "deadline_at": "RFC3339-Z"
 }
 ```
 
-`request` 必须通过协议专属 schema。禁止出现 `model` 之外的 URL、Authorization、api_key、token 或代理字段。
+除 `run_id`、Credential、已验签 Provider/Model binding、路由审计字段、operation、非认证请求体和 deadline 外，Sidecar 不得传入协议、URL、relative path、model、stream 或任何认证字段。五个路由审计字段必须全部提供或全部省略；部分字段直接返回 `ROUTING_SNAPSHOT_NOT_AUTHORIZED`，只有无路由字段的旧 fixed 兼容调用允许省略。Rust 必须根据当前 Execution Snapshot 和已验签 Catalog 解析 Provider protocol、固定 endpoint/path、model name、request defaults 和认证方式，再通过 Keychain 与 CONNECT Egress 执行请求。`request` 必须通过协议专属 schema；请求正文不得包含 URL、Authorization、api_key、token 或代理字段。
 
 初始 response：
 
@@ -738,6 +746,10 @@ Cancel 幂等；已终止请求返回原终态。
 ```
 
 `available` 当且仅当 `state=ready`。probe 必须使用同一 Catalog/Keychain/SSRF/timeout 路径，但不进入 `system.health`；401/403 为 `provider_rejected`，网络失败为 `provider_unreachable`，不得返回 Secret 或 Provider 原始错误正文。
+
+`credential.describe` 仅供 Sidecar 在发布 API Model Profile 前逐 Candidate 预检，request 固定为 `{credential_ref,provider_release_id}`，response 只允许包含 `credential_ref`、`provider_release_id`、`auth_type`、`state`、`metadata_version` 和 `active_secret_version`，不得包含 Secret、Secret hash、Keychain account 或 Header。Provider 不匹配、Credential 不存在或索引损坏必须返回稳定错误码。
+
+路由授权反向方法固定为：`routing.snapshot.register` 注册带原始规范化 Candidate v2 JSON 和 SHA-256 的 Execution Snapshot Lease；`routing.decision.register` 在每个 Decision 首个 Attempt 前登记本轮选择和角色；`routing.snapshot.revoke` 在 Run 结束时撤销该 Run 的 Lease。三者均必须校验 Run、Snapshot、Candidate、Role、Deadline 和幂等关系，不能改变业务 SQLite 状态。
 
 ### 7.3 Keychain 与凭据对象
 

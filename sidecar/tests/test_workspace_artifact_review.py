@@ -46,9 +46,7 @@ class TestArtifactService:
 
     @pytest.mark.asyncio
     async def test_create_artifact_deduplication(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "existing-id"})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "existing-id"})))
         result = await create_artifact(
             mock_db_session,
             "comp-1",
@@ -64,17 +62,13 @@ class TestArtifactService:
 
     @pytest.mark.asyncio
     async def test_get_artifact(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "art-1", "filename": "test.py"})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "art-1", "filename": "test.py"})))
         result = await get_artifact(mock_db_session, "comp-1", "art-1")
         assert result["id"] == "art-1"
 
     @pytest.mark.asyncio
     async def test_list_artifacts(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "art-1"}, {"id": "art-2"}])
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchall=AsyncMock(return_value=[{"id": "art-1"}, {"id": "art-2"}])))
         result = await list_artifacts(mock_db_session, "comp-1")
         assert len(result) == 2
 
@@ -157,9 +151,7 @@ class TestApprovalService:
 
     @pytest.mark.asyncio
     async def test_resolve_approval_approve(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "app-1", "status": "pending"})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "app-1", "status": "pending"})))
         mock_db_session.commit = AsyncMock()
         result = await resolve_approval(
             mock_db_session,
@@ -171,9 +163,7 @@ class TestApprovalService:
 
     @pytest.mark.asyncio
     async def test_resolve_approval_not_found(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value=None)
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value=None)))
         with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
             await resolve_approval(
                 mock_db_session,
@@ -184,17 +174,17 @@ class TestApprovalService:
 
     @pytest.mark.asyncio
     async def test_list_pending_approvals(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "app-1", "status": "pending"}])
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchall=AsyncMock(return_value=[{"id": "app-1", "status": "pending"}])))
         result = await list_pending_approvals(mock_db_session, "comp-1")
         assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_list_pending_approvals_with_type(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "app-1", "status": "pending", "approval_type": "external_write"}])
-        ))
+        mock_db_session.execute = AsyncMock(
+            return_value=MagicMock(
+                fetchall=AsyncMock(return_value=[{"id": "app-1", "status": "pending", "approval_type": "external_write"}])
+            )
+        )
         result = await list_pending_approvals(mock_db_session, "comp-1", approval_type="external_write")
         assert len(result) == 1
         assert result[0]["approval_type"] == "external_write"
@@ -208,9 +198,7 @@ class TestApprovalService:
 
     @pytest.mark.asyncio
     async def test_resolve_approval_deny(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "app-1", "status": "pending"})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "app-1", "status": "pending"})))
         mock_db_session.commit = AsyncMock()
         result = await resolve_approval(
             mock_db_session,
@@ -222,9 +210,7 @@ class TestApprovalService:
 
     @pytest.mark.asyncio
     async def test_resolve_approval_already_resolved(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "app-1", "status": "allowed"})
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "app-1", "status": "allowed"})))
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await resolve_approval(
                 mock_db_session,
@@ -241,6 +227,7 @@ class TestArtifactExtended:
     async def test_get_artifact_version_chain(self, mock_db_session):
         # Mock chain: art-1 -> art-2 -> None
         call_count = 0
+
         async def mock_execute(sql, params=()):
             nonlocal call_count
             call_count += 1
@@ -256,21 +243,16 @@ class TestArtifactExtended:
 
     @pytest.mark.asyncio
     async def test_list_artifacts_with_filters(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "art-1", "artifact_type": "code"}])
-        ))
-        result = await list_artifacts(
-            mock_db_session,
-            "comp-1",
-            company_task_id="task-1",
-            artifact_type="code",
-            limit=10
+        mock_db_session.execute = AsyncMock(
+            return_value=MagicMock(fetchall=AsyncMock(return_value=[{"id": "art-1", "artifact_type": "code"}]))
         )
+        result = await list_artifacts(mock_db_session, "comp-1", company_task_id="task-1", artifact_type="code", limit=10)
         assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_create_artifact_error_propagates(self, mock_db_session):
         call_count = 0
+
         async def mock_execute(sql, params=()):
             nonlocal call_count
             call_count += 1
@@ -296,9 +278,7 @@ class TestReviewExtended:
 
     @pytest.mark.asyncio
     async def test_submit_review_report_not_found(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value=None)
-        ))
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchone=AsyncMock(return_value=None)))
         with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
             await submit_review_report(
                 mock_db_session,
@@ -314,9 +294,9 @@ class TestReviewExtended:
 
     @pytest.mark.asyncio
     async def test_submit_review_report_invalid_state(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchone=AsyncMock(return_value={"id": "asgn-1", "status": "completed"})
-        ))
+        mock_db_session.execute = AsyncMock(
+            return_value=MagicMock(fetchone=AsyncMock(return_value={"id": "asgn-1", "status": "completed"}))
+        )
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await submit_review_report(
                 mock_db_session,
@@ -332,22 +312,14 @@ class TestReviewExtended:
 
     @pytest.mark.asyncio
     async def test_list_review_issues(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "issue-1", "severity": "high"}])
-        ))
+        mock_db_session.execute = AsyncMock(
+            return_value=MagicMock(fetchall=AsyncMock(return_value=[{"id": "issue-1", "severity": "high"}]))
+        )
         result = await list_review_issues(mock_db_session, "comp-1")
         assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_list_review_issues_with_filters(self, mock_db_session):
-        mock_db_session.execute = AsyncMock(return_value=MagicMock(
-            fetchall=AsyncMock(return_value=[{"id": "issue-1", "status": "open"}])
-        ))
-        result = await list_review_issues(
-            mock_db_session,
-            "comp-1",
-            report_id="rep-1",
-            status="open",
-            limit=5
-        )
+        mock_db_session.execute = AsyncMock(return_value=MagicMock(fetchall=AsyncMock(return_value=[{"id": "issue-1", "status": "open"}])))
+        result = await list_review_issues(mock_db_session, "comp-1", report_id="rep-1", status="open", limit=5)
         assert len(result) == 1

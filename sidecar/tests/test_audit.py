@@ -37,9 +37,7 @@ async def test_audit_is_persistent_scoped_and_redacted(
     assert detail["password"]["redacted"] is True
     assert "never-store-this" not in audit.detail_json
     assert detail["nested"]["token"]["redacted"] is True
-    assert [row.id for row in await list_audit(db, company_id=None)] == [
-        audit.id
-    ]
+    assert [row.id for row in await list_audit(db, company_id=None)] == [audit.id]
     with pytest.raises(aiosqlite.IntegrityError):
         await db.execute(
             "UPDATE audit_logs SET action='tampered' WHERE id=?",

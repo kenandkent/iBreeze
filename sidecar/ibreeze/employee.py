@@ -617,9 +617,7 @@ async def update_employee_status(
     employee = await get_employee(db, company_id, employee_id)
     if employee.workflow_role == WorkflowRole.GENERAL_MANAGER:
         raise ValueError("STATE_TRANSITION_INVALID")
-    if status in {EmployeeStatus.INACTIVE, EmployeeStatus.UNAVAILABLE} and (
-        await _has_active_assignment(db, employee_id)
-    ):
+    if status in {EmployeeStatus.INACTIVE, EmployeeStatus.UNAVAILABLE} and (await _has_active_assignment(db, employee_id)):
         raise ValueError("EMPLOYEE_HAS_ACTIVE_ASSIGNMENT")
     cursor = await db.execute(
         """UPDATE employees SET status=?,updated_at=?,version=version+1

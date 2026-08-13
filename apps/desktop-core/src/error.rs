@@ -19,6 +19,9 @@ pub enum AppError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
     #[error("Network error: {0}")]
     Network(String),
 
@@ -61,6 +64,7 @@ impl Serialize for AppError {
             AppError::Unauthorized(msg) => ("UNAUTHORIZED", msg.clone()),
             AppError::Validation(msg) => ("VALIDATION_ERROR", msg.clone()),
             AppError::NotFound(msg) => ("NOT_FOUND", msg.clone()),
+            AppError::Conflict(msg) => ("CONFLICT", msg.clone()),
             AppError::Network(msg) => ("NETWORK_ERROR", msg.clone()),
             AppError::Storage(msg) => ("STORAGE_ERROR", msg.clone()),
             AppError::Security(msg) => ("SECURITY_ERROR", msg.clone()),

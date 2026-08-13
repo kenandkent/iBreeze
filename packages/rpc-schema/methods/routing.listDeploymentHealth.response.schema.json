@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.listDeploymentHealth.response.v1","title":"RoutingListDeploymentHealthResponse","type":"object","additionalProperties":false,
+  "properties":{"items":{"type":"array"},"next_cursor":{"type":["string","null"]}},"required":["items","next_cursor"]
+}

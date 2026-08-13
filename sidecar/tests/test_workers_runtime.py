@@ -97,9 +97,7 @@ class TestRuntimeWorkerWorkException:
         wq.submit = AsyncMock(side_effect=RuntimeError("db down"))
         w = RuntimeWorker(write_queue=wq)
         await w.work()
-        mock_logger.exception.assert_called_once_with(
-            "RuntimeWorker dispatch failed"
-        )
+        mock_logger.exception.assert_called_once_with("RuntimeWorker dispatch failed")
 
     @patch("ibreeze.workers.runtime.logger")
     async def test_does_not_re_raise(self, mock_logger):

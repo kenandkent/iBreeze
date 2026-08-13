@@ -94,55 +94,31 @@ EVENT_REGISTRY: dict[DomainEventType, DomainEventSpec] = {
     DomainEventType.COMPANY_UPDATED: DomainEventSpec(DomainEventType.COMPANY_UPDATED, "company", "公司信息更新"),
     DomainEventType.COMPANY_ARCHIVED: DomainEventSpec(DomainEventType.COMPANY_ARCHIVED, "company", "公司归档"),
     DomainEventType.DEPARTMENT_CREATED: DomainEventSpec(DomainEventType.DEPARTMENT_CREATED, "department", "部门创建"),
-    DomainEventType.DEPARTMENT_UPDATED: DomainEventSpec(
-        DomainEventType.DEPARTMENT_UPDATED, "department", "部门信息更新"
-    ),
-    DomainEventType.DEPARTMENT_LEADER_CHANGED: DomainEventSpec(
-        DomainEventType.DEPARTMENT_LEADER_CHANGED, "department", "部门负责人变更"
-    ),
+    DomainEventType.DEPARTMENT_UPDATED: DomainEventSpec(DomainEventType.DEPARTMENT_UPDATED, "department", "部门信息更新"),
+    DomainEventType.DEPARTMENT_LEADER_CHANGED: DomainEventSpec(DomainEventType.DEPARTMENT_LEADER_CHANGED, "department", "部门负责人变更"),
     DomainEventType.EMPLOYEE_CREATED: DomainEventSpec(DomainEventType.EMPLOYEE_CREATED, "employee", "职员创建"),
     DomainEventType.EMPLOYEE_UPDATED: DomainEventSpec(DomainEventType.EMPLOYEE_UPDATED, "employee", "职员信息更新"),
-    DomainEventType.EMPLOYEE_STATUS_CHANGED: DomainEventSpec(
-        DomainEventType.EMPLOYEE_STATUS_CHANGED, "employee", "职员状态变更"
-    ),
+    DomainEventType.EMPLOYEE_STATUS_CHANGED: DomainEventSpec(DomainEventType.EMPLOYEE_STATUS_CHANGED, "employee", "职员状态变更"),
     DomainEventType.EMPLOYEE_TRANSFERRED: DomainEventSpec(DomainEventType.EMPLOYEE_TRANSFERRED, "employee", "职员调岗"),
     # ── CompanyTask ────────────────────────────────────────────────────
-    DomainEventType.COMPANY_TASK_CREATED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_CREATED, "company_task", "公司任务创建"
-    ),
+    DomainEventType.COMPANY_TASK_CREATED: DomainEventSpec(DomainEventType.COMPANY_TASK_CREATED, "company_task", "公司任务创建"),
     DomainEventType.COMPANY_TASK_REVISION_REQUESTED: DomainEventSpec(
         DomainEventType.COMPANY_TASK_REVISION_REQUESTED, "company_task", "公司任务修订请求"
     ),
     DomainEventType.COMPANY_TASK_ANALYSIS_REQUESTED: DomainEventSpec(
         DomainEventType.COMPANY_TASK_ANALYSIS_REQUESTED, "company_task", "公司任务分析请求"
     ),
-    DomainEventType.COMPANY_TASK_ANALYZED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_ANALYZED, "company_task", "公司任务分析完成"
-    ),
+    DomainEventType.COMPANY_TASK_ANALYZED: DomainEventSpec(DomainEventType.COMPANY_TASK_ANALYZED, "company_task", "公司任务分析完成"),
     DomainEventType.COMPANY_TASK_AWAITING_CONFIRMATION: DomainEventSpec(
         DomainEventType.COMPANY_TASK_AWAITING_CONFIRMATION, "company_task", "公司任务等待确认"
     ),
-    DomainEventType.COMPANY_TASK_APPROVED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_APPROVED, "company_task", "公司任务已批准"
-    ),
-    DomainEventType.COMPANY_TASK_DISPATCHED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_DISPATCHED, "company_task", "公司任务已分派"
-    ),
-    DomainEventType.COMPANY_TASK_COMPLETED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_COMPLETED, "company_task", "公司任务已完成"
-    ),
-    DomainEventType.COMPANY_TASK_CANCELLED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_CANCELLED, "company_task", "公司任务已取消"
-    ),
-    DomainEventType.COMPANY_TASK_FAILED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_FAILED, "company_task", "公司任务已失败"
-    ),
-    DomainEventType.COMPANY_TASK_PAUSED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_PAUSED, "company_task", "公司任务已暂停"
-    ),
-    DomainEventType.COMPANY_TASK_RESUMED: DomainEventSpec(
-        DomainEventType.COMPANY_TASK_RESUMED, "company_task", "公司任务已恢复"
-    ),
+    DomainEventType.COMPANY_TASK_APPROVED: DomainEventSpec(DomainEventType.COMPANY_TASK_APPROVED, "company_task", "公司任务已批准"),
+    DomainEventType.COMPANY_TASK_DISPATCHED: DomainEventSpec(DomainEventType.COMPANY_TASK_DISPATCHED, "company_task", "公司任务已分派"),
+    DomainEventType.COMPANY_TASK_COMPLETED: DomainEventSpec(DomainEventType.COMPANY_TASK_COMPLETED, "company_task", "公司任务已完成"),
+    DomainEventType.COMPANY_TASK_CANCELLED: DomainEventSpec(DomainEventType.COMPANY_TASK_CANCELLED, "company_task", "公司任务已取消"),
+    DomainEventType.COMPANY_TASK_FAILED: DomainEventSpec(DomainEventType.COMPANY_TASK_FAILED, "company_task", "公司任务已失败"),
+    DomainEventType.COMPANY_TASK_PAUSED: DomainEventSpec(DomainEventType.COMPANY_TASK_PAUSED, "company_task", "公司任务已暂停"),
+    DomainEventType.COMPANY_TASK_RESUMED: DomainEventSpec(DomainEventType.COMPANY_TASK_RESUMED, "company_task", "公司任务已恢复"),
     DomainEventType.CONVERSATION_USER_MESSAGE_SUBMITTED: DomainEventSpec(
         DomainEventType.CONVERSATION_USER_MESSAGE_SUBMITTED, "conversation", "用户消息提交"
     ),
@@ -151,24 +127,16 @@ EVENT_REGISTRY: dict[DomainEventType, DomainEventSpec] = {
     ),
     # ── Plan ───────────────────────────────────────────────────────────
     DomainEventType.PLAN_GENERATED: DomainEventSpec(DomainEventType.PLAN_GENERATED, "company_plan", "计划已生成"),
-    DomainEventType.PLAN_AWAITING_CONFIRMATION: DomainEventSpec(
-        DomainEventType.PLAN_AWAITING_CONFIRMATION, "company_plan", "计划等待确认"
-    ),
+    DomainEventType.PLAN_AWAITING_CONFIRMATION: DomainEventSpec(DomainEventType.PLAN_AWAITING_CONFIRMATION, "company_plan", "计划等待确认"),
     DomainEventType.PLAN_APPROVED: DomainEventSpec(DomainEventType.PLAN_APPROVED, "company_plan", "计划已批准"),
     DomainEventType.PLAN_REJECTED: DomainEventSpec(DomainEventType.PLAN_REJECTED, "company_plan", "计划已拒绝"),
     DomainEventType.PLAN_SUPERSEDED: DomainEventSpec(DomainEventType.PLAN_SUPERSEDED, "company_plan", "计划已替代"),
     # ── Review ─────────────────────────────────────────────────────────
-    DomainEventType.REVIEW_ASSIGNMENT_CREATED: DomainEventSpec(
-        DomainEventType.REVIEW_ASSIGNMENT_CREATED, "review", "审查分配已创建"
-    ),
+    DomainEventType.REVIEW_ASSIGNMENT_CREATED: DomainEventSpec(DomainEventType.REVIEW_ASSIGNMENT_CREATED, "review", "审查分配已创建"),
     DomainEventType.REVIEW_STARTED: DomainEventSpec(DomainEventType.REVIEW_STARTED, "review", "审查已开始"),
     DomainEventType.REVIEW_SUBMITTED: DomainEventSpec(DomainEventType.REVIEW_SUBMITTED, "review", "审查已提交"),
-    DomainEventType.REVIEW_ISSUE_CREATED: DomainEventSpec(
-        DomainEventType.REVIEW_ISSUE_CREATED, "review", "审查问题已创建"
-    ),
-    DomainEventType.REVIEW_ISSUE_RESOLVED: DomainEventSpec(
-        DomainEventType.REVIEW_ISSUE_RESOLVED, "review", "审查问题已解决"
-    ),
+    DomainEventType.REVIEW_ISSUE_CREATED: DomainEventSpec(DomainEventType.REVIEW_ISSUE_CREATED, "review", "审查问题已创建"),
+    DomainEventType.REVIEW_ISSUE_RESOLVED: DomainEventSpec(DomainEventType.REVIEW_ISSUE_RESOLVED, "review", "审查问题已解决"),
     DomainEventType.RUN_PROBING: DomainEventSpec(DomainEventType.RUN_PROBING, "agent_run", "运行探测"),
     DomainEventType.RUN_STARTED: DomainEventSpec(DomainEventType.RUN_STARTED, "agent_run", "运行开始"),
     DomainEventType.RUN_COMPLETED: DomainEventSpec(DomainEventType.RUN_COMPLETED, "agent_run", "运行完成"),

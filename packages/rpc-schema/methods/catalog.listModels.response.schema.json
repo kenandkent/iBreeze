@@ -35,7 +35,23 @@
             "items": {
               "type": "string"
             }
-          }
+          },
+          "routing_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
+          "quality_prior": { "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.0001 },
+          "tool_reliability_prior": { "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.0001 },
+          "latency_prior_ms": { "type": "integer", "minimum": 1 },
+          "model_family": { "type": "string", "minLength": 1 },
+          "model_vendor": { "type": "string", "minLength": 1 },
+          "architecture_class": { "enum": ["dense", "moe", "hybrid", "unknown"] },
+          "supports_reasoning": { "type": "boolean" },
+          "reasoning_levels": {
+            "type": "array",
+            "items": { "enum": ["low", "medium", "high"] },
+            "uniqueItems": true
+          },
+          "input_price_microusd_per_million": { "type": "integer", "minimum": 0 },
+          "output_price_microusd_per_million": { "type": "integer", "minimum": 0 },
+          "routing_enabled": { "type": "boolean" }
         },
         "required": [
           "model_id",

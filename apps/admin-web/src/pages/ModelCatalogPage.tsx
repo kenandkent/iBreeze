@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, message } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Popconfirm, Checkbox, Select, message } from 'antd';
 import { logger } from '../utils/logger';
 import { formatNumber } from '../utils/formatters';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
@@ -28,6 +28,18 @@ export default function ModelCatalogPage() {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
+    form.setFieldsValue({
+      routing_tier: 1,
+      quality_prior: 0.5,
+      tool_reliability_prior: 0.5,
+      latency_prior_ms: 3000,
+      architecture_class: 'unknown',
+      supports_reasoning: false,
+      reasoning_levels: [],
+      input_price_microusd_per_million: 0,
+      output_price_microusd_per_million: 0,
+      routing_enabled: false,
+    });
     setModalOpen(true);
   };
 
@@ -94,6 +106,18 @@ export default function ModelCatalogPage() {
           {record.supports_tools && <Tag color="blue">Tools</Tag>}
           {record.supports_streaming && <Tag color="cyan">Streaming</Tag>}
           {record.supports_vision && <Tag color="purple">Vision</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: '路由元数据', key: 'routing',
+      render: (_: unknown, record: ModelCatalogItem) => (
+        <Space size="small">
+          <Tag>Tier {record.routing_tier}</Tag>
+          <Tag color={record.routing_enabled ? 'green' : 'default'}>
+            {record.routing_enabled ? '智能路由' : '固定路由'}
+          </Tag>
+          <span>{record.model_vendor}/{record.model_family}</span>
         </Space>
       ),
     },
@@ -169,6 +193,59 @@ export default function ModelCatalogPage() {
           </Form.Item>
           <Form.Item name="supports_vision" valuePropName="checked">
             <Checkbox>支持视觉能力</Checkbox>
+          </Form.Item>
+          <Form.Item name="model_family" label="模型家族" rules={[{ required: true, message: '请输入模型家族' }]}>
+            <Input placeholder="例如 gpt、claude、qwen" />
+          </Form.Item>
+          <Form.Item name="model_vendor" label="模型厂商" rules={[{ required: true, message: '请输入模型厂商' }]}>
+            <Input placeholder="例如 openai、anthropic" />
+          </Form.Item>
+          <Form.Item name="routing_tier" label="路由等级" rules={[{ required: true, message: '请选择路由等级' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} max={3} precision={0} />
+          </Form.Item>
+          <Form.Item name="quality_prior" label="质量先验" rules={[{ required: true, message: '请输入质量先验' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} max={1} step={0.0001} precision={4} />
+          </Form.Item>
+          <Form.Item name="tool_reliability_prior" label="工具可靠性先验" rules={[{ required: true, message: '请输入工具可靠性先验' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} max={1} step={0.0001} precision={4} />
+          </Form.Item>
+          <Form.Item name="latency_prior_ms" label="延迟先验（毫秒）" rules={[{ required: true, message: '请输入延迟先验' }]}>
+            <InputNumber style={{ width: '100%' }} min={1} precision={0} />
+          </Form.Item>
+          <Form.Item name="architecture_class" label="架构类型" rules={[{ required: true, message: '请选择架构类型' }]}>
+            <Select options={[
+              { value: 'dense', label: 'Dense' },
+              { value: 'moe', label: 'MoE' },
+              { value: 'hybrid', label: 'Hybrid' },
+              { value: 'unknown', label: 'Unknown' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="supports_reasoning" valuePropName="checked">
+            <Checkbox>支持推理</Checkbox>
+          </Form.Item>
+          <Form.Item noStyle dependencies={['supports_reasoning']}>
+            {({ getFieldValue }) => (
+              <Form.Item name="reasoning_levels" label="推理等级">
+                <Select
+                  mode="multiple"
+                  disabled={!getFieldValue('supports_reasoning')}
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' },
+                  ]}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
+          <Form.Item name="input_price_microusd_per_million" label="输入价格（微美元/百万 token）" rules={[{ required: true, message: '请输入输入价格' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} precision={0} />
+          </Form.Item>
+          <Form.Item name="output_price_microusd_per_million" label="输出价格（微美元/百万 token）" rules={[{ required: true, message: '请输入输出价格' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} precision={0} />
+          </Form.Item>
+          <Form.Item name="routing_enabled" valuePropName="checked">
+            <Checkbox>启用智能路由候选</Checkbox>
           </Form.Item>
         </Form>
       </Modal>

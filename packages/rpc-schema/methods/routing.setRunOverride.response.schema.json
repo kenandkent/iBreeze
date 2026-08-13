@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.setRunOverride.response.v1","title":"RoutingSetRunOverrideResponse","type":"object","additionalProperties":false,
+  "properties":{"run_id":{"type":"string"},"override_mode":{"type":["string","null"]},"version":{"type":"integer"},"updated_at":{"type":"string"}},"required":["run_id","override_mode","version","updated_at"]
+}

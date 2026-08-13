@@ -25,11 +25,20 @@ _SENSITIVE_KEYS = frozenset(
         "cookie",
         "secret",
         "credential",
+        "credential_ref",
         "access_token",
         "refresh_token",
         "private_key",
         "jwt",
         "bearer",
+        "prompt",
+        "candidate",
+        "candidate_content",
+        "aggregator_input",
+        "model_output",
+        "tool_result",
+        "request_body",
+        "error_body",
     }
 )
 

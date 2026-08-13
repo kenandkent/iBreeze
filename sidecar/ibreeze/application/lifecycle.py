@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -63,7 +64,9 @@ from ibreeze.persistence.migrator import prepare
 from ibreeze.persistence.profile import PreparedProfileDatabase
 from ibreeze.persistence.unit_of_work import UnitOfWork
 from ibreeze.persistence.write_queue import WriteQueue
+from ibreeze.routing.config import startup_config
 from ibreeze.rpc.dispatcher import Dispatcher, ReverseMethodTable
+from ibreeze.runtime.recovery import reconcile_startup_state
 from ibreeze.runtime.transport import set_reverse_rpc_session
 from ibreeze.workers.supervisor import WorkerSupervisor
 
@@ -115,9 +118,7 @@ def _build_command(command_cls: type, params: dict[str, Any]) -> Any:
                     actual=i["actual"],
                     evidence_refs=tuple(_dict_to_uuid(e) for e in i.get("evidence_refs", [])),
                     suggested_fix=i["suggested_fix"],
-                    assignee_employee_id=_dict_to_uuid(i["assignee_employee_id"])
-                    if i.get("assignee_employee_id")
-                    else None,
+                    assignee_employee_id=_dict_to_uuid(i["assignee_employee_id"]) if i.get("assignee_employee_id") else None,
                 )
                 for i in val
             )
@@ -135,7 +136,9 @@ def _handler(handler: Any, command_cls: type, write_queue: WriteQueue | None = N
         trace_id = getattr(context, "trace_id", UUID(int=0))
         deadline = getattr(context, "deadline_at", None) or (datetime.now(UTC) + timedelta(seconds=30))
         return await write_queue.submit(
-            command_name=command_cls.__name__, trace_id=trace_id, deadline_at=deadline,
+            command_name=command_cls.__name__,
+            trace_id=trace_id,
+            deadline_at=deadline,
             execute=lambda _conn: handler.handle(context, command),
         )
 
@@ -268,6 +271,11 @@ class ApplicationLifecycle:
         return self._command_bus
 
     async def start(self) -> None:
+        # Capture deployment routing configuration before any RPC, worker, or
+        # run can be created.  The value is process-scoped and must not be
+        # re-read from the environment during an active Sidecar lifetime.
+        routing_rollout = startup_config()
+        logger.info("lifecycle: routing rollout stage=%s", routing_rollout.stage)
         logger.info("lifecycle: acquire profile file lock")
         self._profile_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._profile_path.parent.chmod(0o700)
@@ -307,6 +315,11 @@ class ApplicationLifecycle:
         await self._ensure_profile_identity()
         self._phase = LifecyclePhase.IDENTITY_VERIFIED
 
+        # Reconcile all state left by a previous process before workers or RPC
+        # can accept a new Run.  The callback executes inside the sole
+        # WriteQueue transaction; no routing row is replayed automatically.
+        await self._reconcile_startup_state()
+
         logger.info("lifecycle: prepare rpc dispatcher")
 
         logger.info("lifecycle: register core system handlers")
@@ -319,8 +332,13 @@ class ApplicationLifecycle:
         if registered:
             verify_sidecar_registry(self._dispatcher)
         for command_name in (
-            "StartEmployeeTask", "EvaluateEmployeeSubmission", "EvaluateEmployeeAcceptance", "EvaluateAffectedTask",
-            "EvaluateDepartmentReadiness", "EvaluateCompanyReadiness", "AdvanceEmployeeTaskGraph",
+            "StartEmployeeTask",
+            "EvaluateEmployeeSubmission",
+            "EvaluateEmployeeAcceptance",
+            "EvaluateAffectedTask",
+            "EvaluateDepartmentReadiness",
+            "EvaluateCompanyReadiness",
+            "AdvanceEmployeeTaskGraph",
         ):
             self._command_bus.register(
                 command_name,
@@ -340,9 +358,27 @@ class ApplicationLifecycle:
         logger.info("lifecycle: handshake ready")
         self._phase = LifecyclePhase.HANDSHAKE_READY
 
-    def _internal_command_handler(
-        self, command_name: str
-    ) -> Callable[[dict[str, Any], Any | None], Awaitable[Any]]:
+    async def _reconcile_startup_state(self) -> None:
+        write_queue = self._write_queue
+        submit = getattr(write_queue, "submit", None)
+        if not callable(submit):
+            return
+
+        result = submit(
+            command_name="runtime.startup_recovery",
+            trace_id=uuid4(),
+            deadline_at=datetime.now(UTC) + timedelta(seconds=30),
+            execute=reconcile_startup_state,
+        )
+        # Lightweight lifecycle mocks used by unit tests may expose a regular
+        # MagicMock instead of an async WriteQueue.  Production always returns
+        # an awaitable; accepting the mock keeps the startup ordering testable
+        # without weakening the real transaction boundary.
+        if inspect.isawaitable(result):
+            summary = await result
+            logger.info("lifecycle: startup recovery summary=%s", summary)
+
+    def _internal_command_handler(self, command_name: str) -> Callable[[dict[str, Any], Any | None], Awaitable[Any]]:
         async def handler(payload: dict[str, Any], connection: Any | None = None) -> Any:
             return await self._evaluate_internal_command(command_name, payload, connection)
 
@@ -363,8 +399,7 @@ class ApplicationLifecycle:
         """
         if (
             self._employee_start_handler is None
-            or
-            self._employee_submit_handler is None
+            or self._employee_submit_handler is None
             or self._employee_accept_handler is None
             or self._department_complete_handler is None
             or self._company_complete_handler is None
@@ -638,10 +673,7 @@ class ApplicationLifecycle:
 
     async def _ensure_profile_identity_in_transaction(self, conn: aiosqlite.Connection) -> None:
         """Read and update the profile identity inside the single write transaction."""
-        cursor = await conn.execute(
-            "SELECT id, schema_epoch, backend_origin, app_user_id, "
-            "masked_identifier, device_id FROM local_profile"
-        )
+        cursor = await conn.execute("SELECT id, schema_epoch, backend_origin, app_user_id, masked_identifier, device_id FROM local_profile")
         row = await cursor.fetchone()
         if row is None:
             if self._profile_mode != "online":

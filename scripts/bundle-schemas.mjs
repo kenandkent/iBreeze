@@ -25,11 +25,14 @@ function collectSchemas(dir) {
   return files;
 }
 
-// Build $id -> file path map
+// Build $id -> file path map. RPC payloads may reference the canonical
+// routing contract under packages/contracts; include that directory in the
+// lookup without copying its files into the RPC output tree.
 const allFiles = collectSchemas(resolve(inputDir));
+const canonicalContractFiles = collectSchemas(resolve(inputDir, "../contracts"));
 const idToFile = new Map();
 
-for (const file of allFiles) {
+for (const file of [...allFiles, ...canonicalContractFiles]) {
   try {
     const schema = JSON.parse(readFileSync(file, "utf-8"));
     if (schema.$id) {
@@ -50,7 +53,15 @@ function dereference(schema, visited = new Set()) {
     if (key === "$ref" && typeof copy[key] === "string") {
       const ref = copy[key];
       if (idToFile.has(ref)) {
-        const target = JSON.parse(readFileSync(idToFile.get(ref), "utf-8"));
+        let target = JSON.parse(readFileSync(idToFile.get(ref), "utf-8"));
+        // Follow local alias schemas (for example an RPC URI that aliases a
+        // canonical contract URI) before merging, so generated consumers do
+        // not retain a fetchable external $ref.
+        const seenRefs = new Set([ref]);
+        while (typeof target.$ref === "string" && idToFile.has(target.$ref) && !seenRefs.has(target.$ref)) {
+          seenRefs.add(target.$ref);
+          target = JSON.parse(readFileSync(idToFile.get(target.$ref), "utf-8"));
+        }
         delete copy.$ref;
         // Merge target into copy, preserving copy's own properties
         for (const k of Object.keys(target)) {

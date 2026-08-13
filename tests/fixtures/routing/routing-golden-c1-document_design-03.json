@@ -1,0 +1,6 @@
+{
+  "category": "document_design",
+  "input": "脱敏路由验收输入 routing-golden-c1-document_design-03：验证 document_design 的确定性选择、故障恢复和审计关联。",
+  "task_id": "routing-golden-c1-document_design-03",
+  "tier": "C1"
+}

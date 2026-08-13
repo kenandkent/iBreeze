@@ -24,6 +24,63 @@ from ibreeze.runtime.process_supervisor import get_supervisor
 logger = logging.getLogger("ibreeze.run_executor")
 
 _TERMINAL_RUN = {"succeeded", "cancelled", "timed_out", "failed", "lost"}
+_RESOURCE_WAIT_FAILURES = frozenset(
+    {
+        "MODEL_CAPABILITY_UNAVAILABLE",
+        "ROUTING_HEALTH_UNAVAILABLE",
+        "CREDENTIAL_MISSING",
+        "CREDENTIAL_NOT_READY",
+    }
+)
+
+
+def _resource_wait_failure_code(error: BaseException) -> str | None:
+    """Return a resumable resource error code, if the failure is transient."""
+    code = str(error)
+    return code if code in _RESOURCE_WAIT_FAILURES else None
+
+
+async def _project_tool_outcomes(
+    *,
+    run_id: str,
+    company_id: str,
+    checkpoints: list[Any],
+    read_pool: Any | None,
+    write_queue: Any | None,
+) -> None:
+    """Project tool verifier results without persisting tool arguments/results."""
+    if not checkpoints or read_pool is None or write_queue is None:
+        return
+    from ibreeze.routing.outcomes import RouteOutcomeProjector, stable_tool_source_id
+
+    for checkpoint in checkpoints:
+        decision = await read_pool.query_one(
+            "SELECT id FROM route_decisions WHERE company_id=? AND run_id=? AND turn_index=?",
+            (company_id, run_id, int(checkpoint.turn_number)),
+        )
+        if decision is None:
+            continue
+        result = checkpoint.result
+        rejected = not checkpoint.approved or (isinstance(result, dict) and isinstance(result.get("error"), str))
+        event = "tool_rejected" if rejected else "tool_verified"
+        source_id = stable_tool_source_id(run_id, checkpoint.turn_number, checkpoint.tool_call_id)
+
+        async def persist(db: Any, *, decision_id: str = str(decision["id"]), event_name: str = event, source: str = source_id) -> None:
+            await RouteOutcomeProjector().append(
+                db,
+                route_decision_id=decision_id,
+                company_id=company_id,
+                outcome_type="tool_result",
+                source_id=source,
+                event=event_name,
+            )
+
+        await write_queue.submit(
+            "routing.outcome.tool_result",
+            uuid4(),
+            _deadline(25),
+            persist,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,9 +188,7 @@ class RuntimeExecutionService:
                 employee_task_id=(str(row["employee_task_id"]) if row["employee_task_id"] else None),
             )
 
-        result = await self._write_queue.submit(
-            "runtime.claim_next", uuid4(), _deadline(25), claim
-        )
+        result = await self._write_queue.submit("runtime.claim_next", uuid4(), _deadline(25), claim)
         return cast(ClaimedRun | None, result)
 
     async def _execute_claimed(
@@ -162,9 +217,7 @@ class RuntimeExecutionService:
                 return
 
             if run["status"] == "queued":
-                if not await self._transition(
-                    claimed, "queued", "probing", run_version, {"adapter_type": adapter_type}
-                ):
+                if not await self._transition(claimed, "queued", "probing", run_version, {"adapter_type": adapter_type}):
                     return
                 run_version += 1
                 if not await self._transition(claimed, "probing", "starting", run_version, {}):
@@ -199,6 +252,9 @@ class RuntimeExecutionService:
                     claimed.run_id,
                     spec,
                     snapshot_data=snapshot,
+                    read_pool=self._read_pool,
+                    write_queue=self._write_queue,
+                    company_id=claimed.company_id,
                 )
             else:
                 await self._fail_claimed(claimed, "UNKNOWN_ADAPTER_TYPE")
@@ -218,6 +274,11 @@ class RuntimeExecutionService:
                 # never turn an intentional cancellation into run.failed.
                 logger.info("API Model run %s cancelled", claimed.run_id)
                 return
+            resource_code = _resource_wait_failure_code(exc)
+            if resource_code is not None:
+                logger.warning("run %s is waiting for resource: %s", claimed.run_id, resource_code)
+                await self._wait_resource_claimed(claimed, resource_code)
+                return
             logger.exception("run %s failed in RuntimeWorker", claimed.run_id)
             await self._fail_claimed(claimed, "EXECUTION_ERROR")
         finally:
@@ -227,15 +288,22 @@ class RuntimeExecutionService:
 
     async def _load_snapshot(self, company_id: str, snapshot_id: str) -> dict[str, Any]:
         row = await self._read_pool.query_one(
-            """SELECT es.content_sha256, es.runtime_binding_json,
+            """SELECT es.id, es.snapshot_purpose, es.content_sha256, es.runtime_binding_json,
+                      es.routing_policy_json, es.routing_policy_sha256,
+                      es.routing_classifier_version, es.candidate_bindings_json,
+                      es.candidate_bindings_sha256,
                       es.workspace_policy_json, tw.repository_root,
                       tw.workspace_grant_id,
-                      bpv.system_prompt, bpv.tool_policy_json
+                          bpv.system_prompt, bpv.tool_policy_json,
+                          bpv.timeout_seconds,
+                          ar.started_at AS run_started_at
                FROM execution_snapshots es
                LEFT JOIN task_workspaces tw
                  ON tw.id=es.task_workspace_id AND tw.company_id=es.company_id
                LEFT JOIN employee_base_profile_versions bpv
                  ON bpv.id=es.base_profile_version_id
+               LEFT JOIN agent_runs ar
+                 ON ar.execution_snapshot_id=es.id AND ar.company_id=es.company_id
                WHERE es.id=? AND es.company_id=?""",
             (snapshot_id, company_id),
         )
@@ -245,6 +313,46 @@ class RuntimeExecutionService:
             binding = json.loads(row["runtime_binding_json"] or "{}")
         except (TypeError, ValueError) as exc:
             raise ValueError("EXECUTION_SNAPSHOT_BINDING_INVALID") from exc
+        candidate_bindings_json = row["candidate_bindings_json"]
+        if candidate_bindings_json:
+            try:
+                candidate_bindings = json.loads(candidate_bindings_json)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("EXECUTION_SNAPSHOT_CANDIDATES_INVALID") from exc
+            if not isinstance(candidate_bindings, list):
+                raise ValueError("EXECUTION_SNAPSHOT_CANDIDATES_INVALID")
+            from ibreeze.routing.canonical_json import canonical_json
+
+            canonical_candidates_json = canonical_json(candidate_bindings)
+            if canonical_candidates_json != candidate_bindings_json:
+                raise ValueError("EXECUTION_SNAPSHOT_CANDIDATES_NON_CANONICAL")
+            if row["candidate_bindings_sha256"] != hashlib.sha256(canonical_candidates_json.encode("utf-8")).hexdigest():
+                raise ValueError("EXECUTION_SNAPSHOT_CANDIDATES_HASH_MISMATCH")
+        else:
+            candidate_bindings = None
+        routing_policy_json = row["routing_policy_json"] or "{}"
+        try:
+            policy_value = json.loads(routing_policy_json)
+            from ibreeze.routing.canonical_json import canonical_json
+
+            canonical_policy_json = canonical_json(policy_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("EXECUTION_SNAPSHOT_POLICY_INVALID") from exc
+        if canonical_policy_json != routing_policy_json:
+            raise ValueError("EXECUTION_SNAPSHOT_POLICY_NON_CANONICAL")
+        if row["routing_policy_sha256"] and row["routing_policy_sha256"] != hashlib.sha256(
+            canonical_policy_json.encode("utf-8")
+        ).hexdigest():
+            raise ValueError("EXECUTION_SNAPSHOT_POLICY_HASH_MISMATCH")
+        from datetime import UTC, datetime, timedelta
+
+        run_deadline_at = None
+        if row["run_started_at"] and row["timeout_seconds"]:
+            try:
+                started_at = datetime.fromisoformat(str(row["run_started_at"]).replace("Z", "+00:00")).astimezone(UTC)
+                run_deadline_at = (started_at + timedelta(seconds=max(1, int(row["timeout_seconds"])))).isoformat().replace("+00:00", "Z")
+            except (TypeError, ValueError):
+                raise ValueError("RUN_DEADLINE_INVALID")
         return {
             "content_sha256": row["content_sha256"],
             "runtime_binding": binding,
@@ -253,6 +361,14 @@ class RuntimeExecutionService:
             "workspace_grant_id": row["workspace_grant_id"],
             "system_prompt": row["system_prompt"] or "",
             "tool_policy_json": row["tool_policy_json"] or "{}",
+            "routing_policy_json": routing_policy_json,
+            "routing_classifier_version": row["routing_classifier_version"],
+            "candidate_bindings_json": candidate_bindings,
+            "candidate_bindings_json_raw": candidate_bindings_json,
+            "candidate_bindings_sha256": row["candidate_bindings_sha256"],
+            "execution_snapshot_id": snapshot_id,
+            "run_purpose": row["snapshot_purpose"] if "snapshot_purpose" in row.keys() else "task_execution",
+            "run_deadline_at": run_deadline_at,
         }
 
     async def _transition(
@@ -291,7 +407,7 @@ class RuntimeExecutionService:
                     connection=conn,
                 )
             cursor = await conn.execute(
-                f"""UPDATE agent_runs SET {', '.join(assignments)}
+                f"""UPDATE agent_runs SET {", ".join(assignments)}
                     WHERE id=? AND company_id=? AND status=? AND version=?""",
                 tuple(params),
             )
@@ -314,9 +430,7 @@ class RuntimeExecutionService:
             )
             return True
 
-        result = await self._write_queue.submit(
-            f"runtime.run.{to_state}", uuid4(), _deadline(30), transition
-        )
+        result = await self._write_queue.submit(f"runtime.run.{to_state}", uuid4(), _deadline(30), transition)
         return bool(result)
 
     async def _complete_claimed(self, claimed: ClaimedRun, expected_version: int, result: dict[str, Any]) -> None:
@@ -367,9 +481,7 @@ class RuntimeExecutionService:
                 },
             )
 
-        await self._write_queue.submit(
-            "runtime.run.complete", uuid4(), _deadline(30), complete
-        )
+        await self._write_queue.submit("runtime.run.complete", uuid4(), _deadline(30), complete)
 
     async def _fail_claimed(self, claimed: ClaimedRun, failure_code: str) -> None:
         async def fail(conn: Any) -> None:
@@ -408,9 +520,49 @@ class RuntimeExecutionService:
                 },
             )
 
-        await self._write_queue.submit(
-            "runtime.run.fail", uuid4(), _deadline(30), fail
-        )
+        await self._write_queue.submit("runtime.run.fail", uuid4(), _deadline(30), fail)
+
+    async def _wait_resource_claimed(self, claimed: ClaimedRun, failure_code: str) -> None:
+        """Move a running Run to ``waiting_resource`` for explicit resume."""
+
+        async def wait(conn: Any) -> None:
+            now = _now()
+            row = await (
+                await conn.execute(
+                    "SELECT status, version FROM agent_runs WHERE id=? AND company_id=?",
+                    (claimed.run_id, claimed.company_id),
+                )
+            ).fetchone()
+            if row is None or row["status"] in _TERMINAL_RUN:
+                return
+            from_state = str(row["status"])
+            version = int(row["version"])
+            cursor = await conn.execute(
+                """UPDATE agent_runs
+                   SET status='waiting_resource', resume_state='running', failure_code=?,
+                       completed_at=NULL, exit_code=NULL, updated_at=?, version=version+1
+                   WHERE id=? AND company_id=? AND status=? AND version=?""",
+                (failure_code, now, claimed.run_id, claimed.company_id, from_state, version),
+            )
+            if cursor.rowcount != 1:
+                return
+            await _write_event(
+                conn,
+                company_id=claimed.company_id,
+                run_id=claimed.run_id,
+                event_type="run.waiting_resource",
+                payload={
+                    "company_id": claimed.company_id,
+                    "aggregate_id": claimed.run_id,
+                    "version": version + 1,
+                    "from_state": from_state,
+                    "to_state": "waiting_resource",
+                    "resume_state": "running",
+                    "failure_code": failure_code,
+                },
+            )
+
+        await self._write_queue.submit("runtime.run.waiting_resource", uuid4(), _deadline(30), wait)
 
     async def _release_claimed(self, claimed: ClaimedRun) -> None:
         async def release(conn: Any) -> None:
@@ -422,9 +574,7 @@ class RuntimeExecutionService:
             )
             await conn.execute("DELETE FROM runtime_leases WHERE id=?", (claimed.lease_id,))
 
-        await self._write_queue.submit(
-            "runtime.release_lease", uuid4(), _deadline(25), release
-        )
+        await self._write_queue.submit("runtime.release_lease", uuid4(), _deadline(25), release)
 
     async def _lease_heartbeat(self, lease_id: str, heartbeat: Callable[[], None] | None) -> None:
         try:
@@ -442,9 +592,7 @@ class RuntimeExecutionService:
                         (now, now, lease_id, now),
                     )
 
-                await self._write_queue.submit(
-                    "runtime.heartbeat_lease", uuid4(), _deadline(25), refresh
-                )
+                await self._write_queue.submit("runtime.heartbeat_lease", uuid4(), _deadline(25), refresh)
         except asyncio.CancelledError:
             return
 
@@ -522,9 +670,7 @@ async def _write_event(
                     "evidence_artifact_ids": payload["evidence_artifact_ids"],
                 }
             )
-        canonical_payload_json = json.dumps(
-            canonical_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        )
+        canonical_payload_json = json.dumps(canonical_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         await db.execute(
             """INSERT INTO domain_events
                (event_id, company_id, aggregate_type, aggregate_id,
@@ -666,8 +812,7 @@ async def _execute_cli(
                 {
                     "execution_snapshot_sha256": snapshot_row["content_sha256"],
                     "agent_type": snapshot_binding.get("agent_type") or process_request.get("agent_type"),
-                    "agent_release_id": snapshot_binding.get("agent_release_id")
-                    or process_request.get("agent_release_id"),
+                    "agent_release_id": snapshot_binding.get("agent_release_id") or process_request.get("agent_release_id"),
                     "agent_key": snapshot_binding.get("agent_key") or snapshot_binding.get("agent_cli"),
                     "purpose": snapshot_binding.get("purpose") or process_request.get("purpose"),
                     "workspace_grant_id": snapshot_row["workspace_grant_id"],
@@ -743,6 +888,9 @@ async def _execute_model(
     spec: dict[str, Any],
     *,
     snapshot_data: dict[str, Any] | None = None,
+    read_pool: Any | None = None,
+    write_queue: Any | None = None,
+    company_id: str = "",
 ) -> dict[str, Any]:
     """Execute an API Model run via ModelRuntime.
 
@@ -751,9 +899,10 @@ async def _execute_model(
     """
     from pathlib import Path
 
+    from ibreeze.routing.transport import RoutingTransport
     from ibreeze.runtime.model_loop import ModelRuntime
     from ibreeze.runtime.model_tools import ModelToolContext, build_model_tools
-    from ibreeze.runtime.transport import create_transport, get_reverse_rpc_session
+    from ibreeze.runtime.transport import ModelTransport, RoutedModelTransport, create_transport, get_reverse_rpc_session
 
     has_snapshot = snapshot_data is not None
     binding = dict((snapshot_data or {}).get("runtime_binding") or {})
@@ -778,15 +927,52 @@ async def _execute_model(
     session = get_reverse_rpc_session()
     if session is None:
         raise ValueError("IPC_SESSION_REQUIRED")
-    transport = create_transport(
-        credential_ref=credential_ref,
-        model=model,
-        run_id=run_id,
-        provider_release_id=provider_release_id,
-        model_binding_id=model_binding_id,
-        provider_protocol=provider_protocol,
-        session=session,
-    )
+    candidates = (snapshot_data or {}).get("candidate_bindings_json")
+    if isinstance(candidates, list) and candidates:
+        try:
+            policy = json.loads(str((snapshot_data or {}).get("routing_policy_json") or "{}"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("ROUTING_POLICY_INVALID") from exc
+        transport: ModelTransport = RoutingTransport(
+            candidates,
+            policy,
+            run_id=run_id,
+            session=session,
+            execution_snapshot_id=str((snapshot_data or {}).get("execution_snapshot_id", "")),
+            run_purpose=str((snapshot_data or {}).get("run_purpose", spec.get("run_purpose", "task_execution"))),
+            run_deadline_at=(str((snapshot_data or {}).get("run_deadline_at")) if (snapshot_data or {}).get("run_deadline_at") else None),
+            artifact_type=str(spec.get("artifact_type")) if spec.get("artifact_type") else None,
+            required_capability_tags=tuple(str(item) for item in spec.get("required_capability_tags", ()) if isinstance(item, str)),
+            attachment_types=tuple(str(item) for item in spec.get("attachment_types", ()) if isinstance(item, str)),
+            prior_tool_failures=int(spec.get("prior_tool_failures", 0) or 0),
+            verification_failures=int(spec.get("verification_failures", 0) or 0),
+            open_blocker_high_count=int(spec.get("open_blocker_high_count", 0) or 0),
+            read_pool=read_pool,
+            write_queue=write_queue,
+            company_id=company_id,
+            anchor_candidate_id=str(policy.get("anchor_candidate_id", "")),
+            routing_policy=policy,
+            candidate_bindings_json=(
+                str((snapshot_data or {}).get("candidate_bindings_json_raw"))
+                if (snapshot_data or {}).get("candidate_bindings_json_raw")
+                else None
+            ),
+            candidate_bindings_sha256=(
+                str((snapshot_data or {}).get("candidate_bindings_sha256"))
+                if (snapshot_data or {}).get("candidate_bindings_sha256")
+                else None
+            ),
+        )
+    else:
+        transport = create_transport(
+            credential_ref=credential_ref,
+            model=model,
+            run_id=run_id,
+            provider_release_id=provider_release_id,
+            model_binding_id=model_binding_id,
+            provider_protocol=provider_protocol,
+            session=session,
+        )
     snapshot_workspace = (snapshot_data or {}).get("repository_root")
     workspace_value = snapshot_workspace or spec.get("workspace")
     if snapshot_workspace and spec.get("workspace") and Path(str(spec["workspace"])).resolve() != Path(str(snapshot_workspace)).resolve():
@@ -815,14 +1001,33 @@ async def _execute_model(
             tools = {name: tool for name, tool in tools.items() if name in allowed}
     runtime = ModelRuntime(transport, tools=tools, max_turns=50)
 
-    result = await runtime.run(
-        system_prompt=(
-            ((snapshot_data or {}).get("system_prompt") if has_snapshot else None)
-            or spec.get("system_prompt")
-            or "You are a helpful assistant."
-        ),
-        user_message=spec.get("prompt", ""),
-    )
+    try:
+        result = await runtime.run(
+            system_prompt=(
+                ((snapshot_data or {}).get("system_prompt") if has_snapshot else None)
+                or spec.get("system_prompt")
+                or "You are a helpful assistant."
+            ),
+            user_message=spec.get("prompt", ""),
+        )
+    finally:
+        try:
+            await _project_tool_outcomes(
+                run_id=run_id,
+                company_id=company_id,
+                checkpoints=result.checkpoints if "result" in locals() else [],
+                read_pool=read_pool,
+                write_queue=write_queue,
+            )
+        except Exception:
+            logger.warning("failed to project tool outcomes for run %s", run_id)
+        if isinstance(transport, RoutedModelTransport):
+            try:
+                await transport.revoke_snapshot()
+            except Exception:
+                # The Run terminal state is already controlled by the Sidecar;
+                # a disconnected Rust process has also cleared all leases.
+                logger.warning("failed to revoke routing snapshot for run %s", run_id)
     return {
         "exit_code": 0 if result.content else -1,
         "stdout": result.content,

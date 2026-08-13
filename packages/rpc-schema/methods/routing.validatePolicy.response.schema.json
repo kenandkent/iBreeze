@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/routing.validatePolicy.response.v1",
+  "title": "RoutingValidatePolicyResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "valid": { "type": "boolean" },
+    "canonical_json": { "type": ["string", "null"] },
+    "canonical_sha256": { "type": ["string", "null"] },
+    "issues": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "code": { "type": "string" }, "json_pointer": { "type": "string" }, "message": { "type": "string" } }, "required": ["code", "json_pointer", "message"] } }
+  },
+  "required": ["valid", "canonical_json", "canonical_sha256", "issues"]
+}

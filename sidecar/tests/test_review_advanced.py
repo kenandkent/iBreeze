@@ -134,9 +134,18 @@ async def _create_report_direct(
                 reviewed_artifact_id, reviewed_sha256, verdict,
                 report_artifact_id, version, created_at)
                VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (report_id, company_id, assignment_id, "run-fake",
-             assignment["artifact_id"], assignment["reviewed_sha256"], verdict,
-             report_artifact_id, 1, now),
+            (
+                report_id,
+                company_id,
+                assignment_id,
+                "run-fake",
+                assignment["artifact_id"],
+                assignment["reviewed_sha256"],
+                verdict,
+                report_artifact_id,
+                1,
+                now,
+            ),
         )
         await db.execute(
             """UPDATE review_assignments
@@ -155,9 +164,7 @@ class TestReviewReportHashBinding:
     """REV-003: Review report should be bound with hash."""
 
     async def test_assignment_records_reviewed_sha256(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         result = await assign_reviewer(
             db,
             company.id,
@@ -176,9 +183,7 @@ class TestReviewReportHashBinding:
         assert assignment["reviewed_sha256"] == "a" * 64
 
     async def test_reviewer_cannot_be_contributor(self, db, published_profile):
-        company, contributor, _, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, contributor, _, artifact_id = await _company_with_artifact(db, published_profile)
         with pytest.raises(ValueError, match="REVIEWER_CANNOT_BE_CONTRIBUTOR"):
             await assign_reviewer(
                 db,
@@ -190,9 +195,7 @@ class TestReviewReportHashBinding:
             )
 
     async def test_duplicate_reviewer_rejected(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         await assign_reviewer(
             db,
             company.id,
@@ -212,9 +215,7 @@ class TestReviewReportHashBinding:
             )
 
     async def test_submit_report_with_verdict(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -230,18 +231,12 @@ class TestReviewReportHashBinding:
             report_artifact_id="report-art-001",
             verdict="pass",
         )
-        report_row = await (
-            await db.execute(
-                "SELECT verdict FROM review_reports WHERE id=?", (report_id,)
-            )
-        ).fetchone()
+        report_row = await (await db.execute("SELECT verdict FROM review_reports WHERE id=?", (report_id,))).fetchone()
         assert report_row["verdict"] == "pass"
 
     async def test_report_binds_to_assignment(self, db, published_profile):
         """REV-003: Report is bound to its assignment."""
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -271,9 +266,7 @@ class TestIssueCloseGuard:
     """REV-004: Blocker/high issues cannot be rejected."""
 
     async def test_create_blocker_issue(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -305,9 +298,7 @@ class TestIssueCloseGuard:
 
     async def test_resolve_blocker_issue(self, db, published_profile):
         """REV-004: Blocker issues can be resolved but must be fixed."""
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -346,9 +337,7 @@ class TestIssueCloseGuard:
 
     async def test_high_issue_severity(self, db, published_profile):
         """REV-004: High severity issues are tracked."""
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -375,16 +364,12 @@ class TestIssueCloseGuard:
             actual="不合规",
             suggested_fix="修复安全问题",
         )
-        issues = await list_review_issues(
-            db, company.id, report_id=report_id
-        )
+        issues = await list_review_issues(db, company.id, report_id=report_id)
         assert len(issues) == 1
         assert issues[0]["severity"] == "high"
 
     async def test_medium_low_issues(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -448,9 +433,7 @@ class TestDepartmentReportCompanyReview:
         assert is_terminal("ReviewIssue", "rejected")
 
     async def test_list_issues_filters(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -488,27 +471,20 @@ class TestDepartmentReportCompanyReview:
             actual="拼写错误",
             suggested_fix="修改拼写",
         )
-        all_issues = await list_review_issues(
-            db, company.id, status="open"
-        )
+        all_issues = await list_review_issues(db, company.id, status="open")
         assert len(all_issues) == 2
-        open_issues = await list_review_issues(
-            db, company.id, status="open"
-        )
+        open_issues = await list_review_issues(db, company.id, status="open")
         assert len(open_issues) == 2
-        resolved_issues = await list_review_issues(
-            db, company.id, status="resolved"
-        )
+        resolved_issues = await list_review_issues(db, company.id, status="resolved")
         assert len(resolved_issues) == 0
+
 
 @pytest.mark.asyncio
 class TestReviewSubmitValidation:
     """New review submission validation rules (R07)."""
 
     async def test_submit_report_sha_mismatch_fails(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -518,6 +494,7 @@ class TestReviewSubmitValidation:
             reviewed_sha256="a" * 64,
         )
         from ibreeze.review.service import submit_review_report
+
         with pytest.raises(ValueError, match="REVIEW_ARTIFACT_MISMATCH"):
             await submit_review_report(
                 db,
@@ -532,9 +509,7 @@ class TestReviewSubmitValidation:
             )
 
     async def test_submit_report_artifact_not_found_fails(self, db, published_profile):
-        company, _, reviewer, artifact_id = await _company_with_artifact(
-            db, published_profile
-        )
+        company, _, reviewer, artifact_id = await _company_with_artifact(db, published_profile)
         assignment = await assign_reviewer(
             db,
             company.id,
@@ -544,6 +519,7 @@ class TestReviewSubmitValidation:
             reviewed_sha256="a" * 64,
         )
         from ibreeze.review.service import submit_review_report
+
         with pytest.raises(ValueError, match="REVIEW_ARTIFACT_MISMATCH"):
             await submit_review_report(
                 db,

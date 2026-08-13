@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -92,6 +93,27 @@ class ModelCatalog(UUIDPrimaryKeyMixin, CatalogRevisionMixin, Base):
         CheckConstraint("catalog_revision > 0", name="ck_models_revision"),
         CheckConstraint("context_window > 0", name="ck_models_context_window"),
         CheckConstraint("max_output_tokens > 0", name="ck_models_max_output"),
+        CheckConstraint("routing_tier >= 0 AND routing_tier <= 3", name="ck_models_routing_tier"),
+        CheckConstraint("quality_prior >= 0 AND quality_prior <= 1", name="ck_models_quality_prior"),
+        CheckConstraint(
+            "tool_reliability_prior >= 0 AND tool_reliability_prior <= 1",
+            name="ck_models_tool_reliability_prior",
+        ),
+        CheckConstraint("latency_prior_ms > 0", name="ck_models_latency_prior"),
+        CheckConstraint(
+            "architecture_class IN ('dense','moe','hybrid','unknown')",
+            name="ck_models_architecture_class",
+        ),
+        CheckConstraint("input_price_microusd_per_million >= 0", name="ck_models_input_price"),
+        CheckConstraint("output_price_microusd_per_million >= 0", name="ck_models_output_price"),
+        CheckConstraint(
+            "supports_reasoning OR jsonb_array_length(reasoning_levels) = 0",
+            name="ck_models_reasoning_levels",
+        ),
+        CheckConstraint(
+            "NOT routing_enabled OR (model_family <> 'unknown' AND model_vendor <> 'unknown')",
+            name="ck_models_routing_identity",
+        ),
         CheckConstraint(
             "status IN ('draft','validated','published')",
             name="ck_models_status",
@@ -107,6 +129,28 @@ class ModelCatalog(UUIDPrimaryKeyMixin, CatalogRevisionMixin, Base):
     supports_tools: Mapped[bool] = mapped_column(Boolean, nullable=False)
     supports_streaming: Mapped[bool] = mapped_column(Boolean, nullable=False)
     supports_vision: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    routing_tier: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    quality_prior: Mapped[float] = mapped_column(
+        Numeric(5, 4), nullable=False, default=0.5, server_default="0.5"
+    )
+    tool_reliability_prior: Mapped[float] = mapped_column(
+        Numeric(5, 4), nullable=False, default=0.5, server_default="0.5"
+    )
+    latency_prior_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=3000, server_default="3000")
+    model_family: Mapped[str] = mapped_column(String(100), nullable=False, default="unknown", server_default="unknown")
+    model_vendor: Mapped[str] = mapped_column(String(100), nullable=False, default="unknown", server_default="unknown")
+    architecture_class: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unknown", server_default="unknown"
+    )
+    supports_reasoning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    reasoning_levels: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    input_price_microusd_per_million: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    output_price_microusd_per_million: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    routing_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class ProviderCatalog(UUIDPrimaryKeyMixin, CatalogRevisionMixin, Base):

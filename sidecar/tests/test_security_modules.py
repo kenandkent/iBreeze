@@ -165,7 +165,6 @@ async def test_list_audit_logs_empty() -> None:
     assert result == []
 
 
-
 def test_derive_key_returns_key_and_salt() -> None:
     key, salt = derive_key("password123")
     assert isinstance(key, bytes)
@@ -212,7 +211,6 @@ def test_is_bcrypt_hash() -> None:
     assert is_bcrypt_hash("$2a$12$xyz")
     assert not is_bcrypt_hash("$argon2id$...")
     assert not is_bcrypt_hash("plain")
-
 
 
 def test_resolve_safe_accepts_valid_path(tmp_path: Path) -> None:
@@ -270,7 +268,6 @@ def test_verify_write_approval_expired() -> None:
     assert verify_write_approval(approval, "/path", "hash1") is False
 
 
-
 def test_admin_has_all_permissions() -> None:
     assert check_permission(Role.ADMIN, "company.create")
     assert check_permission(Role.ADMIN, "backup.restore")
@@ -305,19 +302,18 @@ def test_require_permission_succeeds() -> None:
     require_permission(Role.USER, "task.read")
 
 
-
 def test_redact_string_authorization() -> None:
-    result = redact_string('Authorization: Bearer abc123')
+    result = redact_string("Authorization: Bearer abc123")
     assert "[REDACTED]" in result
 
 
 def test_redact_string_password() -> None:
-    result = redact_string('password=secret123')
+    result = redact_string("password=secret123")
     assert "[REDACTED]" in result
 
 
 def test_redact_string_token() -> None:
-    result = redact_string('token: xyz789')
+    result = redact_string("token: xyz789")
     assert "[REDACTED]" in result
 
 
@@ -354,7 +350,6 @@ def test_redact_dict_non_string_values() -> None:
     assert result["count"] == 42
     assert result["active"] is True
     assert result["ratio"] == 3.14
-
 
 
 def test_validate_package_paths_clean(tmp_path: Path) -> None:

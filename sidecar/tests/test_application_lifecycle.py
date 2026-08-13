@@ -128,6 +128,7 @@ class TestApplicationLifecycleStart:
             patch("ibreeze.application.lifecycle.UnitOfWork", return_value=mock_uow) as m_uow_cls,
             patch("ibreeze.application.lifecycle.WorkerSupervisor", return_value=mock_ws_instance) as m_ws_cls,
             patch("ibreeze.application.lifecycle.register_public_handlers", return_value=None) as m_reg_public,
+            patch("ibreeze.application.lifecycle.startup_config") as m_startup_config,
         ):
             mock_rp_cls.open = AsyncMock(return_value=mock_read_pool)
 
@@ -158,6 +159,7 @@ class TestApplicationLifecycleStart:
             )
             mock_ws_instance.start.assert_called_once()
             m_reg_public.assert_called_once_with(lc)
+            m_startup_config.assert_called_once_with()
             lc._ensure_profile_identity.assert_called_once()
             lc._init_review_completion_handlers.assert_called_once()
 
@@ -217,21 +219,24 @@ class TestApplicationLifecycleStart:
 class TestApplicationLifecycleEnsureProfileIdentity:
     @pytest.mark.asyncio
     async def test_success(self):
-        lc = ApplicationLifecycle(Path("/tmp/test.db"), backend_origin="https://example.com",
-                                   app_user_id="user-1", masked_identifier="mask-1", device_id="dev-1")
+        lc = ApplicationLifecycle(
+            Path("/tmp/test.db"), backend_origin="https://example.com", app_user_id="user-1", masked_identifier="mask-1", device_id="dev-1"
+        )
         lc._prepared = MagicMock()
 
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(return_value={
-            "id": "profile-uuid",
-            "schema_epoch": 1,
-            "backend_origin": "https://example.com",
-            "app_user_id": "user-1",
-            "masked_identifier": "mask-1",
-            "device_id": "dev-1",
-            "created_at": "2026-01-01T00:00:00Z",
-            "last_opened_at": "2026-01-01T00:00:00Z",
-        })
+        mock_cursor.fetchone = AsyncMock(
+            return_value={
+                "id": "profile-uuid",
+                "schema_epoch": 1,
+                "backend_origin": "https://example.com",
+                "app_user_id": "user-1",
+                "masked_identifier": "mask-1",
+                "device_id": "dev-1",
+                "created_at": "2026-01-01T00:00:00Z",
+                "last_opened_at": "2026-01-01T00:00:00Z",
+            }
+        )
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
@@ -241,9 +246,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
             await lc._ensure_profile_identity()
 
         mock_writer.execute.assert_any_call(
-            "SELECT id, schema_epoch, backend_origin, app_user_id, "
-            "masked_identifier, device_id "
-            "FROM local_profile"
+            "SELECT id, schema_epoch, backend_origin, app_user_id, masked_identifier, device_id FROM local_profile"
         )
         # Verify UPDATE goes through WriteQueue instead of direct writer
         queue.submit.assert_awaited_once_with(
@@ -283,16 +286,18 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         lc._prepared = MagicMock()
 
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(return_value={
-            "id": "uuid",
-            "schema_epoch": 1,
-            "backend_origin": "https://wrong.com",
-            "app_user_id": "",
-            "masked_identifier": "",
-            "device_id": "",
-            "created_at": "",
-            "last_opened_at": "",
-        })
+        mock_cursor.fetchone = AsyncMock(
+            return_value={
+                "id": "uuid",
+                "schema_epoch": 1,
+                "backend_origin": "https://wrong.com",
+                "app_user_id": "",
+                "masked_identifier": "",
+                "device_id": "",
+                "created_at": "",
+                "last_opened_at": "",
+            }
+        )
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
@@ -313,16 +318,18 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         lc._prepared = MagicMock()
 
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(return_value={
-            "id": "uuid",
-            "schema_epoch": 1,
-            "backend_origin": "wrong-origin",
-            "app_user_id": "wrong-user",
-            "masked_identifier": "wrong-mask",
-            "device_id": "wrong-dev",
-            "created_at": "",
-            "last_opened_at": "",
-        })
+        mock_cursor.fetchone = AsyncMock(
+            return_value={
+                "id": "uuid",
+                "schema_epoch": 1,
+                "backend_origin": "wrong-origin",
+                "app_user_id": "wrong-user",
+                "masked_identifier": "wrong-mask",
+                "device_id": "wrong-dev",
+                "created_at": "",
+                "last_opened_at": "",
+            }
+        )
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer
@@ -419,9 +426,7 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         )
         mock_writer.execute.assert_any_call(
             expected_sql,
-            (fake_uuid, "1.2.3", "https://example.com",
-             "user-1", "mask-1", "dev-1",
-             "2026-07-30T12:00:00Z", "2026-07-30T12:00:00Z"),
+            (fake_uuid, "1.2.3", "https://example.com", "user-1", "mask-1", "dev-1", "2026-07-30T12:00:00Z", "2026-07-30T12:00:00Z"),
         )
 
     @pytest.mark.asyncio
@@ -445,16 +450,18 @@ class TestApplicationLifecycleEnsureProfileIdentity:
         lc._prepared = MagicMock()
 
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(return_value={
-            "id": "uuid",
-            "schema_epoch": 2,
-            "backend_origin": "",
-            "app_user_id": "",
-            "masked_identifier": "",
-            "device_id": "",
-            "created_at": "",
-            "last_opened_at": "",
-        })
+        mock_cursor.fetchone = AsyncMock(
+            return_value={
+                "id": "uuid",
+                "schema_epoch": 2,
+                "backend_origin": "",
+                "app_user_id": "",
+                "masked_identifier": "",
+                "device_id": "",
+                "created_at": "",
+                "last_opened_at": "",
+            }
+        )
         mock_writer = AsyncMock()
         mock_writer.execute.return_value = mock_cursor
         lc._writer = mock_writer

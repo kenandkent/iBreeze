@@ -212,8 +212,18 @@ class TestReplaceEmployeeSuccess:
                     base_profile_version_id, workflow_role, status, created_at, updated_at, version)
                    VALUES (?, ?, ?, 'Old', 'old', 'p1', 'member', 'active', ?, ?, 1),
                           (?, ?, ?, 'New', 'new', 'p1', 'member', 'active', ?, ?, 1)""",
-                (emp_old, company_id, dept_id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z",
-                 emp_new, company_id, dept_id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+                (
+                    emp_old,
+                    company_id,
+                    dept_id,
+                    "2026-01-01T00:00:00Z",
+                    "2026-01-01T00:00:00Z",
+                    emp_new,
+                    company_id,
+                    dept_id,
+                    "2026-01-01T00:00:00Z",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.execute(
                 """INSERT INTO department_tasks
@@ -233,7 +243,11 @@ class TestReplaceEmployeeSuccess:
             await db.execute("PRAGMA foreign_keys = ON")
         await db.commit()
         result = await replace_employee(
-            db, company_id, dept_task_id, old_employee_id=emp_old, new_employee_id=emp_new,
+            db,
+            company_id,
+            dept_task_id,
+            old_employee_id=emp_old,
+            new_employee_id=emp_new,
         )
         assert result["new_employee_id"] == emp_new
         assert result["old_employee_id"] == emp_old
@@ -276,8 +290,7 @@ class TestOptimisticLockConflicts:
             await submit_plan_for_review(db, "c1", "t1", "e1")
 
     async def test_submit_second_lock_conflict(self):
-        db = _Db({"id": "p1", "status": "analyzing"},
-                 {"company_plan_versions": 1, "company_tasks": 0})
+        db = _Db({"id": "p1", "status": "analyzing"}, {"company_plan_versions": 1, "company_tasks": 0})
         with pytest.raises(ValueError, match="OPTIMISTIC_LOCK_CONFLICT"):
             await submit_plan_for_review(db, "c1", "t1", "e1")
 
@@ -373,8 +386,11 @@ class TestReplaceEmployee:
     async def test_replace_not_found(self, db):
         with pytest.raises(ValueError, match="RESOURCE_NOT_FOUND"):
             await replace_employee(
-                db, str(uuid.uuid4()), "nonexistent",
-                old_employee_id="old", new_employee_id="new",
+                db,
+                str(uuid.uuid4()),
+                "nonexistent",
+                old_employee_id="old",
+                new_employee_id="new",
             )
 
 

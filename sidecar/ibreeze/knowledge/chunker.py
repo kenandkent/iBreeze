@@ -50,9 +50,7 @@ def chunk_code(text: str, language: str = "", max_tokens: int = 1200) -> list[di
     for line in lines:
         line_tokens = max(len(line) // 5, 1)
 
-        is_boundary = any(
-            line.strip().startswith(kw) for kw in ["def ", "class ", "async def ", "function ", "export "]
-        )
+        is_boundary = any(line.strip().startswith(kw) for kw in ["def ", "class ", "async def ", "function ", "export "])
 
         if is_boundary and current_tokens + line_tokens > max_tokens and current_chunk:
             chunks.append({"text": current_chunk.strip(), "token_count": current_tokens, "language": language})

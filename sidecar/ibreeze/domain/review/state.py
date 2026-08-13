@@ -27,6 +27,4 @@ ASSIGNMENT_ALL_EDGES: frozenset[tuple[str, str]] = frozenset(
     (src, tgt) for src, targets in ASSIGNMENT_TRANSITIONS.items() for tgt in targets
 )
 
-ISSUE_ALL_EDGES: frozenset[tuple[str, str]] = frozenset(
-    (src, tgt) for src, targets in ISSUE_TRANSITIONS.items() for tgt in targets
-)
+ISSUE_ALL_EDGES: frozenset[tuple[str, str]] = frozenset((src, tgt) for src, targets in ISSUE_TRANSITIONS.items() for tgt in targets)

@@ -1,7 +1,7 @@
 // DO NOT EDIT MANUALLY
 // Generated from packages/rpc-schema/registry.v1.json
 //
-// 120 total methods (50 read, 70 write)
+// 132 total methods (56 read, 76 write)
 
 const READ_METHODS: ReadonlySet<string> = new Set([
     'approval.listPending',
@@ -23,6 +23,7 @@ const READ_METHODS: ReadonlySet<string> = new Set([
     'conversation.getDepartment',
     'conversation.list',
     'conversation.listMessages',
+    'credential.list',
     'department.get',
     'department.list',
     'departmentTask.get',
@@ -40,6 +41,11 @@ const READ_METHODS: ReadonlySet<string> = new Set([
     'review.get',
     'review.list',
     'review.listIssues',
+    'routing.getDecision',
+    'routing.getRunSummary',
+    'routing.listDecisions',
+    'routing.listDeploymentHealth',
+    'routing.validatePolicy',
     'run.get',
     'run.list',
     'run.listEvents',
@@ -78,6 +84,10 @@ const WRITE_METHODS: ReadonlySet<string> = new Set([
     'conversation.archive',
     'conversation.create',
     'conversation.submitUserMessage',
+    'credential.create',
+    'credential.delete',
+    'credential.probe',
+    'credential.updateSecret',
     'department.archive',
     'department.create',
     'department.responsibility.create',
@@ -112,6 +122,8 @@ const WRITE_METHODS: ReadonlySet<string> = new Set([
     'review.rerun',
     'review.resolveIssue',
     'review.submit',
+    'routing.clearExpiredHealth',
+    'routing.setRunOverride',
     'run.cancel',
     'run.resume',
     'runtime.run',

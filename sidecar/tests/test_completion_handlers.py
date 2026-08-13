@@ -199,7 +199,11 @@ class TestCompleteDepartmentTaskHandler:
     async def test_lock_conflict_raises(self) -> None:
         handler = CompleteDepartmentTaskHandler(
             _gate(()),
-            _uow(_session(lock_row={"id": str(TASK_ID), "status": "executing", "version": 1, "company_task_id": str(uuid4())}, update_rowcount=0)),
+            _uow(
+                _session(
+                    lock_row={"id": str(TASK_ID), "status": "executing", "version": 1, "company_task_id": str(uuid4())}, update_rowcount=0
+                )
+            ),
         )
         with pytest.raises(ValueError, match="OPTIMISTIC_LOCK_CONFLICT"):
             await handler.handle(_context(), CompleteDepartmentTask(COMPANY_ID, TASK_ID, 1))

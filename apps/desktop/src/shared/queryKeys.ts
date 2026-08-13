@@ -64,4 +64,15 @@ export const queryKeys = {
 
   orchestrationList: (ctx: QueryCtx) =>
     [...queryKeys.all(ctx), 'orchestrations'] as const,
+
+  routingSummary: (ctx: QueryCtx, companyId: string, runId: string) =>
+    [...queryKeys.all(ctx), companyId, 'routing', 'summary', runId] as const,
+  routingDecisions: (ctx: QueryCtx, companyId: string, runId: string) =>
+    [...queryKeys.all(ctx), companyId, 'routing', 'decisions', runId] as const,
+  routingHealth: (ctx: QueryCtx, companyId: string) =>
+    [...queryKeys.all(ctx), companyId, 'routing', 'health'] as const,
+  credentials: (ctx: QueryCtx) =>
+    [...queryKeys.all(ctx), 'credentials'] as const,
+  catalogModels: (ctx: QueryCtx) =>
+    [...queryKeys.all(ctx), 'catalog', 'models'] as const,
 };

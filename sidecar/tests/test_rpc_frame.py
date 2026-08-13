@@ -36,6 +36,7 @@ class TestEncodeFrame:
 
     def test_raises_invalid_length_for_empty_payload(self):
         import ibreeze.rpc.frame as frame_mod
+
         original = frame_mod.json.dumps
 
         def fake_dumps(obj, **kwargs):
@@ -50,6 +51,7 @@ class TestEncodeFrame:
 
     def test_raises_too_large_error(self):
         import ibreeze.rpc.frame as frame_mod
+
         original = frame_mod.json.dumps
 
         def fake_dumps(obj, **kwargs):
@@ -86,6 +88,7 @@ class TestReadFrame:
 
     async def test_raises_on_too_large_frame(self):
         import ibreeze.rpc.frame as frame_mod
+
         reader = asyncio.StreamReader()
         reader.feed_data(struct.pack(">I", frame_mod.MAX_FRAME_BYTES + 1))
         with pytest.raises(TooLargeError, match="frame too large"):

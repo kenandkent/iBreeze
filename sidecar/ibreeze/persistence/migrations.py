@@ -58,6 +58,18 @@ MIGRATIONS: list[Migration] = [
         sql="file://migrations/005_multi_agent_aggregation.sql",
         sha256="b68033ade6d3a670725c230336a9b92fbd12b093fe220599df2a685b06b2ccfe",
     ),
+    Migration(
+        version=6,
+        filename="006_intelligent_routing.sql",
+        sql="file://migrations/006_intelligent_routing.sql",
+        sha256="d21c8c09d523bb2eeb1857148f9a95b0c4c18e41e692da07839689e341e6f842",
+    ),
+    Migration(
+        version=7,
+        filename="007_routing_capability_tags.sql",
+        sql="file://migrations/007_routing_capability_tags.sql",
+        sha256="94104bad40fde769eb78b6b21d265847ab335c864aa78c5362090b43d33c94c1",
+    ),
 ]
 
 
@@ -96,8 +108,7 @@ async def run_migrations(
         now = time.time()
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
         await db.execute(
-            "INSERT OR REPLACE INTO schema_migrations (version, script_sha256, status, started_at) "
-            "VALUES (?, ?, 'running', ?)",
+            "INSERT OR REPLACE INTO schema_migrations (version, script_sha256, status, started_at) VALUES (?, ?, 'running', ?)",
             (str(m.version), m.sha256, started_at),
         )
         try:

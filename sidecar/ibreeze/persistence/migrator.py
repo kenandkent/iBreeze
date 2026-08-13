@@ -68,8 +68,7 @@ class MigrationRunner:
             filename = file_path.name
             started_at = _now_iso()
             await self._db.execute(
-                "INSERT INTO schema_migrations (version, filename, script_sha256, status, started_at) "
-                "VALUES (?, ?, ?, 'running', ?)",
+                "INSERT INTO schema_migrations (version, filename, script_sha256, status, started_at) VALUES (?, ?, ?, 'running', ?)",
                 (version, filename, sha256, started_at),
             )
             try:

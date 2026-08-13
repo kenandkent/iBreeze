@@ -79,9 +79,7 @@ class TestIdempotencyStore:
         session.connection.execute.assert_called_once()
 
     async def test_claim_returns_false_on_duplicate(self, session):
-        session.connection.execute.side_effect = sqlite3.IntegrityError(
-            "UNIQUE constraint failed: idempotency.idempotency_key"
-        )
+        session.connection.execute.side_effect = sqlite3.IntegrityError("UNIQUE constraint failed: idempotency.idempotency_key")
         store = IdempotencyStore()
         result = await store.claim(session, "key1", "sha")
         assert result is False

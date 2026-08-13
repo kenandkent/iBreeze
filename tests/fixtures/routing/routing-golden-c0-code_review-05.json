@@ -1,0 +1,6 @@
+{
+  "category": "code_review",
+  "input": "脱敏路由验收输入 routing-golden-c0-code_review-05：验证 code_review 的确定性选择、故障恢复和审计关联。",
+  "task_id": "routing-golden-c0-code_review-05",
+  "tier": "C0"
+}

@@ -6,8 +6,9 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -191,6 +192,14 @@ class ProductionRpcServer:
                     return self._error(request_id, -32001, "IPC_SESSION_INVALID")
                 asyncio.create_task(self.stop())
                 result = {"accepted": True}
+            elif method == "credential.getReferences":
+                if self._ipc_session_id is None or self._ipc_session_id != str(session.meta.session_id):
+                    return self._error(request_id, -32001, "IPC_SESSION_INVALID")
+                result = await self._credential_get_references(params)
+            elif method == "credential.probeSucceeded":
+                if self._ipc_session_id is None or self._ipc_session_id != str(session.meta.session_id):
+                    return self._error(request_id, -32001, "IPC_SESSION_INVALID")
+                result = await self._credential_probe_succeeded(params)
             else:
                 if self._ipc_session_id is None or self._ipc_session_id != str(session.meta.session_id):
                     return self._error(request_id, -32001, "IPC_SESSION_INVALID")
@@ -236,6 +245,81 @@ class ProductionRpcServer:
                 logger.warning("RPC notification failed method=%s: %s", method, exc)
                 return None
             return self._error(request_id, -32000, self._safe_exception_message(exc))
+
+    async def _credential_get_references(self, params: dict[str, Any]) -> dict[str, Any]:
+        credential_ref = params.get("credential_ref")
+        if not isinstance(credential_ref, str) or not credential_ref:
+            raise ValueError("CREDENTIAL_REF_INVALID")
+        try:
+            uuid.UUID(credential_ref)
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError("CREDENTIAL_REF_INVALID") from None
+        needle = credential_ref
+        profile_versions = await self._lifecycle.read_pool.query_all(
+            """SELECT v.id, v.status, v.routing_policy_json
+               FROM employee_base_profile_versions v
+               WHERE EXISTS (
+                 SELECT 1 FROM json_tree(v.routing_policy_json)
+                 WHERE json_tree.type='text' AND json_tree.value=?
+               )""",
+            (needle,),
+        )
+        active_ids = sorted(str(row["id"]) for row in profile_versions if row["status"] in {"published", "retired"})
+        draft_ids = sorted(str(row["id"]) for row in profile_versions if row["status"] == "draft")
+        snapshots = await self._lifecycle.read_pool.query_all(
+            """SELECT id, candidate_bindings_json FROM execution_snapshots
+               WHERE candidate_bindings_json IS NOT NULL
+                 AND EXISTS (
+                   SELECT 1 FROM json_tree(execution_snapshots.candidate_bindings_json)
+                   WHERE json_tree.type='text' AND json_tree.value=?
+                 )""",
+            (needle,),
+        )
+        runs = await self._lifecycle.read_pool.query_all(
+            """SELECT ar.id
+               FROM agent_runs ar
+               JOIN execution_snapshots es ON es.id=ar.execution_snapshot_id
+                                             AND es.company_id=ar.company_id
+               WHERE ar.status NOT IN ('succeeded','failed','cancelled','timed_out','lost')
+                 AND es.candidate_bindings_json IS NOT NULL
+                 AND EXISTS (
+                   SELECT 1 FROM json_tree(es.candidate_bindings_json)
+                   WHERE json_tree.type='text' AND json_tree.value=?
+                 )""",
+            (needle,),
+        )
+        snapshot_ids = {str(row["id"]) for row in snapshots}
+        run_ids = {str(row["id"]) for row in runs}
+        return {
+            "active_profile_version_ids": active_ids,
+            "draft_profile_version_ids": draft_ids,
+            "non_terminal_run_ids": sorted(run_ids),
+            "total_count": len(active_ids) + len(draft_ids) + len(run_ids) + len(snapshot_ids),
+        }
+
+    async def _credential_probe_succeeded(self, params: dict[str, Any]) -> dict[str, Any]:
+        credential_hash = params.get("credential_ref_sha256")
+        if not isinstance(credential_hash, str) or re.fullmatch(r"[0-9a-f]{64}", credential_hash) is None:
+            raise ValueError("CREDENTIAL_REF_INVALID")
+
+        async def clear_health(db: Any) -> dict[str, Any]:
+            cursor = await db.execute(
+                """UPDATE deployment_health
+                   SET availability_state='ready', consecutive_strikes=0,
+                       benched_until=NULL, last_failure_kind=NULL,
+                       last_failure_at=NULL, version=version+1,
+                       updated_at=?
+                   WHERE credential_ref_sha256=?""",
+                (datetime.now(UTC).isoformat().replace("+00:00", "Z"), credential_hash),
+            )
+            return {"cleared_count": cursor.rowcount}
+
+        return await self._lifecycle.write_queue.submit(
+            "credential.probeSucceeded",
+            uuid.uuid4(),
+            datetime.now(UTC) + timedelta(seconds=30),
+            clear_health,
+        )
 
     def _context_from_meta(
         self,
@@ -352,12 +436,16 @@ class ProductionRpcServer:
     def _safe_exception_message(error: Exception) -> str:
         """Expose stable domain codes, never provider/SQL exception text."""
         message = str(error).strip()
-        if isinstance(error, ValueError) and 0 < len(message) <= 160 and all(
-            character.isupper() or character.isdigit() or character in "_.:-" for character in message
+        if (
+            isinstance(error, ValueError)
+            and 0 < len(message) <= 160
+            and all(character.isupper() or character.isdigit() or character in "_.:-" for character in message)
         ):
             return message
-        if isinstance(error, RuntimeError) and 0 < len(message) <= 160 and all(
-            character.isupper() or character.isdigit() or character in "_.:-" for character in message
+        if (
+            isinstance(error, RuntimeError)
+            and 0 < len(message) <= 160
+            and all(character.isupper() or character.isdigit() or character in "_.:-" for character in message)
         ):
             return message
         return "INTERNAL_ERROR"

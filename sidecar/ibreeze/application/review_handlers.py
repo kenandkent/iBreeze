@@ -20,6 +20,7 @@ from ibreeze.domain.review.entities import ReviewAssignment
 from ibreeze.domain.review.repository import ReviewRepository
 from ibreeze.persistence.types import DomainEventRecord, OutboxRecord
 from ibreeze.persistence.unit_of_work import CommandResult
+from ibreeze.routing.outcomes import RouteOutcomeProjector
 
 
 def canonical_hash(request: Any) -> str:
@@ -70,15 +71,44 @@ def _issue_event_payload(previous: Any, result: Any) -> dict[str, Any]:
         "from_state": previous.state,
         "to_state": result.state,
         "severity": result.severity,
-        "assignee_employee_id": (
-            str(result.assignee_employee_id) if result.assignee_employee_id else None
-        ),
-        "verifier_employee_id": (
-            str(result.verifier_employee_id) if result.verifier_employee_id else None
-        ),
+        "assignee_employee_id": (str(result.assignee_employee_id) if result.assignee_employee_id else None),
+        "verifier_employee_id": (str(result.verifier_employee_id) if result.verifier_employee_id else None),
         "rejection_reason": result.rejection_reason,
         "evidence_refs": list(result.evidence_refs),
     }
+
+
+async def _project_review_outcome(session: Any, request: SubmitReview, report_id: Any) -> None:
+    """Attach a submitted review to the last route decision of its run.
+
+    Legacy CLI/fixed runs may not have a route decision; those reviews remain
+    valid and simply have no model-routing outcome to project.
+    """
+    cursor = await session.execute(
+        """SELECT id FROM route_decisions
+           WHERE company_id=? AND run_id=?
+           ORDER BY turn_index DESC, id DESC LIMIT 1""",
+        (str(request.company_id), str(request.reviewer_run_id)),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return
+    event = {
+        "pass": "review_passed",
+        "needs_changes": "review_needs_changes",
+        "failed": "review_failed",
+    }.get(request.verdict)
+    if event is None:
+        return
+    await RouteOutcomeProjector().append(
+        session,
+        route_decision_id=str(row["id"] if hasattr(row, "keys") else row[0]),
+        company_id=str(request.company_id),
+        outcome_type="review",
+        source_id=str(report_id),
+        event=event,
+        has_blocker=any(issue.severity == "blocker" for issue in request.issues),
+    )
 
 
 class SubmitReviewGuards:
@@ -173,9 +203,7 @@ class SubmitReviewGuards:
         if request.verdict == "needs_changes" and not request.issues:
             raise ValueError("VERDICT_NEEDS_CHANGES_WITHOUT_ISSUES")
         if request.verdict == "failed":
-            has_blocker_review_exec = any(
-                iss.severity == "blocker" and iss.category == "review_execution" for iss in request.issues
-            )
+            has_blocker_review_exec = any(iss.severity == "blocker" and iss.category == "review_execution" for iss in request.issues)
             if not has_blocker_review_exec:
                 raise ValueError("VERDICT_FAILED_MISSING_BLOCKER_REVIEW_EXECUTION")
 
@@ -187,9 +215,7 @@ class StartReviewHandler:
 
     async def handle(self, context: Any, request: StartReview) -> Any:
         async def command(session: Any) -> Any:
-            assignment = await self._repo.lock_assignment(
-                session, request.assignment_id, request.company_id
-            )
+            assignment = await self._repo.lock_assignment(session, request.assignment_id, request.company_id)
             if assignment.version != request.expected_version:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
             result = await self._repo.transition(session, assignment, "in_review")
@@ -217,9 +243,7 @@ class SubmitReviewHandler:
 
     async def handle(self, context: Any, request: SubmitReview) -> Any:
         async def command(session: Any) -> Any:
-            assignment = await self._repo.lock_assignment(
-                session, request.assignment_id, request.company_id
-            )
+            assignment = await self._repo.lock_assignment(session, request.assignment_id, request.company_id)
             await self._guards.validate(session, assignment, request)
             report = await self._repo.create_report(
                 session,
@@ -246,6 +270,7 @@ class SubmitReviewHandler:
                 for iss in request.issues
             ]
             await self._repo.create_issues(session, request.company_id, report.id, issues_data)
+            await _project_review_outcome(session, request, report.id)
             result = await self._repo.transition(session, assignment, "submitted")
             rerun_event: DomainEventRecord | None = None
             rerun_outbox: OutboxRecord | None = None
@@ -253,9 +278,7 @@ class SubmitReviewHandler:
                 # Fuse verdicts + optional auto-rerun inside the same txn.  Any
                 # round+1 review.assigned event the aggregation produced is
                 # persisted here, atomic with the report.
-                outcome = await self._aggregation.on_report_submitted(
-                    session, company_id=request.company_id, assignment=result
-                )
+                outcome = await self._aggregation.on_report_submitted(session, company_id=request.company_id, assignment=result)
                 rerun_event = outcome.rerun_event
                 rerun_outbox = outcome.rerun_outbox
             payload = {
@@ -267,7 +290,10 @@ class SubmitReviewHandler:
                 "verdict": request.verdict,
             }
             event = _event(
-                "review.submitted", "review_assignment", result.id, result.version,
+                "review.submitted",
+                "review_assignment",
+                result.id,
+                result.version,
                 request.company_id,
                 payload,
             )
@@ -292,9 +318,7 @@ class RerunReviewHandler:
 
     async def handle(self, context: Any, request: RerunReview) -> Any:
         async def command(session: Any) -> Any:
-            _assignment, event, outbox = await self._repo.create_rerun_assignment(
-                session, request.company_id, request.review_id
-            )
+            _assignment, event, outbox = await self._repo.create_rerun_assignment(session, request.company_id, request.review_id)
             return CommandResult(
                 response={"status": "queued"},
                 events=(event,),
@@ -317,7 +341,10 @@ class StartIssueFixHandler:
             result = await self._repo.transition_issue(session, issue, "fixing")
             payload = _issue_event_payload(issue, result)
             event = _event(
-                "review.issue_changed", "review_issue", result.id, result.version,
+                "review.issue_changed",
+                "review_issue",
+                result.id,
+                result.version,
                 getattr(result, "company_id", None),
                 payload,
             )
@@ -351,7 +378,10 @@ class ResolveIssueHandler:
             )
             payload = _issue_event_payload(issue, result)
             event = _event(
-                "review.issue_changed", "review_issue", result.id, result.version,
+                "review.issue_changed",
+                "review_issue",
+                result.id,
+                result.version,
                 getattr(result, "company_id", None),
                 payload,
             )
@@ -382,7 +412,10 @@ class VerifyIssueHandler:
             )
             payload = _issue_event_payload(issue, result)
             event = _event(
-                "review.issue_changed", "review_issue", result.id, result.version,
+                "review.issue_changed",
+                "review_issue",
+                result.id,
+                result.version,
                 getattr(result, "company_id", None),
                 payload,
             )
@@ -408,7 +441,10 @@ class CloseIssueHandler:
             result = await self._repo.transition_issue(session, issue, "closed")
             payload = _issue_event_payload(issue, result)
             event = _event(
-                "review.issue_changed", "review_issue", result.id, result.version,
+                "review.issue_changed",
+                "review_issue",
+                result.id,
+                result.version,
                 getattr(result, "company_id", None),
                 payload,
             )
@@ -439,7 +475,10 @@ class RejectIssueHandler:
             )
             payload = _issue_event_payload(issue, result)
             event = _event(
-                "review.issue_changed", "review_issue", result.id, result.version,
+                "review.issue_changed",
+                "review_issue",
+                result.id,
+                result.version,
                 getattr(result, "company_id", None),
                 payload,
             )

@@ -80,10 +80,7 @@ def validate_plan(
     if (
         not plan.goals
         or not plan.department_tasks
-        or any(
-            not task.objective.strip() or not task.deliverables or not task.acceptance_criteria
-            for task in plan.department_tasks
-        )
+        or any(not task.objective.strip() or not task.deliverables or not task.acceptance_criteria for task in plan.department_tasks)
     ):
         issues.append(
             PlanValidationIssue(
@@ -157,9 +154,7 @@ def validate_plan(
                         "Review strategy and review rounds are required.",
                     )
                 )
-        if emergency_disabled_capability_tags and any(
-            tag in emergency_disabled_capability_tags for tag in task.required_capability_tags
-        ):
+        if emergency_disabled_capability_tags and any(tag in emergency_disabled_capability_tags for tag in task.required_capability_tags):
             issues.append(
                 PlanValidationIssue(
                     "PV-010",

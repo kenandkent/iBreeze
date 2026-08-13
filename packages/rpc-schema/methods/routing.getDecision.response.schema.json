@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://ibreeze.ai/schemas/routing.getDecision.response.v1","title":"RoutingGetDecisionResponse","type":"object","additionalProperties":false,
+  "properties":{"decision":{"type":"object"},"attempts":{"type":"array"},"outcomes":{"type":"array"}},"required":["decision","attempts","outcomes"]
+}

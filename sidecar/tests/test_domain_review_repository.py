@@ -130,9 +130,13 @@ class TestLockIssue:
 class TestTransition:
     async def test_transitions_assignment(self, repo, mock_db_session, assignment_id, company_id):
         assignment = ReviewAssignment(
-            id=assignment_id, company_id=company_id,
-            artifact_id=uuid.uuid4(), artifact_sha256="a" * 64,
-            reviewer_employee_id=uuid.uuid4(), state="assigned", version=1,
+            id=assignment_id,
+            company_id=company_id,
+            artifact_id=uuid.uuid4(),
+            artifact_sha256="a" * 64,
+            reviewer_employee_id=uuid.uuid4(),
+            state="assigned",
+            version=1,
         )
         mock_cursor = AsyncMock()
         mock_cursor.rowcount = 1
@@ -146,9 +150,13 @@ class TestTransition:
 
     async def test_raises_state_transition_invalid(self, repo, mock_db_session, assignment_id, company_id):
         assignment = ReviewAssignment(
-            id=assignment_id, company_id=company_id,
-            artifact_id=uuid.uuid4(), artifact_sha256="a" * 64,
-            reviewer_employee_id=uuid.uuid4(), state="stale", version=1,
+            id=assignment_id,
+            company_id=company_id,
+            artifact_id=uuid.uuid4(),
+            artifact_sha256="a" * 64,
+            reviewer_employee_id=uuid.uuid4(),
+            state="stale",
+            version=1,
         )
 
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
@@ -156,9 +164,13 @@ class TestTransition:
 
     async def test_raises_optimistic_lock_conflict(self, repo, mock_db_session, assignment_id, company_id):
         assignment = ReviewAssignment(
-            id=assignment_id, company_id=company_id,
-            artifact_id=uuid.uuid4(), artifact_sha256="a" * 64,
-            reviewer_employee_id=uuid.uuid4(), state="assigned", version=1,
+            id=assignment_id,
+            company_id=company_id,
+            artifact_id=uuid.uuid4(),
+            artifact_sha256="a" * 64,
+            reviewer_employee_id=uuid.uuid4(),
+            state="assigned",
+            version=1,
         )
         mock_cursor = AsyncMock()
         mock_cursor.rowcount = 0
@@ -169,9 +181,13 @@ class TestTransition:
 
     async def test_updates_with_version_check(self, repo, mock_db_session, assignment_id, company_id):
         assignment = ReviewAssignment(
-            id=assignment_id, company_id=company_id,
-            artifact_id=uuid.uuid4(), artifact_sha256="a" * 64,
-            reviewer_employee_id=uuid.uuid4(), state="assigned", version=5,
+            id=assignment_id,
+            company_id=company_id,
+            artifact_id=uuid.uuid4(),
+            artifact_sha256="a" * 64,
+            reviewer_employee_id=uuid.uuid4(),
+            state="assigned",
+            version=5,
         )
         mock_cursor = AsyncMock()
         mock_cursor.rowcount = 1
@@ -187,8 +203,12 @@ class TestTransition:
 class TestTransitionIssue:
     async def test_transitions_issue(self, repo, mock_db_session, issue_id, company_id):
         issue = ReviewIssue(
-            id=issue_id, company_id=company_id,
-            severity="medium", category="functional", state="open", version=1,
+            id=issue_id,
+            company_id=company_id,
+            severity="medium",
+            category="functional",
+            state="open",
+            version=1,
         )
         mock_cursor = AsyncMock()
         mock_cursor.rowcount = 1
@@ -202,8 +222,12 @@ class TestTransitionIssue:
     async def test_raises_blocker_high_cannot_be_rejected(self, repo, mock_db_session, issue_id, company_id):
         for severity in ("blocker", "high"):
             issue = ReviewIssue(
-                id=issue_id, company_id=company_id,
-                severity=severity, category="functional", state="open", version=1,
+                id=issue_id,
+                company_id=company_id,
+                severity=severity,
+                category="functional",
+                state="open",
+                version=1,
             )
             with pytest.raises(ValueError, match="BLOCKER_HIGH_CANNOT_BE_REJECTED"):
                 await repo.transition_issue(mock_db_session, issue, "rejected")
@@ -211,30 +235,45 @@ class TestTransitionIssue:
     async def test_allows_medium_low_to_be_rejected(self, repo, mock_db_session, issue_id, company_id):
         for severity in ("medium", "low"):
             issue = ReviewIssue(
-                id=issue_id, company_id=company_id,
-                severity=severity, category="functional", state="open", version=1,
+                id=issue_id,
+                company_id=company_id,
+                severity=severity,
+                category="functional",
+                state="open",
+                version=1,
             )
             mock_cursor = AsyncMock()
             mock_cursor.rowcount = 1
             mock_db_session.execute.return_value = mock_cursor
 
             result = await repo.transition_issue(
-                mock_db_session, issue, "rejected", rejection_reason="not applicable",
+                mock_db_session,
+                issue,
+                "rejected",
+                rejection_reason="not applicable",
             )
             assert result.state == "rejected"
 
     async def test_raises_state_transition_invalid(self, repo, mock_db_session, issue_id, company_id):
         issue = ReviewIssue(
-            id=issue_id, company_id=company_id,
-            severity="medium", category="functional", state="closed", version=1,
+            id=issue_id,
+            company_id=company_id,
+            severity="medium",
+            category="functional",
+            state="closed",
+            version=1,
         )
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await repo.transition_issue(mock_db_session, issue, "open")
 
     async def test_raises_optimistic_lock_conflict(self, repo, mock_db_session, issue_id, company_id):
         issue = ReviewIssue(
-            id=issue_id, company_id=company_id,
-            severity="medium", category="functional", state="open", version=1,
+            id=issue_id,
+            company_id=company_id,
+            severity="medium",
+            category="functional",
+            state="open",
+            version=1,
         )
         mock_cursor = AsyncMock()
         mock_cursor.rowcount = 0
@@ -251,9 +290,14 @@ class TestCreateReport:
         report_artifact_id = uuid.uuid4()
 
         result = await repo.create_report(
-            mock_db_session, company_id, assignment_id,
-            reviewer_run_id, reviewed_artifact_id,
-            "a" * 64, "pass", report_artifact_id,
+            mock_db_session,
+            company_id,
+            assignment_id,
+            reviewer_run_id,
+            reviewed_artifact_id,
+            "a" * 64,
+            "pass",
+            report_artifact_id,
         )
 
         assert isinstance(result, ReviewReport)
@@ -268,8 +312,14 @@ class TestCreateReport:
     async def test_allows_needs_changes_and_failed_verdicts(self, repo, mock_db_session, company_id, assignment_id):
         for verdict in ("needs_changes", "failed"):
             result = await repo.create_report(
-                mock_db_session, company_id, assignment_id,
-                uuid.uuid4(), uuid.uuid4(), "a" * 64, verdict, uuid.uuid4(),
+                mock_db_session,
+                company_id,
+                assignment_id,
+                uuid.uuid4(),
+                uuid.uuid4(),
+                "a" * 64,
+                verdict,
+                uuid.uuid4(),
             )
             assert result.verdict == verdict
 

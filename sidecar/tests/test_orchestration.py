@@ -118,9 +118,7 @@ def test_valid_plan_has_no_issues() -> None:
         plan,
         active_department_ids=frozenset({"architecture", "development"}),
         candidate_department_ids=frozenset({"architecture", "development"}),
-        active_leader_department_ids=frozenset(
-            {"architecture", "development"}
-        ),
+        active_leader_department_ids=frozenset({"architecture", "development"}),
         allowed_employee_ids=frozenset({"employee-1", "employee-2"}),
     )
     assert issues == ()

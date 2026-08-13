@@ -1,0 +1,6 @@
+{
+  "category": "code_implementation",
+  "input": "脱敏路由验收输入 routing-golden-c1-code_implementation-06：验证 code_implementation 的确定性选择、故障恢复和审计关联。",
+  "task_id": "routing-golden-c1-code_implementation-06",
+  "tier": "C1"
+}

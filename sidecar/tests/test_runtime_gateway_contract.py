@@ -191,23 +191,13 @@ async def test_gateway_creates_snapshot_bound_task_execution(db, published_profi
         adapter_type="codex_cli",
         work_item_id=values["employee_task_id"],
     )
-    run = await (
-        await db.execute("SELECT * FROM agent_runs WHERE id=?", (result["run_id"],))
-    ).fetchone()
-    queue = await (
-        await db.execute("SELECT * FROM runtime_queue WHERE run_id=?", (result["run_id"],))
-    ).fetchone()
+    run = await (await db.execute("SELECT * FROM agent_runs WHERE id=?", (result["run_id"],))).fetchone()
+    queue = await (await db.execute("SELECT * FROM runtime_queue WHERE run_id=?", (result["run_id"],))).fetchone()
     assert result["status"] == "queued"
     assert run["run_purpose"] == "task_execution"
     assert queue["work_item_type"] == "employee_task"
     assert queue["priority"] == 10
-    assert (
-        await (
-            await db.execute(
-                "SELECT COUNT(*) AS count FROM outbox_events WHERE topic='run.queued'"
-            )
-        ).fetchone()
-    )["count"] == 1
+    assert (await (await db.execute("SELECT COUNT(*) AS count FROM outbox_events WHERE topic='run.queued'")).fetchone())["count"] == 1
 
 
 @pytest.mark.asyncio

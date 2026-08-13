@@ -61,23 +61,23 @@ class TestCliAdapter:
             assert result.failure_code is None
 
     def test_create_adapter_factory(self):
-        with patch.object(CliAdapter, '__init__', return_value=None):
+        with patch.object(CliAdapter, "__init__", return_value=None):
             with patch("ibreeze.runtime.cli.shutil.which", return_value="/usr/bin/codex"):
                 adapter = create_adapter("codex_cli")
                 assert isinstance(adapter, CodexCliAdapter)
 
     def test_codex_adapter_requires_executable(self):
-        with patch.object(CliAdapter, '__init__', side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
+        with patch.object(CliAdapter, "__init__", side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
             with pytest.raises(ValueError, match="AGENT_EXECUTABLE_NOT_FOUND"):
                 CodexCliAdapter(executable="/nonexistent/path")
 
     def test_claude_adapter_requires_executable(self):
-        with patch.object(CliAdapter, '__init__', side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
+        with patch.object(CliAdapter, "__init__", side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
             with pytest.raises(ValueError, match="AGENT_EXECUTABLE_NOT_FOUND"):
                 ClaudeCodeAdapter(executable="/nonexistent/path")
 
     def test_opencode_adapter_requires_executable(self):
-        with patch.object(CliAdapter, '__init__', side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
+        with patch.object(CliAdapter, "__init__", side_effect=ValueError("AGENT_EXECUTABLE_NOT_FOUND")):
             with pytest.raises(ValueError, match="AGENT_EXECUTABLE_NOT_FOUND"):
                 OpenCodeAdapter(executable="/nonexistent/path")
 
@@ -103,12 +103,12 @@ class TestModelRuntime:
     @pytest.mark.asyncio
     async def test_model_runtime_with_tool_calls(self):
         mock_transport = AsyncMock()
-        mock_transport.complete = AsyncMock(side_effect=[
-            ModelTurn(content="", tool_calls=(
-                ToolCall(id="1", name="test_tool", arguments={"x": 1}),
-            )),
-            ModelTurn(content="Done"),
-        ])
+        mock_transport.complete = AsyncMock(
+            side_effect=[
+                ModelTurn(content="", tool_calls=(ToolCall(id="1", name="test_tool", arguments={"x": 1}),)),
+                ModelTurn(content="Done"),
+            ]
+        )
 
         async def test_tool(args):
             return "result"
@@ -124,10 +124,12 @@ class TestModelRuntime:
     @pytest.mark.asyncio
     async def test_model_runtime_max_turns_exceeded(self):
         mock_transport = AsyncMock()
-        mock_transport.complete = AsyncMock(return_value=ModelTurn(
-            content="",
-            tool_calls=(ToolCall(id="1", name="test_tool", arguments={}),),
-        ))
+        mock_transport.complete = AsyncMock(
+            return_value=ModelTurn(
+                content="",
+                tool_calls=(ToolCall(id="1", name="test_tool", arguments={}),),
+            )
+        )
 
         async def test_tool(args):
             return "result"
@@ -139,12 +141,12 @@ class TestModelRuntime:
     @pytest.mark.asyncio
     async def test_model_runtime_permission_denied(self):
         mock_transport = AsyncMock()
-        mock_transport.complete = AsyncMock(side_effect=[
-            ModelTurn(content="", tool_calls=(
-                ToolCall(id="1", name="dangerous_tool", arguments={}),
-            )),
-            ModelTurn(content="Done"),
-        ])
+        mock_transport.complete = AsyncMock(
+            side_effect=[
+                ModelTurn(content="", tool_calls=(ToolCall(id="1", name="dangerous_tool", arguments={}),)),
+                ModelTurn(content="Done"),
+            ]
+        )
 
         async def deny_checker(tool_name, args):
             return ToolPermission.DENY
@@ -160,13 +162,15 @@ class TestModelRuntime:
     @pytest.mark.asyncio
     async def test_model_runtime_duplicate_tool_call_ids(self):
         mock_transport = AsyncMock()
-        mock_transport.complete = AsyncMock(return_value=ModelTurn(
-            content="",
-            tool_calls=(
-                ToolCall(id="1", name="tool1", arguments={}),
-                ToolCall(id="1", name="tool2", arguments={}),
-            ),
-        ))
+        mock_transport.complete = AsyncMock(
+            return_value=ModelTurn(
+                content="",
+                tool_calls=(
+                    ToolCall(id="1", name="tool1", arguments={}),
+                    ToolCall(id="1", name="tool2", arguments={}),
+                ),
+            )
+        )
 
         runtime = ModelRuntime(mock_transport, {})
         with pytest.raises(ValueError, match="MODEL_TOOL_CALL_ID_DUPLICATE"):
@@ -194,11 +198,13 @@ class TestTransport:
 
     def test_reverse_rpc_normalize_usage(self):
         transport = ReverseRpcTransport(credential_ref="c", model="m")
-        stats = transport.normalize_usage({
-            "prompt_tokens": 100,
-            "completion_tokens": 50,
-            "total_tokens": 150,
-        })
+        stats = transport.normalize_usage(
+            {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+            }
+        )
         assert stats.prompt_tokens == 100
         assert stats.completion_tokens == 50
         assert stats.total_tokens == 150
@@ -261,8 +267,10 @@ class TestEvents:
     def test_event_publisher_unsubscribe(self):
         publisher = EventPublisher()
         received = []
+
         def callback(e):
             return received.append(e)
+
         publisher.subscribe(EventType.RUN_STARTED, callback)
         publisher.unsubscribe(EventType.RUN_STARTED, callback)
         publisher.publish(
@@ -293,8 +301,10 @@ class TestEvents:
 
     def test_event_publisher_unsubscribe_nonexistent(self):
         publisher = EventPublisher()
+
         def callback(e):
             return None
+
         publisher.unsubscribe(EventType.RUN_STARTED, callback)
 
     def test_serialize_deserialize_event(self):
@@ -347,10 +357,18 @@ class TestEvents:
     def test_event_publisher_sequence_per_run_company(self):
         publisher = EventPublisher()
         e1 = publisher.publish(
-            EventType.RUN_STARTED, run_id="run-1", company_id="comp-1", employee_id="emp-1", payload={},
+            EventType.RUN_STARTED,
+            run_id="run-1",
+            company_id="comp-1",
+            employee_id="emp-1",
+            payload={},
         )
         e2 = publisher.publish(
-            EventType.RUN_STARTED, run_id="run-1", company_id="comp-2", employee_id="emp-1", payload={},
+            EventType.RUN_STARTED,
+            run_id="run-1",
+            company_id="comp-2",
+            employee_id="emp-1",
+            payload={},
         )
         assert e1.sequence == 1
         assert e2.sequence == 1
@@ -362,14 +380,27 @@ class TestEvents:
     def test_event_type_enum_has_all_expected_values(self):
         values = [v.value for v in EventType]
         expected = [
-            "run.started", "run.completed", "run.failed", "run.cancelled",
-            "tool.requested", "tool.approved", "tool.started", "tool.completed",
-            "tool.failed", "tool.denied",
-            "model.thinking", "model.output", "model.output.delta", "model.output.compacted",
+            "run.started",
+            "run.completed",
+            "run.failed",
+            "run.cancelled",
+            "tool.requested",
+            "tool.approved",
+            "tool.started",
+            "tool.completed",
+            "tool.failed",
+            "tool.denied",
+            "model.thinking",
+            "model.output",
+            "model.output.delta",
+            "model.output.compacted",
             "checkpoint.created",
-            "verification.passed", "verification.failed",
-            "permission.granted", "permission.denied",
-            "approval.requested", "approval.resolved",
+            "verification.passed",
+            "verification.failed",
+            "permission.granted",
+            "permission.denied",
+            "approval.requested",
+            "approval.resolved",
             "workspace.changed",
         ]
         for e in expected:

@@ -186,10 +186,12 @@ class TestPV003CycleDetection:
     """PV-003: Dependency cycle detection."""
 
     def test_direct_cycle(self):
-        plan = _plan((
-            _task("a", "architecture", dependencies=("b",)),
-            _task("b", "development", dependencies=("a",)),
-        ))
+        plan = _plan(
+            (
+                _task("a", "architecture", dependencies=("b",)),
+                _task("b", "development", dependencies=("a",)),
+            )
+        )
         issues = validate_plan(
             plan,
             active_department_ids=_ACTIVE,
@@ -367,14 +369,16 @@ class TestPV008SelfReview:
     """PV-008: A contributor cannot review the same artifact."""
 
     def test_self_review_detected(self):
-        plan = _plan((
-            _task(
-                "t1",
-                "architecture",
-                contributors=("employee-1",),
-                reviewers=("employee-1",),
-            ),
-        ))
+        plan = _plan(
+            (
+                _task(
+                    "t1",
+                    "architecture",
+                    contributors=("employee-1",),
+                    reviewers=("employee-1",),
+                ),
+            )
+        )
         issues = validate_plan(
             plan,
             active_department_ids=_ACTIVE,

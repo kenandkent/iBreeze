@@ -66,9 +66,7 @@ async def test_create_company_is_atomic(
         row = await (await db.execute(sql, params)).fetchone()
         assert row[0] == expected, table
 
-    company = await (
-        await db.execute("SELECT * FROM companies WHERE id=?", (result.id,))
-    ).fetchone()
+    company = await (await db.execute("SELECT * FROM companies WHERE id=?", (result.id,))).fetchone()
     office = await (
         await db.execute(
             "SELECT * FROM departments WHERE id=?",

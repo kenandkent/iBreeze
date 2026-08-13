@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Row, Col, Tag, Typography, Button, Input, Space, Empty } from 'antd';
 import { PlayCircleOutlined, PoweroffOutlined } from '@ant-design/icons';
 import type { AgentInfo } from '../types';
 import { useListAgents } from '../hooks/useAgent';
+import { useProfiles } from '../hooks/useRouting';
 import { logger } from '../utils/logger';
 
 const { Title, Text } = Typography;
@@ -22,10 +23,12 @@ const statusLabel: Record<string, string> = {
 
 export default function AgentPage() {
   const { companyId } = useParams<{ companyId: string }>();
+  const navigate = useNavigate();
   useEffect(() => { logger.logPageInit('AgentPage'); }, []);
 
   const [messageInputs, setMessageInputs] = useState<Record<string, string>>({});
   const { data: agents, isLoading } = useListAgents(companyId!);
+  const profiles = useProfiles(companyId!);
 
   return (
     <div>
@@ -85,6 +88,21 @@ export default function AgentPage() {
           ))}
         </Row>
       )}
+      <Card title="职员模型底座" style={{ marginTop: 24 }} loading={profiles.isLoading}>
+        <TableLikeProfiles
+          profiles={profiles.data?.profiles ?? []}
+          onOpen={(profileId) => navigate(`/companies/${companyId}/profiles/${profileId}/routing`)}
+        />
+      </Card>
     </div>
   );
+}
+
+function TableLikeProfiles({ profiles, onOpen }: { profiles: Array<{ profile_id: string; display_name: string; profile_type: 'agent_cli' | 'api_model'; current_version_status: string; updated_at: string }>; onOpen: (profileId: string) => void }) {
+  return <div style={{ display: 'grid', gap: 8 }}>{profiles.length === 0 ? <Text type="secondary">暂无模型底座</Text> : profiles.map(profile => <Space key={profile.profile_id} style={{ justifyContent: 'space-between' }}>
+    <Text>{profile.display_name}</Text>
+    <Tag>{profile.profile_type === 'api_model' ? 'API Model' : 'CLI Agent'}</Tag>
+    <Tag>{profile.current_version_status}</Tag>
+    <Button size="small" onClick={() => onOpen(profile.profile_id)}>{profile.profile_type === 'api_model' ? '配置路由' : '查看说明'}</Button>
+  </Space>)}</div>;
 }

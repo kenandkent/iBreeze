@@ -1,0 +1,6 @@
+{
+  "category": "structured_schema",
+  "input": "脱敏路由验收输入 routing-golden-c2-structured_schema-01：验证 structured_schema 的确定性选择、故障恢复和审计关联。",
+  "task_id": "routing-golden-c2-structured_schema-01",
+  "tier": "C2"
+}

@@ -40,9 +40,7 @@ class TestMigrationRunner:
     async def test_ensure_migration_ledger_creates_table(self, tmp_path: Path) -> None:
         async with aiosqlite.connect(tmp_path / "test.db") as db:
             await ensure_migration_ledger(db)
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
             assert await cursor.fetchone() is not None
 
     async def test_get_applied_migrations_empty(self, tmp_path: Path) -> None:
@@ -60,9 +58,7 @@ class TestMigrationRunner:
         )
         async with aiosqlite.connect(tmp_path / "test.db") as db:
             await run_migrations(db, migrations=[test_migration])
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_migration_run'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='test_migration_run'")
             assert await cursor.fetchone() is not None
             applied = await get_applied_migrations(db)
             assert 99 in applied

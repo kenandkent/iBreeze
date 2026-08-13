@@ -90,7 +90,7 @@ async def test_cli_adapter_requires_rust_execution_snapshot(
 ) -> None:
     executable = tmp_path / "agent"
     executable.write_text(
-        "#!/bin/sh\nprintf '%s|%s' \"$PWD\" \"$1\"\n",
+        '#!/bin/sh\nprintf \'%s|%s\' "$PWD" "$1"\n',
         encoding="utf-8",
     )
     executable.chmod(0o700)

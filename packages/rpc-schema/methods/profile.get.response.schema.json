@@ -30,6 +30,30 @@
     "updated_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "profile_type": {
+      "enum": ["agent_cli", "api_model"]
+    },
+    "current_version_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "routing_policy_json": {
+      "type": "string"
+    },
+    "versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["draft", "published", "retired"] },
+          "profile_type": { "enum": ["agent_cli", "api_model"] },
+          "routing_policy_json": { "type": "string" }
+        },
+        "required": ["id", "status", "profile_type", "routing_policy_json"]
+      }
     }
   },
   "additionalProperties": false,
@@ -39,6 +63,10 @@
     "status",
     "version",
     "created_at",
-    "updated_at"
+    "updated_at",
+    "profile_type",
+    "current_version_id",
+    "routing_policy_json",
+    "versions"
   ]
 }

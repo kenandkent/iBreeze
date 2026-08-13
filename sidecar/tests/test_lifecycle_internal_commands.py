@@ -27,8 +27,7 @@ class TestEvaluateInternalCommand:
         self.lc._department_complete_handler = AsyncMock()
         self.lc._company_complete_handler = AsyncMock()
 
-    def _conn(self, *, run_row=None, task_row=None, dept_row=None, company_row=None,
-              assignment_row=None, issue_row=None) -> AsyncMock:
+    def _conn(self, *, run_row=None, task_row=None, dept_row=None, company_row=None, assignment_row=None, issue_row=None) -> AsyncMock:
         conn = AsyncMock()
 
         async def fake_execute(sql, _params=()):
@@ -73,7 +72,11 @@ class TestEvaluateInternalCommand:
         self.lc._employee_start_handler.handle = AsyncMock(return_value={"ok": True})
         result = await self.lc._evaluate_internal_command(
             "StartEmployeeTask",
-            {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000002", "expected_version": 2},
+            {
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "aggregate_id": "00000000-0000-0000-0000-000000000002",
+                "expected_version": 2,
+            },
         )
         assert result == {"ok": True}
 
@@ -81,7 +84,8 @@ class TestEvaluateInternalCommand:
     async def test_start_employee_task_ignored_missing_fields(self) -> None:
         self._handlers()
         result = await self.lc._evaluate_internal_command(
-            "StartEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000002"}
+            "StartEmployeeTask",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000002"},
         )
         assert result == {"status": "ignored", "reason": "task_id_or_version_missing"}
 
@@ -90,11 +94,17 @@ class TestEvaluateInternalCommand:
         self._handlers()
         self.lc._employee_submit_handler.handle = AsyncMock(return_value={"ok": True})
         conn = self._conn(
-            run_row={"employee_task_id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "status": "succeeded"},
+            run_row={
+                "employee_task_id": "00000000-0000-0000-0000-000000000003",
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "status": "succeeded",
+            },
             task_row={"version": 1},
         )
         result = await self.lc._evaluate_internal_command(
-            "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+            "EvaluateEmployeeSubmission",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+            connection=conn,
         )
         assert result == {"ok": True}
 
@@ -103,7 +113,9 @@ class TestEvaluateInternalCommand:
         self._handlers()
         conn = self._conn(run_row=None)
         result = await self.lc._evaluate_internal_command(
-            "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+            "EvaluateEmployeeSubmission",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+            connection=conn,
         )
         assert result == {"status": "ignored", "reason": "run_not_successful_or_not_employee_task"}
 
@@ -111,26 +123,36 @@ class TestEvaluateInternalCommand:
     async def test_evaluate_employee_submission_ignored_run_not_succeeded(self) -> None:
         self._handlers()
         conn = self._conn(
-            run_row={"employee_task_id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "status": "failed"},
+            run_row={
+                "employee_task_id": "00000000-0000-0000-0000-000000000003",
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "status": "failed",
+            },
             task_row={"version": 1},
         )
         result = await self.lc._evaluate_internal_command(
-            "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+            "EvaluateEmployeeSubmission",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+            connection=conn,
         )
         assert result == {"status": "ignored", "reason": "run_not_successful_or_not_employee_task"}
 
     @pytest.mark.asyncio
     async def test_evaluate_employee_submission_ignored_on_lock_conflict(self) -> None:
         self._handlers()
-        self.lc._employee_submit_handler.handle = AsyncMock(
-            side_effect=ValueError("OPTIMISTIC_LOCK_CONFLICT")
-        )
+        self.lc._employee_submit_handler.handle = AsyncMock(side_effect=ValueError("OPTIMISTIC_LOCK_CONFLICT"))
         conn = self._conn(
-            run_row={"employee_task_id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "status": "succeeded"},
+            run_row={
+                "employee_task_id": "00000000-0000-0000-0000-000000000003",
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "status": "succeeded",
+            },
             task_row={"version": 1},
         )
         result = await self.lc._evaluate_internal_command(
-            "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+            "EvaluateEmployeeSubmission",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+            connection=conn,
         )
         assert result == {"status": "ignored", "reason": "OPTIMISTIC_LOCK_CONFLICT"}
 
@@ -147,11 +169,17 @@ class TestEvaluateInternalCommand:
     async def test_evaluate_employee_submission_employee_task_missing(self) -> None:
         self._handlers()
         conn = self._conn(
-            run_row={"employee_task_id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "status": "succeeded"},
+            run_row={
+                "employee_task_id": "00000000-0000-0000-0000-000000000003",
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "status": "succeeded",
+            },
             task_row=None,
         )
         result = await self.lc._evaluate_internal_command(
-            "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+            "EvaluateEmployeeSubmission",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+            connection=conn,
         )
         assert result == {"status": "ignored", "reason": "employee_task_missing"}
 
@@ -160,19 +188,27 @@ class TestEvaluateInternalCommand:
         self._handlers()
         self.lc._employee_submit_handler.handle = AsyncMock(side_effect=ValueError("SOMETHING_ELSE"))
         conn = self._conn(
-            run_row={"employee_task_id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "status": "succeeded"},
+            run_row={
+                "employee_task_id": "00000000-0000-0000-0000-000000000003",
+                "company_id": "00000000-0000-0000-0000-000000000001",
+                "status": "succeeded",
+            },
             task_row={"version": 1},
         )
         with pytest.raises(ValueError, match="SOMETHING_ELSE"):
             await self.lc._evaluate_internal_command(
-                "EvaluateEmployeeSubmission", {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"}, connection=conn
+                "EvaluateEmployeeSubmission",
+                {"company_id": "00000000-0000-0000-0000-000000000001", "run_id": "00000000-0000-0000-0000-000000000008"},
+                connection=conn,
             )
 
     @pytest.mark.asyncio
     async def test_evaluate_company_readiness_re_raises_unknown_valueerror(self) -> None:
         self._handlers()
         self.lc._company_complete_handler.handle = AsyncMock(side_effect=ValueError("SOMETHING_ELSE"))
-        conn = self._conn(company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
+        conn = self._conn(
+            company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
+        )
         with pytest.raises(ValueError, match="SOMETHING_ELSE"):
             await self.lc._evaluate_internal_command(
                 "EvaluateCompanyReadiness",
@@ -184,7 +220,9 @@ class TestEvaluateInternalCommand:
     async def test_evaluate_department_readiness_re_raises_unknown_valueerror(self) -> None:
         self._handlers()
         self.lc._department_complete_handler.handle = AsyncMock(side_effect=ValueError("SOMETHING_ELSE"))
-        conn = self._conn(dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
+        conn = self._conn(
+            dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
+        )
         with pytest.raises(ValueError, match="SOMETHING_ELSE"):
             await self.lc._evaluate_internal_command(
                 "EvaluateDepartmentReadiness",
@@ -217,7 +255,9 @@ class TestEvaluateInternalCommand:
             task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1},
         )
         result = await self.lc._evaluate_internal_command(
-            "AcceptEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "issue_id": "00000000-0000-0000-0000-000000000007"}, connection=conn
+            "AcceptEmployeeTask",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "issue_id": "00000000-0000-0000-0000-000000000007"},
+            connection=conn,
         )
         assert result == {"ok": True}
 
@@ -234,7 +274,9 @@ class TestEvaluateInternalCommand:
     async def test_evaluate_company_readiness_success(self) -> None:
         self._handlers()
         self.lc._company_complete_handler.handle = AsyncMock(return_value={"ok": True})
-        conn = self._conn(company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
+        conn = self._conn(
+            company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
+        )
         result = await self.lc._evaluate_internal_command(
             "EvaluateCompanyReadiness",
             {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000004"},
@@ -245,10 +287,10 @@ class TestEvaluateInternalCommand:
     @pytest.mark.asyncio
     async def test_evaluate_company_readiness_blocked(self) -> None:
         self._handlers()
-        self.lc._company_complete_handler.handle = AsyncMock(
-            side_effect=ValueError("COMPLETION_GATE_BLOCKED:review")
+        self.lc._company_complete_handler.handle = AsyncMock(side_effect=ValueError("COMPLETION_GATE_BLOCKED:review"))
+        conn = self._conn(
+            company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
         )
-        conn = self._conn(company_row={"id": "00000000-0000-0000-0000-000000000005", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
         result = await self.lc._evaluate_internal_command(
             "EvaluateCompanyReadiness",
             {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000004"},
@@ -271,7 +313,9 @@ class TestEvaluateInternalCommand:
     async def test_evaluate_department_readiness_success(self) -> None:
         self._handlers()
         self.lc._department_complete_handler.handle = AsyncMock(return_value={"ok": True})
-        conn = self._conn(dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
+        conn = self._conn(
+            dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
+        )
         result = await self.lc._evaluate_internal_command(
             "EvaluateDepartmentReadiness",
             {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
@@ -282,10 +326,10 @@ class TestEvaluateInternalCommand:
     @pytest.mark.asyncio
     async def test_evaluate_department_readiness_blocked(self) -> None:
         self._handlers()
-        self.lc._department_complete_handler.handle = AsyncMock(
-            side_effect=ValueError("COMPLETION_GATE_BLOCKED:issues")
+        self.lc._department_complete_handler.handle = AsyncMock(side_effect=ValueError("COMPLETION_GATE_BLOCKED:issues"))
+        conn = self._conn(
+            dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
         )
-        conn = self._conn(dept_row={"id": "00000000-0000-0000-0000-000000000004", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
         result = await self.lc._evaluate_internal_command(
             "EvaluateDepartmentReadiness",
             {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
@@ -322,21 +366,27 @@ class TestEvaluateInternalCommand:
     async def test_default_accept_success(self) -> None:
         self._handlers()
         self.lc._employee_accept_handler.handle = AsyncMock(return_value={"ok": True})
-        conn = self._conn(task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
+        conn = self._conn(
+            task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
+        )
         result = await self.lc._evaluate_internal_command(
-            "AcceptEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"}, connection=conn
+            "AcceptEmployeeTask",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
+            connection=conn,
         )
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
     async def test_default_accept_blocked(self) -> None:
         self._handlers()
-        self.lc._employee_accept_handler.handle = AsyncMock(
-            side_effect=ValueError("COMPLETION_GATE_BLOCKED:gate")
+        self.lc._employee_accept_handler.handle = AsyncMock(side_effect=ValueError("COMPLETION_GATE_BLOCKED:gate"))
+        conn = self._conn(
+            task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
         )
-        conn = self._conn(task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
         result = await self.lc._evaluate_internal_command(
-            "AcceptEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"}, connection=conn
+            "AcceptEmployeeTask",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
+            connection=conn,
         )
         assert result == {"status": "blocked", "reason": "COMPLETION_GATE_BLOCKED:gate"}
 
@@ -345,18 +395,22 @@ class TestEvaluateInternalCommand:
         self._handlers()
         conn = self._conn(task_row=None)
         result = await self.lc._evaluate_internal_command(
-            "AcceptEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"}, connection=conn
+            "AcceptEmployeeTask",
+            {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
+            connection=conn,
         )
         assert result == {"status": "ignored", "reason": "employee_task_missing"}
 
     @pytest.mark.asyncio
     async def test_default_accept_re_raises_unknown_valueerror(self) -> None:
         self._handlers()
-        self.lc._employee_accept_handler.handle = AsyncMock(
-            side_effect=ValueError("SOMETHING_ELSE")
+        self.lc._employee_accept_handler.handle = AsyncMock(side_effect=ValueError("SOMETHING_ELSE"))
+        conn = self._conn(
+            task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1}
         )
-        conn = self._conn(task_row={"id": "00000000-0000-0000-0000-000000000003", "company_id": "00000000-0000-0000-0000-000000000001", "version": 1})
         with pytest.raises(ValueError, match="SOMETHING_ELSE"):
             await self.lc._evaluate_internal_command(
-                "AcceptEmployeeTask", {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"}, connection=conn
+                "AcceptEmployeeTask",
+                {"company_id": "00000000-0000-0000-0000-000000000001", "aggregate_id": "00000000-0000-0000-0000-000000000003"},
+                connection=conn,
             )

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/routing-policy-rpc.v1",
+  "$ref": "https://ibreeze.ai/schemas/routing-policy.v1"
+}

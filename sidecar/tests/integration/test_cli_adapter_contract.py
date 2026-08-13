@@ -38,7 +38,7 @@ def _make_fake_cli(bin_dir: Path, name: str, exit_code: int = 0, version: str = 
         f"#!/bin/sh\n"
         f'if [ "$1" = "--version" ]; then\n'
         f'  echo "{name} version {version}"\n'
-        f'  exit {exit_code}\n'
+        f"  exit {exit_code}\n"
         f"fi\n"
         f'echo "fake {name} executed"\n'
     )

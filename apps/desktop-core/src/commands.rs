@@ -16,13 +16,16 @@ use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use tauri::State;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-use crate::broker::credential::CredentialStore;
+use crate::broker::credential::{CredentialAuthType, CredentialStore, KeychainCredential};
+use crate::broker::credential_idempotency::CredentialIdempotencyStore;
+use crate::broker::credential_index::{CredentialIndexStore, CredentialMetadata, CredentialState};
 use crate::broker::dns_policy::DnsPolicy;
 use crate::broker::domain_policy::NormalizedDomain;
 use crate::broker::egress::EgressBroker;
@@ -75,6 +78,7 @@ pub struct AppState {
     pub reverse_table: Arc<ReverseMethodTable>,
     pub process_supervisor: Arc<ProcessSupervisor>,
     pub reverse_broker: Arc<ReverseBroker>,
+    credential_idempotency_lock: Arc<Mutex<()>>,
 }
 
 impl AppState {
@@ -131,6 +135,7 @@ impl AppState {
             reverse_table: rev_table_arc.clone(),
             process_supervisor,
             reverse_broker,
+            credential_idempotency_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -300,6 +305,7 @@ pub async fn auth_close_profile_impl(state: &AppState) -> Result<CloseProfileRes
     state.process_supervisor.bind_client(None).await;
     state.reverse_broker.bind_client(None).await;
     state.reverse_broker.bind_profile(None).await;
+    state.reverse_broker.bind_profile_root(None).await;
     state.reverse_broker.bind_catalog(None).await;
     let mut auth = state.auth.write().await;
     auth.access_token = None;
@@ -457,6 +463,7 @@ pub async fn auth_logout_impl(state: &AppState) -> Result<LogoutResult, AppError
     state.process_supervisor.bind_client(None).await;
     state.reverse_broker.bind_client(None).await;
     state.reverse_broker.bind_profile(None).await;
+    state.reverse_broker.bind_profile_root(None).await;
     state.reverse_broker.bind_catalog(None).await;
     let (access_token, profile_id) = {
         let mut auth = state.auth.write().await;
@@ -518,7 +525,7 @@ pub async fn rpc_request(
                 ));
             }
         }
-        return dispatch_rust_core(state.inner(), &method, params).await;
+        return dispatch_rust_core(state.inner(), &method, params, None).await;
     }
     let sidecar_kind = crate::rpc::generated_method_kinds::sidecar_method_kind(&method);
     let owner_kind = crate::rpc::generated_method_kinds::rust_core_method_kind(&method);
@@ -545,7 +552,7 @@ pub async fn rpc_request(
         }
     };
     let result = if owner_kind.is_some() {
-        dispatch_rust_core(state.inner(), &method, params).await
+        dispatch_rust_core(state.inner(), &method, params, key).await
     } else {
         state
             .supervisor
@@ -568,6 +575,7 @@ async fn dispatch_rust_core(
     state: &AppState,
     method: &str,
     params: Value,
+    idempotency_key: Option<Uuid>,
 ) -> Result<Value, AppError> {
     let object = params
         .as_object()
@@ -614,6 +622,28 @@ async fn dispatch_rust_core(
         .map_err(|error| AppError::Internal(error.to_string())),
         "auth.closeProfile" => serde_json::to_value(auth_close_profile_impl(state).await?)
             .map_err(|error| AppError::Internal(error.to_string())),
+        "credential.create" => {
+            ensure_rpc_fields(
+                object,
+                &["label", "provider_release_id", "auth_type", "secret"],
+            )?;
+            credential_mutation_impl(state, method, object, idempotency_key).await
+        }
+        "credential.list" => {
+            ensure_rpc_fields(object, &["provider_release_id"])?;
+            credential_list_impl(state, object).await
+        }
+        "credential.updateSecret" | "credential.delete" | "credential.probe" => {
+            if method == "credential.updateSecret" {
+                ensure_rpc_fields(
+                    object,
+                    &["credential_ref", "expected_metadata_version", "secret"],
+                )?;
+            } else {
+                ensure_rpc_fields(object, &["credential_ref", "expected_metadata_version"])?;
+            }
+            credential_mutation_impl(state, method, object, idempotency_key).await
+        }
         "system.health" => system_health_impl(state).await,
         "updater.verifyLaunch" => {
             serde_json::to_value(crate::commands::updater::updater_verify_launch_impl(state).await?)
@@ -625,6 +655,571 @@ async fn dispatch_rust_core(
         .map_err(|error| AppError::Internal(error.to_string())),
         _ => Err(AppError::Validation("METHOD_NOT_ALLOWED".to_owned())),
     }
+}
+
+fn ensure_rpc_fields(
+    object: &serde_json::Map<String, Value>,
+    allowed: &[&str],
+) -> Result<(), AppError> {
+    if object
+        .keys()
+        .any(|key| !allowed.iter().any(|item| item == key))
+    {
+        return Err(AppError::Validation("RPC_PARAMS_INVALID".to_owned()));
+    }
+    Ok(())
+}
+
+async fn credential_mutation_impl(
+    state: &AppState,
+    method: &str,
+    object: &serde_json::Map<String, Value>,
+    idempotency_key: Option<Uuid>,
+) -> Result<Value, AppError> {
+    let key = idempotency_key.ok_or_else(|| {
+        AppError::Validation("A write RPC requires an idempotency key".to_owned())
+    })?;
+    let (profile_id, root) = active_profile_root(state).await?;
+    let hmac_key = state
+        .credential_store
+        .load_or_create_profile_idempotency_key(&profile_id)?;
+    let fingerprint = credential_request_fingerprint(&hmac_key, method, object)?;
+    let _guard = state.credential_idempotency_lock.lock().await;
+    let records = CredentialIdempotencyStore::new(&root);
+    if let Some(response) = records.lookup(key, method, &fingerprint)? {
+        return Ok(response);
+    }
+    let response = match method {
+        "credential.create" => credential_create_impl(state, object).await?,
+        "credential.updateSecret" => credential_update_impl(state, object).await?,
+        "credential.delete" => credential_delete_impl(state, object).await?,
+        "credential.probe" => credential_probe_impl(state, object).await?,
+        _ => return Err(AppError::Validation("METHOD_NOT_ALLOWED".to_owned())),
+    };
+    records.record(key, method, &fingerprint, response.clone())?;
+    Ok(response)
+}
+
+fn credential_request_fingerprint(
+    hmac_key: &[u8; 32],
+    method: &str,
+    object: &serde_json::Map<String, Value>,
+) -> Result<String, AppError> {
+    use hmac::{Hmac, Mac};
+    let secret = object.get("secret").and_then(Value::as_str).unwrap_or("");
+    let mut hmac = Hmac::<Sha256>::new_from_slice(hmac_key)
+        .map_err(|_| AppError::Internal("HMAC initialization failed".to_owned()))?;
+    hmac.update(secret.as_bytes());
+    let secret_hmac = format!("{:x}", hmac.finalize().into_bytes());
+    let mut sanitized = std::collections::BTreeMap::new();
+    for (name, value) in object {
+        if name != "secret" {
+            sanitized.insert(name, value);
+        }
+    }
+    let payload = serde_json::json!({
+        "method": method,
+        "params": sanitized,
+        "secret_hmac": secret_hmac,
+    });
+    let bytes =
+        serde_json::to_vec(&payload).map_err(|error| AppError::Internal(error.to_string()))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+async fn active_profile_root(state: &AppState) -> Result<(String, PathBuf), AppError> {
+    let profile_id = state
+        .auth
+        .read()
+        .await
+        .profile_directory_id
+        .clone()
+        .ok_or_else(|| AppError::Auth("PROFILE_NOT_OPEN".to_owned()))?;
+    let root = state.store.profile_path(&profile_id)?;
+    Ok((profile_id, root))
+}
+
+fn normalize_credential_label(label: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    label.trim().nfkc().flat_map(char::to_lowercase).collect()
+}
+
+async fn credential_create_impl(
+    state: &AppState,
+    object: &serde_json::Map<String, Value>,
+) -> Result<Value, AppError> {
+    let (profile_id, root) = active_profile_root(state).await?;
+    let label = string_value(object, "label")?;
+    let provider_release_id = Uuid::parse_str(&string_value(object, "provider_release_id")?)
+        .map_err(|_| AppError::Validation("CREDENTIAL_PROVIDER_INVALID".to_owned()))?;
+    let auth_type = string_value(object, "auth_type")?;
+    let secret = string_value(object, "secret")?;
+    if label.chars().count() > 100 || secret.chars().count() > 16_384 {
+        return Err(AppError::Validation("RPC_PARAMS_INVALID".to_owned()));
+    }
+    state
+        .reverse_broker
+        .validate_credential_auth_type(provider_release_id, &auth_type)
+        .await?;
+    let normalized_label = normalize_credential_label(&label);
+    let index_store = CredentialIndexStore::new(&root);
+    let mut index = index_store.load()?;
+    if index.credentials.iter().any(|item| {
+        item.provider_release_id == provider_release_id
+            && item.normalized_label == normalized_label
+            && !matches!(item.state, CredentialState::Deleting)
+    }) {
+        return Err(AppError::Validation(
+            "CREDENTIAL_LABEL_DUPLICATE".to_owned(),
+        ));
+    }
+    let credential_ref = Uuid::new_v4();
+    let now = Utc::now().to_rfc3339();
+    let auth = match auth_type.as_str() {
+        "bearer" => CredentialAuthType::Bearer,
+        "x_api_key" => CredentialAuthType::XApiKey,
+        _ => {
+            return Err(AppError::Validation(
+                "CREDENTIAL_AUTH_TYPE_INVALID".to_owned(),
+            ))
+        }
+    };
+    let creating = CredentialMetadata {
+        credential_ref,
+        label,
+        normalized_label,
+        provider_release_id,
+        auth_type,
+        state: CredentialState::Creating,
+        resume_state: None,
+        metadata_version: 1,
+        active_secret_version: None,
+        pending_secret_version: Some(1),
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+    index.credentials.push(creating.clone());
+    index_store.save(index)?;
+    if let Err(error) = state.credential_store.store_credential_version(
+        &profile_id,
+        credential_ref,
+        1,
+        &KeychainCredential {
+            schema_version: 1,
+            provider_id: provider_release_id,
+            auth_type: auth,
+            secret: Zeroizing::new(secret),
+            created_at: now,
+        },
+    ) {
+        let mut rollback = index_store.load()?;
+        rollback
+            .credentials
+            .retain(|item| item.credential_ref != credential_ref);
+        index_store.save(rollback)?;
+        return Err(error);
+    }
+    let mut index = index_store.load()?;
+    let item = index
+        .credentials
+        .iter_mut()
+        .find(|item| item.credential_ref == credential_ref)
+        .ok_or_else(|| AppError::Security("CREDENTIAL_INDEX_CORRUPT".to_owned()))?;
+    item.state = CredentialState::Unverified;
+    item.pending_secret_version = None;
+    item.active_secret_version = Some(1);
+    item.metadata_version += 1;
+    item.updated_at = Utc::now().to_rfc3339();
+    let metadata = item.clone();
+    index_store.save(index)?;
+    serde_json::to_value(metadata).map_err(|error| AppError::Internal(error.to_string()))
+}
+
+async fn credential_list_impl(
+    state: &AppState,
+    object: &serde_json::Map<String, Value>,
+) -> Result<Value, AppError> {
+    let (_profile_id, root) = active_profile_root(state).await?;
+    let index = CredentialIndexStore::new(root).load()?;
+    let provider = object
+        .get("provider_release_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let mut items: Vec<CredentialMetadata> = index
+        .credentials
+        .into_iter()
+        .filter(|item| provider.is_none() || Some(item.provider_release_id) == provider)
+        .collect();
+    items.sort_by(|left, right| {
+        left.label
+            .cmp(&right.label)
+            .then(left.credential_ref.cmp(&right.credential_ref))
+    });
+    serde_json::to_value(serde_json::json!({"items": items}))
+        .map_err(|error| AppError::Internal(error.to_string()))
+}
+
+async fn credential_update_impl(
+    state: &AppState,
+    object: &serde_json::Map<String, Value>,
+) -> Result<Value, AppError> {
+    let (profile_id, root) = active_profile_root(state).await?;
+    let credential_ref = Uuid::parse_str(&string_value(object, "credential_ref")?)
+        .map_err(|_| AppError::Validation("CREDENTIAL_REF_INVALID".to_owned()))?;
+    let expected = object
+        .get("expected_metadata_version")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            AppError::Validation("RPC_PARAM_REQUIRED:expected_metadata_version".to_owned())
+        })?;
+    let secret = string_value(object, "secret")?;
+    if secret.chars().count() > 16_384 {
+        return Err(AppError::Validation("RPC_PARAMS_INVALID".to_owned()));
+    }
+    let store = CredentialIndexStore::new(&root);
+    let mut index = store.load()?;
+    let (provider_release_id, auth_type, active_version, next, previous_metadata) = {
+        let item = index
+            .credentials
+            .iter()
+            .find(|item| item.credential_ref == credential_ref)
+            .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?;
+        if item.metadata_version != expected {
+            return Err(AppError::Validation(
+                "CREDENTIAL_VERSION_MISMATCH".to_owned(),
+            ));
+        }
+        if !matches!(
+            item.state,
+            CredentialState::Ready | CredentialState::Unverified
+        ) {
+            return Err(AppError::Validation("CREDENTIAL_IN_USE".to_owned()));
+        }
+        let active = item
+            .active_secret_version
+            .ok_or_else(|| AppError::Security("CREDENTIAL_INDEX_CORRUPT".to_owned()))?;
+        (
+            item.provider_release_id,
+            item.auth_type.clone(),
+            active,
+            active + 1,
+            item.clone(),
+        )
+    };
+    // A running Snapshot or an active HTTP lease may still authorize the
+    // current secret version.  Replacing it would make an already planned Run
+    // fail non-deterministically, so updates fail closed until those leases
+    // finish.  Draft/Profile references alone are not a barrier; publish
+    // preflight and the Snapshot authorization check handle that race.
+    let snapshot_count = state
+        .reverse_broker
+        .snapshot_authorization
+        .active_for_credential(credential_ref)
+        .await;
+    let lease_count = state
+        .reverse_broker
+        .http_broker
+        .active_credential_leases(credential_ref)
+        .await;
+    if snapshot_count > 0 || lease_count > 0 {
+        return Err(AppError::Validation("CREDENTIAL_IN_USE".to_owned()));
+    }
+    if let Some(item) = index
+        .credentials
+        .iter_mut()
+        .find(|item| item.credential_ref == credential_ref)
+    {
+        item.state = CredentialState::Updating;
+        item.resume_state = Some(CredentialState::Unverified);
+        item.pending_secret_version = Some(next);
+        item.metadata_version += 1;
+    }
+    store.save(index)?;
+    let auth = if auth_type == "bearer" {
+        CredentialAuthType::Bearer
+    } else {
+        CredentialAuthType::XApiKey
+    };
+    if let Err(error) = state.credential_store.store_credential_version(
+        &profile_id,
+        credential_ref,
+        next,
+        &KeychainCredential {
+            schema_version: 1,
+            provider_id: provider_release_id,
+            auth_type: auth,
+            secret: Zeroizing::new(secret),
+            created_at: Utc::now().to_rfc3339(),
+        },
+    ) {
+        let mut rollback = store.load()?;
+        if let Some(item) = rollback
+            .credentials
+            .iter_mut()
+            .find(|item| item.credential_ref == credential_ref)
+        {
+            *item = previous_metadata;
+        }
+        store.save(rollback)?;
+        return Err(error);
+    }
+    let mut index = store.load()?;
+    let item = index
+        .credentials
+        .iter_mut()
+        .find(|item| item.credential_ref == credential_ref)
+        .expect("credential exists");
+    item.state = CredentialState::Unverified;
+    item.resume_state = None;
+    item.active_secret_version = Some(next);
+    item.pending_secret_version = None;
+    item.metadata_version += 1;
+    item.updated_at = Utc::now().to_rfc3339();
+    let result = item.clone();
+    store.save(index)?;
+    let _ = state.credential_store.delete_credential_version(
+        &profile_id,
+        credential_ref,
+        active_version,
+    )?;
+    serde_json::to_value(result).map_err(|error| AppError::Internal(error.to_string()))
+}
+
+async fn credential_delete_impl(
+    state: &AppState,
+    object: &serde_json::Map<String, Value>,
+) -> Result<Value, AppError> {
+    let (profile_id, root) = active_profile_root(state).await?;
+    let credential_ref = Uuid::parse_str(&string_value(object, "credential_ref")?)
+        .map_err(|_| AppError::Validation("CREDENTIAL_REF_INVALID".to_owned()))?;
+    let expected = object
+        .get("expected_metadata_version")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            AppError::Validation("RPC_PARAM_REQUIRED:expected_metadata_version".to_owned())
+        })?;
+    let store = CredentialIndexStore::new(&root);
+    let mut index = store.load()?;
+    let item = index
+        .credentials
+        .iter()
+        .find(|item| item.credential_ref == credential_ref)
+        .cloned()
+        .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?;
+    if item.metadata_version != expected {
+        return Err(AppError::Validation(
+            "CREDENTIAL_VERSION_MISMATCH".to_owned(),
+        ));
+    }
+    let resume_state = match item.state {
+        CredentialState::Ready | CredentialState::Unverified => item.state.clone(),
+        CredentialState::Creating | CredentialState::Updating | CredentialState::Deleting => {
+            return Err(AppError::Validation("CREDENTIAL_IN_USE".to_owned()))
+        }
+    };
+    if item.active_secret_version.is_none() {
+        return Err(AppError::Security("CREDENTIAL_INDEX_CORRUPT".to_owned()));
+    }
+    if let Some(entry) = index
+        .credentials
+        .iter_mut()
+        .find(|entry| entry.credential_ref == credential_ref)
+    {
+        entry.state = CredentialState::Deleting;
+        entry.resume_state = Some(resume_state.clone());
+        entry.metadata_version += 1;
+        entry.updated_at = Utc::now().to_rfc3339();
+    }
+    store.save(index)?;
+
+    let sidecar_references = match state.supervisor.client().await {
+        Ok(client) => {
+            client
+                .call::<Value>(
+                    "credential.getReferences",
+                    serde_json::json!({"credential_ref": credential_ref}),
+                    Some(Uuid::new_v4()),
+                )
+                .await
+        }
+        Err(error) => Err(error),
+    };
+    let references = match sidecar_references {
+        Ok(value) => value,
+        Err(error) => {
+            let mut rollback = store.load()?;
+            if let Some(entry) = rollback
+                .credentials
+                .iter_mut()
+                .find(|entry| entry.credential_ref == credential_ref)
+            {
+                entry.state = resume_state.clone();
+                entry.resume_state = None;
+                entry.metadata_version += 1;
+                entry.updated_at = Utc::now().to_rfc3339();
+            }
+            store.save(rollback)?;
+            return Err(error);
+        }
+    };
+    let sidecar_count = references
+        .get("total_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let snapshot_count = state
+        .reverse_broker
+        .snapshot_authorization
+        .active_for_credential(credential_ref)
+        .await;
+    let lease_count = state
+        .reverse_broker
+        .http_broker
+        .active_credential_leases(credential_ref)
+        .await;
+    if sidecar_count > 0 || snapshot_count > 0 || lease_count > 0 {
+        let mut rollback = store.load()?;
+        if let Some(entry) = rollback
+            .credentials
+            .iter_mut()
+            .find(|entry| entry.credential_ref == credential_ref)
+        {
+            entry.state = resume_state;
+            entry.resume_state = None;
+            entry.metadata_version += 1;
+            entry.updated_at = Utc::now().to_rfc3339();
+        }
+        store.save(rollback)?;
+        return Err(AppError::Validation("CREDENTIAL_IN_USE".to_owned()));
+    }
+    let item = store
+        .load()?
+        .credentials
+        .into_iter()
+        .find(|entry| entry.credential_ref == credential_ref)
+        .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?;
+    if let Some(version) = item.active_secret_version {
+        let _ = state.credential_store.delete_credential_version(
+            &profile_id,
+            credential_ref,
+            version,
+        )?;
+    }
+    if let Some(version) = item.pending_secret_version {
+        let _ = state.credential_store.delete_credential_version(
+            &profile_id,
+            credential_ref,
+            version,
+        )?;
+    }
+    let mut final_index = store.load()?;
+    final_index
+        .credentials
+        .retain(|entry| entry.credential_ref != credential_ref);
+    store.save(final_index)?;
+    Ok(serde_json::json!({"credential_ref": credential_ref, "deleted": true}))
+}
+
+async fn credential_probe_impl(
+    state: &AppState,
+    object: &serde_json::Map<String, Value>,
+) -> Result<Value, AppError> {
+    let (_profile_id, root) = active_profile_root(state).await?;
+    let credential_ref = Uuid::parse_str(&string_value(object, "credential_ref")?)
+        .map_err(|_| AppError::Validation("CREDENTIAL_REF_INVALID".to_owned()))?;
+    let expected = object
+        .get("expected_metadata_version")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            AppError::Validation("RPC_PARAM_REQUIRED:expected_metadata_version".to_owned())
+        })?;
+    let store = CredentialIndexStore::new(root);
+    let mut index = store.load()?;
+    let provider_release_id = index
+        .credentials
+        .iter()
+        .find(|item| item.credential_ref == credential_ref)
+        .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?
+        .provider_release_id;
+    if index
+        .credentials
+        .iter()
+        .find(|item| item.credential_ref == credential_ref)
+        .map(|item| item.metadata_version)
+        != Some(expected)
+    {
+        return Err(AppError::Validation(
+            "CREDENTIAL_VERSION_MISMATCH".to_owned(),
+        ));
+    }
+    let probe = state
+        .reverse_broker
+        .probe_credential_ref(credential_ref, provider_release_id)
+        .await?;
+    let available = probe
+        .get("available")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if available {
+        let credential_ref_sha256 = format!(
+            "{:x}",
+            Sha256::digest(credential_ref.to_string().as_bytes())
+        );
+        state
+            .supervisor
+            .client()
+            .await?
+            .call::<Value>(
+                "credential.probeSucceeded",
+                serde_json::json!({
+                    "credential_ref_sha256": credential_ref_sha256,
+                    "credential_secret_version": index.credentials.iter().find(|item| item.credential_ref == credential_ref).and_then(|item| item.active_secret_version).unwrap_or(1),
+                    "profile_id": _profile_id,
+                    "idempotency_id": Uuid::new_v4(),
+                }),
+                Some(Uuid::new_v4()),
+            )
+            .await?;
+    }
+    let item = index
+        .credentials
+        .iter_mut()
+        .find(|item| item.credential_ref == credential_ref)
+        .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?;
+    if item.metadata_version != expected {
+        return Err(AppError::Validation(
+            "CREDENTIAL_VERSION_MISMATCH".to_owned(),
+        ));
+    }
+    item.state = if available {
+        CredentialState::Ready
+    } else {
+        CredentialState::Unverified
+    };
+    item.updated_at = Utc::now().to_rfc3339();
+    item.metadata_version += 1;
+    store.save(index)?;
+    let mut response = probe;
+    if let Value::Object(ref mut object) = response {
+        object.insert(
+            "credential_ref".to_owned(),
+            Value::String(credential_ref.to_string()),
+        );
+        object.insert(
+            "state".to_owned(),
+            Value::String(if available { "ready" } else { "unverified" }.to_owned()),
+        );
+        object.insert("metadata_version".to_owned(), Value::from(expected + 1));
+    }
+    Ok(response)
+}
+
+fn string_value(object: &serde_json::Map<String, Value>, name: &str) -> Result<String, AppError> {
+    object
+        .get(name)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::Validation(format!("RPC_PARAM_REQUIRED:{name}")))
 }
 
 async fn open_online_session(
@@ -712,6 +1307,10 @@ async fn open_online_session(
     state
         .reverse_broker
         .bind_profile(Some(profile_id.clone()))
+        .await;
+    state
+        .reverse_broker
+        .bind_profile_root(Some(profile_root.clone()))
         .await;
     state.process_supervisor.clear_network_policies().await;
     state
@@ -824,6 +1423,10 @@ async fn open_offline_session(
     state
         .reverse_broker
         .bind_profile(Some(meta.profile_directory_id.clone()))
+        .await;
+    state
+        .reverse_broker
+        .bind_profile_root(Some(profile_root.clone()))
         .await;
     state.process_supervisor.clear_network_policies().await;
     state
@@ -1008,11 +1611,98 @@ fn load_catalog_snapshot(manifest: &CatalogManifest) -> Result<CatalogSnapshot, 
                 .cloned()
                 .filter(Value::is_object)
                 .ok_or_else(|| AppError::Security("CATALOG_REQUEST_DEFAULTS_INVALID".to_owned()))?;
+            let routing_tier = binding
+                .get("routing_tier")
+                .and_then(Value::as_u64)
+                .filter(|value| *value <= 3)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?
+                as u8;
+            let quality_prior = binding
+                .get("quality_prior")
+                .and_then(Value::as_f64)
+                .filter(|value| (0.0..=1.0).contains(value))
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_INVALID".to_owned()))?;
+            let tool_reliability_prior = binding
+                .get("tool_reliability_prior")
+                .and_then(Value::as_f64)
+                .filter(|value| (0.0..=1.0).contains(value))
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_INVALID".to_owned()))?;
+            let latency_prior_ms = binding
+                .get("latency_prior_ms")
+                .and_then(Value::as_u64)
+                .filter(|value| *value > 0)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_INVALID".to_owned()))?;
+            let model_family = binding
+                .get("model_family")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?
+                .to_owned();
+            let model_vendor = binding
+                .get("model_vendor")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?
+                .to_owned();
+            let architecture_class = binding
+                .get("architecture_class")
+                .and_then(Value::as_str)
+                .filter(|value| matches!(*value, "dense" | "moe" | "hybrid" | "unknown"))
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_INVALID".to_owned()))?
+                .to_owned();
+            let supports_reasoning = binding
+                .get("supports_reasoning")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?;
+            let reasoning_levels = binding
+                .get("reasoning_levels")
+                .and_then(Value::as_array)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .filter(|level| matches!(*level, "low" | "medium" | "high"))
+                        .map(str::to_owned)
+                        .ok_or_else(|| {
+                            AppError::Security("CATALOG_ROUTING_METADATA_INVALID".to_owned())
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if !supports_reasoning && !reasoning_levels.is_empty() {
+                return Err(AppError::Security(
+                    "CATALOG_ROUTING_METADATA_INVALID".to_owned(),
+                ));
+            }
+            let input_price_microusd_per_million = binding
+                .get("input_price_microusd_per_million")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?;
+            let output_price_microusd_per_million = binding
+                .get("output_price_microusd_per_million")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?;
+            let routing_enabled = binding
+                .get("routing_enabled")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| AppError::Security("CATALOG_ROUTING_METADATA_MISSING".to_owned()))?;
             model_bindings.push(CatalogModelBinding {
                 binding_id,
                 model_id,
                 provider_model_name: provider_model_name.to_owned(),
                 request_defaults,
+                routing_tier,
+                quality_prior,
+                tool_reliability_prior,
+                latency_prior_ms,
+                model_family,
+                model_vendor,
+                architecture_class,
+                supports_reasoning,
+                reasoning_levels,
+                input_price_microusd_per_million,
+                output_price_microusd_per_million,
+                routing_enabled,
             });
         }
         snapshot.push(CatalogProviderBinding {

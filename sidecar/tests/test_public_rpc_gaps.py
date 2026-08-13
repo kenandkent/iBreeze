@@ -26,9 +26,7 @@ class _FakeLifecycle:
     def __init__(self, profile_path: Path) -> None:
         self._profile_path = profile_path
         self.dispatcher = Dispatcher()
-        self.read_pool = SimpleNamespace(
-            read_transaction=lambda fn: _noop_read(fn)
-        )
+        self.read_pool = SimpleNamespace(read_transaction=lambda fn: _noop_read(fn))
         self.write_queue = SimpleNamespace()
 
     @property
@@ -200,9 +198,7 @@ class TestCatalogErrors:
 class TestBackupGaps:
     async def test_restore(self, tmp_path) -> None:
         lc = _FakeLifecycle(tmp_path / "p.db")
-        with patch.object(
-            rpc.backup_service, "restore_backup", new=AsyncMock(return_value={"restored_at": "t"})
-        ) as m:
+        with patch.object(rpc.backup_service, "restore_backup", new=AsyncMock(return_value={"restored_at": "t"})) as m:
             result = await rpc._backup_restore(lc, None, {"backup_id": "b1"})
         assert result["restored_at"] == "t"
         m.assert_awaited_once()

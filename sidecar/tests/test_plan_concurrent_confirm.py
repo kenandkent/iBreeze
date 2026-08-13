@@ -29,9 +29,7 @@ async def _company(db: aiosqlite.Connection, profile_id: str, name: str):
     )
 
 
-async def _task_with_plan(
-    db: aiosqlite.Connection, company_id: str
-) -> tuple[str, str]:
+async def _task_with_plan(db: aiosqlite.Connection, company_id: str) -> tuple[str, str]:
     """Create a task with awaiting_user_confirmation status. Return (task_id, plan_id)."""
     conversation = await get_company_conversation(db, company_id)
     result = await submit_user_message(
@@ -67,21 +65,15 @@ class TestPlanConfirmationGuard:
     async def test_first_confirm_succeeds(self, db, published_profile):
         company = await _company(db, published_profile, "首次确认")
         task_id, _ = await _task_with_plan(db, company.id)
-        result = await confirm_plan(
-            db, company.id, task_id, company.general_manager_employee_id
-        )
+        result = await confirm_plan(db, company.id, task_id, company.general_manager_employee_id)
         assert result["status"] == "approved"
 
     async def test_second_confirm_rejected(self, db, published_profile):
         company = await _company(db, published_profile, "重复确认")
         task_id, _ = await _task_with_plan(db, company.id)
-        await confirm_plan(
-            db, company.id, task_id, company.general_manager_employee_id
-        )
+        await confirm_plan(db, company.id, task_id, company.general_manager_employee_id)
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
-            await confirm_plan(
-                db, company.id, task_id, company.general_manager_employee_id
-            )
+            await confirm_plan(db, company.id, task_id, company.general_manager_employee_id)
 
     async def test_confirm_nonexistent_task_fails(self, db, published_profile):
         company = await _company(db, published_profile, "不存在任务")
@@ -118,8 +110,6 @@ class TestPlanConfirmationGuard:
     async def test_task_approved_after_confirm(self, db, published_profile):
         company = await _company(db, published_profile, "确认后状态")
         task_id, plan_id = await _task_with_plan(db, company.id)
-        await confirm_plan(
-            db, company.id, task_id, company.general_manager_employee_id
-        )
+        await confirm_plan(db, company.id, task_id, company.general_manager_employee_id)
         task = await get_company_task(db, company.id, task_id)
         assert task["status"] == "approved"

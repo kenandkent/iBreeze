@@ -84,9 +84,7 @@ async def env(db: Any) -> dict[str, str]:
         (dept_rev_id, dept_id, company_id, _sha256("eng"), now),
     )
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'department','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'department','active',?)",
         (dept_conv_id, company_id, now),
     )
     await db.execute(
@@ -106,9 +104,7 @@ async def env(db: Any) -> dict[str, str]:
         (employee_id, company_id, dept_id, version_id, now, now),
     )
     await db.execute(
-        "INSERT INTO conversations"
-        " (id, company_id, conversation_type, status, created_at)"
-        " VALUES (?,?,'company','active',?)",
+        "INSERT INTO conversations (id, company_id, conversation_type, status, created_at) VALUES (?,?,'company','active',?)",
         (conv_id, company_id, now),
     )
     await db.execute(
@@ -155,29 +151,31 @@ async def env(db: Any) -> dict[str, str]:
         ),
     )
 
-    plan_body = json.dumps({
-        "company_id": company_id,
-        "company_task_id": task_id,
-        "plan_version": 1,
-        "goal": "Implement login feature",
-        "department_tasks": [
-            {
-                "department_id": dept_id,
-                "local_ref": "fe-1",
-                "objective": "Build login UI",
-                "deliverables": [
-                    {
-                        "title": "Login page",
-                        "description": "Login page component",
-                        "contributor_employee_ids": [employee_id],
-                    }
-                ],
-                "acceptance_criteria": ["Works in browser"],
-                "dependency_refs": [],
-            }
-        ],
-        "created_at": now,
-    })
+    plan_body = json.dumps(
+        {
+            "company_id": company_id,
+            "company_task_id": task_id,
+            "plan_version": 1,
+            "goal": "Implement login feature",
+            "department_tasks": [
+                {
+                    "department_id": dept_id,
+                    "local_ref": "fe-1",
+                    "objective": "Build login UI",
+                    "deliverables": [
+                        {
+                            "title": "Login page",
+                            "description": "Login page component",
+                            "contributor_employee_ids": [employee_id],
+                        }
+                    ],
+                    "acceptance_criteria": ["Works in browser"],
+                    "dependency_refs": [],
+                }
+            ],
+            "created_at": now,
+        }
+    )
     plan_sha256 = _sha256(plan_body)
     plan_version_id = _id()
     await db.execute(

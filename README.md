@@ -142,6 +142,7 @@ cd apps/desktop-core && cargo tauri dev
 - 本地离线认证与 Profile 身份校验（`local_profile` 表 `backend_origin`/`app_user_id`/`masked_identifier`/`device_id` 四字段验证）
 - Runtime 队列调度（RuntimeWorker 按公司公平性与优先级领取 ready Run，创建 5 分钟 lease，调用 Rust ProcessSupervisor/ModelRuntime 执行，并通过 WriteQueue 原子落库状态、事件和 Outbox；心跳每 30 秒续租）
 - 计划确认与分发只有 `task.confirmPlan` 一个入口：在同一 WriteQueue 事务校验 plan hash/version、active Catalog、Workspace Grant、部门和每个参与职员的状态/发布 Profile/运行绑定，创建不可变 Availability/Execution Snapshot、Task、Run 与队列项，并按 `approved → dispatching → checking_resources → executing` 逐边记录状态事件；任一资源不可用时返回 `waiting_resource` 且不留下部分任务图，Catalog 不可用时不创建本地占位目录
+- `sequential_refinement` 的延迟段只使用确认时冻结的 dispatch spec；实际派发前严格解析冻结的能力标签数组并再次校验冻结的员工部门归属、Profile Version、Catalog Release、能力标签和 Workspace Grant 状态，任一引用失效或 spec 结构损坏即将 EmployeeTask 置为 `failed`，不创建错误 Run
 - 低层 `runtime.run` 只接受已持久化且未过期的 Availability Snapshot、Execution Snapshot、CompanyTask、Conversation、职员和适配器契约，创建带 `run.queued` 事件的队列项；生产 RPC 委托 `ibreeze.runtime.gateway.start` 唯一实现，除 `task.confirmPlan` 原子创建完整任务图和该 Gateway 外，其他模块不得自行插入 `agent_runs`；客户端不能用任务 ID 直接启动未快照的 Run，任务执行入口仍是计划确认后的 RuntimeWorker
 - Review 状态机的 `StartReview`、`StartIssueFix`、`VerifyIssue`、`CloseIssue` 和 `RejectIssue` 只注册到内部 Command Bus；Outbox 在当前 WriteQueue 事务中直接调用它们，公共 RPC 只能提交带完整产物/运行/复测证据的 `review.resolveIssue`，不能绕过状态迁移
 - Review Issue 进入 `verified` 必须持久化同公司且仍为 active 的 `verifier_employee_id`；进入 `rejected` 必须持久化 1–2000 个字符的 `rejection_reason`，blocker/high 问题不可驳回
@@ -154,6 +155,26 @@ cd apps/desktop-core && cargo tauri dev
 - Rust stdout/stderr 读取器共享一个发送锁，序号分配与 IPC 通知原子化，Sidecar 始终按连续序号接收；Agent 版本探测在失败或超时路径等待输出读取任务结束，禁止遗留后台任务
 - API Model 由内置 Agent Loop 驱动，固定只读工具为 `read_file`、`list_files`、`search_text`；模型、Credential、Provider、Workspace 和 ToolPolicy 均来自不可变 Execution Snapshot，取消通过 `credential.http.cancel` 传播到 Rust
 - API Model 通过 Rust Credential HTTP Broker + CONNECT Egress Proxy 执行完整请求闭环；Provider 事件通过同一认证 IPC Session 的反向通知返回 Sidecar
+- Credential 写操作使用 24 小时跨重启幂等记录：请求指纹只保存移除 Secret 后的字段与 Keychain HMAC，Secret 不进入响应缓存、日志、备份或 SQLite；发布 API Model Profile 前由 Rust `credential.describe` 逐 Candidate 预检非敏感 metadata
+- API Model 支持 `fixed`、`smart_single`、`selective_ensemble` 三种 turn 级路由：策略写入 Profile Version，候选集合和 Secret 版本写入 Execution Snapshot；Sidecar 负责上下文分类、能力门控、确定性评分、重试/回退、Ensemble 和 Outcome，Ensemble 会先按策略 `max_proposers` 截断确定性阵容再执行触发与 vision/Provider 差异门禁，评分同分时使用本地校准后的 effective quality、延迟、Binding ID、Candidate ID 稳定排序；输入指纹包含 artifact、能力标签和 production/evaluation 来源，避免不同执行边界复用审计身份；Rust 对每个物理请求执行 Snapshot Lease 授权、Keychain 凭据展开、Provider 错误归一化和 Egress
+- Ensemble proposer 会收到当前工具名称和 JSON Schema 作为不可执行上下文，返回的 tool call 只进入候选 envelope；只有 aggregator、single 或 fallback 的最终 ModelTurn 进入工具执行链。
+- Anchor 和全部候选都不满足能力/健康条件，或 Credential 尚未 ready 时，Run 会带稳定 failure code 进入 `waiting_resource`，不会伪造失败完成；用户显式恢复资源后才重新排队执行。计划确认会对每个交付物的 contributor 和 reviewer 一起做职员/部门/底座/能力/目录/Workspace 预检，任一参与者不可用就不会部分派发
+- Plan/Department Task 的 `required_capability_tags` 在部门/职员能力匹配和确认计划资源预检阶段校验，并冻结进 Run spec；路由器仅将其纳入 Context 指纹和审计，不把职员能力标签误当作模型候选元数据。模型候选按 Provider、工具、视觉、流式、上下文、tier、reasoning、role 和 Health 硬门禁过滤
+- `fixed` 明确只执行 Anchor（不做难度分层，按 C0 进行能力门控）；Anchor 不满足硬能力条件时才按策略声明的 `fallback_order` 选择回退，禁止因评分或分类结果静默切换到任意候选
+- Snapshot 注册传递完整、规范化的 Candidate v2 原始 JSON 与 SHA-256；Rust 只从已验签 Catalog 解析 Provider protocol、endpoint、model name、request defaults，Sidecar 不得传入 `protocol`、`relative_path` 或覆盖 `model`
+- proposer 的工具调用只进入结构化候选 envelope，不能进入工具执行器；只有 single、aggregator 或 fallback 的最终 ModelTurn 可以执行工具。每个 Attempt 都经历 `created → accepted → streaming → terminal` 的 CAS 状态链，并按稳定 UUID 关联工具、验证、Review 和任务 Outcome
+- 本地 Outcome 达到每个 Deployment/purpose 至少 30 个样本后才影响质量 prior；purpose 样本不足时回退到该 Deployment 全局样本，校准范围固定为 `[-0.20,0.20]`，所有校准数据只保存在桌面 SQLite
+- Deployment Health 在每个路由 transport 创建/turn 执行前从当前公司本地 SQLite 恢复；benched 或 `credential_invalid` 状态不会因新 Run 或新 transport 被绕过，Health 账本读取失败时路由 fail-closed
+- ModelTurn 的 Rust Credential HTTP Broker 只执行一次物理请求；Retry-After 等待、同 Deployment 重试和 fallback 由 Sidecar 创建新的 Route Attempt 统一处理，Credential Probe 使用独立的探测重试策略
+- Rust 在发送 ModelTurn 前对 v2 Candidate 同时校验 `provider_protocol` 与 `request_defaults_sha256` 是否匹配已验签 Catalog Binding；旧 fixed 兼容快照没有 v2 授权字段时跳过这两项声明校验，但仍只使用已验签 Catalog 的协议、路径、模型名和 request defaults
+- `credential.http.start` 的五个 Snapshot/Attempt 授权字段必须全部提供或全部省略；部分字段请求直接返回 `ROUTING_SNAPSHOT_NOT_AUTHORIZED`，只有无路由字段的旧 fixed 兼容调用保留历史路径
+- 路由 Attempt/Decision/Health 审计写入或 Rust 授权失败会取消已接受的 Broker 请求并停止 fallback，避免产生未审计的 Provider 调用或重复副作用
+- Sidecar 启动在接受新 Run 前通过同一 WriteQueue 事务执行恢复：非终态 AgentRun 进入 `failed`、队列/Lease 失效、`planned/executing` Route Decision 和 `created/accepted/streaming` Attempt 保守标记失败且禁止自动重放，只删除已过期的 `ready` Deployment Health
+- 智能路由只使用已签名 Catalog 的 Provider/Model Binding；`IBREEZE_ROUTING_STAGE` 在 Sidecar 启动时读取一次（默认 `observe`）：生产 `observe` 只执行 Anchor 并把 rules-v1 的候选建议写入 `policy_trail`，生产 `shadow` 同样不执行额外候选，只有内部 `evaluation` 输入源允许执行影子候选；CLI Agent 仍保持任务级多职员协作，不进入 turn 级路由
+- 路由模式或策略值损坏时 fail-safe 到 `fixed` Anchor；不会把非法配置当作 `smart_single` 执行。
+- 固定兼容快照缺少 Anchor ID 时使用快照候选数组第一项作为 Anchor，不从当前 Catalog 补候选。
+- Run Override 在构建 RoutingContext 前读取一次并写入输入指纹/规则轨迹；非法控制值同样 fail-safe 到 `fixed`。
+- 路由 Decision、Attempt、Deployment Health、Outcome 均保存在 Profile 本地 SQLite；Run 详情可查看 tier、实际模型、fallback、usage、latency 和脱敏错误，设置页可维护 Credential、Probe、过期健康记录和 Run override
 - 外部写入同时绑定人工 `approval_id` 与 Rust `workspace_grant_id`；staging 文件必须在 Profile 内、校验 source hash/size、目标状态 hash 和 receipt，不能把审批 ID 当作 Workspace 授权
 - 不确定恢复审批只允许固定 `retry_once` 目标（run/tool execution/input hash/prior started time/TTL），外部写入和恢复审批均使用版本化 JSON Schema 与 canonical hash，消费前逐字段校验并保证幂等
 - 凭据探测（`credential.probe` 支持 `profile_directory_id` 指定目录）
@@ -168,15 +189,18 @@ cd apps/desktop-core && cargo tauri dev
 
 ### 测试覆盖率
 
-| 模块 | Statements | Branches | Functions | Lines |
-|---|---|---|---|---|
-| Sidecar (Python) | 84.72% | - | - | - |
-| Admin Web (TypeScript) | 86.33% | 80% | 84.47% | 87.78% |
-| Desktop (TypeScript) | 88.95% | 96.49% | 81.81% | 98.56% |
-| Desktop Core (Rust) | 100% | - | 100% | 100% |
-| Backend API (Python) | 100% | - | - | - |
+本次实现后的可复现门禁结果如下；通过测试不等同于已达到生产发布条件：
 
-所有模块覆盖率阈值已配置为 80%，CI 中强制执行。
+| 模块 | 当前结果 | 工程门禁 |
+|---|---|---|
+| Sidecar (Python) | 1746 passed，覆盖率 71.47% | 总覆盖率 ≥77%（当前未达） |
+| Desktop UI (TypeScript) | 151 passed，functions 75.7% | functions ≥80%（当前未达） |
+| Admin Web (TypeScript) | 134 passed，branches 79.61% | branches ≥80%（当前未达） |
+| Backend API (Python) | 213 passed，覆盖率 63.11% | 总覆盖率 ≥62%（已达） |
+| Desktop Core (Rust) | nextest 191 passed，lib 116 passed | lines ≥30%、functions ≥25%、regions ≥30%（已达） |
+| 智能路由专项 | 路由/恢复/生命周期/脱敏等 94 passed | `ibreeze.routing` 与 Rust 新授权模块需专项 100% 覆盖后才可 GA |
+
+`scripts/verify-all.sh` 使用各组件既有阈值；Sidecar、Desktop 和 Admin Web 的当前覆盖率门禁仍是发布阻塞项。真实 Provider A/B、跨进程 IPC/TLS、macOS Seatbelt、签名公证和升级回滚仍需 staging/发布环境验证。
 
 ### 公开目录查询
 - Agent 目录查询
@@ -191,6 +215,16 @@ cd apps/desktop-core && cargo tauri dev
 - [部署文档](docs/部署文档.md)
 - [用户手册](docs/用户手册.md)
 - [API 文档](docs/API文档.md)
+- [智能聚合路由使用说明](docs/使用说明/智能聚合路由使用说明.md)
+- [智能聚合路由验收报告](docs/验收报告/智能聚合路由效果验收报告.md)
+
+智能路由本地快速验证：
+
+```bash
+uv run --project sidecar pytest sidecar/tests -q
+bash scripts/generate-contracts.sh && bash scripts/check-contract-drift.sh
+npm --prefix apps/desktop run typecheck && npm --prefix apps/desktop run lint && npm --prefix apps/desktop run test -- --run
+```
 
 ## 许可证
 

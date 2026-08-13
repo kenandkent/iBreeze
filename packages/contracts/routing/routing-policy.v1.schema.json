@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/routing-policy.v1",
+  "title": "RoutingPolicyV1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "mode": { "enum": ["fixed", "smart_single", "selective_ensemble"] },
+    "anchor_candidate_id": { "type": "string", "format": "uuid" },
+    "candidates": {
+      "type": "array", "minItems": 1, "maxItems": 12,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "properties": {
+          "candidate_id": { "type": "string", "format": "uuid" },
+          "provider_release_id": { "type": "string", "format": "uuid" },
+          "model_binding_id": { "type": "string", "format": "uuid" },
+          "credential_ref": { "type": "string", "format": "uuid" },
+          "enabled": { "type": "boolean" },
+          "eligible_roles": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": { "enum": ["single", "proposer", "aggregator", "fallback"] }
+          },
+          "routing_enabled": { "type": "boolean" }
+          ,"credential_secret_version": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["candidate_id", "provider_release_id", "model_binding_id", "credential_ref", "enabled", "eligible_roles", "routing_enabled"]
+      }
+    },
+    "fallback_order": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "format": "uuid" } },
+    "ensemble": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "max_proposers": { "type": "integer", "minimum": 2, "maximum": 4 },
+        "min_successful_proposers": { "type": "integer", "minimum": 1 },
+        "proposer_timeout_seconds": { "type": "integer", "minimum": 10, "maximum": 300 },
+        "aggregator_timeout_seconds": { "type": "integer", "minimum": 10, "maximum": 480 },
+        "proposer_max_retries": { "type": "integer", "minimum": 0, "maximum": 2 }
+      },
+      "required": ["max_proposers", "min_successful_proposers", "proposer_timeout_seconds", "aggregator_timeout_seconds", "proposer_max_retries"]
+    }
+  },
+  "required": ["schema_version", "mode", "anchor_candidate_id", "candidates", "fallback_order", "ensemble"]
+}

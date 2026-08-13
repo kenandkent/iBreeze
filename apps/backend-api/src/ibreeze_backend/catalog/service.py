@@ -143,6 +143,30 @@ def _validate_model_values(model: ModelCatalog) -> None:
         raise ValueError("MODEL_CAPABILITY_INVALID")
     if not model.supports_streaming:
         raise ValueError("MODEL_STREAMING_REQUIRED")
+    if not 0 <= model.routing_tier <= 3:
+        raise ValueError("MODEL_ROUTING_TIER_INVALID")
+    if not 0 <= float(model.quality_prior) <= 1 or not 0 <= float(model.tool_reliability_prior) <= 1:
+        raise ValueError("MODEL_ROUTING_PRIOR_INVALID")
+    if model.latency_prior_ms <= 0:
+        raise ValueError("MODEL_LATENCY_PRIOR_INVALID")
+    if model.architecture_class not in {"dense", "moe", "hybrid", "unknown"}:
+        raise ValueError("MODEL_ARCHITECTURE_CLASS_INVALID")
+    allowed_levels = {"low", "medium", "high"}
+    levels = list(model.reasoning_levels or [])
+    if len(levels) != len(set(levels)) or not set(levels) <= allowed_levels:
+        raise ValueError("MODEL_REASONING_LEVELS_INVALID")
+    if not model.supports_reasoning and levels:
+        raise ValueError("MODEL_REASONING_LEVELS_UNSUPPORTED")
+    model.reasoning_levels = [level for level in ("low", "medium", "high") if level in levels]
+    model.model_family = model.model_family.strip().lower()
+    model.model_vendor = model.model_vendor.strip().lower()
+    if model.routing_enabled and (
+        not model.model_family
+        or not model.model_vendor
+        or model.model_family == "unknown"
+        or model.model_vendor == "unknown"
+    ):
+        raise ValueError("MODEL_ROUTING_IDENTITY_REQUIRED")
 
 
 async def create_agent(db: AsyncSession, body: AgentCreate) -> AgentCatalog:
@@ -421,6 +445,18 @@ async def clone_model_revision(db: AsyncSession, resource_id: uuid.UUID) -> Mode
         supports_tools=source.supports_tools,
         supports_streaming=source.supports_streaming,
         supports_vision=source.supports_vision,
+        routing_tier=source.routing_tier,
+        quality_prior=source.quality_prior,
+        tool_reliability_prior=source.tool_reliability_prior,
+        latency_prior_ms=source.latency_prior_ms,
+        model_family=source.model_family,
+        model_vendor=source.model_vendor,
+        architecture_class=source.architecture_class,
+        supports_reasoning=source.supports_reasoning,
+        reasoning_levels=list(source.reasoning_levels or []),
+        input_price_microusd_per_million=source.input_price_microusd_per_million,
+        output_price_microusd_per_million=source.output_price_microusd_per_million,
+        routing_enabled=source.routing_enabled,
         catalog_revision=revision,
         status="draft",
         version=1,

@@ -43,9 +43,7 @@ async def _company(db: aiosqlite.Connection, profile_id: str, name: str):
     )
 
 
-async def _task_with_status(
-    db: aiosqlite.Connection, company_id: str, status: str
-) -> str:
+async def _task_with_status(db: aiosqlite.Connection, company_id: str, status: str) -> str:
     """Create a company task and set it to the given status. Return task_id."""
     conversation = await get_company_conversation(db, company_id)
     result = await submit_user_message(
@@ -162,9 +160,7 @@ class TestTaskStatusTransitions:
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
             await confirm_plan(db, company.id, task_id, company.general_manager_employee_id)
 
-    async def test_draft_can_only_transition_to_analyzing_or_cancelling(
-        self, db, published_profile
-    ):
+    async def test_draft_can_only_transition_to_analyzing_or_cancelling(self, db, published_profile):
         company = await _company(db, published_profile, "流转公司")
         task_id = await _task_with_status(db, company.id, "draft")
         task = await get_company_task(db, company.id, task_id)
@@ -213,9 +209,7 @@ class TestPauseResumeLifecycle:
     async def test_pause_sets_resume_state(self, db, published_profile):
         company = await _company(db, published_profile, "暂停公司")
         task_id = await _task_with_status(db, company.id, "executing")
-        result = await pause_task(
-            db, company.id, task_id, company.general_manager_employee_id
-        )
+        result = await pause_task(db, company.id, task_id, company.general_manager_employee_id)
         assert result["status"] == "paused"
         task = await get_company_task(db, company.id, task_id)
         assert task["resume_state"] == "executing"
@@ -224,9 +218,7 @@ class TestPauseResumeLifecycle:
     async def test_resume_restores_original_state(self, db, published_profile):
         company = await _company(db, published_profile, "恢复公司")
         task_id = await _task_with_status(db, company.id, "executing")
-        await pause_task(
-            db, company.id, task_id, company.general_manager_employee_id
-        )
+        await pause_task(db, company.id, task_id, company.general_manager_employee_id)
         task_before = await get_company_task(db, company.id, task_id)
         assert task_before["status"] == "paused"
         assert task_before["resume_state"] == "executing"
@@ -235,17 +227,13 @@ class TestPauseResumeLifecycle:
         company = await _company(db, published_profile, "非执行暂停")
         task_id = await _task_with_status(db, company.id, "draft")
         with pytest.raises(ValueError, match="STATE_TRANSITION_INVALID"):
-            await pause_task(
-                db, company.id, task_id, company.general_manager_employee_id
-            )
+            await pause_task(db, company.id, task_id, company.general_manager_employee_id)
 
     async def test_resume_rejects_non_paused(self, db, published_profile):
         company = await _company(db, published_profile, "非暂停恢复")
         task_id = await _task_with_status(db, company.id, "executing")
         with pytest.raises((ValueError, IndexError)):
-            await resume_task(
-                db, company.id, task_id, company.general_manager_employee_id
-            )
+            await resume_task(db, company.id, task_id, company.general_manager_employee_id)
 
     async def test_paused_state_requires_resume_state(self):
         with pytest.raises(ValueError, match="resume_state required"):

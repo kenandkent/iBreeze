@@ -79,9 +79,7 @@ class TestPermissionFilteringByScope:
         assert len(ids) == 1
 
     async def test_department_scoped(self, db, published_profile):
-        company, intake, source_event = await _scope(
-            db, published_profile, "部门可见"
-        )
+        company, intake, source_event = await _scope(db, published_profile, "部门可见")
         dept_id = company.general_manager_office_id
         await import_knowledge(
             db,
@@ -112,9 +110,7 @@ class TestPermissionFilteringByScope:
         assert len(ids_out) == 0
 
     async def test_task_scoped(self, db, published_profile):
-        company, intake, source_event = await _scope(
-            db, published_profile, "任务可见"
-        )
+        company, intake, source_event = await _scope(db, published_profile, "任务可见")
         task_id = intake.company_task_id
         await import_knowledge(
             db,
@@ -145,9 +141,7 @@ class TestPermissionFilteringByScope:
         assert len(ids_out) == 0
 
     async def test_private_scoped(self, db, published_profile):
-        company, intake, source_event = await _scope(
-            db, published_profile, "私有可见"
-        )
+        company, intake, source_event = await _scope(db, published_profile, "私有可见")
         owner_id = company.general_manager_employee_id
         await import_knowledge(
             db,
@@ -183,9 +177,7 @@ class TestHybridSearchRRF:
     """KNOW-004: Hybrid search should use RRF fusion."""
 
     async def test_search_returns_results(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "搜索公司"
-        )
+        company, _, source_event = await _scope(db, published_profile, "搜索公司")
         item = await import_knowledge(
             db,
             company.id,
@@ -213,9 +205,7 @@ class TestGenerationAtomicSwitch:
     """KNOW-005: Embedding generation switch should be atomic."""
 
     async def test_import_creates_outbox_event(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "原子切换"
-        )
+        company, _, source_event = await _scope(db, published_profile, "原子切换")
         await import_knowledge(
             db,
             company.id,
@@ -235,9 +225,7 @@ class TestGenerationAtomicSwitch:
         assert outbox[0] >= 1
 
     async def test_remove_creates_outbox_event(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "删除原子切换"
-        )
+        company, _, source_event = await _scope(db, published_profile, "删除原子切换")
         item = await import_knowledge(
             db,
             company.id,
@@ -263,9 +251,7 @@ class TestIndexDuringKnowledgeChange:
     """KNOW-006: Indexing should handle concurrent knowledge changes."""
 
     async def test_concurrent_imports(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "并发导入"
-        )
+        company, _, source_event = await _scope(db, published_profile, "并发导入")
         items = []
         for i in range(3):
             item = await import_knowledge(
@@ -285,9 +271,7 @@ class TestIndexDuringKnowledgeChange:
         assert ids == {item.id for item in items}
 
     async def test_import_and_remove_race(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "导入删除竞争"
-        )
+        company, _, source_event = await _scope(db, published_profile, "导入删除竞争")
         item1 = await import_knowledge(
             db,
             company.id,
@@ -340,9 +324,7 @@ class TestIndexCorruptionRecovery:
     """KNOW-008: Index corruption should trigger re-indexing."""
 
     async def test_duplicate_content_rejected(self, db, published_profile):
-        company, _, source_event = await _scope(
-            db, published_profile, "重复内容"
-        )
+        company, _, source_event = await _scope(db, published_profile, "重复内容")
         await import_knowledge(
             db,
             company.id,

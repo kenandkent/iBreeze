@@ -183,6 +183,7 @@ class TestVectorStoreDelete:
 class TestGetVectorStore:
     def test_singleton(self):
         import ibreeze.knowledge.vector_store as mod
+
         mod._vector_store = None
         s1 = get_vector_store()
         s2 = get_vector_store()
@@ -237,6 +238,7 @@ class TestEmbeddingService:
 class TestGetEmbeddingService:
     def test_singleton(self):
         import ibreeze.knowledge.embeddings as mod
+
         mod._embedding_service = None
         s1 = get_embedding_service()
         s2 = get_embedding_service()
@@ -309,7 +311,5 @@ class TestTextSearchFTS:
 
     @pytest.mark.asyncio
     async def test_search_fts_with_generation_filter(self, db: aiosqlite.Connection):
-        result = await search_fts(
-            db, "test", "company1", generation_id="gen1"
-        )
+        result = await search_fts(db, "test", "company1", generation_id="gen1")
         assert result == []

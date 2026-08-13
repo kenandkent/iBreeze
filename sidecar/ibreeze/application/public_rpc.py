@@ -31,7 +31,9 @@ from ibreeze.orchestration.dispatch_strategies import maybe_dispatch_deliverable
 from ibreeze.persistence.unit_of_work import CommandResult
 from ibreeze.profile import service as profile_service
 from ibreeze.review import service as review_service
+from ibreeze.routing import rpc as routing_rpc
 from ibreeze.runtime import service as runtime_service
+from ibreeze.runtime.transport import ReverseRpcClient
 from ibreeze.schemas import (
     CompanyCreate,
     CompanyUpdate,
@@ -62,6 +64,67 @@ def _serialize(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_serialize(v) for v in value]
     return value
+
+
+def _profile_public_response(profile: dict[str, Any]) -> dict[str, Any]:
+    """Project internal profile rows to the strict public Profile contract."""
+    versions_raw = profile.get("versions", [])
+    versions: list[dict[str, Any]] = []
+    for raw in versions_raw if isinstance(versions_raw, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        version_id = raw.get("id")
+        if not isinstance(version_id, str):
+            continue
+        versions.append(
+            {
+                "id": version_id,
+                "status": str(raw.get("status", "draft")),
+                "profile_type": str(raw.get("profile_type", "api_model")),
+                "routing_policy_json": str(raw.get("routing_policy_json") or "{}"),
+            }
+        )
+    current_id = profile.get("current_version_id")
+    current = next((item for item in versions if item["id"] == current_id), None)
+    if current is None and versions:
+        current = versions[0]
+        current_id = current["id"]
+    status = str(current.get("status", "draft") if current else "draft")
+    return {
+        "profile_id": str(profile.get("id", "")),
+        "display_name": str(profile.get("name", "")),
+        "status": status,
+        "version": int(profile.get("version", 1) or 1),
+        "created_at": str(profile.get("created_at", "")),
+        "updated_at": str(profile.get("updated_at", "")),
+        "profile_type": str(current.get("profile_type", "api_model") if current else "api_model"),
+        "current_version_id": str(current_id) if current_id else None,
+        "routing_policy_json": str(current.get("routing_policy_json", "{}") if current else "{}"),
+        "versions": versions,
+    }
+
+
+def _profile_list_response(profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for profile in profiles:
+        projected = _profile_public_response(profile)
+        current = next(
+            (item for item in projected["versions"] if item["id"] == projected["current_version_id"]),
+            None,
+        )
+        items.append(
+            {
+                "profile_id": projected["profile_id"],
+                "display_name": projected["display_name"],
+                "status": projected["status"],
+                "version": projected["version"],
+                "updated_at": projected["updated_at"],
+                "profile_type": projected["profile_type"],
+                "current_version_id": projected["current_version_id"],
+                "current_version_status": current["status"] if current else projected["status"],
+            }
+        )
+    return {"profiles": items}
 
 
 def _required(params: dict[str, Any], *names: str) -> None:
@@ -170,17 +233,58 @@ def _service_factory(
 def _profile_factory(
     method_name: str,
 ) -> Callable[[dict[str, Any], object], Callable[[aiosqlite.Connection], Awaitable[Any]]]:
-    return _service_factory(
-        lambda db, params: _profile_call(db, method_name, params)
-    )
+    return _service_factory(lambda db, params: _profile_call(db, method_name, params))
+
+
+async def _preflight_profile_credentials(lifecycle: Any, params: dict[str, Any], _session: object) -> None:
+    """Resolve non-sensitive Credential metadata before publishing a profile.
+
+    The check intentionally runs outside the SQLite write transaction.  The
+    Snapshot/Rust authorization boundary repeats the version check when a Run
+    starts, so a credential changing between these two points fails closed.
+    """
+
+    async def load_draft(db: Any) -> Any:
+        cursor = await db.execute(
+            "SELECT profile_type,routing_policy_json FROM employee_base_profile_versions WHERE id=? AND company_id=? AND status='draft'",
+            (params["draft_id"], params["company_id"]),
+        )
+        return await cursor.fetchone()
+
+    record = await lifecycle.read_pool.read_transaction(load_draft)
+    if record is None or record[0] != "api_model":
+        return
+    try:
+        policy = json.loads(record[1] or "{}")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("ROUTING_POLICY_INVALID") from exc
+    # ``session`` here is the public ``CommandContext`` and deliberately does
+    # not expose reverse-RPC methods.  The authenticated IpcSession is bound
+    # once by ProductionRpcServer and is resolved by ReverseRpcClient's global
+    # lifecycle binding.  Passing CommandContext would make profile.publish
+    # fail with an attribute error before the credential preflight runs.
+    client = ReverseRpcClient()
+    for candidate in policy.get("candidates", []) if isinstance(policy, dict) else []:
+        if not isinstance(candidate, dict):
+            continue
+        description = await client.call(
+            "credential.describe",
+            {
+                "credential_ref": candidate.get("credential_ref"),
+                "provider_release_id": candidate.get("provider_release_id"),
+            },
+        )
+        if description.get("state") != "ready":
+            raise ValueError("CREDENTIAL_NOT_READY")
+        expected_version = candidate.get("credential_secret_version")
+        if expected_version is not None and int(description.get("active_secret_version", 0)) != int(expected_version):
+            raise ValueError("CREDENTIAL_VERSION_MISMATCH")
 
 
 def _task_factory(
     method_name: str,
 ) -> Callable[[dict[str, Any], object], Callable[[aiosqlite.Connection], Awaitable[Any]]]:
-    return _service_factory(
-        lambda db, params: _task_call(db, method_name, params)
-    )
+    return _service_factory(lambda db, params: _task_call(db, method_name, params))
 
 
 async def _first_published_profile(db: Any) -> str:
@@ -399,6 +503,8 @@ async def _profile_call(db: Any, method: str, params: dict[str, Any]) -> Any:
         kwargs.setdefault("provider_release_id", "")
         kwargs.setdefault("model_binding_id", "")
         kwargs.setdefault("provider_protocol", "")
+        if kwargs.get("api_model") and "routing_policy" not in kwargs:
+            kwargs["routing_policy"] = kwargs.get("base_profile", {}).get("routing_policy")
     if method == "update_draft":
         kwargs.setdefault("agent_cli", "")
         kwargs.setdefault("api_model", "")
@@ -522,13 +628,26 @@ def register_public_handlers(lifecycle: Any) -> int:
     }
     for method, service_name in profile_methods.items():
         if method in {"profile.get", "profile.list"}:
-            async def profile_read_handler(
-                params: dict[str, Any], _session: object, _name: str = service_name
-            ) -> Any:
-                return _serialize(await read_pool.read_transaction(lambda db: _profile_call(db, _name, params)))
+
+            async def profile_read_handler(params: dict[str, Any], _session: object, _name: str = service_name) -> Any:
+                value = await read_pool.read_transaction(lambda db: _profile_call(db, _name, params))
+                if _name == "get_profile":
+                    return _profile_public_response(value) if isinstance(value, dict) else None
+                if _name == "list_profiles":
+                    return _profile_list_response(value if isinstance(value, list) else [])
+                return _serialize(value)
+
             profile_handler: Handler = profile_read_handler
         else:
             profile_handler = _write(lifecycle, method, _profile_factory(service_name))
+            if method == "profile.publish":
+                base_handler = profile_handler
+
+                async def profile_publish_handler(params: dict[str, Any], session: object, _base: Handler = base_handler) -> Any:
+                    await _preflight_profile_credentials(lifecycle, params, session)
+                    return await _base(params, session)
+
+                profile_handler = profile_publish_handler
         dispatcher.register(method, profile_handler)
 
     for method, service_name in task_methods.items():
@@ -536,10 +655,10 @@ def register_public_handlers(lifecycle: Any) -> int:
             method.endswith(".get") or method.endswith(".list") or method.endswith(".listEvents") or method == "departmentTask.getReport"
         )
         if is_read:
-            async def task_read_handler(
-                params: dict[str, Any], _session: object, _name: str = service_name
-            ) -> Any:
+
+            async def task_read_handler(params: dict[str, Any], _session: object, _name: str = service_name) -> Any:
                 return _serialize(await read_pool.read_transaction(lambda db: _task_call(db, _name, params)))
+
             task_handler: Handler = task_read_handler
         else:
             task_handler = _write(lifecycle, method, _task_factory(service_name))
@@ -552,9 +671,8 @@ def register_public_handlers(lifecycle: Any) -> int:
         "runtime.getStatus": "get_runtime_status",
     }
     for method, service_name in runtime_methods.items():
-        async def runtime_read_handler(
-            params: dict[str, Any], _session: object, _name: str = service_name
-        ) -> Any:
+
+        async def runtime_read_handler(params: dict[str, Any], _session: object, _name: str = service_name) -> Any:
             return _serialize(await read_pool.read_transaction(lambda db: _runtime_call(db, _name, params)))
 
         dispatcher.register(method, runtime_read_handler)
@@ -691,6 +809,14 @@ def register_public_handlers(lifecycle: Any) -> int:
     register_sql_write("backup.restore", lambda db, p: _backup_restore(lifecycle, db, p))
     register_sql_read("backup.list", lambda db, p: _backup_list(lifecycle, p))
     register_sql_read("backup.get", lambda db, p: _backup_get(lifecycle, p))
+
+    register_sql_read("routing.validatePolicy", lambda db, p: routing_rpc.validate_policy(db, p))
+    register_sql_read("routing.getRunSummary", lambda db, p: routing_rpc.get_run_summary(db, p))
+    register_sql_read("routing.listDecisions", lambda db, p: routing_rpc.list_decisions(db, p))
+    register_sql_read("routing.getDecision", lambda db, p: routing_rpc.get_decision(db, p))
+    register_sql_read("routing.listDeploymentHealth", lambda db, p: routing_rpc.list_health(db, p))
+    register_sql_write("routing.setRunOverride", lambda db, p: routing_rpc.set_override(db, p))
+    register_sql_write("routing.clearExpiredHealth", lambda db, p: routing_rpc.clear_expired_health(db, p))
 
     return int(dispatcher.method_count)
 
@@ -1020,6 +1146,36 @@ def _catalog_entries(lifecycle: Any, resource_type: str) -> list[dict[str, Any]]
     return entries
 
 
+_CATALOG_ROUTING_FIELDS = (
+    "routing_tier",
+    "quality_prior",
+    "tool_reliability_prior",
+    "latency_prior_ms",
+    "model_family",
+    "model_vendor",
+    "architecture_class",
+    "supports_reasoning",
+    "reasoning_levels",
+    "input_price_microusd_per_million",
+    "output_price_microusd_per_million",
+    "routing_enabled",
+)
+
+
+def _validate_catalog_model_routing_metadata(resource: dict[str, Any]) -> None:
+    """Reject a new model release that cannot participate in routing.
+
+    Defaults belong only to the backend migration for historical rows.  The
+    desktop cache must never manufacture routing metadata because doing so
+    changes the signed release's routing behavior.
+    """
+    missing = [field for field in _CATALOG_ROUTING_FIELDS if field not in resource]
+    if missing:
+        raise ValueError("CATALOG_ROUTING_METADATA_MISSING")
+    if resource.get("supports_reasoning") is False and resource.get("reasoning_levels"):
+        raise ValueError("CATALOG_ROUTING_METADATA_MISSING")
+
+
 async def _catalog_list_resources(lifecycle: Any, resource_type: str) -> dict[str, Any]:
     entries = _catalog_entries(lifecycle, resource_type)
     if resource_type == "agent":
@@ -1036,31 +1192,22 @@ async def _catalog_list_resources(lifecycle: Any, resource_type: str) -> dict[st
             ]
         }
     if resource_type == "model":
-        providers = {
-            entry["id"]: entry
-            for entry in _catalog_entries(lifecycle, "provider")
-            if isinstance(entry.get("id"), str)
-        }
+        providers = {entry["id"]: entry for entry in _catalog_entries(lifecycle, "provider") if isinstance(entry.get("id"), str)}
         models_by_key = {entry.get("key"): entry for entry in entries}
         models: list[dict[str, Any]] = []
         for provider_id, provider in providers.items():
             for binding in provider.get("model_bindings", []):
                 if not isinstance(binding, dict):
                     continue
-                model = models_by_key.get(
-                    f"{provider.get('key', '')}/{binding.get('provider_model_name', '')}"
-                )
+                model = models_by_key.get(f"{provider.get('key', '')}/{binding.get('provider_model_name', '')}")
                 if model is None:
                     model = next(
-                        (
-                            value
-                            for value in entries
-                            if value.get("id") == binding.get("model_id")
-                        ),
+                        (value for value in entries if value.get("id") == binding.get("model_id")),
                         None,
                     )
                 if model is None:
                     continue
+                _validate_catalog_model_routing_metadata(model)
                 models.append(
                     {
                         "model_id": model["id"],
@@ -1070,11 +1217,21 @@ async def _catalog_list_resources(lifecycle: Any, resource_type: str) -> dict[st
                         "model_binding_id": binding.get("binding_id", ""),
                         "provider_protocol": provider.get("protocol", ""),
                         "capabilities": [],
+                        "routing_tier": model["routing_tier"],
+                        "quality_prior": model["quality_prior"],
+                        "tool_reliability_prior": model["tool_reliability_prior"],
+                        "latency_prior_ms": model["latency_prior_ms"],
+                        "model_family": model["model_family"],
+                        "model_vendor": model["model_vendor"],
+                        "architecture_class": model["architecture_class"],
+                        "supports_reasoning": model["supports_reasoning"],
+                        "reasoning_levels": model["reasoning_levels"],
+                        "input_price_microusd_per_million": model["input_price_microusd_per_million"],
+                        "output_price_microusd_per_million": model["output_price_microusd_per_million"],
+                        "routing_enabled": model["routing_enabled"],
                     }
                 )
-        return {
-            "models": models
-        }
+        return {"models": models}
     return {
         "skills": [
             {
@@ -1152,6 +1309,8 @@ async def _catalog_sync(lifecycle: Any, db: Any) -> dict[str, Any]:
         if not isinstance(resource, dict):
             raise ValueError("CATALOG_INVALID")
         resource_type = str(resource.get("type", ""))
+        if resource_type == "model":
+            _validate_catalog_model_routing_metadata(resource)
         resource_id = str(resource.get("id", ""))
         version_id = str(resource.get("skill_version_id", resource.get("id", "")))
         content_json = json.dumps(resource, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

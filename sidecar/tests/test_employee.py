@@ -72,13 +72,16 @@ async def test_department_employee_lifecycle(
         ),
     )
     assert (await get_employee(db, company.id, member.id)).department_id == department.id
-    assert len(
-        await list_employees(
-            db,
-            company.id,
-            department_id=department.id,
+    assert (
+        len(
+            await list_employees(
+                db,
+                company.id,
+                department_id=department.id,
+            )
         )
-    ) == 2
+        == 2
+    )
 
     renamed = await update_employee_display_name(
         db,

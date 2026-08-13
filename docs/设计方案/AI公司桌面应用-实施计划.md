@@ -264,7 +264,7 @@ ibreeze/
 
 - [ ] **步骤 2：先实现 RPC meta 和最小 health 契约**
 
-  `meta.schema.json` 固定要求 `trace_id/ipc_session_id/window_session_id/idempotency_key/deadline_at`，其中 `ipc_session_id` 仅Rust本地方法和首次handshake可为null；`registry.v1.json` 按核心重构设计第5节记录每个公开方法的owner/kind/scope/Schema/幂等TTL/错误码，集合必须与J.14及Supervisor方法一致且互斥；`reverse-methods.v1.json` 精确登记F.4七个Sidecar→Rust请求和四个Rust→Sidecar notification，并为各方法生成严格Schema；创建 `system.handshake` 请求/响应Schema及 `system.health` 请求/响应Schema，字段逐字符合F.3、F.5与核心重构设计第11.4节。
+  `meta.schema.json` 固定要求 `trace_id/ipc_session_id/window_session_id/idempotency_key/deadline_at`，其中 `ipc_session_id` 仅Rust本地方法和首次handshake可为null；`registry.v1.json` 按核心重构设计第5节记录每个公开方法的owner/kind/scope/Schema/幂等TTL/错误码，集合必须与J.14及Supervisor方法一致且互斥；`reverse-methods.v1.json` 精确登记当前 11 个 Sidecar→Rust 请求（`routing.snapshot.register`、`routing.decision.register`、`routing.snapshot.revoke`、`credential.http.start`、`credential.http.cancel`、`credential.probe`、`credential.describe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`）和四个Rust→Sidecar notification，并为各方法生成严格Schema；创建 `system.handshake` 请求/响应Schema及 `system.health` 请求/响应Schema，字段逐字符合F.3、F.5与核心重构设计第11.4节。
 
   同时一次性创建H.4完整DomainEvent registry及每个独立payload Schema；目录测试要求registry引用零悬空且集合与H.4逐项相等。后续领域任务只能实现和消费已登记v1事件，不能等到功能阶段再补一个P3运行时所需的Schema。
 
@@ -1015,7 +1015,7 @@ ibreeze/
 - 修改：`apps/desktop-core/src/process/{mod.rs,seatbelt.rs}`（唯一 CLI 进程组监管与 Seatbelt 实现）
 - 创建：`apps/desktop-core/tests/{egress_proxy.rs,credential_broker.rs,ssrf.rs,process_supervisor.rs,seatbelt.rs}`
 
-**产生接口：** 每 Run loopback CONNECT proxy；Sidecar 反向 RPC 只允许 `credential.http.start/cancel/probe`、`host.externalWrite.execute`、`runtime.process.start/cancel/status`；Rust 只发送 `credential.http.event`、`runtime.process.registered/output/exited` notification，集合逐字来自 `reverse-methods.v1.json`。
+**产生接口：** 每 Run loopback CONNECT proxy；Sidecar 反向 RPC 固定允许 `routing.snapshot.register`、`routing.decision.register`、`routing.snapshot.revoke`、`credential.http.start`、`credential.http.cancel`、`credential.probe`、`credential.describe`、`host.externalWrite.execute`、`runtime.process.start`、`runtime.process.cancel`、`runtime.process.status`；Rust 只发送 `credential.http.event`、`runtime.process.registered`、`runtime.process.output`、`runtime.process.exited` notification，集合逐字来自 `reverse-methods.v1.json`。
 
 - [ ] **步骤 1：写代理绕过和 SSRF 失败测试**
 
@@ -1027,7 +1027,7 @@ ibreeze/
 
 - [ ] **步骤 3：实现 Credential Broker**
 
-  Sidecar请求只含 credential_ref、已验签 Provider id/version、relative path、非认证 headers 和 body。Rust 校验 catalog、从 Keychain取 key、注入 auth、执行 HTTPS，再分 chunk 返还。
+  Sidecar请求只含 credential_ref、固定 secret version、已验签 Provider/Model binding、operation、非认证请求体和 deadline；不得传 protocol、relative path、URL、model 或认证字段。Rust 按 Execution Snapshot 和已验签 Catalog 解析协议、固定 path、model、request defaults，从 Keychain取 key、注入 auth、执行 HTTPS，再分 chunk 返还。
 
 - [ ] **步骤 4：真实 CLI 代理兼容探测**
 
@@ -1675,6 +1675,10 @@ ExecutionSnapshot 的不可变 `runtime_binding_json` 一致，其他模块不�
   ```
 
 **完成标准：** API Model能完整执行工具任务，不存在“直接请求模型并返回文本”的捷径。
+
+**智能聚合路由专项边界：** API Model 的 turn 级路由不在本任务中重新定义。实现团队必须继续执行《iBreeze智能聚合路由设计方案.md》和《docs/superpowers/plans/2026-08-13-ibreeze-hybrid-intelligent-routing.md》中的 Task 1–17：Backend Catalog routing metadata、Profile Policy、Execution Snapshot v2、Rust Snapshot Lease、Sidecar Decision/Attempt/Health/Outcome、三种模式、Credential/Probe、Routing RPC、桌面配置与 Run 观测界面。Plan/Department Task 的 `required_capability_tags` 必须在部门/职员能力匹配与确认计划资源预检阶段校验并冻结到 Run spec；确认预检覆盖 contributor 与 reviewer，任一参与者不可用时不得部分派发；该字段不是 API Model Candidate 的字段，不得用于模型候选过滤。CLI Profile 不得携带 Routing Policy；所有路由字段只以专项契约和生成物为准。
+
+对于 `sequential_refinement`，后续 EmployeeTask 必须使用确认时冻结的 dispatch spec；依赖满足后的派发前先严格解析冻结的能力标签数组，再复核其中冻结的员工部门归属、Profile Version、Catalog Release、能力标签和 Workspace Grant。任一引用失效或 spec 结构损坏时将该段置为 `failed`，不得读取当前 Profile 或全局目录替换绑定，也不得创建错误 Run。
 
 ### P5-T06：Tool Registry、Permission Gateway 与Seatbelt策略输入
 
@@ -2865,6 +2869,12 @@ ExecutionSnapshot 的不可变 `runtime_binding_json` 一致，其他模块不�
 | AC-23 | 部门和最终报告追溯产物、测试、Review、修复与复测证据 | P6-T03、P6-T04、P7-T05 | `sidecar/tests/orchestration/test_reports.py`、`sidecar/tests/orchestration/test_final_review.py` |
 | AC-24 | CLI不能绕过每Run Egress Broker，未声明域名必须失败 | P2-T07、P5-T06 | `apps/desktop-core/tests/egress_proxy.rs`、`tests/security/test_egress_policy.py` |
 | AC-25 | Refresh Token与OfflineSessionTicket在单个Keychain bundle原子轮换且明文不可见 | P2-T02、P2-T04 | `apps/desktop-core/tests/keychain_rotation.rs`、`apps/desktop-core/tests/auth_flow.rs` |
+| AC-26 | API Model Profile 固化 Routing Policy，CLI 不携带路由策略 | 智能路由 Task 4、14 | `sidecar/tests/test_routing_policy.py`、桌面路由配置测试 |
+| AC-27 | Execution Snapshot v2 固化候选、凭据版本和 hash | 智能路由 Task 5、6 | `sidecar/tests/test_routing_candidates.py`、`apps/desktop-core/tests/snapshot_authorization.rs` |
+| AC-28 | 三种路由模式、能力门控、重试/回退和 Ensemble 工具边界有效 | 智能路由 Task 8–11 | `sidecar/tests/test_routing_engine.py`、`sidecar/tests/test_routing_ensemble_execution.py` |
+| AC-29 | Decision/Attempt/Health/Outcome 可追踪且 RPC company-scoped 脱敏 | 智能路由 Task 3、9、12、13、15 | `sidecar/tests/test_routing_repository.py`、`sidecar/tests/test_public_rpc.py` |
+| AC-30 | 12 类 Provider 错误和取消/崩溃恢复不产生重复副作用 | 智能路由 Task 7、10、16 | Rust provider tests、Sidecar retry/recovery tests |
+| AC-31 | 路由配置、Run 观测和 Health UI 遵守北京时间、数值格式和启动阶段边界 | 智能路由 Task 14–16 | Desktop typecheck/lint/unit、routing E2E |
 
 ---
 
@@ -2885,6 +2895,7 @@ RPC方法以设计方案 J.14 为唯一契约来源；下表规定实现归属�
 | `departmentTask.*` | P7-T02、P7-T05 | P9-T05、P9-T06 | checkResources、replaceEmployee、getReport；可用性和证据报告 |
 | `runtime.*` | P5-T01至P5-T05、P7-T02 | P9-T03、P9-T06 | probeAgent/probeProvider、listAvailableModels/getStatus |
 | `run.*` | P5-T01、P5-T07、P8-T04 | P9-T06 | cancel/resume/get/list/listEvents；checkpoint恢复和不确定副作用 |
+| `routing.*` | 智能聚合路由专项 Task 3、6、8–13 | 智能聚合路由专项 Task 14–15 | `validatePolicy/getRunSummary/listDecisions/getDecision/listDeploymentHealth/setRunOverride/clearExpiredHealth`；company scope、敏感字段脱敏、后续 Turn Override |
 | `approval.*` | P6-T05 | P9-T06 | listPending/resolve；target hash、TTL、一次性消费 |
 | `artifact.*` | P6-T03 | P9-T06 | list/getSnapshot；CAS、版本链和贡献者谱系 |
 | `workspace.*` | P6-T01、P6-T02 | P9-T06 | get/apply/abandon/cleanupTask；baseline、漂移和清理守卫 |
@@ -2946,7 +2957,7 @@ RPC方法以设计方案 J.14 为唯一契约来源；下表规定实现归属�
 |---|---|---|
 | `sidecar/ibreeze/persistence/migrations/001_initial.sql` | Profile、Catalog Cache、Event/Outbox/Idempotency、Audit/Settings、Company/Department/Employee、Conversation、Task/Plan/Snapshot、Runtime Queue/Run/Event/Checkpoint、Workspace、Artifact、Review、Approval、Knowledge、Backup 的完整 v1 Schema | P3-T01 创建骨架；P3-T03至P8-T04 按任务顺序补充固定段；P8 阶段出口冻结最终 SHA-256 |
 
-本项目不迁移已有 Profile，v1 只允许一个 `001_initial.sql`，禁止生成 `20260722000xxx` 过渡脚本。P3-T01先创建文件，各后续任务按顺序修改同一文件并同步更新Migration Registry hash；任何并行任务不得同时修改该脚本。P8阶段出口必须从空目录仅执行该脚本，完成全部表、索引、组合外键、CHECK和不可变Trigger验证。首个正式版本发布后的新增Schema才使用时间戳增量Migration。外部数据进入Profile必须经过显式导入器，不能隐式猜测字段。
+本项目不迁移已有 Profile；v1 的本地 Schema 由 `001_initial.sql` 和已冻结的顺序迁移 `002_review_assignment_version.sql`、`003_review_report_version.sql`、`004_resolution_evidence.sql`、`005_multi_agent_aggregation.sql`、`006_intelligent_routing.sql`、`007_routing_capability_tags.sql` 组成，禁止生成未登记的时间戳过渡脚本。每个迁移都必须在 `MIGRATIONS` 中登记真实 SHA-256，历史 checksum 不得修改；任何并行任务不得同时修改同一迁移脚本。空 Profile 必须按顺序执行全部迁移，完成全部表、索引、组合外键、CHECK 和不可变 Trigger 验证。后续正式版本的新 Schema 才使用新增顺序 migration。外部数据进入 Profile 必须经过显式导入器，不能隐式猜测字段。
 
 ---
 

@@ -14,4 +14,1298 @@ export interface ProfileUpdatedraftRequest {
   provider_release_id?: string;
   model_binding_id?: string;
   provider_protocol?: "openai_responses" | "anthropic_messages" | "openai_chat_completions";
+  routing_policy?: RoutingPolicyV1;
+}
+export interface RoutingPolicyV1 {
+  schema_version: 1;
+  mode: "fixed" | "smart_single" | "selective_ensemble";
+  anchor_candidate_id: string;
+  /**
+   * @minItems 1
+   * @maxItems 12
+   */
+  candidates:
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ]
+    | [
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        },
+        {
+          candidate_id: string;
+          provider_release_id: string;
+          model_binding_id: string;
+          credential_ref: string;
+          enabled: boolean;
+          /**
+           * @minItems 1
+           */
+          eligible_roles: [
+            "single" | "proposer" | "aggregator" | "fallback",
+            ...("single" | "proposer" | "aggregator" | "fallback")[]
+          ];
+          routing_enabled: boolean;
+          credential_secret_version?: number;
+        }
+      ];
+  /**
+   * @minItems 1
+   */
+  fallback_order: [string, ...string[]];
+  ensemble: {
+    max_proposers: number;
+    min_successful_proposers: number;
+    proposer_timeout_seconds: number;
+    aggregator_timeout_seconds: number;
+    proposer_max_retries: number;
+  };
 }

@@ -30,6 +30,17 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "profile_type": {
+            "enum": ["agent_cli", "api_model"]
+          },
+          "current_version_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "current_version_status": {
+            "type": "string",
+            "enum": ["draft", "published", "retired"]
           }
         },
         "required": [
@@ -37,7 +48,10 @@
           "display_name",
           "status",
           "version",
-          "updated_at"
+          "updated_at",
+          "profile_type",
+          "current_version_id",
+          "current_version_status"
         ],
         "additionalProperties": false
       }

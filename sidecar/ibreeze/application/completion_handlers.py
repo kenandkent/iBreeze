@@ -15,6 +15,7 @@ from ibreeze.domain.tasks.commands import (
 )
 from ibreeze.persistence.types import DomainEventRecord, OutboxRecord
 from ibreeze.persistence.unit_of_work import CommandResult
+from ibreeze.routing.outcomes import RouteOutcomeProjector
 
 
 def _hash(obj: Any) -> str:
@@ -27,8 +28,9 @@ def _hash(obj: Any) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _event(event_type: str, aggregate_type: str, task_id: UUID, company_id: UUID,
-           version: int, from_state: str, to_state: str) -> DomainEventRecord:
+def _event(
+    event_type: str, aggregate_type: str, task_id: UUID, company_id: UUID, version: int, from_state: str, to_state: str
+) -> DomainEventRecord:
     payload = {
         "company_id": str(company_id),
         "aggregate_id": str(task_id),
@@ -37,8 +39,12 @@ def _event(event_type: str, aggregate_type: str, task_id: UUID, company_id: UUID
         "to_state": to_state,
     }
     return DomainEventRecord(
-        event_id=uuid4(), event_type=event_type, aggregate_type=aggregate_type,
-        aggregate_id=task_id, aggregate_version=version, company_id=company_id,
+        event_id=uuid4(),
+        event_type=event_type,
+        aggregate_type=aggregate_type,
+        aggregate_id=task_id,
+        aggregate_version=version,
+        company_id=company_id,
         payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
         trace_id=str(uuid4()),
     )
@@ -46,6 +52,36 @@ def _event(event_type: str, aggregate_type: str, task_id: UUID, company_id: UUID
 
 def _outbox(topic: str, payload: dict[str, Any], event: DomainEventRecord) -> OutboxRecord:
     return OutboxRecord(topic=topic, payload_json=event.payload_json, domain_event_id=event.event_id)
+
+
+async def _project_task_outcome(
+    session: Any,
+    *,
+    company_id: UUID,
+    task_id: UUID,
+    task_column: str,
+) -> None:
+    if task_column not in {"company_task_id", "department_task_id"}:
+        raise ValueError("ROUTE_OUTCOME_TASK_SCOPE_INVALID")
+    cursor = await session.execute(
+        f"""SELECT rd.id FROM route_decisions rd
+            JOIN agent_runs ar ON ar.id=rd.run_id AND ar.company_id=rd.company_id
+            WHERE rd.company_id=? AND ar.{task_column}=?
+            ORDER BY rd.turn_index DESC, rd.id DESC LIMIT 1""",
+        (str(company_id), str(task_id)),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return
+    decision_id = row["id"] if hasattr(row, "keys") else row[0]
+    await RouteOutcomeProjector().append(
+        session,
+        route_decision_id=str(decision_id),
+        company_id=str(company_id),
+        outcome_type="task_terminal",
+        source_id=str(task_id),
+        event="task_succeeded",
+    )
 
 
 class EmployeeGate:
@@ -509,8 +545,15 @@ class AcceptEmployeeTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            event = _event("employee_task.status_changed", "employee_task", request.task_id,
-                           request.company_id, task["version"] + 1, task["status"], "accepted")
+            event = _event(
+                "employee_task.status_changed",
+                "employee_task",
+                request.task_id,
+                request.company_id,
+                task["version"] + 1,
+                task["status"],
+                "accepted",
+            )
             payload = {
                 "company_id": str(request.company_id),
                 "aggregate_id": str(request.task_id),
@@ -704,8 +747,21 @@ class CompleteDepartmentTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            event = _event("department_task.status_changed", "department_task", request.task_id,
-                           request.company_id, task["version"] + 1, task["status"], "completed")
+            await _project_task_outcome(
+                session,
+                company_id=request.company_id,
+                task_id=request.task_id,
+                task_column="department_task_id",
+            )
+            event = _event(
+                "department_task.status_changed",
+                "department_task",
+                request.task_id,
+                request.company_id,
+                task["version"] + 1,
+                task["status"],
+                "completed",
+            )
             payload = {
                 "company_id": str(request.company_id),
                 "aggregate_id": str(request.task_id),
@@ -753,19 +809,38 @@ class CompleteCompanyTaskHandler:
             )
             if cursor.rowcount != 1:
                 raise ValueError("OPTIMISTIC_LOCK_CONFLICT")
-            event = _event("company_task.status_changed", "company_task", request.task_id,
-                           request.company_id, task["version"] + 1, task["status"], "completed")
+            await _project_task_outcome(
+                session,
+                company_id=request.company_id,
+                task_id=request.task_id,
+                task_column="company_task_id",
+            )
+            event = _event(
+                "company_task.status_changed",
+                "company_task",
+                request.task_id,
+                request.company_id,
+                task["version"] + 1,
+                task["status"],
+                "completed",
+            )
             return CommandResult(
                 response={"id": str(request.task_id), "status": "completed"},
                 events=(event,),
-                outbox=(_outbox("company_task.status_changed", {
-                    "company_id": str(request.company_id),
-                    "aggregate_id": str(request.task_id),
-                    "version": task["version"] + 1,
-                    "from_state": task["status"],
-                    "to_state": "completed",
-                    "task_id": str(request.task_id),
-                }, event),),
+                outbox=(
+                    _outbox(
+                        "company_task.status_changed",
+                        {
+                            "company_id": str(request.company_id),
+                            "aggregate_id": str(request.task_id),
+                            "version": task["version"] + 1,
+                            "from_state": task["status"],
+                            "to_state": "completed",
+                            "task_id": str(request.task_id),
+                        },
+                        event,
+                    ),
+                ),
             )
 
         return await self._uow.execute(context, _hash(request), command)

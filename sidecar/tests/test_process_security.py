@@ -33,17 +33,13 @@ def test_sanitize_command_args_passes_clean():
 
 
 def test_sanitize_command_args_removes_forbidden():
-    result = sanitize_command_args(
-        ["codex", "--dangerously-skip-permissions", "--prompt", "do stuff"]
-    )
+    result = sanitize_command_args(["codex", "--dangerously-skip-permissions", "--prompt", "do stuff"])
     assert "--dangerously-skip-permissions" not in result
     assert "--prompt" in result
 
 
 def test_sanitize_command_args_removes_multiple_forbidden():
-    result = sanitize_command_args(
-        ["codex", "--share", "--max-budget-usd", "100", "--prompt", "x"]
-    )
+    result = sanitize_command_args(["codex", "--share", "--max-budget-usd", "100", "--prompt", "x"])
     assert "--share" not in result
     assert "--max-budget-usd" not in result
     assert "--prompt" in result

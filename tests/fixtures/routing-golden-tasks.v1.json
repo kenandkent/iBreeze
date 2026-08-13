@@ -1,0 +1,3366 @@
+{
+  "schema_version": 1,
+  "manifest_id": "ibreeze-routing-golden-v1",
+  "tasks": [
+    {
+      "task_id": "routing-golden-c0-code_implementation-01",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-02",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-03",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-04",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-05",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-06",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-07",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-08",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-09",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_implementation-10",
+      "tier": "C0",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_implementation-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-01",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-02",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-03",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-04",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-05",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-06",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-07",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-08",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-09",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-code_review-10",
+      "tier": "C0",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-code_review-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-01",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-02",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-03",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-04",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-05",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-06",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-07",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-08",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-09",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-document_design-10",
+      "tier": "C0",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-document_design-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-01",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-01.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-02",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-02.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-03",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-03.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-04",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-04.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-05",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-05.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-06",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-06.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-07",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-07.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-08",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-08.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-09",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-09.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-structured_schema-10",
+      "tier": "C0",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-structured_schema-10.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-01",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-02",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-03",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-04",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-05",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-06",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-07",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-08",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-09",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c0-tool_failure_recovery-10",
+      "tier": "C0",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c0-tool_failure_recovery-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-01",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-02",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-03",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-04",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-05",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-06",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-07",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-08",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-09",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_implementation-10",
+      "tier": "C1",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_implementation-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-01",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-02",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-03",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-04",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-05",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-06",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-07",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-08",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-09",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-code_review-10",
+      "tier": "C1",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-code_review-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-01",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-02",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-03",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-04",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-05",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-06",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-07",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-08",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-09",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-document_design-10",
+      "tier": "C1",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-document_design-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-01",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-01.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-02",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-02.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-03",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-03.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-04",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-04.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-05",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-05.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-06",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-06.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-07",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-07.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-08",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-08.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-09",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-09.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-structured_schema-10",
+      "tier": "C1",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-structured_schema-10.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-01",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-02",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-03",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-04",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-05",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-06",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-07",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-08",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-09",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c1-tool_failure_recovery-10",
+      "tier": "C1",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c1-tool_failure_recovery-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-01",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-02",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-03",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-04",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-05",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-06",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-07",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-08",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-09",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_implementation-10",
+      "tier": "C2",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_implementation-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-01",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-02",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-03",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-04",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-05",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-06",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-07",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-08",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-09",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-code_review-10",
+      "tier": "C2",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-code_review-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-01",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-02",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-03",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-04",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-05",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-06",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-07",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-08",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-09",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-document_design-10",
+      "tier": "C2",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-document_design-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-01",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-01.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-02",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-02.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-03",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-03.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-04",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-04.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-05",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-05.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-06",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-06.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-07",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-07.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-08",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-08.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-09",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-09.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-structured_schema-10",
+      "tier": "C2",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-structured_schema-10.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-01",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-02",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-03",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-04",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-05",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-06",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-07",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-08",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-09",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c2-tool_failure_recovery-10",
+      "tier": "C2",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c2-tool_failure_recovery-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-01",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-02",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-03",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-04",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-05",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-06",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-07",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-08",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-09",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_implementation-10",
+      "tier": "C3",
+      "category": "code_implementation",
+      "run_purpose": "task_execution",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_implementation-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "execution_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-01",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-02",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-03",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-04",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-05",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-06",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-07",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-08",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-09",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-code_review-10",
+      "tier": "C3",
+      "category": "code_review",
+      "run_purpose": "review",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-code_review-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "review_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-01",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-01.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-02",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-02.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-03",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-03.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-04",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-04.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-05",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-05.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-06",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-06.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-07",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-07.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-08",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-08.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-09",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-09.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-document_design-10",
+      "tier": "C3",
+      "category": "document_design",
+      "run_purpose": "company_plan",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-document_design-10.json",
+      "required_tools": [
+        "workspace.read"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "design_document",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-01",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-01.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-02",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-02.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-03",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-03.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-04",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-04.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-05",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-05.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-06",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-06.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-07",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-07.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-08",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-08.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-09",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-09.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-structured_schema-10",
+      "tier": "C3",
+      "category": "structured_schema",
+      "run_purpose": "verification",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-structured_schema-10.json",
+      "required_tools": [
+        "workspace.read",
+        "schema.validate"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "verification_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-01",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-01.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-02",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-02.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-03",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-03.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-04",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-04.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-05",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-05.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-06",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-06.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-07",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-07.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-08",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-08.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-09",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-09.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    },
+    {
+      "task_id": "routing-golden-c3-tool_failure_recovery-10",
+      "tier": "C3",
+      "category": "tool_failure_recovery",
+      "run_purpose": "repair",
+      "input_fixture": "tests/fixtures/routing/routing-golden-c3-tool_failure_recovery-10.json",
+      "required_tools": [
+        "workspace.read",
+        "workspace.write",
+        "test.run"
+      ],
+      "acceptance": {
+        "kind": "assertion",
+        "value": "routing_decision.status in {succeeded,failed}"
+      },
+      "artifact_type": "repair_report",
+      "max_runtime_seconds": 120
+    }
+  ]
+}

@@ -13,9 +13,7 @@ def _now() -> str:
 
 async def should_run_daily_backup(db: Any) -> bool:
     """Check if a daily backup should run (>24h since last)."""
-    cursor = await db.execute(
-        "SELECT created_at FROM backup_records WHERE backup_type = 'daily' ORDER BY created_at DESC LIMIT 1"
-    )
+    cursor = await db.execute("SELECT created_at FROM backup_records WHERE backup_type = 'daily' ORDER BY created_at DESC LIMIT 1")
     last = await cursor.fetchone()
     if not last:
         return True

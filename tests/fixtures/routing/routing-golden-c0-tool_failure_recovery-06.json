@@ -1,0 +1,6 @@
+{
+  "category": "tool_failure_recovery",
+  "input": "脱敏路由验收输入 routing-golden-c0-tool_failure_recovery-06：验证 tool_failure_recovery 的确定性选择、故障恢复和审计关联。",
+  "task_id": "routing-golden-c0-tool_failure_recovery-06",
+  "tier": "C0"
+}

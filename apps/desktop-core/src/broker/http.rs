@@ -20,7 +20,24 @@ use crate::error::AppError;
 
 pub const MAX_RETRIES: u32 = 3;
 pub const MAX_STREAM_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
-const MAX_RETRY_AFTER_SECONDS: u64 = 30;
+const MAX_RETRY_AFTER_SECONDS: u64 = 900;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProviderFailureKind {
+    RateLimited,
+    ProviderOverloaded,
+    TransportTransient,
+    Timeout,
+    ContextOverflow,
+    AuthInvalid,
+    ModelNotFound,
+    UnsupportedCapability,
+    InsufficientCredits,
+    BadRequest,
+    PolicyRefusal,
+    InvalidResponse,
+}
 
 pub struct HttpBroker {
     credential_store: Arc<CredentialStore>,
@@ -60,6 +77,7 @@ impl HttpBroker {
         relative_path: &str,
         request_body: Value,
         deadline_s: u64,
+        max_retries: u32,
     ) -> Result<(Uuid, oneshot::Sender<()>, mpsc::Receiver<BrokerEvent>), AppError> {
         let credential = self
             .credential_store
@@ -131,6 +149,7 @@ impl HttpBroker {
                 cancel_rx,
                 deadline_s,
                 &proxy_url,
+                max_retries,
             )
             .await
             {
@@ -139,7 +158,7 @@ impl HttpBroker {
                     .push_event_async(
                         request_id,
                         BrokerEventKind::Failed,
-                        sanitized_failure_payload(&e),
+                        sanitized_failure_payload(&e, request_id),
                     )
                     .await;
                 stream_manager.complete_async(request_id).await;
@@ -149,6 +168,12 @@ impl HttpBroker {
         });
 
         Ok((request_id, cancel_tx, receiver))
+    }
+
+    pub async fn active_credential_leases(&self, credential_ref: Uuid) -> usize {
+        self.lease_manager
+            .active_for_credential(credential_ref)
+            .await
     }
 
     pub async fn subscribe(
@@ -209,6 +234,7 @@ impl HttpBroker {
         mut cancel_rx: oneshot::Receiver<()>,
         deadline_s: u64,
         proxy_url: &str,
+        max_retries: u32,
     ) -> Result<(), AppError> {
         dns_policy.validate_url(target_url)?;
 
@@ -250,7 +276,7 @@ impl HttpBroker {
         let mut last_error = None;
         let mut retry_after = None;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             if tokio::time::Instant::now() >= deadline {
                 return Err(AppError::Network("Deadline exceeded".to_owned()));
             }
@@ -338,26 +364,46 @@ impl HttpBroker {
                         )
                         .await;
                     }
-                    match status.as_u16() {
-                        401 | 403 => {
-                            return Err(AppError::Unauthorized("CREDENTIAL_UNAVAILABLE".to_owned()))
-                        }
-                        400 | 404 => {
-                            return Err(AppError::Validation(
-                                "PROVIDER_CONFIGURATION_INVALID".to_owned(),
-                            ))
-                        }
-                        408 | 429 | 500..=599 => {
-                            last_error = Some(AppError::Network(format!("HTTP {status}")));
+                    let error_body = resp
+                        .bytes()
+                        .await
+                        .map(|body| body.into_iter().take(64 * 1024).collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    let failure_kind = failure_kind_for_response(status, &error_body);
+                    match failure_kind {
+                        ProviderFailureKind::Timeout
+                        | ProviderFailureKind::RateLimited
+                        | ProviderFailureKind::ProviderOverloaded => {
+                            let retry_ms = response_retry_after
+                                .map(|value| value.as_millis().min(u64::MAX as u128) as u64)
+                                .unwrap_or(0);
+                            last_error = Some(AppError::Network(format!(
+                                "{}:HTTP {status}:retry_after_ms={retry_ms}",
+                                failure_kind.as_str()
+                            )));
                             retry_after = response_retry_after;
                             continue;
                         }
-                        s => return Err(AppError::Network(format!("Unexpected status {s}"))),
+                        ProviderFailureKind::AuthInvalid => {
+                            return Err(AppError::Unauthorized("AUTH_INVALID".to_owned()))
+                        }
+                        ProviderFailureKind::ModelNotFound
+                        | ProviderFailureKind::ContextOverflow
+                        | ProviderFailureKind::UnsupportedCapability
+                        | ProviderFailureKind::InsufficientCredits
+                        | ProviderFailureKind::BadRequest
+                        | ProviderFailureKind::PolicyRefusal => {
+                            return Err(AppError::Validation(failure_kind.as_str().to_owned()))
+                        }
+                        ProviderFailureKind::TransportTransient
+                        | ProviderFailureKind::InvalidResponse => {
+                            return Err(AppError::Network(failure_kind.as_str().to_owned()))
+                        }
                     }
                 }
                 Err(e) if e.is_timeout() || e.is_connect() || e.is_request() => {
-                    last_error = Some(AppError::Network(e.to_string()));
-                    if attempt < MAX_RETRIES {
+                    last_error = Some(AppError::Network(format!("TRANSPORT_TRANSIENT:{}", e)));
+                    if attempt < max_retries {
                         continue;
                     }
                     break;
@@ -525,23 +571,125 @@ async fn push_sse_line(
 }
 
 fn retry_after_from_response(response: &reqwest::Response) -> Option<Duration> {
-    let seconds = response
+    let value = response
         .headers()
         .get(reqwest::header::RETRY_AFTER)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.trim().parse::<u64>().ok())?;
+        .and_then(|value| value.to_str().ok())?;
+    if let Ok(seconds) = value.trim().parse::<u64>() {
+        return Some(Duration::from_secs(seconds.min(MAX_RETRY_AFTER_SECONDS)));
+    }
+    let date = chrono::DateTime::parse_from_rfc2822(value)
+        .ok()?
+        .with_timezone(&chrono::Utc);
+    let seconds = (date - chrono::Utc::now()).num_seconds().max(0) as u64;
     Some(Duration::from_secs(seconds.min(MAX_RETRY_AFTER_SECONDS)))
 }
 
-fn sanitized_failure_payload(error: &AppError) -> Value {
-    let error_code = match error {
-        AppError::Unauthorized(_) => "CREDENTIAL_UNAVAILABLE",
-        AppError::Validation(_) => "PROVIDER_CONFIGURATION_INVALID",
-        AppError::Network(_) => "PROVIDER_NETWORK_ERROR",
-        AppError::Cancelled(_) => "PROVIDER_CANCELLED",
-        _ => "PROVIDER_REQUEST_FAILED",
+fn sanitized_failure_payload(error: &AppError, request_id: Uuid) -> Value {
+    let (error_code, kind) = match error {
+        AppError::Unauthorized(message) => ("AUTH_INVALID", message.as_str()),
+        AppError::Validation(message) => ("BAD_REQUEST", message.as_str()),
+        AppError::Network(message) => ("PROVIDER_NETWORK_ERROR", message.as_str()),
+        AppError::Cancelled(_) => ("PROVIDER_CANCELLED", "TRANSPORT_TRANSIENT"),
+        _ => ("PROVIDER_REQUEST_FAILED", "INVALID_RESPONSE"),
     };
-    serde_json::json!({"error_code": error_code})
+    let failure_kind = if kind.contains("Deadline exceeded") {
+        "TIMEOUT"
+    } else {
+        kind.split(':').next().unwrap_or("INVALID_RESPONSE")
+    };
+    let http_status = kind
+        .split("HTTP ")
+        .nth(1)
+        .and_then(|value| value.split(':').next())
+        .and_then(|value| value.parse::<u16>().ok());
+    let retry_after_ms = kind
+        .split("retry_after_ms=")
+        .nth(1)
+        .and_then(|value| value.split(':').next())
+        .and_then(|value| value.parse::<u64>().ok());
+    serde_json::json!({
+        "request_id": request_id,
+        "error_code": error_code,
+        "failure_kind": failure_kind,
+        "http_status": http_status,
+        "retry_after_ms": retry_after_ms,
+        "safe_message": error_code,
+        "visible_content": false
+    })
+}
+
+fn failure_kind_for_response(status: reqwest::StatusCode, body: &[u8]) -> ProviderFailureKind {
+    let body_text = String::from_utf8_lossy(body).to_ascii_lowercase();
+    let contains = |needles: &[&str]| needles.iter().any(|needle| body_text.contains(needle));
+    if contains(&[
+        "context_length",
+        "context_window",
+        "too_many_tokens",
+        "max_tokens_exceeded",
+    ]) {
+        return ProviderFailureKind::ContextOverflow;
+    }
+    if contains(&[
+        "insufficient_quota",
+        "insufficient_credits",
+        "billing",
+        "credit_balance",
+    ]) {
+        return ProviderFailureKind::InsufficientCredits;
+    }
+    if contains(&[
+        "content_filter",
+        "safety",
+        "policy_refusal",
+        "policy violation",
+        "refusal",
+        "refused",
+    ]) {
+        return ProviderFailureKind::PolicyRefusal;
+    }
+    if contains(&[
+        "unsupported",
+        "not_supported",
+        "capability_not_available",
+        "tool_choice",
+    ]) {
+        return ProviderFailureKind::UnsupportedCapability;
+    }
+    failure_kind_for_status(status)
+}
+
+fn failure_kind_for_status(status: reqwest::StatusCode) -> ProviderFailureKind {
+    match status.as_u16() {
+        408 => ProviderFailureKind::Timeout,
+        429 => ProviderFailureKind::RateLimited,
+        500..=599 => ProviderFailureKind::ProviderOverloaded,
+        404 => ProviderFailureKind::ModelNotFound,
+        401 | 403 => ProviderFailureKind::AuthInvalid,
+        413 => ProviderFailureKind::ContextOverflow,
+        402 => ProviderFailureKind::InsufficientCredits,
+        422 => ProviderFailureKind::UnsupportedCapability,
+        _ => ProviderFailureKind::BadRequest,
+    }
+}
+
+impl ProviderFailureKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::RateLimited => "RATE_LIMITED",
+            Self::ProviderOverloaded => "PROVIDER_OVERLOADED",
+            Self::TransportTransient => "TRANSPORT_TRANSIENT",
+            Self::Timeout => "TIMEOUT",
+            Self::ContextOverflow => "CONTEXT_OVERFLOW",
+            Self::AuthInvalid => "AUTH_INVALID",
+            Self::ModelNotFound => "MODEL_NOT_FOUND",
+            Self::UnsupportedCapability => "UNSUPPORTED_CAPABILITY",
+            Self::InsufficientCredits => "INSUFFICIENT_CREDITS",
+            Self::BadRequest => "BAD_REQUEST",
+            Self::PolicyRefusal => "POLICY_REFUSAL",
+            Self::InvalidResponse => "INVALID_RESPONSE",
+        }
+    }
 }
 
 pub fn detect_event_kind(value: &Value) -> BrokerEventKind {
@@ -614,5 +762,90 @@ mod tests {
     fn detect_kind_tool_use() {
         let v = serde_json::json!({"type": "tool_use", "name": "x"});
         assert_eq!(detect_event_kind(&v), BrokerEventKind::ToolCallDelta);
+    }
+
+    #[test]
+    fn classify_provider_failure_statuses() {
+        use reqwest::StatusCode;
+
+        let cases = [
+            (StatusCode::REQUEST_TIMEOUT, ProviderFailureKind::Timeout),
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                ProviderFailureKind::RateLimited,
+            ),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ProviderFailureKind::ProviderOverloaded,
+            ),
+            (StatusCode::NOT_FOUND, ProviderFailureKind::ModelNotFound),
+            (StatusCode::UNAUTHORIZED, ProviderFailureKind::AuthInvalid),
+            (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                ProviderFailureKind::ContextOverflow,
+            ),
+            (
+                StatusCode::PAYMENT_REQUIRED,
+                ProviderFailureKind::InsufficientCredits,
+            ),
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                ProviderFailureKind::UnsupportedCapability,
+            ),
+            (StatusCode::BAD_REQUEST, ProviderFailureKind::BadRequest),
+        ];
+
+        for (status, expected) in cases {
+            assert_eq!(failure_kind_for_response(status, b""), expected);
+        }
+    }
+
+    #[test]
+    fn classify_structured_provider_failure_bodies() {
+        use reqwest::StatusCode;
+
+        assert_eq!(
+            failure_kind_for_response(
+                StatusCode::BAD_REQUEST,
+                br#"{"error":"context_length_exceeded"}"#
+            ),
+            ProviderFailureKind::ContextOverflow
+        );
+        assert_eq!(
+            failure_kind_for_response(StatusCode::BAD_REQUEST, br#"{"code":"insufficient_quota"}"#),
+            ProviderFailureKind::InsufficientCredits
+        );
+        assert_eq!(
+            failure_kind_for_response(
+                StatusCode::BAD_REQUEST,
+                br#"{"error":{"type":"content_filter"}}"#
+            ),
+            ProviderFailureKind::PolicyRefusal
+        );
+        assert_eq!(
+            failure_kind_for_response(
+                StatusCode::BAD_REQUEST,
+                br#"{"message":"tool_choice is not supported"}"#
+            ),
+            ProviderFailureKind::UnsupportedCapability
+        );
+    }
+
+    #[test]
+    fn classify_failure_body_case_insensitively_without_leaking_body() {
+        use reqwest::StatusCode;
+
+        assert_eq!(
+            failure_kind_for_response(StatusCode::BAD_REQUEST, b"CONTEXT_WINDOW exceeded"),
+            ProviderFailureKind::ContextOverflow
+        );
+        assert_eq!(
+            failure_kind_for_response(StatusCode::BAD_REQUEST, b"provider refused this request"),
+            ProviderFailureKind::PolicyRefusal
+        );
+        assert_eq!(
+            failure_kind_for_response(StatusCode::BAD_REQUEST, b"opaque provider failure"),
+            ProviderFailureKind::BadRequest
+        );
     }
 }

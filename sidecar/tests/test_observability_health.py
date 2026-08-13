@@ -117,6 +117,7 @@ class TestHealthSnapshot:
 class TestGetDiskFree:
     def test_disk_free_returns_zero_on_error(self):
         from ibreeze.observability.health import _get_disk_free
+
         with patch("ibreeze.observability.health.shutil.disk_usage", side_effect=OSError):
             result = _get_disk_free(Path("/nonexistent_path_xyz"))
         assert result == 0
@@ -126,5 +127,6 @@ class TestGetMigrationVersion:
     @pytest.mark.asyncio
     async def test_returns_zero_when_writer_none(self):
         from ibreeze.observability.health import _get_migration_version_async
+
         result = await _get_migration_version_async(None)
         assert result == 0

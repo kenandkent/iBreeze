@@ -782,6 +782,7 @@ class EmployeeBaseProfileVersionResponse(StrictModel):
     description: str
     profile_type: ProfileType
     runtime_binding_json: str
+    routing_policy_json: str = "{}"
     system_prompt: str
     capability_tags_json: str
     tool_policy_json: str
@@ -1157,9 +1158,7 @@ class KnowledgeItemCreate(StrictModel):
             KnowledgeVisibility.PRIVATE: (None, None, self.owner_employee_id),
         }
         expected = allowed[self.visibility]
-        if scope != expected or (
-            self.visibility is not KnowledgeVisibility.COMPANY and all(value is None for value in expected)
-        ):
+        if scope != expected or (self.visibility is not KnowledgeVisibility.COMPANY and all(value is None for value in expected)):
             raise ValueError("knowledge visibility scope is invalid")
         return self
 

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibreeze.ai/schemas/evaluation/routing-golden-task.v1",
+  "title": "RoutingGoldenTaskManifestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "manifest_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+    "tasks": {
+      "type": "array",
+      "minItems": 200,
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task_id": { "type": "string", "pattern": "^routing-golden-c[0-3]-[a-z_]+-[0-9]{2}$" },
+          "tier": { "enum": ["C0", "C1", "C2", "C3"] },
+          "category": { "enum": ["code_implementation", "code_review", "document_design", "structured_schema", "tool_failure_recovery"] },
+          "run_purpose": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "input_fixture": { "type": "string", "pattern": "^tests/fixtures/routing/[a-z0-9_/-]+\\.json$" },
+          "required_tools": { "type": "array", "items": { "type": "string", "pattern": "^[a-zA-Z0-9._:-]+$" }, "uniqueItems": true },
+          "acceptance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "enum": ["command", "assertion"] },
+              "value": { "type": "string", "minLength": 1, "maxLength": 500 }
+            },
+            "required": ["kind", "value"]
+          },
+          "artifact_type": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "max_runtime_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 }
+        },
+        "required": ["task_id", "tier", "category", "run_purpose", "input_fixture", "required_tools", "acceptance", "artifact_type", "max_runtime_seconds"]
+      }
+    }
+  },
+  "required": ["schema_version", "manifest_id", "tasks"]
+}

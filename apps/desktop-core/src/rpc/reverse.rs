@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -6,7 +7,11 @@ use serde_json::Value;
 use tokio::sync::{oneshot, RwLock};
 use uuid::Uuid;
 
-use crate::broker::{CredentialStore, HttpBroker};
+use crate::broker::credential_index::{CredentialIndexStore, CredentialState};
+use crate::broker::snapshot_authorization::{
+    canonical_json, SnapshotAuthorizationStore, SnapshotRouteRole,
+};
+use crate::broker::{http::MAX_RETRIES, CredentialStore, HttpBroker};
 use crate::error::AppError;
 use crate::ipc::dispatcher::ReverseMethodTable;
 use crate::ipc::error::IpcError;
@@ -20,7 +25,7 @@ use crate::security::grant_store::GrantStore;
 type CancelSender = (Uuid, oneshot::Sender<()>);
 type CancelSenderMap = Arc<RwLock<HashMap<Uuid, CancelSender>>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderProtocol {
     OpenaiResponses,
@@ -29,7 +34,7 @@ pub enum ProviderProtocol {
 }
 
 impl ProviderProtocol {
-    fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::OpenaiResponses => "openai_responses",
             Self::AnthropicMessages => "anthropic_messages",
@@ -59,6 +64,18 @@ pub struct CatalogModelBinding {
     pub model_id: Uuid,
     pub provider_model_name: String,
     pub request_defaults: Value,
+    pub routing_tier: u8,
+    pub quality_prior: f64,
+    pub tool_reliability_prior: f64,
+    pub latency_prior_ms: u64,
+    pub model_family: String,
+    pub model_vendor: String,
+    pub architecture_class: String,
+    pub supports_reasoning: bool,
+    pub reasoning_levels: Vec<String>,
+    pub input_price_microusd_per_million: u64,
+    pub output_price_microusd_per_million: u64,
+    pub routing_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,14 +168,28 @@ pub struct ExternalWriteResponse {
 #[serde(deny_unknown_fields)]
 pub struct CredentialHttpStart {
     pub run_id: Uuid,
+    #[serde(default)]
+    pub execution_snapshot_id: Option<Uuid>,
+    #[serde(default)]
+    pub route_decision_id: Option<Uuid>,
+    #[serde(default)]
+    pub route_attempt_id: Option<Uuid>,
+    #[serde(default)]
+    pub candidate_id: Option<Uuid>,
+    #[serde(default)]
+    pub route_role: Option<SnapshotRouteRole>,
     pub credential_ref: Uuid,
+    #[serde(default = "default_secret_version")]
+    pub credential_secret_version: u64,
     pub provider_release_id: Uuid,
     pub model_binding_id: Uuid,
-    pub protocol: ProviderProtocol,
     pub operation: ProviderOperation,
-    pub relative_path: String,
     pub request: Value,
     pub deadline_at: String,
+}
+
+fn default_secret_version() -> u64 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +207,46 @@ pub struct CredentialProbe {
     pub credential_ref: Uuid,
     pub provider_release_id: Uuid,
     pub model_binding_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CredentialDescribe {
+    pub credential_ref: Uuid,
+    pub provider_release_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotRegister {
+    pub execution_snapshot_id: Uuid,
+    pub run_id: Uuid,
+    pub candidate_bindings_json: String,
+    pub candidate_bindings_sha256: String,
+    pub run_deadline_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionRegister {
+    pub route_decision_id: Uuid,
+    pub run_id: Uuid,
+    pub execution_snapshot_id: Uuid,
+    pub turn_index: u32,
+    pub selections: Vec<DecisionSelection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionSelection {
+    pub candidate_id: Uuid,
+    pub role: SnapshotRouteRole,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotRevoke {
+    pub run_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -218,7 +289,9 @@ pub struct ReverseBroker {
     terminal_requests: Arc<RwLock<HashMap<Uuid, Value>>>,
     notification_client: Arc<RwLock<Option<std::sync::Weak<SidecarClient>>>>,
     profile_directory_id: Arc<RwLock<Option<String>>>,
+    profile_root: Arc<RwLock<Option<PathBuf>>>,
     catalog: Arc<RwLock<Option<CatalogSnapshot>>>,
+    pub snapshot_authorization: SnapshotAuthorizationStore,
 }
 
 impl ReverseBroker {
@@ -230,7 +303,9 @@ impl ReverseBroker {
             terminal_requests: Arc::new(RwLock::new(HashMap::new())),
             notification_client: Arc::new(RwLock::new(None)),
             profile_directory_id: Arc::new(RwLock::new(None)),
+            profile_root: Arc::new(RwLock::new(None)),
             catalog: Arc::new(RwLock::new(None)),
+            snapshot_authorization: SnapshotAuthorizationStore::default(),
         }
     }
 
@@ -242,8 +317,44 @@ impl ReverseBroker {
         *self.profile_directory_id.write().await = profile_directory_id;
     }
 
+    pub async fn bind_profile_root(&self, profile_root: Option<PathBuf>) {
+        *self.profile_root.write().await = profile_root;
+    }
+
     pub async fn bind_catalog(&self, snapshot: Option<CatalogSnapshot>) {
         *self.catalog.write().await = snapshot;
+    }
+
+    pub async fn validate_credential_auth_type(
+        &self,
+        provider_release_id: Uuid,
+        auth_type: &str,
+    ) -> Result<(), AppError> {
+        let catalog = self.catalog.read().await;
+        let provider = catalog
+            .as_ref()
+            .and_then(|snapshot| {
+                snapshot
+                    .providers
+                    .iter()
+                    .find(|provider| provider.provider_release_id == provider_release_id)
+            })
+            .ok_or_else(|| AppError::Validation("CATALOG_PROVIDER_NOT_FOUND".to_owned()))?;
+        let expected = match provider.auth_scheme.as_str() {
+            "bearer" => "bearer",
+            "x-api-key" => "x_api_key",
+            _ => {
+                return Err(AppError::Validation(
+                    "CREDENTIAL_AUTH_TYPE_INVALID".to_owned(),
+                ))
+            }
+        };
+        if expected != auth_type {
+            return Err(AppError::Validation(
+                "CREDENTIAL_AUTH_TYPE_MISMATCH".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     /// Cancel every provider request owned by the current authenticated IPC
@@ -264,7 +375,100 @@ impl ReverseBroker {
             let _ = sender.send(());
         }
         self.terminal_requests.write().await.clear();
+        self.snapshot_authorization.clear().await;
         count
+    }
+
+    pub async fn handle_snapshot_register(
+        &self,
+        request: SnapshotRegister,
+    ) -> Result<Value, AppError> {
+        let deadline = chrono::DateTime::parse_from_rfc3339(&request.run_deadline_at)
+            .map_err(|_| AppError::Validation("ROUTING_SNAPSHOT_INVALID".to_owned()))?
+            .with_timezone(&chrono::Utc);
+        self.validate_snapshot_credentials(&request.candidate_bindings_json)
+            .await?;
+        let snapshot = self
+            .snapshot_authorization
+            .register_snapshot(
+                request.execution_snapshot_id,
+                request.run_id,
+                request.candidate_bindings_json,
+                request.candidate_bindings_sha256,
+                deadline,
+            )
+            .await?;
+        Ok(
+            serde_json::json!({"execution_snapshot_id": snapshot.execution_snapshot_id, "run_id": snapshot.run_id, "authorized": true, "run_deadline_at": snapshot.run_deadline_at.to_rfc3339()}),
+        )
+    }
+
+    async fn validate_snapshot_credentials(
+        &self,
+        candidate_bindings_json: &str,
+    ) -> Result<(), AppError> {
+        let profile_root = self
+            .profile_root
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::Auth("PROFILE_NOT_OPEN".to_owned()))?;
+        let index = CredentialIndexStore::new(profile_root).load()?;
+        let candidates = crate::broker::snapshot_authorization::parse_authorized_candidates(
+            candidate_bindings_json,
+        )?;
+        for candidate in candidates {
+            let metadata = index
+                .credentials
+                .iter()
+                .find(|item| item.credential_ref == candidate.credential_ref)
+                .ok_or_else(|| AppError::NotFound("CREDENTIAL_MISSING".to_owned()))?;
+            if metadata.provider_release_id != candidate.provider_release_id {
+                return Err(AppError::Validation(
+                    "CREDENTIAL_PROVIDER_MISMATCH".to_owned(),
+                ));
+            }
+            if !matches!(metadata.state, CredentialState::Ready) {
+                return Err(AppError::Validation(
+                    match metadata.state {
+                        CredentialState::Deleting => "CREDENTIAL_IN_USE",
+                        _ => "CREDENTIAL_NOT_READY",
+                    }
+                    .to_owned(),
+                ));
+            }
+            if metadata.active_secret_version != Some(candidate.credential_secret_version) {
+                return Err(AppError::Validation(
+                    "CREDENTIAL_VERSION_MISMATCH".to_owned(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn handle_decision_register(
+        &self,
+        request: DecisionRegister,
+    ) -> Result<Value, AppError> {
+        let selections = request
+            .selections
+            .into_iter()
+            .map(|item| (item.candidate_id, item.role))
+            .collect();
+        self.snapshot_authorization
+            .register_decision(
+                request.route_decision_id,
+                request.run_id,
+                request.execution_snapshot_id,
+                selections,
+            )
+            .await?;
+        Ok(serde_json::json!({"route_decision_id": request.route_decision_id, "registered": true}))
+    }
+
+    pub async fn handle_snapshot_revoke(&self, request: SnapshotRevoke) -> Result<Value, AppError> {
+        self.snapshot_authorization.revoke_run(request.run_id).await;
+        Ok(serde_json::json!({"run_id": request.run_id, "revoked": true}))
     }
 
     async fn notify(&self, method: &str, params: Value) -> Result<(), AppError> {
@@ -288,25 +492,109 @@ impl ReverseBroker {
         &self,
         request: CredentialHttpStart,
     ) -> Result<Value, AppError> {
+        validate_route_metadata_presence(
+            request.execution_snapshot_id,
+            request.route_decision_id,
+            request.route_attempt_id,
+            request.candidate_id,
+            request.route_role.as_ref(),
+        )?;
         let deadline_s = parse_deadline(&request.deadline_at)
             .ok_or_else(|| AppError::Validation("PROVIDER_DEADLINE_INVALID".to_owned()))?;
+        let request_deadline = chrono::DateTime::parse_from_rfc3339(&request.deadline_at)
+            .map_err(|_| AppError::Validation("PROVIDER_DEADLINE_INVALID".to_owned()))?
+            .with_timezone(&chrono::Utc);
         let profile_directory_id = self
             .profile_directory_id
             .read()
             .await
             .clone()
             .ok_or_else(|| AppError::Auth("PROFILE_NOT_OPEN".to_owned()))?;
+        let mut expected_request_defaults_sha256: Option<String> = None;
+        let mut expected_provider_protocol: Option<ProviderProtocol> = None;
+        if let (
+            Some(snapshot_id),
+            Some(decision_id),
+            Some(attempt_id),
+            Some(candidate_id),
+            Some(role),
+        ) = (
+            request.execution_snapshot_id,
+            request.route_decision_id,
+            request.route_attempt_id,
+            request.candidate_id,
+            request.route_role.clone(),
+        ) {
+            let authorized = self
+                .snapshot_authorization
+                .authorize_attempt(
+                    crate::broker::snapshot_authorization::AuthorizeAttemptRequest {
+                        attempt_id,
+                        decision_id,
+                        run_id: request.run_id,
+                        snapshot_id,
+                        candidate_id,
+                        role,
+                        now: chrono::Utc::now(),
+                    },
+                )
+                .await?;
+            self.snapshot_authorization
+                .validate_request_deadline(snapshot_id, request.run_id, request_deadline)
+                .await?;
+            if authorized.provider_release_id != request.provider_release_id
+                || authorized.model_binding_id != request.model_binding_id
+                || authorized.credential_ref != request.credential_ref
+                || authorized.credential_secret_version != request.credential_secret_version
+            {
+                return Err(AppError::Security(
+                    "ROUTING_SNAPSHOT_NOT_AUTHORIZED".to_owned(),
+                ));
+            }
+            expected_request_defaults_sha256 = authorized.request_defaults_sha256.clone();
+            expected_provider_protocol = authorized.provider_protocol.clone();
+            if let Some(existing_request_id) =
+                self.snapshot_authorization.bound_request(attempt_id).await
+            {
+                if let Some(terminal) = self
+                    .terminal_requests
+                    .read()
+                    .await
+                    .get(&existing_request_id)
+                    .cloned()
+                {
+                    return Ok(terminal);
+                }
+                return Ok(serde_json::json!({
+                    "request_id": existing_request_id,
+                    "accepted": true,
+                    "stream": true,
+                    "replayed": true,
+                }));
+            }
+        }
         let provider = self
-            .resolve_provider(
-                request.provider_release_id,
-                request.model_binding_id,
-                &request.protocol,
-                &request.relative_path,
-            )
+            .resolve_provider(request.provider_release_id, request.model_binding_id)
             .await?;
-        let credential = self
-            .credential_store
-            .load_keychain_credential(&profile_directory_id, request.credential_ref)?;
+        if let Some(expected) = expected_provider_protocol.as_ref() {
+            if expected.as_str() != provider.protocol.as_str() {
+                return Err(AppError::Security(
+                    "ROUTING_SNAPSHOT_NOT_AUTHORIZED".to_owned(),
+                ));
+            }
+        }
+        if let Some(expected) = expected_request_defaults_sha256.as_deref() {
+            if expected != provider.request_defaults_sha256 {
+                return Err(AppError::Security(
+                    "ROUTING_SNAPSHOT_NOT_AUTHORIZED".to_owned(),
+                ));
+            }
+        }
+        let credential = self.credential_store.load_keychain_credential_version(
+            &profile_directory_id,
+            request.credential_ref,
+            request.credential_secret_version,
+        )?;
         if credential.provider_id != request.provider_release_id {
             return Err(AppError::Validation(
                 "CREDENTIAL_PROVIDER_MISMATCH".to_owned(),
@@ -323,15 +611,24 @@ impl ReverseBroker {
                 request.provider_release_id,
                 request.model_binding_id,
                 request.run_id,
-                &request.relative_path,
+                provider.protocol.expected_path(),
                 request_body,
                 deadline_s,
+                // Model-level retry/fallback is owned by Sidecar.  A
+                // RouteAttempt must correspond to exactly one physical HTTP
+                // request, so the Broker must not retry this operation.
+                0,
             )
             .await?;
         self.cancel_senders
             .write()
             .await
             .insert(request_id, (request.run_id, cancel_tx));
+        if let Some(attempt_id) = request.route_attempt_id {
+            self.snapshot_authorization
+                .bind_request(attempt_id, request_id)
+                .await?;
+        }
         let broker = self.clone();
         let run_id = request.run_id;
         tokio::spawn(async move {
@@ -524,6 +821,9 @@ impl ReverseBroker {
                 relative_path,
                 request_body,
                 15,
+                // Credential Probe is outside RouteAttempt accounting and may
+                // use the Broker's independent transient retry budget.
+                MAX_RETRIES,
             )
             .await;
         let (request_id, cancel_tx, receiver) = match result {
@@ -549,27 +849,101 @@ impl ReverseBroker {
         }
     }
 
+    pub async fn handle_credential_describe(
+        &self,
+        request: CredentialDescribe,
+    ) -> Result<Value, AppError> {
+        let profile_root = self
+            .profile_root
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::Auth("PROFILE_NOT_OPEN".to_owned()))?;
+        let index = CredentialIndexStore::new(profile_root).load()?;
+        let item = index
+            .credentials
+            .into_iter()
+            .find(|item| item.credential_ref == request.credential_ref)
+            .ok_or_else(|| AppError::NotFound("CREDENTIAL_NOT_FOUND".to_owned()))?;
+        if item.provider_release_id != request.provider_release_id {
+            return Err(AppError::Validation(
+                "CREDENTIAL_PROVIDER_MISMATCH".to_owned(),
+            ));
+        }
+        Ok(serde_json::json!({
+            "credential_ref": item.credential_ref,
+            "provider_release_id": item.provider_release_id,
+            "auth_type": item.auth_type,
+            "state": item.state,
+            "metadata_version": item.metadata_version,
+            "active_secret_version": item.active_secret_version,
+        }))
+    }
+
+    /// Public credential management owns only metadata and the expected
+    /// version.  Provider/model selection is resolved from the signed Catalog
+    /// here so the Tauri command cannot probe an arbitrary URL or model.
+    pub async fn probe_credential_ref(
+        &self,
+        credential_ref: Uuid,
+        provider_release_id: Uuid,
+    ) -> Result<Value, AppError> {
+        let catalog = self.catalog.read().await.clone();
+        let snapshot =
+            catalog.ok_or_else(|| AppError::Validation("CATALOG_NOT_AVAILABLE".to_owned()))?;
+        let provider = snapshot
+            .providers
+            .iter()
+            .find(|item| item.provider_release_id == provider_release_id)
+            .ok_or_else(|| AppError::Validation("CATALOG_PROVIDER_NOT_FOUND".to_owned()))?;
+        let binding = provider
+            .model_bindings
+            .first()
+            .ok_or_else(|| AppError::Validation("CATALOG_MODEL_BINDING_NOT_FOUND".to_owned()))?;
+        self.handle_credential_probe(CredentialProbe {
+            credential_ref,
+            provider_release_id,
+            model_binding_id: binding.binding_id,
+        })
+        .await
+    }
+
     async fn resolve_provider(
         &self,
         provider_release_id: Uuid,
         model_binding_id: Uuid,
-        protocol: &ProviderProtocol,
-        relative_path: &str,
     ) -> Result<ResolvedProvider, AppError> {
         let catalog = self.catalog.read().await;
         let snapshot = catalog
             .as_ref()
             .ok_or_else(|| AppError::Validation("CATALOG_NOT_AVAILABLE".to_owned()))?;
         let provider = resolve_provider(snapshot, provider_release_id, model_binding_id)?;
-        if provider.protocol.as_str() != protocol.as_str()
-            || protocol.expected_path() != relative_path
-        {
-            return Err(AppError::Validation(
-                "PROVIDER_OPERATION_NOT_ALLOWED".to_owned(),
-            ));
-        }
         Ok(provider)
     }
+}
+
+fn validate_route_metadata_presence(
+    execution_snapshot_id: Option<Uuid>,
+    route_decision_id: Option<Uuid>,
+    route_attempt_id: Option<Uuid>,
+    candidate_id: Option<Uuid>,
+    route_role: Option<&SnapshotRouteRole>,
+) -> Result<(), AppError> {
+    let present = [
+        execution_snapshot_id.is_some(),
+        route_decision_id.is_some(),
+        route_attempt_id.is_some(),
+        candidate_id.is_some(),
+        route_role.is_some(),
+    ];
+    let any = present.iter().any(|value| *value);
+    let complete = present.iter().all(|value| *value);
+    if any && !complete {
+        return Err(AppError::Security(
+            "ROUTING_SNAPSHOT_NOT_AUTHORIZED".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn probe_request(protocol: &ProviderProtocol) -> (&'static str, Value) {
@@ -635,6 +1009,7 @@ struct ResolvedProvider {
     auth_scheme: String,
     model_name: String,
     request_defaults: Value,
+    request_defaults_sha256: String,
     protocol: ProviderProtocol,
 }
 
@@ -657,9 +1032,18 @@ fn resolve_provider(
         base_url: provider.base_url.clone(),
         auth_scheme: provider.auth_scheme.clone(),
         model_name: binding.provider_model_name.clone(),
+        request_defaults_sha256: json_sha256(&binding.request_defaults)?,
         request_defaults: binding.request_defaults.clone(),
         protocol: provider.protocol.clone(),
     })
+}
+
+fn json_sha256(value: &Value) -> Result<String, AppError> {
+    use sha2::{Digest, Sha256};
+
+    let bytes = canonical_json(value)
+        .map_err(|_| AppError::Validation("CATALOG_REQUEST_DEFAULTS_INVALID".to_owned()))?;
+    Ok(format!("{:x}", Sha256::digest(bytes.as_bytes())))
 }
 
 fn prepare_provider_request(
@@ -674,6 +1058,11 @@ fn prepare_provider_request(
     for forbidden in [
         "url",
         "base_url",
+        "relative_path",
+        "protocol",
+        "provider_protocol",
+        "endpoint",
+        "headers",
         "authorization",
         "api_key",
         "token",
@@ -839,6 +1228,51 @@ pub fn register_reverse_handlers(
     );
     let broker_clone = broker.clone();
     table.register(
+        "routing.snapshot.register",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: SnapshotRegister = serde_json::from_value(params)
+                    .map_err(|_| IpcError::Internal("RPC_PARAMS_INVALID".to_owned()))?;
+                broker
+                    .handle_snapshot_register(request)
+                    .await
+                    .map_err(ipc_from_app_error)
+            })
+        }),
+    );
+    let broker_clone = broker.clone();
+    table.register(
+        "routing.decision.register",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: DecisionRegister = serde_json::from_value(params)
+                    .map_err(|_| IpcError::Internal("RPC_PARAMS_INVALID".to_owned()))?;
+                broker
+                    .handle_decision_register(request)
+                    .await
+                    .map_err(ipc_from_app_error)
+            })
+        }),
+    );
+    let broker_clone = broker.clone();
+    table.register(
+        "routing.snapshot.revoke",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: SnapshotRevoke = serde_json::from_value(params)
+                    .map_err(|_| IpcError::Internal("RPC_PARAMS_INVALID".to_owned()))?;
+                broker
+                    .handle_snapshot_revoke(request)
+                    .await
+                    .map_err(ipc_from_app_error)
+            })
+        }),
+    );
+    let broker_clone = broker.clone();
+    table.register(
         "credential.http.cancel",
         Arc::new(move |params| {
             let broker = broker_clone.clone();
@@ -847,6 +1281,21 @@ pub fn register_reverse_handlers(
                     .map_err(|_| IpcError::Internal("RPC_PARAMS_INVALID".to_owned()))?;
                 let result = broker.handle_credential_http_cancel(request).await;
                 result.map_err(ipc_from_app_error)
+            })
+        }),
+    );
+    let broker_clone = broker.clone();
+    table.register(
+        "credential.describe",
+        Arc::new(move |params| {
+            let broker = broker_clone.clone();
+            Box::pin(async move {
+                let request: CredentialDescribe = serde_json::from_value(params)
+                    .map_err(|_| IpcError::Internal("RPC_PARAMS_INVALID".to_owned()))?;
+                broker
+                    .handle_credential_describe(request)
+                    .await
+                    .map_err(ipc_from_app_error)
             })
         }),
     );
@@ -933,6 +1382,7 @@ fn ipc_from_app_error(error: AppError) -> IpcError {
         AppError::Unauthorized(message) => ("UNAUTHORIZED", message),
         AppError::Validation(message) => ("VALIDATION_ERROR", message),
         AppError::NotFound(message) => ("NOT_FOUND", message),
+        AppError::Conflict(message) => ("CONFLICT", message),
         AppError::Network(message) => ("NETWORK_ERROR", message),
         AppError::Storage(message) => ("STORAGE_ERROR", message),
         AppError::Security(message) => ("SECURITY_ERROR", message),
@@ -965,9 +1415,13 @@ fn stable_error_code(message: &str, fallback: &str) -> String {
 /// Allowed reverse methods from Sidecar to Rust
 pub const ALLOWED_REVERSE_METHODS: &[&str] = &[
     "system.heartbeat",
+    "routing.snapshot.register",
+    "routing.decision.register",
+    "routing.snapshot.revoke",
     "credential.http.start",
     "credential.http.cancel",
     "credential.probe",
+    "credential.describe",
     "host.externalWrite.execute",
     "runtime.process.start",
     "runtime.process.cancel",
@@ -1002,6 +1456,7 @@ mod tests {
         assert!(validate_reverse_method("credential.http.start").is_ok());
         assert!(validate_reverse_method("credential.http.cancel").is_ok());
         assert!(validate_reverse_method("credential.probe").is_ok());
+        assert!(validate_reverse_method("credential.describe").is_ok());
         assert!(validate_reverse_method("host.externalWrite.execute").is_ok());
         assert!(validate_reverse_method("runtime.process.start").is_ok());
         assert!(validate_reverse_method("runtime.process.cancel").is_ok());
@@ -1027,6 +1482,71 @@ mod tests {
         let too_far = (chrono::Utc::now() + chrono::Duration::seconds(1200)).to_rfc3339();
         assert_eq!(parse_deadline(&too_far), None);
         assert_eq!(parse_deadline("not-a-date"), None);
+    }
+
+    #[test]
+    fn provider_request_rejects_catalog_owned_transport_fields() {
+        let provider = ResolvedProvider {
+            base_url: "https://provider.example".to_owned(),
+            auth_scheme: "bearer".to_owned(),
+            model_name: "model-a".to_owned(),
+            request_defaults: serde_json::json!({}),
+            request_defaults_sha256: json_sha256(&serde_json::json!({})).expect("hash"),
+            protocol: ProviderProtocol::OpenaiResponses,
+        };
+        for field in [
+            "url",
+            "relative_path",
+            "protocol",
+            "provider_protocol",
+            "endpoint",
+            "headers",
+            "authorization",
+            "stream",
+        ] {
+            let request = serde_json::json!({field: "attacker-controlled"});
+            let error = prepare_provider_request(&request, &provider).expect_err(field);
+            assert_eq!(
+                error.to_string(),
+                "Validation error: PROVIDER_REQUEST_FIELD_FORBIDDEN"
+            );
+        }
+        let model_override = serde_json::json!({"model": "attacker-model"});
+        let error = prepare_provider_request(&model_override, &provider).expect_err("model");
+        assert_eq!(
+            error.to_string(),
+            "Validation error: PROVIDER_MODEL_OVERRIDE_FORBIDDEN"
+        );
+    }
+
+    #[test]
+    fn routed_http_request_requires_all_snapshot_metadata() {
+        let snapshot = Uuid::new_v4();
+        let decision = Uuid::new_v4();
+        let attempt = Uuid::new_v4();
+        let candidate = Uuid::new_v4();
+        let role = SnapshotRouteRole::Single;
+        assert!(validate_route_metadata_presence(None, None, None, None, None).is_ok());
+        assert!(validate_route_metadata_presence(
+            Some(snapshot),
+            Some(decision),
+            Some(attempt),
+            Some(candidate),
+            Some(&role),
+        )
+        .is_ok());
+        let error = validate_route_metadata_presence(
+            Some(snapshot),
+            Some(decision),
+            None,
+            Some(candidate),
+            Some(&role),
+        )
+        .expect_err("partial snapshot metadata must fail closed");
+        assert_eq!(
+            error.to_string(),
+            "Security error: ROUTING_SNAPSHOT_NOT_AUTHORIZED"
+        );
     }
 
     #[test]

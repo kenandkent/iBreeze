@@ -62,8 +62,7 @@ async def _make_company_task(db, company_id: str) -> str:
                (id, company_id, company_conversation_id, user_message_event_id,
                 title, status, created_at, updated_at, version)
                VALUES (?,?,?,?,?,?,?,?,?)""",
-            (ct_id, company_id, "conv-1", "evt-1", "test-task", "executing",
-             "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", 1),
+            (ct_id, company_id, "conv-1", "evt-1", "test-task", "executing", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", 1),
         )
         await db.commit()
     finally:
@@ -81,9 +80,20 @@ async def _make_dept_task(db, company_id: str, dept_id: str, company_task_id: st
                 objective, deliverables_json, acceptance_criteria_json,
                 status, created_at, updated_at, version)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (dt_id, company_id, company_task_id, dept_id, "dev",
-             "test", "[]", "[]", "executing",
-             "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", 1),
+            (
+                dt_id,
+                company_id,
+                company_task_id,
+                dept_id,
+                "dev",
+                "test",
+                "[]",
+                "[]",
+                "executing",
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+                1,
+            ),
         )
         await db.commit()
     finally:
@@ -91,8 +101,7 @@ async def _make_dept_task(db, company_id: str, dept_id: str, company_task_id: st
     return dt_id
 
 
-async def _make_emp_task(db, company_id: str, dept_task_id: str, employee_id: str,
-                         status: str = "running") -> str:
+async def _make_emp_task(db, company_id: str, dept_task_id: str, employee_id: str, status: str = "running") -> str:
     et_id = str(uuid.uuid4())
     await db.execute("PRAGMA foreign_keys = OFF")
     try:
@@ -102,9 +111,20 @@ async def _make_emp_task(db, company_id: str, dept_task_id: str, employee_id: st
                 objective, acceptance_criteria_json, status, resume_state,
                 created_at, updated_at, version)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (et_id, company_id, dept_task_id, employee_id, "standard",
-             "test", "[]", status, None,
-             "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", 1),
+            (
+                et_id,
+                company_id,
+                dept_task_id,
+                employee_id,
+                "standard",
+                "test",
+                "[]",
+                status,
+                None,
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+                1,
+            ),
         )
         await db.commit()
     finally:
@@ -112,8 +132,7 @@ async def _make_emp_task(db, company_id: str, dept_task_id: str, employee_id: st
     return et_id
 
 
-async def _make_execution_report(db, company_id: str, company_task_id: str,
-                                 dept_task_id: str | None = None) -> str:
+async def _make_execution_report(db, company_id: str, company_task_id: str, dept_task_id: str | None = None) -> str:
     art_id = str(uuid.uuid4())
     await db.execute("PRAGMA foreign_keys = OFF")
     try:
@@ -123,9 +142,22 @@ async def _make_execution_report(db, company_id: str, company_task_id: str,
                 logical_name, object_sha256, object_size, media_type, metadata_json,
                 supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (art_id, company_id, company_task_id, dept_task_id,
-             "execution_report", "exec-report.md", "b" * 64, 50, "text/markdown", "{}",
-             None, "agent", "run-1", "2026-01-01T00:00:00Z"),
+            (
+                art_id,
+                company_id,
+                company_task_id,
+                dept_task_id,
+                "execution_report",
+                "exec-report.md",
+                "b" * 64,
+                50,
+                "text/markdown",
+                "{}",
+                None,
+                "agent",
+                "run-1",
+                "2026-01-01T00:00:00Z",
+            ),
         )
         await db.commit()
     finally:
@@ -133,9 +165,7 @@ async def _make_execution_report(db, company_id: str, company_task_id: str,
     return art_id
 
 
-async def _make_verification(db, company_id: str, artifact_id: str,
-                             company_task_id: str | None = None,
-                             status: str = "passed") -> str:
+async def _make_verification(db, company_id: str, artifact_id: str, company_task_id: str | None = None, status: str = "passed") -> str:
     ver_id = str(uuid.uuid4())
     run_id = str(uuid.uuid4())
     await db.execute("PRAGMA foreign_keys = OFF")
@@ -147,19 +177,31 @@ async def _make_verification(db, company_id: str, artifact_id: str,
                 run_purpose, adapter_type, run_spec_json, run_spec_sha256,
                 status, attempt, created_at, updated_at)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (run_id, company_id, company_task_id or str(uuid.uuid4()),
-             str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()),
-             str(uuid.uuid4()), str(uuid.uuid4()),
-             "verification", "codex_cli", "{}", "a" * 64,
-             "succeeded", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+            (
+                run_id,
+                company_id,
+                company_task_id or str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                "verification",
+                "codex_cli",
+                "{}",
+                "a" * 64,
+                "succeeded",
+                1,
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+            ),
         )
         await db.execute(
             """INSERT INTO verifications
                (id, company_id, run_id, artifact_id, verification_type,
                 status, completed_at)
                VALUES (?,?,?,?,?,?,?)""",
-            (ver_id, company_id, run_id, artifact_id, "test", status,
-             "2026-01-01T00:00:00Z"),
+            (ver_id, company_id, run_id, artifact_id, "test", status, "2026-01-01T00:00:00Z"),
         )
         await db.commit()
     finally:
@@ -167,10 +209,9 @@ async def _make_verification(db, company_id: str, artifact_id: str,
     return ver_id
 
 
-async def _make_artifact(db, company_id: str, company_task_id: str,
-                         contributor_id: str | None = None,
-                         dept_task_id: str | None = None,
-                         sha: str | None = None) -> str:
+async def _make_artifact(
+    db, company_id: str, company_task_id: str, contributor_id: str | None = None, dept_task_id: str | None = None, sha: str | None = None
+) -> str:
     art_id = str(uuid.uuid4())
     sha256 = sha or ("a" * 64)
     await db.execute("PRAGMA foreign_keys = OFF")
@@ -181,9 +222,22 @@ async def _make_artifact(db, company_id: str, company_task_id: str,
                 logical_name, object_sha256, object_size, media_type, metadata_json,
                 supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (art_id, company_id, company_task_id, dept_task_id,
-             "source_code_patch", "main.py", sha256, 100, "text/plain", "{}",
-             None, "agent", "run-1", "2026-01-01T00:00:00Z"),
+            (
+                art_id,
+                company_id,
+                company_task_id,
+                dept_task_id,
+                "source_code_patch",
+                "main.py",
+                sha256,
+                100,
+                "text/plain",
+                "{}",
+                None,
+                "agent",
+                "run-1",
+                "2026-01-01T00:00:00Z",
+            ),
         )
         if contributor_id is not None:
             await db.execute(
@@ -235,7 +289,9 @@ class TestEmployeeTaskGate:
     async def test_open_blocker_issues_blocked(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         reviewer = await create_employee(
-            db, company.id, dept.id,
+            db,
+            company.id,
+            dept.id,
             EmployeeCreate(
                 display_name="评审者",
                 base_profile_version_id=published_profile,
@@ -248,7 +304,8 @@ class TestEmployeeTaskGate:
         art_id = await _make_artifact(db, company.id, ct_id, contributor_id=employee.id)
 
         assignment = await assign_reviewer(
-            db, company.id,
+            db,
+            company.id,
             artifact_id=art_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
@@ -264,9 +321,17 @@ class TestEmployeeTaskGate:
                     reviewed_artifact_id, reviewed_sha256, verdict,
                     report_artifact_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                (report_id, company.id, assignment["id"], "run-review",
-                 art_id, "a" * 64, "needs_changes", "report-art-1",
-                 "2026-01-01T00:00:00Z"),
+                (
+                    report_id,
+                    company.id,
+                    assignment["id"],
+                    "run-review",
+                    art_id,
+                    "a" * 64,
+                    "needs_changes",
+                    "report-art-1",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.execute(
                 """UPDATE review_assignments
@@ -279,7 +344,8 @@ class TestEmployeeTaskGate:
             await db.execute("PRAGMA foreign_keys = ON")
 
         await create_review_issue(
-            db, company.id,
+            db,
+            company.id,
             report_id=report_id,
             severity="blocker",
             category="logic",
@@ -294,7 +360,9 @@ class TestEmployeeTaskGate:
     async def test_rework_missing_version_blocked(self, db, published_profile):
         company, dept, employee = await _setup_company(db, published_profile)
         reviewer = await create_employee(
-            db, company.id, dept.id,
+            db,
+            company.id,
+            dept.id,
             EmployeeCreate(
                 display_name="评审者2",
                 base_profile_version_id=published_profile,
@@ -309,7 +377,8 @@ class TestEmployeeTaskGate:
         await _make_execution_report(db, company.id, ct_id)
 
         assignment = await assign_reviewer(
-            db, company.id,
+            db,
+            company.id,
             artifact_id=art_id,
             reviewer_employee_id=reviewer.id,
             review_round=1,
@@ -325,9 +394,17 @@ class TestEmployeeTaskGate:
                     reviewed_artifact_id, reviewed_sha256, verdict,
                     report_artifact_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                (report_id, company.id, assignment["id"], "run-review",
-                 art_id, "a" * 64, "needs_changes", "report-art-2",
-                 "2026-01-01T00:00:00Z"),
+                (
+                    report_id,
+                    company.id,
+                    assignment["id"],
+                    "run-review",
+                    art_id,
+                    "a" * 64,
+                    "needs_changes",
+                    "report-art-2",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.commit()
         finally:
@@ -351,7 +428,9 @@ class TestEmployeeTaskGate:
 
     async def test_task_not_found(self, db, published_profile):
         blockers = await EmployeeGate().blockers(
-            db, uuid.UUID("00000000-0000-4000-8000-000000000000"), uuid.UUID("00000000-0000-4000-8000-000000000001"),
+            db,
+            uuid.UUID("00000000-0000-4000-8000-000000000000"),
+            uuid.UUID("00000000-0000-4000-8000-000000000001"),
         )
         assert "missing_required_artifact" in blockers
 
@@ -399,9 +478,22 @@ class TestDepartmentTaskGate:
                     logical_name, object_sha256, object_size, media_type, metadata_json,
                     supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (str(uuid.uuid4()), company.id, ct_id, dt_id, "department_report",
-                 "dept-report.md", "d" * 64, 50, "text/markdown", "{}",
-                 None, "agent", "run-report", "2026-01-01T00:00:00Z"),
+                (
+                    str(uuid.uuid4()),
+                    company.id,
+                    ct_id,
+                    dt_id,
+                    "department_report",
+                    "dept-report.md",
+                    "d" * 64,
+                    50,
+                    "text/markdown",
+                    "{}",
+                    None,
+                    "agent",
+                    "run-report",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.commit()
         finally:
@@ -445,9 +537,22 @@ class TestCompanyTaskGate:
                     logical_name, object_sha256, object_size, media_type, metadata_json,
                     supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (str(uuid.uuid4()), company.id, ct_id, dt_id, "department_report",
-                 "dept-report.md", "e" * 64, 50, "text/markdown", "{}",
-                 None, "agent", "run-report", "2026-01-01T00:00:00Z"),
+                (
+                    str(uuid.uuid4()),
+                    company.id,
+                    ct_id,
+                    dt_id,
+                    "department_report",
+                    "dept-report.md",
+                    "e" * 64,
+                    50,
+                    "text/markdown",
+                    "{}",
+                    None,
+                    "agent",
+                    "run-report",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             art_id = str(uuid.uuid4())
             await db.execute(
@@ -456,9 +561,21 @@ class TestCompanyTaskGate:
                     object_sha256, object_size, media_type, metadata_json,
                     supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (art_id, company.id, ct_id, "review_report", "review.md",
-                 "f" * 64, 200, "text/markdown", "{}",
-                 None, "agent", "run-review", "2026-01-01T00:00:00Z"),
+                (
+                    art_id,
+                    company.id,
+                    ct_id,
+                    "review_report",
+                    "review.md",
+                    "f" * 64,
+                    200,
+                    "text/markdown",
+                    "{}",
+                    None,
+                    "agent",
+                    "run-review",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             rev_id = str(uuid.uuid4())
             await db.execute(
@@ -466,8 +583,7 @@ class TestCompanyTaskGate:
                    (id, company_id, artifact_id, reviewer_employee_id,
                     review_round, reviewed_sha256, status, assigned_at)
                    VALUES (?,?,?,?,?,?,?,?)""",
-                (rev_id, company.id, art_id, employee.id, 1, "f" * 64,
-                 "submitted", "2026-01-01T00:00:00Z"),
+                (rev_id, company.id, art_id, employee.id, 1, "f" * 64, "submitted", "2026-01-01T00:00:00Z"),
             )
             report_id = str(uuid.uuid4())
             await db.execute(
@@ -476,9 +592,7 @@ class TestCompanyTaskGate:
                     reviewed_artifact_id, reviewed_sha256, verdict,
                     report_artifact_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                (report_id, company.id, rev_id, "run-review",
-                 art_id, "f" * 64, "pass", "report-art-pass",
-                 "2026-01-01T00:00:00Z"),
+                (report_id, company.id, rev_id, "run-review", art_id, "f" * 64, "pass", "report-art-pass", "2026-01-01T00:00:00Z"),
             )
             await db.execute(
                 """INSERT INTO artifacts
@@ -486,9 +600,21 @@ class TestCompanyTaskGate:
                     object_sha256, object_size, media_type, metadata_json,
                     supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (str(uuid.uuid4()), company.id, ct_id, "final_report", "final.md",
-                 "g" * 64, 300, "text/markdown", "{}",
-                 None, "agent", "run-final", "2026-01-01T00:00:00Z"),
+                (
+                    str(uuid.uuid4()),
+                    company.id,
+                    ct_id,
+                    "final_report",
+                    "final.md",
+                    "g" * 64,
+                    300,
+                    "text/markdown",
+                    "{}",
+                    None,
+                    "agent",
+                    "run-final",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.execute(
                 """UPDATE company_tasks
@@ -521,9 +647,22 @@ class TestCompanyTaskGate:
                     logical_name, object_sha256, object_size, media_type, metadata_json,
                     supersedes_artifact_id, created_by_type, created_by_run_id, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (str(uuid.uuid4()), company.id, ct_id, dt_id, "department_report",
-                 "dept-report.md", "h" * 64, 50, "text/markdown", "{}",
-                 None, "agent", "run-report", "2026-01-01T00:00:00Z"),
+                (
+                    str(uuid.uuid4()),
+                    company.id,
+                    ct_id,
+                    dt_id,
+                    "department_report",
+                    "dept-report.md",
+                    "h" * 64,
+                    50,
+                    "text/markdown",
+                    "{}",
+                    None,
+                    "agent",
+                    "run-report",
+                    "2026-01-01T00:00:00Z",
+                ),
             )
             await db.commit()
         finally:

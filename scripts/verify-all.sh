@@ -158,7 +158,21 @@ run_e2e() {
     echo "--- e2e tests ---"
     e2e_dir="$ROOT_DIR/tests/e2e"
     if [ -d "$e2e_dir" ] && ls "$e2e_dir"/*.py &>/dev/null 2>&1; then
-        uv run --directory apps/backend-api pytest "$e2e_dir" -v --tb=short
+        backend_files=()
+        # Only test modules belong to the Backend E2E invocation.  Helpers
+        # such as fake_provider.py import Sidecar-only dependencies and must
+        # be loaded by the dedicated Sidecar project below instead.
+        for file in "$e2e_dir"/test_*.py; do
+            if [ "$(basename "$file")" != "test_intelligent_routing.py" ]; then
+                backend_files+=("$file")
+            fi
+        done
+        if [ ${#backend_files[@]} -gt 0 ]; then
+            uv run --directory apps/backend-api pytest "${backend_files[@]}" -v --tb=short
+        fi
+        if [ -f "$e2e_dir/test_intelligent_routing.py" ]; then
+            uv run --project "$ROOT_DIR/sidecar" pytest "$e2e_dir/test_intelligent_routing.py" -v --tb=short
+        fi
     else
         echo "(no e2e test files found in $e2e_dir)"
     fi

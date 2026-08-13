@@ -77,3 +77,30 @@ class TestNoDirectHttpCalls:
         )
         assert await probe.probe() is False
         assert probe._rpc.last_method in allowed
+
+    @pytest.mark.asyncio
+    async def test_acceptance_persistence_failure_cancels_accepted_request(self) -> None:
+        calls: list[str] = []
+
+        class _AcceptedSession:
+            async def call(self, method: str, _params: dict[str, object]) -> dict[str, object]:
+                calls.append(method)
+                if method == "credential.http.start":
+                    return {"accepted": True, "stream": True, "request_id": "provider-request-1"}
+                if method == "credential.http.cancel":
+                    return {"cancelled": True}
+                raise AssertionError(method)
+
+        async def fail_persist(_request_id: str) -> None:
+            raise RuntimeError("ROUTE_ATTEMPT_ACCEPT_CONFLICT")
+
+        transport = ReverseRpcTransport(
+            credential_ref="cred-1",
+            model="gpt-4o",
+            run_id="run-1",
+            session=_AcceptedSession(),
+            accepted_callback=fail_persist,
+        )
+        with pytest.raises(RuntimeError, match="ROUTE_ATTEMPT_ACCEPT_CONFLICT"):
+            await transport.complete(({"role": "user", "content": "hello"},), ())
+        assert calls == ["credential.http.start", "credential.http.cancel"]

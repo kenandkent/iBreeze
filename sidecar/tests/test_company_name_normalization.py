@@ -40,9 +40,7 @@ class TestNFKCNormalization:
             await create_company(db, _create(published_profile, name="  acme corp  "))
 
     async def test_rename_rejects_nfkc_duplicate(self, db, published_profile):
-        company = await create_company(
-            db, _create(published_profile, name="Alpha")
-        )
+        company = await create_company(db, _create(published_profile, name="Alpha"))
         await create_company(db, _create(published_profile, name="Beta"))
         with pytest.raises(ValueError, match="NAME_EXISTS"):
             await rename_company(
