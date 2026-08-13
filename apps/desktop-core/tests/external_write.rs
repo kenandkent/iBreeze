@@ -81,7 +81,10 @@ fn state_sha_of(path: &PathBuf) -> String {
 
 #[tokio::test]
 async fn happy_path_create_file() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("new_file.txt");
 
     let grant_store = GrantStore::new();
@@ -112,7 +115,10 @@ async fn happy_path_create_file() {
 
 #[tokio::test]
 async fn happy_path_replace_file() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("existing.txt");
     fs::write(&target, b"original content").expect("write original");
 
@@ -144,7 +150,10 @@ async fn happy_path_replace_file() {
 
 #[tokio::test]
 async fn path_traversal_is_rejected() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let bookmark_path = dir.path().join("allowed");
     fs::create_dir(&bookmark_path).expect("create allowed dir");
 
@@ -188,7 +197,10 @@ async fn path_traversal_is_rejected() {
 
 #[tokio::test]
 async fn expired_approval_is_rejected() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("expired_test.txt");
 
     let grant_store = GrantStore::new();
@@ -219,7 +231,10 @@ async fn expired_approval_is_rejected() {
 
 #[tokio::test]
 async fn sha_mismatch_before_write_is_detected() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("mismatch.txt");
     fs::write(&target, b"original content").expect("write original");
 
@@ -250,7 +265,10 @@ async fn sha_mismatch_before_write_is_detected() {
 
 #[tokio::test]
 async fn receipt_idempotency_returns_original_result() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("idempotent.txt");
 
     let grant_store = GrantStore::new();
@@ -293,7 +311,10 @@ async fn receipt_idempotency_returns_original_result() {
 
 #[tokio::test]
 async fn target_changed_after_receipt_returns_security_risk() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("risk.txt");
 
     let grant_store = GrantStore::new();
@@ -333,7 +354,10 @@ async fn target_changed_after_receipt_returns_security_risk() {
 
 #[tokio::test]
 async fn delete_operation() {
-    let dir = TempDir::new().expect("temp dir");
+    // Use the current directory (not the default `/tmp` base) so the
+    // workspace is outside the platform protected-system-path set checked by
+    // validate_path_safety on Linux CI. Matches grant_store.rs unit tests.
+    let dir = TempDir::new_in(".").expect("temp dir");
     let target = dir.path().join("delete_me.txt");
     fs::write(&target, b"content to delete").expect("write original");
 
