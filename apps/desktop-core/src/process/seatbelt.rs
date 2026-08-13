@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::process::RunPurpose;
 
+#[cfg(target_os = "macos")]
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
 // Agent CLIs are allowed to invoke only this fixed, reviewable helper set in
