@@ -10,6 +10,17 @@ vi.mock('../utils/logger', () => ({
 
 const mockApiGet = vi.spyOn(apiClient, 'apiGet');
 const mockApiPost = vi.spyOn(apiClient, 'apiPost');
+const mockApiPatch = vi.spyOn(apiClient, 'apiPatch');
+const mockApiDelete = vi.spyOn(apiClient, 'apiDelete');
+
+function makeItem(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: '1', key: 'openai', display_name: 'OpenAI', base_url: 'https://api.openai.com',
+    protocol: 'openai_chat_completions', auth_scheme: 'bearer',
+    status: 'draft', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 function renderPage() {
   const qc = createTestQueryClient();
@@ -58,11 +69,7 @@ describe('ProviderCatalogPage interactions', () => {
 
   it('renders providers table', async () => {
     mockApiGet.mockResolvedValue({
-      items: [{
-        id: '1', key: 'openai', display_name: 'OpenAI', base_url: 'https://api.openai.com',
-        protocol: 'openai_chat_completions', auth_scheme: 'bearer',
-        status: 'published', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z',
-      }],
+      items: [makeItem({ status: 'published' })],
     });
     renderPage();
 
@@ -71,5 +78,181 @@ describe('ProviderCatalogPage interactions', () => {
     });
     expect(screen.getAllByText('已发布').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('https://api.openai.com')).toBeInTheDocument();
+  });
+
+  it('edits provider via edit button', async () => {
+    mockApiPatch.mockResolvedValue({ id: '1' });
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('编辑'));
+    expect(screen.getByText('编辑提供商', { selector: '.ant-modal-title' })).toBeInTheDocument();
+    const keyInput = screen.getByLabelText('Key') as HTMLInputElement;
+    expect(keyInput.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: 'Updated OpenAI' } });
+    fireEvent.click(screen.getByText('确 定'));
+
+    await waitFor(() => {
+      expect(mockApiPatch).toHaveBeenCalled();
+    });
+  });
+
+  it('cancels the edit modal', async () => {
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('编辑'));
+    expect(screen.getByText('编辑提供商', { selector: '.ant-modal-title' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('取 消'));
+    expect(mockApiPatch).not.toHaveBeenCalled();
+  });
+
+  it('shows error on edit failure', async () => {
+    mockApiPatch.mockRejectedValue('编辑失败');
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('编辑'));
+    fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: 'Updated OpenAI' } });
+    fireEvent.click(screen.getByText('确 定'));
+
+    await waitFor(() => {
+      expect(mockApiPatch).toHaveBeenCalled();
+    });
+  });
+
+  it('deletes provider', async () => {
+    mockApiDelete.mockResolvedValue(undefined);
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('删除'));
+    const confirmBtn = screen.getByText('确 定');
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockApiDelete).toHaveBeenCalled();
+    });
+  });
+
+  it('shows error on delete failure', async () => {
+    mockApiDelete.mockRejectedValue(new Error('删除失败'));
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('删除'));
+    fireEvent.click(screen.getByText('确 定'));
+
+    await waitFor(() => {
+      expect(mockApiDelete).toHaveBeenCalled();
+    });
+  });
+
+  it('handles non-Error delete failure', async () => {
+    mockApiDelete.mockRejectedValue('删除失败');
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('删除'));
+    fireEvent.click(screen.getByText('确 定'));
+
+    await waitFor(() => {
+      expect(mockApiDelete).toHaveBeenCalled();
+    });
+  });
+
+  it('validates provider', async () => {
+    mockApiPost.mockResolvedValue({ id: '1' });
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('验证'));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/providers/1/validate');
+    });
+  });
+
+  it('shows error on validate failure', async () => {
+    mockApiPost.mockRejectedValue(new Error('验证失败'));
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('验证'));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/providers/1/validate');
+    });
+  });
+
+  it('handles non-Error validate failure', async () => {
+    mockApiPost.mockRejectedValue('验证失败');
+    mockApiGet.mockResolvedValue({ items: [makeItem()] });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('openai')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('验证'));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/providers/1/validate');
+    });
+  });
+
+  it('renders draft, validated and unknown statuses', async () => {
+    mockApiGet.mockResolvedValue({
+      items: [
+        makeItem({ id: '1', key: 'draft-key', status: 'draft' }),
+        makeItem({ id: '2', key: 'validated-key', status: 'validated' }),
+        makeItem({ id: '3', key: 'unknown-key', status: 'unknown' as never }),
+      ],
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('draft-key')).toBeInTheDocument();
+    });
+    expect(screen.getByText('草稿')).toBeInTheDocument();
+    expect(screen.getByText('已验证')).toBeInTheDocument();
+    expect(screen.getByText('已验证（通过发布流程发布）')).toBeInTheDocument();
+    expect(screen.getByText('unknown')).toBeInTheDocument();
+    expect(screen.getAllByText('编辑').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('验证').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('删除').length).toBeGreaterThanOrEqual(1);
   });
 });
