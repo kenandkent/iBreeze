@@ -7,7 +7,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 const mockInvoke = vi.mocked((await import('@tauri-apps/api/core')).invoke);
 
 const { createRpcRequest, systemHealth } = await import('../src/shared/rpcClient');
-const { isReadOperation } = await import('../src/generated/rpc/method_kinds.ts');
+const { isReadOperation, isWriteOperation } = await import('../src/generated/rpc/method_kinds.ts');
 
 describe('isReadOperation', () => {
   it('returns true for get operations', () => {
@@ -33,6 +33,25 @@ describe('isReadOperation', () => {
     expect(isReadOperation('company.archive')).toBe(false);
     expect(isReadOperation('task.confirmPlan')).toBe(false);
     expect(isReadOperation('conversation.archive')).toBe(false);
+  });
+});
+
+describe('isWriteOperation', () => {
+  it('returns true for write operations', () => {
+    expect(isWriteOperation('company.create')).toBe(true);
+    expect(isWriteOperation('company.update')).toBe(true);
+    expect(isWriteOperation('company.archive')).toBe(true);
+    expect(isWriteOperation('task.confirmPlan')).toBe(true);
+    expect(isWriteOperation('conversation.archive')).toBe(true);
+    expect(isWriteOperation('workspace.apply')).toBe(true);
+    expect(isWriteOperation('review.submit')).toBe(true);
+  });
+
+  it('returns false for read operations', () => {
+    expect(isWriteOperation('company.get')).toBe(false);
+    expect(isWriteOperation('company.list')).toBe(false);
+    expect(isWriteOperation('task.get')).toBe(false);
+    expect(isWriteOperation('system.health')).toBe(false);
   });
 });
 

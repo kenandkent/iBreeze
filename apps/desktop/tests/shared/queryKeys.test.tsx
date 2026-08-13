@@ -114,6 +114,31 @@ describe('queryKeys', () => {
     const keys = queryKeys.orchestrationList(ctx);
     expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'orchestrations']);
   });
+
+  it('routingSummary returns correct keys', () => {
+    const keys = queryKeys.routingSummary(ctx, 'c1', 'r1');
+    expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'c1', 'routing', 'summary', 'r1']);
+  });
+
+  it('routingDecisions returns correct keys', () => {
+    const keys = queryKeys.routingDecisions(ctx, 'c1', 'r1');
+    expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'c1', 'routing', 'decisions', 'r1']);
+  });
+
+  it('routingHealth returns correct keys', () => {
+    const keys = queryKeys.routingHealth(ctx, 'c1');
+    expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'c1', 'routing', 'health']);
+  });
+
+  it('credentials returns correct keys', () => {
+    const keys = queryKeys.credentials(ctx);
+    expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'credentials']);
+  });
+
+  it('catalogModels returns correct keys', () => {
+    const keys = queryKeys.catalogModels(ctx);
+    expect(keys).toEqual(['https://test.com', 'user-1', 'profile-1', 'catalog', 'models']);
+  });
 });
 
 function QueryCtxDisplay() {
